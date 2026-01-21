@@ -12,7 +12,18 @@
       "Bash(git branch:*)",
       "Bash(git checkout:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git -C \"C:/Users/Brianna/Videos/1dollar\" status)",
+      "Bash(git -C \"C:/Users/Brianna/Videos/1dollar\" diff --stat)",
+      "Bash(git -C \"C:/Users/Brianna/Videos/1dollar\" log --oneline -5)",
+      "Bash(git -C \"C:/Users/Brianna/Videos/1dollar\" add config.yaml patterns.txt process_production.py run_processor.bat setup_windows.bat)",
+      "Bash(git -C \"C:/Users/Brianna/Videos/1dollar\" commit -m \"$\\(cat <<''EOF''\nAdd comprehensive fancy number patterns and Windows 64-bit support\n\n- setup_windows.bat: Use py -3-64 to enforce 64-bit Python \\(required for PyTorch\\)\n- run_processor.bat: Simplify error message to reference setup script\n- patterns.txt: Add 31 regex patterns for fancy number detection including\n  FIVE/SIX/SEVEN_OF_KIND, DOUBLE_QUADS, BOOKENDS, SUPER_REPEATER, MILLIONAIRE, etc.\n- config.yaml: Add toggles for 40+ builtin pattern types with descriptions\n- process_production.py: \n  - Add 40+ pattern detection methods \\(trinary, flipper, ladder variants, etc.\\)\n  - Update classify\\(\\) to check all new patterns\n  - Fix OCR to handle first-digit misreading \\(G→6, B→8\\) in addition to last-digit\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C \"C:/Users/Brianna/Videos/1dollar\" log --oneline -3)",
+      "Bash(venv/Scripts/python.exe:*)",
+      "Bash(git -C \"C:/Users/Brianna/Videos/1dollar\" diff --stat process_production.py)",
+      "Bash(git -C \"C:/Users/Brianna/Videos/1dollar\" push origin main)",
+      "Bash(git -C \"C:/Users/Brianna/Videos/1dollar\" add -A)",
+      "Bash(git -C \"C:/Users/Brianna/Videos/1dollar\" commit -m \"$\\(cat <<''EOF''\nAdd sum patterns and counting ladder patterns\n\nSum patterns:\n- Extended get_sum_category\\(\\) to flag sums 1-11 and 61-72\n- These are collector-valued extreme digit sums\n\nCounting ladder patterns \\(8 new\\):\n- counting_2s through counting_9s\n- Detects step patterns like 02040608, 03060912, etc.\n- Works for both ascending and descending sequences\n\nCoverage now at ~78 of 103 patterns from collector list.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }

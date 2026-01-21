@@ -54,7 +54,18 @@ patterns:
     chunky_ladder: true     # Paired ladder: 11223344
     super_ladder: true      # Double-digit ladder: 01020304
 
+    # --- Counting ladders (step patterns) ---
+    counting_2s: true       # Step of 2: 02040608, 10121416
+    counting_3s: true       # Step of 3: 03060912, 12151821
+    counting_4s: true       # Step of 4: 04081216, 20242832
+    counting_5s: true       # Step of 5: 05101520, 10152025
+    counting_6s: true       # Step of 6: 06121824, 12182430
+    counting_7s: true       # Step of 7: 07142128, 14212835
+    counting_8s: true       # Step of 8: 08162432, 16243240
+    counting_9s: true       # Step of 9: 09182736, 18273645
+
     # --- Sum patterns ---
+    # Digits summing to extreme values (1-11 or 61-72) are flagged automatically
     magic_sum: true         # Digits sum to special values (9, 36, 72)
 
     # --- Flipper patterns (upside-down readable) ---
@@ -97,7 +108,7 @@ patterns:
 crops:
   front:
     seal:
-      x: 0.636
+      x: 0.605
       y: 0.233
       w: 0.254
       h: 0.537
@@ -133,7 +144,7 @@ crops:
 
   back:
     seal:
-      x: 0.619
+      x: 0.635
       y: 0.221
       w: 0.261
       h: 0.557

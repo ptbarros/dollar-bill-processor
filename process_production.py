@@ -152,6 +152,10 @@ class Config:
             # Ladder variants
             'pyramid_ladder': True, 'counting_ladder': True, 'step_ladder': False,
             'chunky_ladder': True, 'super_ladder': True,
+            # Counting ladders (step patterns)
+            'counting_2s': True, 'counting_3s': True, 'counting_4s': True,
+            'counting_5s': True, 'counting_6s': True, 'counting_7s': True,
+            'counting_8s': True, 'counting_9s': True,
             # Sum patterns
             'magic_sum': True,
             # Flipper patterns
@@ -565,14 +569,34 @@ class FancyNumberDetector:
 
     @staticmethod
     def get_sum_category(digits):
-        """Return sum category if notable (SUM_1 through SUM_70)."""
+        """Return sum category if notable - collectors value extreme sums."""
         if len(digits) != 8:
             return None
         s = sum(int(d) for d in digits)
-        # Only flag very low or very high sums
-        if s <= 5 or s >= 67:
+        # Collectors value: very low (1-11) and very high (61-72) sums
+        # Min possible: 0 (00000000), Max possible: 72 (99999999)
+        if s <= 11 or s >= 61:
             return f"SUM_{s}"
         return None
+
+    @staticmethod
+    def has_counting_ladder(digits, step):
+        """Check for counting ladder with given step (e.g., step=2: 02040608)."""
+        if len(digits) != 8:
+            return False
+        # Check as 4 two-digit pairs
+        pairs = [digits[i:i+2] for i in range(0, 8, 2)]
+        try:
+            nums = [int(p) for p in pairs]
+            # Check if each pair increases by step
+            if all(nums[i+1] - nums[i] == step for i in range(3)):
+                return True
+            # Check descending
+            if all(nums[i] - nums[i+1] == step for i in range(3)):
+                return True
+        except:
+            pass
+        return False
 
     # =========================================================================
     # FLIPPER PATTERNS (digits that look same upside down)
@@ -876,6 +900,24 @@ class FancyNumberDetector:
         sum_cat = self.get_sum_category(digits)
         if sum_cat:
             fancy_types.append(sum_cat)
+
+        # === Counting ladder patterns (step of 2-9) ===
+        if builtin.get('counting_2s', True) and self.has_counting_ladder(digits, 2):
+            fancy_types.append("COUNTING_2S")
+        if builtin.get('counting_3s', True) and self.has_counting_ladder(digits, 3):
+            fancy_types.append("COUNTING_3S")
+        if builtin.get('counting_4s', True) and self.has_counting_ladder(digits, 4):
+            fancy_types.append("COUNTING_4S")
+        if builtin.get('counting_5s', True) and self.has_counting_ladder(digits, 5):
+            fancy_types.append("COUNTING_5S")
+        if builtin.get('counting_6s', True) and self.has_counting_ladder(digits, 6):
+            fancy_types.append("COUNTING_6S")
+        if builtin.get('counting_7s', True) and self.has_counting_ladder(digits, 7):
+            fancy_types.append("COUNTING_7S")
+        if builtin.get('counting_8s', True) and self.has_counting_ladder(digits, 8):
+            fancy_types.append("COUNTING_8S")
+        if builtin.get('counting_9s', True) and self.has_counting_ladder(digits, 9):
+            fancy_types.append("COUNTING_9S")
 
         # === Flipper patterns ===
         if builtin.get('flipper', True) and self.is_flipper(digits):

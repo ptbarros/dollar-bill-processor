@@ -1,0 +1,31 @@
+FANCY BILL SUMMARY
+==================================================
+
+Stack positions with fancy bills:
+  1, 2, 3, 4, 5, 6
+
+Details:
+  Position #1: J16272162J
+    Types: TRUE_QUADRINARY, TWO_PAIR_TRIPLE, TRIPLE_DOUBLE_DOUBLE
+    Crops: C:\Users\Brianna\Videos\1dollar\scans\fancy_bills\J16272162J_01.jpg ... _10.jpg
+
+  Position #2: C21222264D
+    Types: TRUE_QUADRINARY, TRIPLES, QUADS
+    Crops: C:\Users\Brianna\Videos\1dollar\scans\fancy_bills\C21222264D_01.jpg ... _10.jpg
+
+  Position #3: L62471358K
+    Types: MAGIC_SUM
+    Crops: C:\Users\Brianna\Videos\1dollar\scans\fancy_bills\L62471358K_01.jpg ... _10.jpg
+
+  Position #4: J66893566D
+    Types: DOUBLE_BOOKEND, BOOKENDS, DOUBLES_BOOKEND, BOOKEND_LADDER
+    Crops: C:\Users\Brianna\Videos\1dollar\scans\fancy_bills\J66893566D_01.jpg ... _10.jpg
+
+  Position #5: K44997754N
+    Types: TRUE_QUADRINARY, TWO_PAIR_TRIPLE, TRIPLE_DOUBLE_DOUBLE, THREE_PAIRS, BOOKENDS, BOOKEND_LADDER, THREE_CONSEC_PAIRS, DOUBLE_99
+    Crops: C:\Users\Brianna\Videos\1dollar\scans\fancy_bills\K44997754N_01.jpg ... _10.jpg
+
+  Position #6: E18899972B
+    Types: TRIPLES, DOUBLE_99
+    Crops: C:\Users\Brianna\Videos\1dollar\scans\fancy_bills\E18899972B_01.jpg ... _10.jpg
+

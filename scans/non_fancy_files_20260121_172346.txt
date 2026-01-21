@@ -1,0 +1,4 @@
+# Non-fancy bill scan files
+# These can be deleted to save space
+# Review before deleting!
+
