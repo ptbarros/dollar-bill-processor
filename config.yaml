@@ -10,6 +10,7 @@
 patterns:
   # Built-in patterns (set to false to disable)
   builtin:
+    # --- Original core patterns ---
     solid: true        # All same digit: 11111111
     repeater: true     # First 4 = last 4: 12341234
     radar: true        # Palindrome: 12344321
@@ -17,6 +18,65 @@ patterns:
     low_serial: true   # Value <= 100: 00000001
     binary: true       # Only 0s and 1s: 01010101
     star_note: true    # Ends with *: F12345678*
+
+    # --- Digit count patterns ---
+    trinary: true           # Uses only 3 different digits
+    true_trinary: true      # Uses exactly 3 digits (each appears at least once)
+    quadrinary: false       # Uses only 4 different digits (too common)
+    true_quadrinary: true   # Uses exactly 4 digits (each appears at least once)
+    quinary: false          # Uses only 5 different digits (too common)
+
+    # --- Even/odd patterns ---
+    all_evens: true         # All digits are even: 02468024
+    all_odds: true          # All digits are odd: 13579135
+
+    # --- Special patterns ---
+    binary_radar: true      # Binary AND radar: 01011010
+    alternator: true        # Alternating digits: 12121212
+
+    # --- Partial ladder patterns ---
+    ladder_7: true          # 7-digit ladder anywhere
+    ladder_6: true          # 6-digit ladder anywhere
+    ladder_5: true          # 5-digit ladder anywhere
+    ladder_4: true          # 4-digit ladder anywhere
+
+    # --- Structural patterns ---
+    full_house: true        # 5 of one digit, 3 of another: 11111222
+    two_pair_triple: true   # Triple + two pairs: 11122334
+    triple_double_double: true  # Triple + double + double: 11122233
+    consecutive_triples: true   # Two triples back-to-back: 111222xx
+    double_quads_sequential: true  # Two sequential quads: 11112222
+
+    # --- Ladder variants ---
+    pyramid_ladder: true    # Up then down: 12321
+    counting_ladder: true   # Count pattern: 12123123
+    step_ladder: false      # Steps of 2: 02468xxx (too common)
+    chunky_ladder: true     # Paired ladder: 11223344
+    super_ladder: true      # Double-digit ladder: 01020304
+
+    # --- Sum patterns ---
+    magic_sum: true         # Digits sum to special values (9, 36, 72)
+
+    # --- Flipper patterns (upside-down readable) ---
+    flipper: true           # Contains only 0,1,6,8,9 (flippable digits)
+    true_flipper: true      # Flippable AND reads same upside down
+    near_flipper: false     # One digit away from true flipper
+
+    # --- Special structural patterns ---
+    broken_radar: true      # One digit off from radar
+    sequential_trinary: true    # Trinary with sequential digits: 121212 vs 131313
+    double_bookend: true    # First 2 = last 2: 12xxxx12
+    radar_repeater: true    # Both radar AND repeater: 12211221
+    birthday: false         # Date patterns (too common): 01151990
+
+    # --- Additional patterns ---
+    four_pairs: true        # Four pairs: 11223344
+    three_pairs: true       # Three pairs anywhere: 112233xx
+    ultra_low_serial: true  # First 5+ digits are zeros
+    super_radar: true       # Triple-symmetric radar: 12122121
+    binary_repeater: true   # Binary AND repeater: 01010101
+    doubles_ladder: true    # Pairs in sequence: 11223344
+    ladder_and_quad: true   # Contains both ladder and quad
 
   # Custom patterns are now in patterns.txt (simpler format, easier to edit)
   # See patterns.txt for examples

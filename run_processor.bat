@@ -21,10 +21,7 @@ if not exist "venv\Scripts\activate.bat" (
     echo.
     echo ERROR: Virtual environment not found!
     echo.
-    echo Please run these commands first:
-    echo   python -m venv venv
-    echo   venv\Scripts\activate
-    echo   pip install -r requirements.txt
+    echo Please run setup_windows.bat first to install dependencies.
     echo.
     pause
     exit /b 1

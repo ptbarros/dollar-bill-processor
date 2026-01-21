@@ -21,22 +21,29 @@ echo   DOLLAR BILL PROCESSOR - SETUP
 echo ============================================
 echo.
 
-:: Check if Python is installed
-python --version >nul 2>&1
+:: Check if 64-bit Python is installed (required for PyTorch)
+py -3-64 --version >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: Python is not installed or not in PATH!
+    echo ERROR: 64-bit Python is not installed!
     echo.
-    echo Please install Python 3.10 or higher from:
+    echo This tool requires 64-bit Python because PyTorch does not
+    echo support 32-bit Windows.
+    echo.
+    echo Please install 64-bit Python 3.10 or higher from:
     echo   https://www.python.org/downloads/
     echo.
+    echo Download the "Windows installer (64-bit)" version.
     echo IMPORTANT: Check "Add Python to PATH" during installation!
+    echo.
+    echo Note: You can have both 32-bit and 64-bit Python installed.
+    echo The py launcher will select the correct version automatically.
     echo.
     pause
     exit /b 1
 )
 
-echo Python found:
-python --version
+echo 64-bit Python found:
+py -3-64 --version
 echo.
 
 :: Check if venv already exists
@@ -49,9 +56,9 @@ if exist "venv" (
     rmdir /s /q venv
 )
 
-:: Create virtual environment
+:: Create virtual environment using 64-bit Python
 echo Creating virtual environment...
-python -m venv venv
+py -3-64 -m venv venv
 if errorlevel 1 (
     echo.
     echo ERROR: Failed to create virtual environment!
