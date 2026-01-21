@@ -1052,7 +1052,8 @@ class ProductionProcessor:
         if img is None:
             return 0
 
-        results = self.yolo_model(img, verbose=False)
+        # Use lower confidence threshold to handle scans with colored backgrounds
+        results = self.yolo_model(img, verbose=False, conf=0.1)
         count = 0
         for result in results:
             count += len(result.boxes)
@@ -1142,7 +1143,8 @@ class ProductionProcessor:
         if aligned_img is None:
             return None, 0
 
-        results = self.yolo_model(aligned_img, verbose=False)
+        # Use lower confidence threshold to handle scans with colored backgrounds
+        results = self.yolo_model(aligned_img, verbose=False, conf=0.1)
         serials_found = []
         h, w = aligned_img.shape[:2]
 
