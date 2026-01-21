@@ -88,10 +88,6 @@ set /p MODE="Enter choice (1 or 2): "
 set "ALL_FLAG="
 if "%MODE%"=="2" set "ALL_FLAG=--all"
 
-echo.
-echo Press any key to start processing, or Ctrl+C to cancel...
-pause >nul
-
 :run
 echo.
 echo Processing: %INPUT_DIR%
