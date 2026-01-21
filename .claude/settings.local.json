@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\\\Users\\\\Brianna\\\\Videos\\\\1dollar\\\\canon\")",
+      "Bash(venvScriptspython -c \"import pandas as pd; df = pd.read_excel\\(''list.xlsx''\\); pd.set_option\\(''display.max_columns'', None\\); pd.set_option\\(''display.width'', None\\); pd.set_option\\(''display.max_colwidth'', None\\); print\\(df.to_string\\(\\)\\)\")",
+      "Bash(cmd //c \"venv\\\\Scripts\\\\python -c \"\"import pandas as pd; df = pd.read_excel\\(''list.xlsx''\\); pd.set_option\\(''display.max_columns'', None\\); pd.set_option\\(''display.width'', None\\); pd.set_option\\(''display.max_colwidth'', None\\); print\\(df.to_string\\(\\)\\)\"\"\")",
+      "Bash(cmd //c \"venv\\\\Scripts\\\\pip install openpyxl pandas -q\")",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git fetch:*)",
+      "Bash(git reset:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

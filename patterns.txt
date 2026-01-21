@@ -1,0 +1,75 @@
+# =============================================================================
+# CUSTOM FANCY NUMBER PATTERNS
+# =============================================================================
+# Add one pattern per line using this format:
+#   NAME,TYPE,VALUE
+#
+# Available types:
+#   contains    - digits contain the value anywhere (most common)
+#   starts_with - digits start with the value
+#   ends_with   - digits end with the value
+#   regex       - regular expression (advanced)
+#
+# Examples:
+#   DOUBLE_99,contains,99        -> matches 12399456, 99123456, etc.
+#   BIRTH_1990,contains,1990     -> matches 19901234, 12199034, etc.
+#   STARTS_777,starts_with,777   -> matches 77712345 only
+#   ENDS_000,ends_with,000       -> matches 12345000 only
+#
+# Lines starting with # are comments and are ignored
+# Blank lines are also ignored
+#
+# NOTE: These patterns are IN ADDITION to the built-in patterns:
+#   SOLID, REPEATER, RADAR, LADDER, LOW_SERIAL, BINARY, STAR
+#   (Built-in patterns can be disabled in config.yaml)
+# =============================================================================
+
+# =============================================================================
+# ACTIVE PATTERNS (uncomment/add as needed)
+# =============================================================================
+
+# --- Digit patterns ---
+TRIPLES,regex,(\d)\1\1
+QUADS,regex,(\d)\1{3}
+BOOKENDS,regex,^(\d).*\1$
+
+# --- Lucky/Novelty numbers ---
+# LUCKY_7s,contains,777
+# DEVIL,contains,666
+# COOL_420,contains,420
+# DOUBLE_69,contains,69
+
+# --- Double/Pairs ---
+DOUBLE_99,contains,99
+# DOUBLE_00,contains,00
+# DOUBLE_11,contains,11
+# DOUBLE_22,contains,22
+# DOUBLE_33,contains,33
+# DOUBLE_44,contains,44
+# DOUBLE_55,contains,55
+# DOUBLE_66,contains,66
+# DOUBLE_77,contains,77
+# DOUBLE_88,contains,88
+
+# =============================================================================
+# MORE PATTERN IDEAS (uncomment to enable)
+# =============================================================================
+
+# --- Birthday/Year patterns ---
+# BIRTH_1990,contains,1990
+# BIRTH_1985,contains,1985
+# YEAR_1776,contains,1776
+# YEAR_2000,contains,2000
+# YEAR_2024,contains,2024
+
+# --- Trailing/Leading zeros ---
+# TRAILING_000,ends_with,000
+# TRAILING_0000,ends_with,0000
+# LEADING_000,starts_with,000
+# LEADING_0000,starts_with,0000
+
+# --- Super patterns (advanced regex) ---
+# SUPER_REPEATER,regex,^(\d\d)(\1){3}$
+# SEVEN_OF_KIND,regex,(\d)\1{6}
+# DOUBLE_QUADS,regex,^(\d)\1{3}(\d)\2{3}$
+# CONSECUTIVE_PAIRS,regex,^(\d)\1(\d)\2(\d)\3(\d)\4$

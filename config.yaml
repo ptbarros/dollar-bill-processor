@@ -1,0 +1,143 @@
+# Dollar Bill Processor Configuration
+# ====================================
+
+# =============================================================================
+# FANCY NUMBER PATTERNS
+# =============================================================================
+# Built-in patterns can be enabled/disabled
+# Custom patterns use the 8-digit portion of the serial (without letters)
+
+patterns:
+  # Built-in patterns (set to false to disable)
+  builtin:
+    solid: true        # All same digit: 11111111
+    repeater: true     # First 4 = last 4: 12341234
+    radar: true        # Palindrome: 12344321
+    ladder: true       # Sequential: 12345678, 87654321
+    low_serial: true   # Value <= 100: 00000001
+    binary: true       # Only 0s and 1s: 01010101
+    star_note: true    # Ends with *: F12345678*
+
+  # Custom patterns are now in patterns.txt (simpler format, easier to edit)
+  # See patterns.txt for examples
+
+
+# =============================================================================
+# CROP REGIONS
+# =============================================================================
+# All coordinates are percentages (0.0 to 1.0) of image dimensions
+# Format: x (left edge), y (top edge), w (width), h (height)
+#
+# To find coordinates:
+#   1. Open a bill image in an editor
+#   2. Note the pixel coordinates of the region you want
+#   3. Divide by image dimensions to get percentages
+#   Example: 470px on 1850px wide image = 470/1850 = 0.254
+
+crops:
+  front:
+    seal:
+      x: 0.636
+      y: 0.233
+      w: 0.254
+      h: 0.537
+      description: "Treasury seal (green circle)"
+
+    full:
+      x: 0.0
+      y: 0.0
+      w: 1.0
+      h: 1.0
+      description: "Full front image"
+
+    left:
+      x: 0.0
+      y: 0.0
+      w: 0.384
+      h: 1.0
+      description: "Left third of bill"
+
+    center:
+      x: 0.354
+      y: 0.0
+      w: 0.322
+      h: 1.0
+      description: "Center third of bill"
+
+    right:
+      x: 0.627
+      y: 0.0
+      w: 0.373
+      h: 1.0
+      description: "Right third of bill"
+
+  back:
+    seal:
+      x: 0.619
+      y: 0.221
+      w: 0.261
+      h: 0.557
+      description: "Back seal/emblem area"
+
+    full:
+      x: 0.0
+      y: 0.0
+      w: 1.0
+      h: 1.0
+      description: "Full back image"
+
+    left:
+      x: 0.0
+      y: 0.0
+      w: 0.384
+      h: 1.0
+      description: "Left third of bill"
+
+    center:
+      x: 0.354
+      y: 0.0
+      w: 0.322
+      h: 1.0
+      description: "Center third of bill"
+
+    right:
+      x: 0.627
+      y: 0.0
+      w: 0.373
+      h: 1.0
+      description: "Right third of bill"
+
+
+# =============================================================================
+# CROP OUTPUT ORDER
+# =============================================================================
+# Defines which crops are generated and in what order
+# Each entry is [side, region_name] matching the crops defined above
+# Output files will be SERIAL_01.jpg, SERIAL_02.jpg, etc.
+
+crop_order:
+  - [front, seal]     # 01
+  - [front, full]     # 02
+  - [front, left]     # 03
+  - [front, center]   # 04
+  - [front, right]    # 05
+  - [back, seal]      # 06
+  - [back, full]      # 07
+  - [back, left]      # 08
+  - [back, center]    # 09
+  - [back, right]     # 10
+
+
+# =============================================================================
+# PROCESSING OPTIONS
+# =============================================================================
+
+options:
+  # JPEG quality for crop output (1-100)
+  jpeg_quality: 95
+
+  # Minimum confidence threshold for OCR (0.0-1.0)
+  min_confidence: 0.0
+
+  # Include star notes as fancy (even without other patterns)
+  star_notes_always_fancy: true

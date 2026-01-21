@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Output files
+output/
+fancy_bills/
+debug_output/
+*.csv
+serial_numbers_*.csv
+results.csv
+non_fancy_files.txt
+summary.txt
+
+# YOLO training runs
+runs/
+yolov8n.pt
+
+# Scanned images (except reference)
+Dollar_*.jpg
+dollar_*.jpg
+scan_*.jpg
+!reference_bill.jpg
+
+# Sample scan directories
+canon/
+epson/
+*_test/
+*_output/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+temp_*.jpg
