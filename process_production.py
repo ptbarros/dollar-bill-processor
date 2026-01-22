@@ -5,6 +5,7 @@ Automated processing of scanned dollar bills with fancy number detection and cro
 
 Features:
 - Scanner-agnostic input (auto-detects naming conventions)
+- Auto-straightening using printed border detection (no reference image needed)
 - Front/back detection using YOLO serial count
 - Smart pairing of front/back images
 - Percentage-based cropping (scanner-independent)
@@ -14,7 +15,7 @@ Features:
 
 Usage:
     python process_production.py /path/to/scans --output fancy_bills/
-    python process_production.py /path/to/scans --output fancy_bills/ --reference /path/to/ref.jpg
+    python process_production.py /path/to/scans --output fancy_bills/ --all  # crop all bills
 """
 
 import cv2
@@ -224,53 +225,84 @@ class BillPair:
 # =============================================================================
 
 class BillAligner:
-    """Aligns scanned bills to a reference template."""
+    """Aligns scanned bills by detecting the bill's rectangular contour."""
 
-    def __init__(self, reference_path):
-        self.reference = cv2.imread(str(reference_path), cv2.IMREAD_GRAYSCALE)
-        if self.reference is None:
-            raise ValueError(f"Could not load reference image: {reference_path}")
+    def __init__(self):
+        """No reference image needed - uses contour detection."""
+        pass
 
-        self.orb = cv2.ORB_create(1000)
-        self.ref_kp, self.ref_desc = self.orb.detectAndCompute(self.reference, None)
+    def detect_rotation_angle(self, img_gray: np.ndarray) -> float:
+        """Detect rotation angle by finding the bill's rectangular contour."""
+        h, w = img_gray.shape[:2]
 
-    def align_image(self, image_path):
-        """Align a bill image to the reference. Returns color image."""
+        # Apply Gaussian blur to reduce noise
+        blurred = cv2.GaussianBlur(img_gray, (5, 5), 0)
+
+        # Use adaptive threshold to handle varying backgrounds
+        thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                        cv2.THRESH_BINARY_INV, 11, 2)
+
+        # Also try Otsu's threshold and combine
+        _, otsu = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        combined = cv2.bitwise_or(thresh, otsu)
+
+        # Find contours
+        contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if not contours:
+            return 0.0
+
+        # Find the largest contour (should be the bill)
+        largest_contour = max(contours, key=cv2.contourArea)
+
+        # Get minimum area rectangle
+        rect = cv2.minAreaRect(largest_contour)
+        angle = rect[2]  # Angle in degrees
+
+        # minAreaRect returns angles in range [-90, 0)
+        # We need to normalize based on the rectangle dimensions
+        rect_w, rect_h = rect[1]
+
+        # If width < height, the rectangle is more vertical, adjust angle
+        if rect_w < rect_h:
+            angle = angle + 90
+
+        # Normalize to [-45, 45] range
+        if angle > 45:
+            angle = angle - 90
+        elif angle < -45:
+            angle = angle + 90
+
+        return angle
+
+    def align_image(self, image_path) -> Optional[np.ndarray]:
+        """Straighten a bill image by detecting its rectangular contour. Returns color image."""
         img_color = cv2.imread(str(image_path))
         if img_color is None:
             return None
 
         img_gray = cv2.cvtColor(img_color, cv2.COLOR_BGR2GRAY)
-        kp, desc = self.orb.detectAndCompute(img_gray, None)
 
-        if desc is None or len(kp) < 10:
+        # Detect rotation angle from contour
+        angle = self.detect_rotation_angle(img_gray)
+
+        # Skip rotation if angle is negligible
+        if abs(angle) < 0.2:
             return img_color
 
-        matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
-        matches = matcher.knnMatch(self.ref_desc, desc, k=2)
+        # Rotate the image to straighten it
+        h, w = img_color.shape[:2]
+        center = (w // 2, h // 2)
 
-        good_matches = []
-        for match_pair in matches:
-            if len(match_pair) == 2:
-                m, n = match_pair
-                if m.distance < 0.75 * n.distance:
-                    good_matches.append(m)
+        # Get rotation matrix - rotate within original bounds
+        # This avoids fill artifacts at corners
+        M = cv2.getRotationMatrix2D(center, angle, 1.0)
 
-        if len(good_matches) < 10:
-            return img_color
-
-        ref_pts = np.float32([self.ref_kp[m.queryIdx].pt for m in good_matches])
-        img_pts = np.float32([kp[m.trainIdx].pt for m in good_matches])
-
-        M, inliers = cv2.estimateAffinePartial2D(img_pts, ref_pts, method=cv2.RANSAC)
-
-        if M is None:
-            return img_color
-
-        aligned = cv2.warpAffine(
-            img_color, M, (self.reference.shape[1], self.reference.shape[0]),
-            flags=cv2.INTER_CUBIC
-        )
+        # Apply rotation with white background for any edge pixels
+        aligned = cv2.warpAffine(img_color, M, (w, h),
+                                  flags=cv2.INTER_CUBIC,
+                                  borderMode=cv2.BORDER_CONSTANT,
+                                  borderValue=(255, 255, 255))
         return aligned
 
 
@@ -1073,14 +1105,14 @@ class ScannerFormatDetector:
 class ProductionProcessor:
     """Main processor for production pipeline."""
 
-    def __init__(self, yolo_model_path: Path, reference_path: Path, use_gpu: bool = False, cfg: Optional[Config] = None):
+    def __init__(self, yolo_model_path: Path, use_gpu: bool = False, cfg: Optional[Config] = None):
         self.cfg = cfg or Config()  # Use provided config or create default
 
         print(f"Loading YOLOv8 model: {yolo_model_path}")
         self.yolo_model = YOLO(str(yolo_model_path))
 
-        print(f"Loading template aligner...")
-        self.aligner = BillAligner(reference_path)
+        print(f"Loading border-based aligner...")
+        self.aligner = BillAligner()  # No reference needed - uses border detection
 
         print(f"Loading EasyOCR (GPU={use_gpu})...")
         self.ocr_reader = easyocr.Reader(['en'], gpu=use_gpu, verbose=False)
@@ -1127,57 +1159,119 @@ class ProductionProcessor:
 
     def extract_serial_from_crop(self, crop_image) -> tuple[Optional[str], float]:
         """Extract serial number from a cropped region using OCR."""
-        results = self.ocr_reader.readtext(
-            crop_image,
-            allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789*',
-            detail=1
-        )
+        # Try OCR on original + CLAHE enhanced variant for better accuracy
+        variants = [crop_image]  # Original
 
-        pattern = r'[A-Z]\d{8}[A-Z*]'
+        # CLAHE contrast enhancement helps with some letter recognition
+        if len(crop_image.shape) == 3:
+            gray = cv2.cvtColor(crop_image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = crop_image
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(gray)
+        variants.append(cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR))
 
-        # Common OCR letter/digit confusions
-        corrections = {
-            '0': ['O', 'Q', 'D'], '1': ['I', 'L'], '5': ['S'],
-            '6': ['G'], '8': ['B'],
+        pattern = r'[A-L]\d{8}[A-Y*]'
+
+        # Common OCR digit→letter confusions
+        digit_to_letter = {
+            '0': ['O', 'D', 'Q'], '1': ['I', 'L'], '5': ['S'],
+            '6': ['G', 'C'], '8': ['B'],
         }
 
-        for (bbox, text, conf) in results:
-            text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
+        # Collect ALL valid serial readings from all variants
+        valid_serials = []
 
-            match = re.search(pattern, text_clean)
-            if match:
-                return match.group(0), conf
+        for variant in variants:
+            results = self.ocr_reader.readtext(
+                variant,
+                allowlist='ABCDEFGHIJKLNPQRSTUVWXY0123456789*',
+                detail=1
+            )
 
-            # Handle OCR errors - last digit misread as number (e.g., A→4, B→8)
-            if re.match(r'^[A-Z]\d{9}$', text_clean):
-                last_digit = text_clean[-1]
-                if last_digit in corrections:
-                    for letter in corrections[last_digit]:
-                        corrected = text_clean[:-1] + letter
-                        if re.match(pattern, corrected):
-                            return corrected, conf
+            for (bbox, text, conf) in results:
+                text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
 
-            # Handle OCR errors - first digit misread as number (e.g., G→6, B→8)
-            if re.match(r'^\d{9}[A-Z*]$', text_clean):
-                first_digit = text_clean[0]
-                if first_digit in corrections:
-                    for letter in corrections[first_digit]:
-                        corrected = letter + text_clean[1:]
-                        if re.match(pattern, corrected):
-                            return corrected, conf
+                # Direct match
+                match = re.search(pattern, text_clean)
+                if match:
+                    valid_serials.append((match.group(0), conf))
+                    continue
 
-            # Handle OCR errors - BOTH first AND last misread as numbers
-            if re.match(r'^\d{10}$', text_clean):
-                first_digit = text_clean[0]
-                last_digit = text_clean[-1]
-                if first_digit in corrections and last_digit in corrections:
-                    for first_letter in corrections[first_digit]:
-                        for last_letter in corrections[last_digit]:
-                            corrected = first_letter + text_clean[1:-1] + last_letter
+                # Try digit→letter corrections for last position
+                if re.match(r'^[A-L]\d{9}$', text_clean):
+                    last_digit = text_clean[-1]
+                    if last_digit in digit_to_letter:
+                        for letter in digit_to_letter[last_digit]:
+                            corrected = text_clean[:-1] + letter
                             if re.match(pattern, corrected):
-                                return corrected, conf
+                                valid_serials.append((corrected, conf))
+                                break
 
-        return None, 0
+                # Try digit→letter corrections for first position
+                elif re.match(r'^\d{9}[A-Y*]$', text_clean):
+                    first_digit = text_clean[0]
+                    if first_digit in digit_to_letter:
+                        for letter in digit_to_letter[first_digit]:
+                            corrected = letter + text_clean[1:]
+                            if re.match(pattern, corrected):
+                                valid_serials.append((corrected, conf))
+                                break
+
+                # Try both positions
+                elif re.match(r'^\d{10}$', text_clean):
+                    first_digit = text_clean[0]
+                    last_digit = text_clean[-1]
+                    if first_digit in digit_to_letter and last_digit in digit_to_letter:
+                        for first_letter in digit_to_letter[first_digit]:
+                            for last_letter in digit_to_letter[last_digit]:
+                                corrected = first_letter + text_clean[1:-1] + last_letter
+                                if re.match(pattern, corrected):
+                                    valid_serials.append((corrected, conf))
+                                    break
+
+        if not valid_serials:
+            return None, 0
+
+        # If only one reading, return it
+        if len(valid_serials) == 1:
+            return valid_serials[0]
+
+        # Multiple readings - use consensus voting on first letter
+        from collections import Counter
+
+        # Group by middle digits (most reliable part)
+        digit_groups = {}
+        for serial, conf in valid_serials:
+            middle = serial[1:9]
+            if middle not in digit_groups:
+                digit_groups[middle] = []
+            digit_groups[middle].append((serial, conf))
+
+        # Use the most common middle-digit pattern
+        if digit_groups:
+            most_common_middle = max(digit_groups.keys(), key=lambda m: len(digit_groups[m]))
+            candidates = digit_groups[most_common_middle]
+
+            # Vote on first letter weighted by confidence
+            letter_votes = Counter()
+            for serial, conf in candidates:
+                letter_votes[serial[0]] += conf
+
+            # Pick highest voted letter
+            best_letter = letter_votes.most_common(1)[0][0]
+
+            # Return candidate with that letter
+            for serial, conf in candidates:
+                if serial[0] == best_letter:
+                    return serial, conf
+
+            # Construct if needed
+            base = candidates[0][0]
+            best_conf = max(c for s, c in candidates)
+            return best_letter + base[1:], best_conf
+
+        return max(valid_serials, key=lambda x: x[1])
 
     def extract_serial(self, image_path: Path) -> tuple[Optional[str], float]:
         """Extract serial number from a bill image."""
@@ -1189,6 +1283,14 @@ class ProductionProcessor:
         results = self.yolo_model(aligned_img, verbose=False, conf=0.1)
         serials_found = []
         h, w = aligned_img.shape[:2]
+
+        # Letter confusions for consensus voting
+        first_letter_alts = {
+            'C': 'G', 'G': 'C',  # Most common confusion
+            'D': 'O', 'O': 'D',
+            'B': 'R', 'R': 'B',
+            'I': 'L', 'L': 'I',
+        }
 
         for result in results:
             for box in result.boxes:
@@ -1211,9 +1313,58 @@ class ProductionProcessor:
                 if serial:
                     serials_found.append((serial, conf))
 
-        if serials_found:
-            return max(serials_found, key=lambda x: x[1])
-        return None, 0
+        if not serials_found:
+            return None, 0
+
+        # If only one reading, return it
+        if len(serials_found) == 1:
+            return serials_found[0]
+
+        # Multiple readings - use consensus voting
+        # Group by the 8 middle digits (which are most reliable)
+        from collections import Counter
+
+        # Extract middle digits (positions 1-8) for grouping
+        digit_groups = {}
+        for serial, conf in serials_found:
+            middle = serial[1:9]  # 8 middle digits
+            if middle not in digit_groups:
+                digit_groups[middle] = []
+            digit_groups[middle].append((serial, conf))
+
+        # Find the most common middle-digit pattern
+        most_common_middle = max(digit_groups.keys(), key=lambda m: len(digit_groups[m]))
+        candidates = digit_groups[most_common_middle]
+
+        # If all candidates agree on first letter, return highest confidence
+        first_letters = set(s[0] for s, c in candidates)
+        if len(first_letters) == 1:
+            return max(candidates, key=lambda x: x[1])
+
+        # Disagreement on first letter - count votes including confusion alternatives
+        letter_votes = Counter()
+        for serial, conf in candidates:
+            first = serial[0]
+            letter_votes[first] += conf  # Weight by confidence
+            # Also give partial credit to confusion partner
+            if first in first_letter_alts:
+                alt = first_letter_alts[first]
+                # Check if alt is also a valid Fed letter
+                if alt in 'ABCDEFGHIJKL':
+                    letter_votes[alt] += conf * 0.3  # Lower weight for alternative
+
+        # Pick the letter with highest weighted votes
+        best_letter = letter_votes.most_common(1)[0][0]
+
+        # Return the candidate with that letter (or construct it)
+        for serial, conf in candidates:
+            if serial[0] == best_letter:
+                return serial, conf
+
+        # Construct the serial with the voted letter
+        base_serial = candidates[0][0]
+        best_conf = max(c for s, c in candidates)
+        return best_letter + base_serial[1:], best_conf
 
     def create_crop(self, image: np.ndarray, side: str, region: str) -> np.ndarray:
         """Create a percentage-based crop from an image."""
@@ -1232,8 +1383,9 @@ class ProductionProcessor:
         """Generate crops for a fancy bill pair based on config."""
         crop_paths = []
 
-        front_img = cv2.imread(str(pair.front_path))
-        back_img = cv2.imread(str(pair.back_path)) if pair.back_path else None
+        # Use aligned (straightened) images for consistent crops
+        front_img = self.aligner.align_image(pair.front_path)
+        back_img = self.aligner.align_image(pair.back_path) if pair.back_path else None
 
         crop_order = self.cfg.crop_order
         jpeg_quality = self.cfg.jpeg_quality
@@ -1455,8 +1607,8 @@ def main():
 Examples:
   python process_production.py ./scans --output ./fancy_bills
   python process_production.py ./scans --output ./fancy_bills --config ./config.yaml
-  python process_production.py ./scans --output ./fancy_bills --reference ./ref.jpg
   python process_production.py ./scans --output ./fancy_bills --gpu
+  python process_production.py ./scans --output ./fancy_bills --all  # crop all bills
         """
     )
 
@@ -1468,8 +1620,6 @@ Examples:
                         help='Path to config.yaml (default: config.yaml in script directory)')
     parser.add_argument('--model', '-m', type=Path, default=None,
                         help='Path to YOLO model (default: best.pt in script directory)')
-    parser.add_argument('--reference', '-r', type=Path, default=None,
-                        help='Reference image for alignment (default: first front image)')
     parser.add_argument('--gpu', action='store_true',
                         help='Use GPU for processing')
     parser.add_argument('--no-verify', action='store_true',
@@ -1504,22 +1654,8 @@ Examples:
         print(f"Error: YOLO model not found: {model_path}")
         return 1
 
-    # Find reference image (priority: --reference flag > first image in input dir)
-    # Note: Using first image from input ensures reference matches scanner/resolution
-    if args.reference:
-        reference_path = args.reference
-        print(f"Using reference: {reference_path}")
-    else:
-        # Use first image in input directory (best for matching scanner characteristics)
-        images = sorted(list(args.input_dir.glob("*.jpg")) + list(args.input_dir.glob("*.jpeg")))
-        if not images:
-            print(f"Error: No images found in {args.input_dir}")
-            return 1
-        reference_path = images[0]
-        print(f"Using first image as reference: {reference_path.name}")
-
-    # Initialize and run
-    processor = ProductionProcessor(model_path, reference_path, use_gpu=args.gpu, cfg=cfg)
+    # Initialize processor (no reference needed - uses border detection for alignment)
+    processor = ProductionProcessor(model_path, use_gpu=args.gpu, cfg=cfg)
 
     if args.all:
         print("Mode: Processing ALL bills (--all flag)")
