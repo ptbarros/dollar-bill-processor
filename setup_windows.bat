@@ -92,6 +92,6 @@ echo ============================================
 echo.
 echo You can now use run_processor.bat to process bills.
 echo.
-echo To edit custom patterns, open patterns.txt in Notepad.
+echo To edit patterns, open patterns_v2.yaml in Notepad.
 echo.
 pause
