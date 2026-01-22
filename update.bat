@@ -60,13 +60,17 @@ if errorlevel 1 (
 )
 
 :: Back up user config files if they exist
-if exist "patterns.txt" (
-    echo Backing up your patterns.txt...
-    copy /y "patterns.txt" "patterns.txt.backup" >nul
+if exist "patterns_v2.yaml" (
+    echo Backing up your patterns_v2.yaml...
+    copy /y "patterns_v2.yaml" "patterns_v2.yaml.backup" >nul
 )
 if exist "config.yaml" (
     echo Backing up your config.yaml...
     copy /y "config.yaml" "config.yaml.backup" >nul
+)
+if exist "patterns.txt" (
+    echo Backing up your patterns.txt...
+    copy /y "patterns.txt" "patterns.txt.backup" >nul
 )
 
 :: Copy updated files (the zip extracts to dollar-bill-processor-main/)
@@ -95,11 +99,11 @@ echo ============================================
 echo   UPDATE COMPLETE!
 echo ============================================
 echo.
-echo Your previous patterns.txt and config.yaml were backed up to:
-echo   patterns.txt.backup
-echo   config.yaml.backup
+echo Your previous config files were backed up to:
+echo   patterns_v2.yaml.backup  (pattern definitions)
+echo   config.yaml.backup       (crop settings)
 echo.
-echo If you had custom patterns, you may want to merge them
-echo from the backup files.
+echo If you had custom patterns in patterns_v2.yaml, you may want
+echo to merge them from the backup file.
 echo.
 pause

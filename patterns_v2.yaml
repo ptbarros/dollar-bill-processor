@@ -1,0 +1,891 @@
+# =============================================================================
+# UNIFIED PATTERN DEFINITION SYSTEM - Complete v2
+# =============================================================================
+#
+# All fancy serial number patterns in one file.
+# Single source of truth for CLI, GUI, and multi-denomination support.
+#
+# RULE TYPES:
+#   regex:          Regular expression match on digits
+#   contains:       Digits contain the value
+#   starts_with:    Digits start with value
+#   ends_with:      Digits end with value
+#   unique_count:   Exact number of unique digits (e.g., 2 for binary)
+#   unique_max:     Maximum unique digits (e.g., <=3 for trinary)
+#   digit_sum:      Sum of all digits equals value
+#   digit_sum_min:  Sum >= value
+#   digit_sum_max:  Sum <= value
+#   check:          Built-in function (see list below)
+#   all:            ALL sub-rules must match (AND)
+#   any:            ANY sub-rule must match (OR)
+#
+# BUILT-IN CHECKS:
+#   solid, palindrome, repeater, ladder_asc, ladder_desc
+#   all_even, all_odd, star_note, flipper_digits, true_flipper
+#   alternator, four_pairs, three_pairs, full_house
+#   binary_digits, chunky_ladder, doubles_ladder
+#
+# =============================================================================
+
+settings:
+  version: "2.0"
+  default_enabled: true
+
+# =============================================================================
+# DENOMINATION PROFILES
+# =============================================================================
+
+denominations:
+  us_1:
+    name: "US $1 Bill"
+    serial_format: "[A-L]\\d{8}[A-Y*]"
+    digit_count: 8
+    star_indicator: "*"
+
+  us_2:
+    name: "US $2 Bill"
+    serial_format: "[A-L]\\d{8}[A-Y*]"
+    digit_count: 8
+    star_indicator: "*"
+
+  us_5:
+    name: "US $5 Bill"
+    serial_format: "[A-L]\\d{8}[A-Y*]"
+    digit_count: 8
+    star_indicator: "*"
+
+  us_100:
+    name: "US $100 Bill"
+    serial_format: "[A-L]{2}\\d{8}[A-Y]"
+    digit_count: 8
+    star_indicator: "*"
+
+# =============================================================================
+# TIER 1: HOLY GRAIL (Extremely Rare - $500+)
+# =============================================================================
+
+patterns:
+
+  SOLID:
+    description: "All 8 digits identical (e.g., 88888888)"
+    tier: 1
+    enabled: true
+    rules:
+      check: solid
+    examples: ["11111111", "88888888"]
+    rarity: "1 in 10,000,000"
+
+  LADDER:
+    description: "Perfect 8-digit ascending or descending sequence"
+    tier: 1
+    enabled: true
+    rules:
+      any:
+        - check: ladder_asc
+        - check: ladder_desc
+    examples: ["01234567", "12345678", "87654321"]
+    rarity: "1 in 5,000,000"
+
+  SUPER_RADAR:
+    description: "Radar with internal symmetry (e.g., 01011010)"
+    tier: 1
+    enabled: true
+    rules:
+      all:
+        - check: palindrome
+        - check: quad_symmetry
+    examples: ["01011010", "10000001"]
+
+  RADAR_REPEATER:
+    description: "Both radar AND repeater (e.g., 12121212)"
+    tier: 1
+    enabled: true
+    rules:
+      all:
+        - check: palindrome
+        - check: repeater
+    examples: ["12121212", "21212121"]
+
+# =============================================================================
+# TIER 2: PREMIUM (Very Rare - $100-500)
+# =============================================================================
+
+  RADAR:
+    description: "Palindrome - reads same forwards and backwards"
+    tier: 2
+    enabled: true
+    rules:
+      check: palindrome
+    examples: ["12344321", "68888886"]
+
+  REPEATER:
+    description: "First 4 digits repeat (ABCDABCD)"
+    tier: 2
+    enabled: true
+    rules:
+      check: repeater
+    examples: ["12341234", "56785678"]
+
+  SUPER_REPEATER:
+    description: "2-digit pattern repeated 4 times (ABABABAB)"
+    tier: 2
+    enabled: true
+    rules:
+      regex: "^(\\d\\d)\\1\\1\\1$"
+    examples: ["12121212", "78787878"]
+
+  BINARY:
+    description: "Only 2 unique digits used"
+    tier: 2
+    enabled: true
+    rules:
+      unique_count: 2
+    examples: ["11211121", "10010010"]
+
+  TRUE_BINARY:
+    description: "Binary using only 0 and 1"
+    tier: 2
+    enabled: true
+    rules:
+      all:
+        - unique_count: 2
+        - check: binary_digits
+    examples: ["01101001", "10010110"]
+
+  SEVEN_OF_KIND:
+    description: "7 identical digits"
+    tier: 2
+    enabled: true
+    rules:
+      regex: "(\\d)\\1{6}"
+    examples: ["77777727", "11111118"]
+
+  DOUBLE_QUADS:
+    description: "Two groups of 4 identical digits (AAAABBBB)"
+    tier: 2
+    enabled: true
+    rules:
+      regex: "^(\\d)\\1{3}(\\d)\\2{3}$"
+    examples: ["11112222", "99990000"]
+
+  BINARY_RADAR:
+    description: "Binary AND palindrome"
+    tier: 2
+    enabled: true
+    rules:
+      all:
+        - unique_count: 2
+        - check: palindrome
+    examples: ["10011001", "01100110"]
+
+  BINARY_REPEATER:
+    description: "Binary AND repeater"
+    tier: 2
+    enabled: true
+    rules:
+      all:
+        - check: binary_digits
+        - check: repeater
+    examples: ["01010101", "10101010"]
+
+  LOW_SERIAL:
+    description: "Serial number 100 or under"
+    tier: 2
+    enabled: true
+    rules:
+      regex: "^0{5}\\d{3}$"
+    examples: ["00000001", "00000099"]
+
+  ULTRA_LOW_SERIAL:
+    description: "Serial starts with 5+ zeros"
+    tier: 2
+    enabled: true
+    rules:
+      starts_with: "00000"
+    examples: ["00000123", "00000001"]
+
+# =============================================================================
+# TIER 3: COLLECTOR (Uncommon - $20-100)
+# =============================================================================
+
+  TRINARY:
+    description: "Only 3 unique digits used"
+    tier: 3
+    enabled: true
+    rules:
+      unique_max: 3
+    examples: ["12312312", "11122233"]
+
+  TRUE_TRINARY:
+    description: "Exactly 3 unique digits"
+    tier: 3
+    enabled: true
+    rules:
+      unique_count: 3
+    examples: ["12312312", "12332112"]
+
+  TRUE_QUADRINARY:
+    description: "Exactly 4 unique digits"
+    tier: 3
+    enabled: true
+    rules:
+      unique_count: 4
+    examples: ["12341234", "11223344"]
+
+  QUINARY:
+    description: "Only 5 unique digits (too common - disabled by default)"
+    tier: 3
+    enabled: false
+    rules:
+      unique_max: 5
+
+  SIX_OF_KIND:
+    description: "6 identical digits"
+    tier: 3
+    enabled: true
+    rules:
+      regex: "(\\d)\\1{5}"
+    examples: ["66666612", "11111189"]
+
+  FIVE_OF_KIND:
+    description: "5 identical consecutive digits"
+    tier: 3
+    enabled: true
+    rules:
+      regex: "(\\d)\\1{4}"
+    examples: ["55555123", "12333334"]
+
+  ALTERNATOR:
+    description: "Digits alternate ABABABAB"
+    tier: 3
+    enabled: true
+    rules:
+      check: alternator
+    examples: ["12121212", "89898989"]
+
+  STAR:
+    description: "Star note (replacement bill)"
+    tier: 3
+    enabled: true
+    uses_full_serial: true
+    rules:
+      ends_with: "*"
+    examples: ["A12345678*"]
+
+  LADDER_7:
+    description: "Contains 7-digit ladder sequence"
+    tier: 3
+    enabled: true
+    rules:
+      check: ladder_7
+
+  CHUNKY_LADDER:
+    description: "Paired ladder (11223344)"
+    tier: 3
+    enabled: true
+    rules:
+      check: chunky_ladder
+    examples: ["11223344", "44332211"]
+
+  DOUBLES_LADDER:
+    description: "Pairs in ascending/descending order"
+    tier: 3
+    enabled: true
+    rules:
+      check: doubles_ladder
+    examples: ["11223344", "99887766"]
+
+  BOOKENDS:
+    description: "First and last digit match"
+    tier: 3
+    enabled: true
+    rules:
+      regex: "^(\\d)\\d{6}\\1$"
+    examples: ["51234565", "81234568"]
+
+  DOUBLE_BOOKEND:
+    description: "First 2 and last 2 digits match"
+    tier: 3
+    enabled: true
+    rules:
+      regex: "^(\\d\\d)\\d{4}\\1$"
+    examples: ["12345612", "99123499"]
+
+  BROKEN_RADAR:
+    description: "One digit away from radar"
+    tier: 3
+    enabled: true
+    rules:
+      check: broken_radar
+    examples: ["12344322", "12345321"]
+
+# =============================================================================
+# TIER 4: INTERESTING (Somewhat Common - $5-20)
+# =============================================================================
+
+  QUADS:
+    description: "4 consecutive identical digits"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "(\\d)\\1{3}"
+    examples: ["12333345", "11114567"]
+
+  TRIPLES:
+    description: "3 consecutive identical digits"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "(\\d)\\1\\1"
+    examples: ["12333456", "11123456"]
+
+  LADDER_6:
+    description: "Contains 6-digit ladder"
+    tier: 4
+    enabled: true
+    rules:
+      check: ladder_6
+
+  LADDER_5:
+    description: "Contains 5-digit ladder"
+    tier: 4
+    enabled: true
+    rules:
+      check: ladder_5
+
+  LADDER_4:
+    description: "Contains 4-digit ladder"
+    tier: 4
+    enabled: true
+    rules:
+      check: ladder_4
+
+  ALL_EVENS:
+    description: "All digits even (0,2,4,6,8)"
+    tier: 4
+    enabled: true
+    rules:
+      check: all_even
+    examples: ["24680246", "20486420"]
+
+  ALL_ODDS:
+    description: "All digits odd (1,3,5,7,9)"
+    tier: 4
+    enabled: true
+    rules:
+      check: all_odd
+    examples: ["13579135", "97531975"]
+
+  FOUR_PAIRS:
+    description: "Four consecutive pairs (AABBCCDD)"
+    tier: 4
+    enabled: true
+    rules:
+      check: four_pairs
+    examples: ["11223344", "99887766"]
+
+  THREE_PAIRS:
+    description: "Contains at least 3 pairs"
+    tier: 4
+    enabled: true
+    rules:
+      check: three_pairs
+    examples: ["11223345", "99881234"]
+
+  FULL_HOUSE:
+    description: "5 of one digit, 3 of another"
+    tier: 4
+    enabled: true
+    rules:
+      check: full_house
+    examples: ["11111222", "33333888"]
+
+  TWO_PAIR_TRIPLE:
+    description: "Triple + two pairs"
+    tier: 4
+    enabled: true
+    rules:
+      check: two_pair_triple
+
+  TRIPLE_DOUBLE_DOUBLE:
+    description: "Triple + double + double + single"
+    tier: 4
+    enabled: true
+    rules:
+      check: triple_double_double
+
+  CONSECUTIVE_TRIPLES:
+    description: "Two triples back-to-back (111222xx)"
+    tier: 4
+    enabled: true
+    rules:
+      check: consecutive_triples
+    examples: ["11122234", "33344456"]
+
+  THREE_CONSEC_PAIRS:
+    description: "Three consecutive pairs"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "(\\d)\\1(\\d)\\2(\\d)\\3"
+    examples: ["11223345", "99887712"]
+
+  FOUR_CONSEC_PAIRS:
+    description: "Four consecutive pairs"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "^(\\d)\\1(\\d)\\2(\\d)\\3(\\d)\\4$"
+    examples: ["11223344", "55667788"]
+
+  BOOKEND_LADDER:
+    description: "Bookend with different middle"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "^(\\d)\\d{6}\\1$"
+
+  DOUBLES_BOOKEND:
+    description: "Double digits on each end match"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "^(\\d)\\1.{4}\\1\\1$"
+    examples: ["11234511", "99123499"]
+
+  TRIPLES_BOOKEND:
+    description: "Triple on each end"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "^(\\d)\\1\\1.{2}\\1\\1\\1$"
+    examples: ["11122111", "99912999"]
+
+  MINI_REPEATER:
+    description: "3-digit pattern repeats (xx123123)"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "^.{2}(\\d{3})\\1$"
+    examples: ["12345345", "00123123"]
+
+  MINI_SUPER_REPEATER:
+    description: "Alternating start pattern"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "^(\\d)(\\d)\\1\\2\\1\\2.{2}$"
+    examples: ["12121234", "89898912"]
+
+  TRAILING_QUAD:
+    description: "Ends with 4 identical digits"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "(\\d)\\1{3}$"
+    examples: ["12340000", "56781111"]
+
+  TRAILING_5:
+    description: "Ends with 5 identical digits"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "(\\d)\\1{4}$"
+    examples: ["12300000", "56711111"]
+
+  TRAILING_6:
+    description: "Ends with 6 identical digits"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "(\\d)\\1{5}$"
+
+  TRAILING_7:
+    description: "Ends with 7 identical digits"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "(\\d)\\1{6}$"
+
+# =============================================================================
+# TIER 5: SUM PATTERNS
+# =============================================================================
+
+  MAGIC_SUM:
+    description: "Digit sum is 36 (perfect middle)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 36
+
+  SUM_72:
+    description: "Maximum sum (all 9s)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 72
+
+  SUM_0:
+    description: "Minimum sum (all 0s)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 0
+
+  SUM_1:
+    description: "Sum equals 1"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 1
+
+  SUM_61:
+    description: "High sum (61)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 61
+
+  SUM_62:
+    description: "High sum (62)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 62
+
+  SUM_63:
+    description: "High sum (63)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 63
+
+  SUM_64:
+    description: "High sum (64)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 64
+
+  SUM_65:
+    description: "High sum (65)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 65
+
+  SUM_66:
+    description: "High sum (66)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 66
+
+  SUM_67:
+    description: "High sum (67)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 67
+
+  SUM_68:
+    description: "High sum (68)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 68
+
+  SUM_69:
+    description: "High sum (69)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 69
+
+  SUM_70:
+    description: "High sum (70)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 70
+
+  SUM_71:
+    description: "High sum (71)"
+    tier: 5
+    enabled: true
+    rules:
+      digit_sum: 71
+
+# =============================================================================
+# TIER 6: LADDER VARIANTS
+# =============================================================================
+
+  PYRAMID_LADDER:
+    description: "Up then down (12321xxx)"
+    tier: 6
+    enabled: true
+    rules:
+      check: pyramid_ladder
+    examples: ["12321000", "34543212"]
+
+  COUNTING_LADDER:
+    description: "Counting pattern (12123123)"
+    tier: 6
+    enabled: true
+    rules:
+      check: counting_ladder
+
+  STEP_LADDER:
+    description: "Steps of 2 (02468xxx)"
+    tier: 6
+    enabled: false
+    rules:
+      check: step_ladder
+    examples: ["02468135", "97531086"]
+
+  SUPER_LADDER:
+    description: "Two-digit increments (01020304)"
+    tier: 6
+    enabled: true
+    rules:
+      check: super_ladder
+    examples: ["01020304", "10203040"]
+
+  COUNTING_2S:
+    description: "Counting by 2s ladder"
+    tier: 6
+    enabled: true
+    rules:
+      check: counting_2s
+
+  COUNTING_3S:
+    description: "Counting by 3s ladder"
+    tier: 6
+    enabled: true
+    rules:
+      check: counting_3s
+
+  COUNTING_4S:
+    description: "Counting by 4s ladder"
+    tier: 6
+    enabled: true
+    rules:
+      check: counting_4s
+
+  COUNTING_5S:
+    description: "Counting by 5s ladder"
+    tier: 6
+    enabled: true
+    rules:
+      check: counting_5s
+
+  COUNTING_6S:
+    description: "Counting by 6s ladder"
+    tier: 6
+    enabled: true
+    rules:
+      check: counting_6s
+
+  COUNTING_7S:
+    description: "Counting by 7s ladder"
+    tier: 6
+    enabled: true
+    rules:
+      check: counting_7s
+
+  COUNTING_8S:
+    description: "Counting by 8s ladder"
+    tier: 6
+    enabled: true
+    rules:
+      check: counting_8s
+
+  COUNTING_9S:
+    description: "Counting by 9s ladder"
+    tier: 6
+    enabled: true
+    rules:
+      check: counting_9s
+
+# =============================================================================
+# TIER 7: FLIPPER PATTERNS (Upside-down readable)
+# =============================================================================
+
+  FLIPPER:
+    description: "Only flippable digits (0,1,6,8,9)"
+    tier: 7
+    enabled: true
+    rules:
+      check: flipper_digits
+    examples: ["01689018", "96801896"]
+
+  TRUE_FLIPPER:
+    description: "Reads same upside down"
+    tier: 7
+    enabled: true
+    rules:
+      check: true_flipper
+    examples: ["10011001", "69000069"]
+
+  NEAR_FLIPPER:
+    description: "One digit from true flipper"
+    tier: 7
+    enabled: false
+    rules:
+      check: near_flipper
+
+# =============================================================================
+# TIER 8: SPECIAL/LOW SERIAL VARIANTS
+# =============================================================================
+
+  LOW_000:
+    description: "Starts with 000"
+    tier: 8
+    enabled: true
+    rules:
+      starts_with: "000"
+
+  LOW_0000:
+    description: "Starts with 0000"
+    tier: 8
+    enabled: true
+    rules:
+      starts_with: "0000"
+
+  LOW_00000:
+    description: "Starts with 00000"
+    tier: 8
+    enabled: true
+    rules:
+      starts_with: "00000"
+
+  LOW_000000:
+    description: "Starts with 000000"
+    tier: 8
+    enabled: true
+    rules:
+      starts_with: "000000"
+
+  TRAILING_000:
+    description: "Ends with 000"
+    tier: 8
+    enabled: true
+    rules:
+      ends_with: "000"
+
+  TRAILING_0000:
+    description: "Ends with 0000"
+    tier: 8
+    enabled: true
+    rules:
+      ends_with: "0000"
+
+  MILLIONAIRE:
+    description: "Millionaire note (xx000000)"
+    tier: 8
+    enabled: true
+    rules:
+      regex: "^.{1,2}0{6}$"
+    examples: ["12000000", "10000000"]
+
+  MULTI_MILLIONAIRE:
+    description: "Multi-millionaire (X0000000)"
+    tier: 8
+    enabled: true
+    rules:
+      regex: "^[1-9]0{7}$"
+    examples: ["10000000", "50000000"]
+
+# =============================================================================
+# TIER 9: STRUCTURAL COMBOS
+# =============================================================================
+
+  SEQUENTIAL_TRINARY:
+    description: "Trinary with sequential digits"
+    tier: 9
+    enabled: true
+    rules:
+      check: sequential_trinary
+    examples: ["12121212", "23232323"]
+
+  TRIPLE_QUAD:
+    description: "Triple + Quad combination"
+    tier: 9
+    enabled: true
+    rules:
+      regex: "^(\\d)\\1\\1(\\d)\\2{3}.?$|^.?(\\d)\\3{3}(\\d)\\4\\4$"
+
+  FIVE_AND_PAIR:
+    description: "Five of a kind + pair"
+    tier: 9
+    enabled: true
+    rules:
+      regex: "^(\\d)\\1{4}(\\d)\\2|\\d*(\\d)\\3(\\d)\\4{4}$"
+
+  LADDER_AND_QUAD:
+    description: "Contains 4+ ladder AND quad"
+    tier: 9
+    enabled: true
+    rules:
+      check: ladder_and_quad
+
+  BIRTHDAY:
+    description: "Valid date format (MMDDYYYY or DDMMYYYY)"
+    tier: 9
+    enabled: false
+    rules:
+      check: birthday
+
+# =============================================================================
+# TIER 10: NOVELTY (User Customizable)
+# =============================================================================
+
+  LUCKY_777:
+    description: "Contains 777"
+    tier: 10
+    enabled: true
+    rules:
+      contains: "777"
+
+  DEVIL_666:
+    description: "Contains 666"
+    tier: 10
+    enabled: false
+    rules:
+      contains: "666"
+
+  DOUBLE_99:
+    description: "Contains 99"
+    tier: 10
+    enabled: true
+    rules:
+      contains: "99"
+
+# =============================================================================
+# CUSTOM USER PATTERNS
+# Add your own patterns here!
+# =============================================================================
+
+custom_patterns:
+  # Examples (uncomment to enable):
+
+  # MY_BIRTHDAY:
+  #   description: "My birthday July 4"
+  #   tier: 10
+  #   enabled: true
+  #   rules:
+  #     contains: "0704"
+
+  # ANNIVERSARY:
+  #   description: "Wedding date"
+  #   tier: 10
+  #   enabled: true
+  #   rules:
+  #     contains: "1225"
+
+  # BIRTH_YEAR_1990:
+  #   description: "Contains 1990"
+  #   tier: 10
+  #   enabled: true
+  #   rules:
+  #     contains: "1990"

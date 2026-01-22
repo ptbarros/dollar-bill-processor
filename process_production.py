@@ -33,13 +33,19 @@ import argparse
 import shutil
 import yaml
 
+# Import v2 pattern engine
+from pattern_engine_v2 import PatternEngine
+
 
 # =============================================================================
 # CONFIGURATION LOADER
 # =============================================================================
 
 class Config:
-    """Loads and manages configuration from config.yaml and patterns.txt"""
+    """Loads and manages configuration from config.yaml (crop settings only).
+
+    Pattern definitions are now in patterns_v2.yaml, managed by PatternEngine.
+    """
 
     # Default values (used if config.yaml is missing)
     DEFAULT_CROP_REGIONS = {
@@ -67,9 +73,7 @@ class Config:
 
     def __init__(self, config_path: Optional[Path] = None, patterns_path: Optional[Path] = None):
         self.config_path = config_path
-        self.patterns_path = patterns_path
         self.data = {}
-        self._patterns_from_txt = None
 
         if config_path and config_path.exists():
             with open(config_path, 'r') as f:
@@ -77,34 +81,6 @@ class Config:
             print(f"Loaded config: {config_path}")
         else:
             print("Using default configuration")
-
-        # Load patterns from simple text file if it exists
-        if patterns_path and patterns_path.exists():
-            self._patterns_from_txt = self._load_patterns_txt(patterns_path)
-            print(f"Loaded patterns: {patterns_path} ({len(self._patterns_from_txt)} patterns)")
-
-    def _load_patterns_txt(self, path: Path) -> list:
-        """Load patterns from simple text file format: NAME,TYPE,VALUE"""
-        patterns = []
-        with open(path, 'r') as f:
-            for line_num, line in enumerate(f, 1):
-                line = line.strip()
-                # Skip empty lines and comments
-                if not line or line.startswith('#'):
-                    continue
-
-                parts = line.split(',', 2)  # Split into max 3 parts
-                if len(parts) < 3:
-                    print(f"  Warning: Skipping invalid pattern on line {line_num}: {line}")
-                    continue
-
-                name, pattern_type, value = parts[0].strip(), parts[1].strip(), parts[2].strip()
-                patterns.append({
-                    'name': name,
-                    'type': pattern_type,
-                    'value': value
-                })
-        return patterns
 
     @property
     def crop_regions(self) -> dict:
@@ -132,75 +108,11 @@ class Config:
         return [tuple(item) for item in self.DEFAULT_CROP_ORDER]
 
     @property
-    def builtin_patterns(self) -> dict:
-        """Get enabled/disabled status of built-in patterns."""
-        defaults = {
-            # Original core patterns
-            'solid': True, 'repeater': True, 'radar': True,
-            'ladder': True, 'low_serial': True, 'binary': True, 'star_note': True,
-            # Digit count patterns
-            'trinary': True, 'true_trinary': True, 'quadrinary': False,
-            'true_quadrinary': True, 'quinary': False,
-            # Even/odd patterns
-            'all_evens': True, 'all_odds': True,
-            # Special patterns
-            'binary_radar': True, 'alternator': True,
-            # Partial ladders
-            'ladder_7': True, 'ladder_6': True, 'ladder_5': True, 'ladder_4': True,
-            # Structural patterns
-            'full_house': True, 'two_pair_triple': True, 'triple_double_double': True,
-            'consecutive_triples': True, 'double_quads_sequential': True,
-            # Ladder variants
-            'pyramid_ladder': True, 'counting_ladder': True, 'step_ladder': False,
-            'chunky_ladder': True, 'super_ladder': True,
-            # Counting ladders (step patterns)
-            'counting_2s': True, 'counting_3s': True, 'counting_4s': True,
-            'counting_5s': True, 'counting_6s': True, 'counting_7s': True,
-            'counting_8s': True, 'counting_9s': True,
-            # Sum patterns
-            'magic_sum': True,
-            # Flipper patterns
-            'flipper': True, 'true_flipper': True, 'near_flipper': False,
-            # Special structural
-            'broken_radar': True, 'sequential_trinary': True, 'double_bookend': True,
-            'radar_repeater': True, 'birthday': False,
-            # Additional patterns
-            'four_pairs': True, 'three_pairs': True, 'ultra_low_serial': True,
-            'super_radar': True, 'binary_repeater': True, 'doubles_ladder': True,
-            'ladder_and_quad': True,
-        }
-        if 'patterns' in self.data and 'builtin' in self.data['patterns']:
-            defaults.update(self.data['patterns']['builtin'])
-        return defaults
-
-    @property
-    def custom_patterns(self) -> list:
-        """Get list of custom patterns. Prefers patterns.txt over config.yaml."""
-        # Prefer patterns.txt (simpler format, less error-prone)
-        if self._patterns_from_txt is not None:
-            return self._patterns_from_txt
-        # Fall back to config.yaml
-        if 'patterns' in self.data and 'custom' in self.data['patterns']:
-            return self.data['patterns']['custom'] or []
-        return []
-
-    @property
     def jpeg_quality(self) -> int:
         """Get JPEG quality setting."""
         if 'options' in self.data:
             return self.data['options'].get('jpeg_quality', 95)
         return 95
-
-    @property
-    def star_notes_always_fancy(self) -> bool:
-        """Whether star notes are always considered fancy."""
-        if 'options' in self.data:
-            return self.data['options'].get('star_notes_always_fancy', True)
-        return True
-
-
-# Global config instance (set during main())
-config: Optional[Config] = None
 
 
 # =============================================================================
@@ -304,697 +216,6 @@ class BillAligner:
                                   borderMode=cv2.BORDER_CONSTANT,
                                   borderValue=(255, 255, 255))
         return aligned
-
-
-class FancyNumberDetector:
-    """Detects fancy serial numbers (repeaters, radars, etc.)"""
-
-    def __init__(self, cfg: Optional[Config] = None):
-        """Initialize with optional config for custom patterns."""
-        self.cfg = cfg
-
-    @staticmethod
-    def extract_digits(serial):
-        """Extract just the 8 digits from serial (remove letters)"""
-        if len(serial) >= 10:
-            return serial[1:9]
-        return None
-
-    @staticmethod
-    def is_repeater(digits):
-        """Check if first 4 digits repeat (e.g., 12341234)"""
-        if len(digits) != 8:
-            return False
-        return digits[:4] == digits[4:]
-
-    @staticmethod
-    def is_radar(digits):
-        """Check if it's a palindrome (e.g., 12344321)"""
-        if len(digits) != 8:
-            return False
-        return digits == digits[::-1]
-
-    @staticmethod
-    def is_solid(digits):
-        """Check if all digits are the same (e.g., 11111111)"""
-        if len(digits) != 8:
-            return False
-        return len(set(digits)) == 1
-
-    @staticmethod
-    def is_ladder(digits):
-        """Check if digits are sequential (e.g., 12345678 or 87654321)"""
-        if len(digits) != 8:
-            return False
-        nums = [int(d) for d in digits]
-        if all(nums[i] + 1 == nums[i + 1] for i in range(7)):
-            return True
-        if all(nums[i] - 1 == nums[i + 1] for i in range(7)):
-            return True
-        return False
-
-    @staticmethod
-    def is_low_serial(digits):
-        """Check if serial number is very low (< 100)"""
-        if len(digits) != 8:
-            return False
-        try:
-            return int(digits) <= 100
-        except:
-            return False
-
-    @staticmethod
-    def is_binary(digits):
-        """Check if only contains 0s and 1s"""
-        if len(digits) != 8:
-            return False
-        return set(digits).issubset({'0', '1'})
-
-    @staticmethod
-    def is_star_note(serial):
-        """Check if it's a star note (ends with *)"""
-        return serial and serial.endswith('*')
-
-    # =========================================================================
-    # DIGIT COUNT PATTERNS
-    # =========================================================================
-
-    @staticmethod
-    def is_trinary(digits):
-        """Check if uses only 3 or fewer different digits."""
-        return len(digits) == 8 and len(set(digits)) <= 3
-
-    @staticmethod
-    def is_true_trinary(digits):
-        """Check if uses exactly 3 different digits (each appears at least once)."""
-        return len(digits) == 8 and len(set(digits)) == 3
-
-    @staticmethod
-    def is_quadrinary(digits):
-        """Check if uses only 4 or fewer different digits."""
-        return len(digits) == 8 and len(set(digits)) <= 4
-
-    @staticmethod
-    def is_true_quadrinary(digits):
-        """Check if uses exactly 4 different digits."""
-        return len(digits) == 8 and len(set(digits)) == 4
-
-    @staticmethod
-    def is_quinary(digits):
-        """Check if uses only 5 or fewer different digits."""
-        return len(digits) == 8 and len(set(digits)) <= 5
-
-    # =========================================================================
-    # EVEN/ODD PATTERNS
-    # =========================================================================
-
-    @staticmethod
-    def is_all_evens(digits):
-        """Check if all digits are even (0,2,4,6,8)."""
-        return len(digits) == 8 and all(d in '02468' for d in digits)
-
-    @staticmethod
-    def is_all_odds(digits):
-        """Check if all digits are odd (1,3,5,7,9)."""
-        return len(digits) == 8 and all(d in '13579' for d in digits)
-
-    # =========================================================================
-    # SPECIAL PATTERNS
-    # =========================================================================
-
-    @staticmethod
-    def has_ladder_of_length(digits, length):
-        """Check if contains an ascending or descending ladder of given length."""
-        if len(digits) < length:
-            return False
-        nums = [int(d) for d in digits]
-        for i in range(len(nums) - length + 1):
-            segment = nums[i:i+length]
-            # Ascending
-            if all(segment[j] + 1 == segment[j+1] for j in range(length-1)):
-                return True
-            # Descending
-            if all(segment[j] - 1 == segment[j+1] for j in range(length-1)):
-                return True
-        return False
-
-    @staticmethod
-    def is_binary_radar(digits):
-        """Check if binary AND radar (palindrome with only 0s and 1s)."""
-        if len(digits) != 8:
-            return False
-        return set(digits).issubset({'0', '1'}) and digits == digits[::-1]
-
-    @staticmethod
-    def is_alternator(digits):
-        """Check if digits alternate between two values (e.g., 12121212)."""
-        if len(digits) != 8:
-            return False
-        if len(set(digits)) != 2:
-            return False
-        return all(digits[i] == digits[i % 2] for i in range(8))
-
-    # =========================================================================
-    # STRUCTURAL PATTERNS
-    # =========================================================================
-
-    @staticmethod
-    def is_full_house(digits):
-        """Check for full house: 5 of one digit, 3 of another."""
-        if len(digits) != 8:
-            return False
-        from collections import Counter
-        counts = sorted(Counter(digits).values(), reverse=True)
-        return counts == [5, 3]
-
-    @staticmethod
-    def is_two_pair_triple(digits):
-        """Check for triple + two pairs pattern."""
-        if len(digits) != 8:
-            return False
-        from collections import Counter
-        counts = sorted(Counter(digits).values(), reverse=True)
-        return counts == [3, 2, 2, 1] or counts == [3, 2, 2]
-
-    @staticmethod
-    def is_triple_double_double(digits):
-        """Check for triple + double + double + single pattern."""
-        if len(digits) != 8:
-            return False
-        from collections import Counter
-        counts = sorted(Counter(digits).values(), reverse=True)
-        return counts == [3, 2, 2, 1]
-
-    @staticmethod
-    def is_consecutive_triples(digits):
-        """Check for two triples back-to-back (111222xx)."""
-        if len(digits) != 8:
-            return False
-        # Check positions 0-5 for two consecutive triples
-        for i in range(3):  # Start positions 0, 1, 2
-            if (digits[i] == digits[i+1] == digits[i+2] and
-                digits[i+3] == digits[i+4] == digits[i+5] and
-                digits[i] != digits[i+3]):
-                return True
-        return False
-
-    @staticmethod
-    def is_double_quads_sequential(digits):
-        """Check for two sequential quads (11112222)."""
-        if len(digits) != 8:
-            return False
-        return (digits[0] == digits[1] == digits[2] == digits[3] and
-                digits[4] == digits[5] == digits[6] == digits[7] and
-                digits[0] != digits[4])
-
-    # =========================================================================
-    # LADDER VARIANTS
-    # =========================================================================
-
-    @staticmethod
-    def is_pyramid_ladder(digits):
-        """Check for pyramid pattern (up then down): 12321xxx."""
-        if len(digits) < 5:
-            return False
-        nums = [int(d) for d in digits]
-        # Check for 5-digit pyramids
-        for i in range(len(nums) - 4):
-            seg = nums[i:i+5]
-            if (seg[0] < seg[1] < seg[2] and seg[2] > seg[3] > seg[4] and
-                seg[0] == seg[4] and seg[1] == seg[3]):
-                return True
-        return False
-
-    @staticmethod
-    def is_counting_ladder(digits):
-        """Check for counting pattern: 12123123 or similar."""
-        if len(digits) != 8:
-            return False
-        # Pattern: 12123123
-        if digits == '12123123':
-            return True
-        # Check for other counting patterns
-        if digits[:2] == '12' and digits[2:5] == '123' and digits[5:] == '123':
-            return True
-        return False
-
-    @staticmethod
-    def is_step_ladder(digits):
-        """Check for steps of 2: 02468xxx."""
-        if len(digits) != 8:
-            return False
-        nums = [int(d) for d in digits]
-        # Check for 4+ digit step pattern
-        for i in range(5):
-            if all(nums[i+j+1] - nums[i+j] == 2 for j in range(3)):
-                return True
-            if all(nums[i+j] - nums[i+j+1] == 2 for j in range(3)):
-                return True
-        return False
-
-    @staticmethod
-    def is_chunky_ladder(digits):
-        """Check for paired ladder: 11223344."""
-        if len(digits) != 8:
-            return False
-        # Check for ascending pairs
-        if all(digits[i*2] == digits[i*2+1] for i in range(4)):
-            nums = [int(digits[i*2]) for i in range(4)]
-            if all(nums[i] + 1 == nums[i+1] for i in range(3)):
-                return True
-            if all(nums[i] - 1 == nums[i+1] for i in range(3)):
-                return True
-        return False
-
-    @staticmethod
-    def is_super_ladder(digits):
-        """Check for double-digit ladder: 01020304."""
-        if len(digits) != 8:
-            return False
-        # Pattern like 01020304, 02040608, etc.
-        pairs = [digits[i:i+2] for i in range(0, 8, 2)]
-        try:
-            nums = [int(p) for p in pairs]
-            diff = nums[1] - nums[0]
-            if diff != 0 and all(nums[i+1] - nums[i] == diff for i in range(3)):
-                return True
-        except:
-            pass
-        return False
-
-    # =========================================================================
-    # SUM PATTERNS
-    # =========================================================================
-
-    @staticmethod
-    def digit_sum(digits):
-        """Calculate sum of all digits."""
-        return sum(int(d) for d in digits)
-
-    @staticmethod
-    def is_magic_sum(digits):
-        """Check if digit sum is a 'magic' number (9, 36, 72)."""
-        if len(digits) != 8:
-            return False
-        s = sum(int(d) for d in digits)
-        return s in {9, 36, 72}
-
-    @staticmethod
-    def get_sum_category(digits):
-        """Return sum category if notable - collectors value extreme sums."""
-        if len(digits) != 8:
-            return None
-        s = sum(int(d) for d in digits)
-        # Collectors value: very low (1-11) and very high (61-72) sums
-        # Min possible: 0 (00000000), Max possible: 72 (99999999)
-        if s <= 11 or s >= 61:
-            return f"SUM_{s}"
-        return None
-
-    @staticmethod
-    def has_counting_ladder(digits, step):
-        """Check for counting ladder with given step (e.g., step=2: 02040608)."""
-        if len(digits) != 8:
-            return False
-        # Check as 4 two-digit pairs
-        pairs = [digits[i:i+2] for i in range(0, 8, 2)]
-        try:
-            nums = [int(p) for p in pairs]
-            # Check if each pair increases by step
-            if all(nums[i+1] - nums[i] == step for i in range(3)):
-                return True
-            # Check descending
-            if all(nums[i] - nums[i+1] == step for i in range(3)):
-                return True
-        except:
-            pass
-        return False
-
-    # =========================================================================
-    # FLIPPER PATTERNS (digits that look same upside down)
-    # =========================================================================
-
-    @staticmethod
-    def is_flipper(digits):
-        """Check if contains only flippable digits (0,1,6,8,9)."""
-        return len(digits) == 8 and set(digits).issubset({'0', '1', '6', '8', '9'})
-
-    @staticmethod
-    def is_true_flipper(digits):
-        """Check if reads same when flipped upside down."""
-        if len(digits) != 8:
-            return False
-        flip_map = {'0': '0', '1': '1', '6': '9', '8': '8', '9': '6'}
-        if not set(digits).issubset(set(flip_map.keys())):
-            return False
-        flipped = ''.join(flip_map[d] for d in reversed(digits))
-        return digits == flipped
-
-    @staticmethod
-    def is_near_flipper(digits):
-        """Check if one digit away from true flipper."""
-        if len(digits) != 8:
-            return False
-        flip_map = {'0': '0', '1': '1', '6': '9', '8': '8', '9': '6'}
-        non_flip_count = sum(1 for d in digits if d not in flip_map)
-        return non_flip_count == 1
-
-    # =========================================================================
-    # SPECIAL STRUCTURAL PATTERNS
-    # =========================================================================
-
-    @staticmethod
-    def is_broken_radar(digits):
-        """Check if one digit away from being a radar."""
-        if len(digits) != 8:
-            return False
-        reversed_digits = digits[::-1]
-        differences = sum(1 for i in range(8) if digits[i] != reversed_digits[i])
-        return differences == 2  # One swap = 2 position differences
-
-    @staticmethod
-    def is_sequential_trinary(digits):
-        """Check for trinary with sequential digits (e.g., 121212 uses 1,2)."""
-        if len(digits) != 8:
-            return False
-        unique = sorted(set(digits))
-        if len(unique) not in [2, 3]:
-            return False
-        nums = [int(d) for d in unique]
-        return all(nums[i] + 1 == nums[i+1] for i in range(len(nums)-1))
-
-    @staticmethod
-    def is_double_bookend(digits):
-        """Check if first 2 digits equal last 2 digits."""
-        return len(digits) == 8 and digits[:2] == digits[-2:]
-
-    @staticmethod
-    def is_radar_repeater(digits):
-        """Check if both radar AND repeater."""
-        if len(digits) != 8:
-            return False
-        is_radar = digits == digits[::-1]
-        is_repeater = digits[:4] == digits[4:]
-        return is_radar and is_repeater
-
-    @staticmethod
-    def is_birthday(digits):
-        """Check if could be a date pattern (MMDDYYYY or DDMMYYYY)."""
-        if len(digits) != 8:
-            return False
-        # MMDDYYYY
-        try:
-            mm, dd = int(digits[:2]), int(digits[2:4])
-            yyyy = int(digits[4:])
-            if 1 <= mm <= 12 and 1 <= dd <= 31 and 1900 <= yyyy <= 2030:
-                return True
-        except:
-            pass
-        # DDMMYYYY
-        try:
-            dd, mm = int(digits[:2]), int(digits[2:4])
-            yyyy = int(digits[4:])
-            if 1 <= mm <= 12 and 1 <= dd <= 31 and 1900 <= yyyy <= 2030:
-                return True
-        except:
-            pass
-        return False
-
-    # =========================================================================
-    # ADDITIONAL PATTERNS
-    # =========================================================================
-
-    @staticmethod
-    def is_four_pairs(digits):
-        """Check for four pairs: 11223344."""
-        if len(digits) != 8:
-            return False
-        return all(digits[i*2] == digits[i*2+1] for i in range(4))
-
-    @staticmethod
-    def is_three_pairs(digits):
-        """Check if contains at least three pairs."""
-        if len(digits) != 8:
-            return False
-        pair_count = 0
-        i = 0
-        while i < 7:
-            if digits[i] == digits[i+1]:
-                pair_count += 1
-                i += 2
-            else:
-                i += 1
-        return pair_count >= 3
-
-    @staticmethod
-    def is_ultra_low_serial(digits):
-        """Check if first 5+ digits are zeros."""
-        if len(digits) != 8:
-            return False
-        return digits[:5] == '00000'
-
-    @staticmethod
-    def is_super_radar(digits):
-        """Check for triple-symmetric radar (e.g., 12122121)."""
-        if len(digits) != 8:
-            return False
-        # Must be radar first
-        if digits != digits[::-1]:
-            return False
-        # Check for additional internal symmetry
-        return digits[:4] == digits[:4][::-1]
-
-    @staticmethod
-    def is_binary_repeater(digits):
-        """Check if binary AND repeater."""
-        if len(digits) != 8:
-            return False
-        return set(digits).issubset({'0', '1'}) and digits[:4] == digits[4:]
-
-    @staticmethod
-    def is_doubles_ladder(digits):
-        """Check for pairs in sequence: 11223344."""
-        if len(digits) != 8:
-            return False
-        if not all(digits[i*2] == digits[i*2+1] for i in range(4)):
-            return False
-        nums = [int(digits[i*2]) for i in range(4)]
-        # Check ascending or descending
-        return (all(nums[i] + 1 == nums[i+1] for i in range(3)) or
-                all(nums[i] - 1 == nums[i+1] for i in range(3)))
-
-    @staticmethod
-    def is_ladder_and_quad(digits):
-        """Check if contains both a 4+ ladder and a quad."""
-        if len(digits) != 8:
-            return False
-        # Check for quad
-        has_quad = bool(re.search(r'(\d)\1{3}', digits))
-        if not has_quad:
-            return False
-        # Check for 4-digit ladder
-        nums = [int(d) for d in digits]
-        for i in range(5):
-            seg = nums[i:i+4]
-            if (all(seg[j] + 1 == seg[j+1] for j in range(3)) or
-                all(seg[j] - 1 == seg[j+1] for j in range(3))):
-                return True
-        return False
-
-    def check_custom_pattern(self, pattern: dict, digits: str, serial: str) -> bool:
-        """Check if digits/serial matches a custom pattern."""
-        pattern_type = pattern.get('type', 'contains')
-        value = pattern.get('value', '')
-
-        if not value:
-            return False
-
-        if pattern_type == 'contains':
-            return value in digits
-        elif pattern_type == 'starts_with':
-            return digits.startswith(value)
-        elif pattern_type == 'ends_with':
-            return digits.endswith(value)
-        elif pattern_type == 'exact':
-            return digits == value
-        elif pattern_type == 'regex':
-            try:
-                return bool(re.search(value, digits))
-            except re.error:
-                return False
-        elif pattern_type == 'serial_contains':
-            # Match against full serial including letters
-            return value in serial
-        elif pattern_type == 'serial_regex':
-            try:
-                return bool(re.search(value, serial))
-            except re.error:
-                return False
-
-        return False
-
-    def classify(self, serial: str) -> list:
-        """Classify a serial number and return all fancy types found."""
-        if not serial:
-            return []
-
-        fancy_types = []
-
-        # Get config settings
-        builtin = self.cfg.builtin_patterns if self.cfg else {
-            'solid': True, 'repeater': True, 'radar': True,
-            'ladder': True, 'low_serial': True, 'binary': True, 'star_note': True
-        }
-
-        # Check star note first (uses full serial)
-        if builtin.get('star_note', True) and self.is_star_note(serial):
-            fancy_types.append("STAR")
-
-        digits = self.extract_digits(serial)
-        if not digits:
-            return fancy_types
-
-        # === Original core patterns ===
-        if builtin.get('solid', True) and self.is_solid(digits):
-            fancy_types.append("SOLID")
-        if builtin.get('repeater', True) and self.is_repeater(digits):
-            fancy_types.append("REPEATER")
-        if builtin.get('radar', True) and self.is_radar(digits):
-            fancy_types.append("RADAR")
-        if builtin.get('ladder', True) and self.is_ladder(digits):
-            fancy_types.append("LADDER")
-        if builtin.get('low_serial', True) and self.is_low_serial(digits):
-            fancy_types.append("LOW_SERIAL")
-        if builtin.get('binary', True) and self.is_binary(digits):
-            fancy_types.append("BINARY")
-
-        # === Digit count patterns ===
-        if builtin.get('trinary', True) and self.is_trinary(digits):
-            fancy_types.append("TRINARY")
-        if builtin.get('true_trinary', True) and self.is_true_trinary(digits):
-            fancy_types.append("TRUE_TRINARY")
-        if builtin.get('quadrinary', False) and self.is_quadrinary(digits):
-            fancy_types.append("QUADRINARY")
-        if builtin.get('true_quadrinary', True) and self.is_true_quadrinary(digits):
-            fancy_types.append("TRUE_QUADRINARY")
-        if builtin.get('quinary', False) and self.is_quinary(digits):
-            fancy_types.append("QUINARY")
-
-        # === Even/odd patterns ===
-        if builtin.get('all_evens', True) and self.is_all_evens(digits):
-            fancy_types.append("ALL_EVENS")
-        if builtin.get('all_odds', True) and self.is_all_odds(digits):
-            fancy_types.append("ALL_ODDS")
-
-        # === Special patterns ===
-        if builtin.get('binary_radar', True) and self.is_binary_radar(digits):
-            fancy_types.append("BINARY_RADAR")
-        if builtin.get('alternator', True) and self.is_alternator(digits):
-            fancy_types.append("ALTERNATOR")
-
-        # === Partial ladder patterns ===
-        if builtin.get('ladder_7', True) and self.has_ladder_of_length(digits, 7):
-            fancy_types.append("LADDER_7")
-        if builtin.get('ladder_6', True) and self.has_ladder_of_length(digits, 6):
-            fancy_types.append("LADDER_6")
-        if builtin.get('ladder_5', True) and self.has_ladder_of_length(digits, 5):
-            fancy_types.append("LADDER_5")
-        if builtin.get('ladder_4', True) and self.has_ladder_of_length(digits, 4):
-            fancy_types.append("LADDER_4")
-
-        # === Structural patterns ===
-        if builtin.get('full_house', True) and self.is_full_house(digits):
-            fancy_types.append("FULL_HOUSE")
-        if builtin.get('two_pair_triple', True) and self.is_two_pair_triple(digits):
-            fancy_types.append("TWO_PAIR_TRIPLE")
-        if builtin.get('triple_double_double', True) and self.is_triple_double_double(digits):
-            fancy_types.append("TRIPLE_DOUBLE_DOUBLE")
-        if builtin.get('consecutive_triples', True) and self.is_consecutive_triples(digits):
-            fancy_types.append("CONSECUTIVE_TRIPLES")
-        if builtin.get('double_quads_sequential', True) and self.is_double_quads_sequential(digits):
-            fancy_types.append("DOUBLE_QUADS_SEQUENTIAL")
-
-        # === Ladder variants ===
-        if builtin.get('pyramid_ladder', True) and self.is_pyramid_ladder(digits):
-            fancy_types.append("PYRAMID_LADDER")
-        if builtin.get('counting_ladder', True) and self.is_counting_ladder(digits):
-            fancy_types.append("COUNTING_LADDER")
-        if builtin.get('step_ladder', False) and self.is_step_ladder(digits):
-            fancy_types.append("STEP_LADDER")
-        if builtin.get('chunky_ladder', True) and self.is_chunky_ladder(digits):
-            fancy_types.append("CHUNKY_LADDER")
-        if builtin.get('super_ladder', True) and self.is_super_ladder(digits):
-            fancy_types.append("SUPER_LADDER")
-
-        # === Sum patterns ===
-        if builtin.get('magic_sum', True) and self.is_magic_sum(digits):
-            fancy_types.append("MAGIC_SUM")
-        sum_cat = self.get_sum_category(digits)
-        if sum_cat:
-            fancy_types.append(sum_cat)
-
-        # === Counting ladder patterns (step of 2-9) ===
-        if builtin.get('counting_2s', True) and self.has_counting_ladder(digits, 2):
-            fancy_types.append("COUNTING_2S")
-        if builtin.get('counting_3s', True) and self.has_counting_ladder(digits, 3):
-            fancy_types.append("COUNTING_3S")
-        if builtin.get('counting_4s', True) and self.has_counting_ladder(digits, 4):
-            fancy_types.append("COUNTING_4S")
-        if builtin.get('counting_5s', True) and self.has_counting_ladder(digits, 5):
-            fancy_types.append("COUNTING_5S")
-        if builtin.get('counting_6s', True) and self.has_counting_ladder(digits, 6):
-            fancy_types.append("COUNTING_6S")
-        if builtin.get('counting_7s', True) and self.has_counting_ladder(digits, 7):
-            fancy_types.append("COUNTING_7S")
-        if builtin.get('counting_8s', True) and self.has_counting_ladder(digits, 8):
-            fancy_types.append("COUNTING_8S")
-        if builtin.get('counting_9s', True) and self.has_counting_ladder(digits, 9):
-            fancy_types.append("COUNTING_9S")
-
-        # === Flipper patterns ===
-        if builtin.get('flipper', True) and self.is_flipper(digits):
-            fancy_types.append("FLIPPER")
-        if builtin.get('true_flipper', True) and self.is_true_flipper(digits):
-            fancy_types.append("TRUE_FLIPPER")
-        if builtin.get('near_flipper', False) and self.is_near_flipper(digits):
-            fancy_types.append("NEAR_FLIPPER")
-
-        # === Special structural patterns ===
-        if builtin.get('broken_radar', True) and self.is_broken_radar(digits):
-            fancy_types.append("BROKEN_RADAR")
-        if builtin.get('sequential_trinary', True) and self.is_sequential_trinary(digits):
-            fancy_types.append("SEQUENTIAL_TRINARY")
-        if builtin.get('double_bookend', True) and self.is_double_bookend(digits):
-            fancy_types.append("DOUBLE_BOOKEND")
-        if builtin.get('radar_repeater', True) and self.is_radar_repeater(digits):
-            fancy_types.append("RADAR_REPEATER")
-        if builtin.get('birthday', False) and self.is_birthday(digits):
-            fancy_types.append("BIRTHDAY")
-
-        # === Additional patterns ===
-        if builtin.get('four_pairs', True) and self.is_four_pairs(digits):
-            fancy_types.append("FOUR_PAIRS")
-        if builtin.get('three_pairs', True) and self.is_three_pairs(digits):
-            fancy_types.append("THREE_PAIRS")
-        if builtin.get('ultra_low_serial', True) and self.is_ultra_low_serial(digits):
-            fancy_types.append("ULTRA_LOW_SERIAL")
-        if builtin.get('super_radar', True) and self.is_super_radar(digits):
-            fancy_types.append("SUPER_RADAR")
-        if builtin.get('binary_repeater', True) and self.is_binary_repeater(digits):
-            fancy_types.append("BINARY_REPEATER")
-        if builtin.get('doubles_ladder', True) and self.is_doubles_ladder(digits):
-            fancy_types.append("DOUBLES_LADDER")
-        if builtin.get('ladder_and_quad', True) and self.is_ladder_and_quad(digits):
-            fancy_types.append("LADDER_AND_QUAD")
-
-        # Custom patterns from config
-        if self.cfg:
-            for pattern in self.cfg.custom_patterns:
-                if self.check_custom_pattern(pattern, digits, serial):
-                    name = pattern.get('name', 'CUSTOM')
-                    fancy_types.append(name)
-
-        return fancy_types
 
 
 # =============================================================================
@@ -1105,7 +326,8 @@ class ScannerFormatDetector:
 class ProductionProcessor:
     """Main processor for production pipeline."""
 
-    def __init__(self, yolo_model_path: Path, use_gpu: bool = False, cfg: Optional[Config] = None):
+    def __init__(self, yolo_model_path: Path, use_gpu: bool = False, cfg: Optional[Config] = None,
+                 patterns_v2_path: Optional[Path] = None):
         self.cfg = cfg or Config()  # Use provided config or create default
 
         print(f"Loading YOLOv8 model: {yolo_model_path}")
@@ -1117,7 +339,11 @@ class ProductionProcessor:
         print(f"Loading EasyOCR (GPU={use_gpu})...")
         self.ocr_reader = easyocr.Reader(['en'], gpu=use_gpu, verbose=False)
 
-        self.fancy_detector = FancyNumberDetector(cfg=self.cfg)
+        # Use v2 pattern engine (single YAML config)
+        print(f"Loading pattern engine v2...")
+        self.pattern_engine = PatternEngine(patterns_v2_path)
+        pattern_count = len(self.pattern_engine.patterns)
+        print(f"  Loaded {pattern_count} patterns from {self.pattern_engine.config_path}")
         print("Ready!\n")
 
     def count_serial_detections(self, image_path: Path) -> int:
@@ -1474,7 +700,7 @@ class ProductionProcessor:
                     pair.fancy_types = ["ALL"]
                     pair.is_fancy = True
                 else:
-                    fancy_types = self.fancy_detector.classify(serial)
+                    fancy_types = self.pattern_engine.classify_simple(serial)
                     pair.fancy_types = fancy_types
                     pair.is_fancy = len(fancy_types) > 0
 
@@ -1637,16 +863,12 @@ Examples:
     # Find and load config
     script_dir = Path(__file__).parent
     config_path = args.config or script_dir / "config.yaml"
-    patterns_path = script_dir / "patterns.txt"
+    patterns_v2_path = script_dir / "patterns_v2.yaml"
 
     cfg = Config(
         config_path if config_path.exists() else None,
-        patterns_path if patterns_path.exists() else None
+        None  # patterns.txt no longer used - v2 YAML is the source of truth
     )
-
-    # Show custom patterns if any
-    if cfg.custom_patterns:
-        print(f"Custom patterns: {[p.get('name', 'unnamed') for p in cfg.custom_patterns]}")
 
     # Find model
     model_path = args.model or script_dir / "best.pt"
@@ -1655,7 +877,12 @@ Examples:
         return 1
 
     # Initialize processor (no reference needed - uses border detection for alignment)
-    processor = ProductionProcessor(model_path, use_gpu=args.gpu, cfg=cfg)
+    processor = ProductionProcessor(
+        model_path,
+        use_gpu=args.gpu,
+        cfg=cfg,
+        patterns_v2_path=patterns_v2_path if patterns_v2_path.exists() else None
+    )
 
     if args.all:
         print("Mode: Processing ALL bills (--all flag)")
