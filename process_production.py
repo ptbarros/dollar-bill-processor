@@ -411,7 +411,7 @@ class ProductionProcessor:
         for variant in variants:
             results = self.ocr_reader.readtext(
                 variant,
-                allowlist='ABCDEFGHIJKLNPQRSTUVWXY0123456789*',
+                allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
                 detail=1
             )
 
@@ -456,10 +456,9 @@ class ProductionProcessor:
                                     valid_serials.append((corrected, conf))
                                     break
 
-                # 9 chars starting with valid letter - likely star note missing *
-                elif re.match(r'^[A-L]\d{8}$', text_clean):
-                    corrected = text_clean + '*'
-                    valid_serials.append((corrected, conf * 0.9))  # Slightly lower confidence
+                # 9 chars starting with valid letter - could be missing last letter
+                # Don't auto-append * as it causes false star note detection
+                # The consensus voting will pick up the correct reading from other boxes
 
                 # 9 chars ending with letter - likely missing first letter
                 elif re.match(r'^\d{8}[A-Y]$', text_clean):
@@ -555,6 +554,45 @@ class ProductionProcessor:
                     serials_found.append((serial, conf))
 
         if not serials_found:
+            # Fallback: Check if this might be a star note with * not detected
+            # Re-scan crops for 9-char patterns that could be star notes
+            star_candidates = []
+            for result in results:
+                for box in result.boxes:
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    box_width = x2 - x1
+                    box_height = y2 - y1
+                    padding_x = int(box_width * 0.40)
+                    padding_y = int(box_height * 0.15)
+
+                    x1_exp = max(0, x1 - padding_x)
+                    y1_exp = max(0, y1 - padding_y)
+                    x2_exp = min(w, x2 + padding_x)
+                    y2_exp = min(h, y2 + padding_y)
+
+                    crop = aligned_img[y1_exp:y2_exp, x1_exp:x2_exp]
+
+                    # Try OCR without the full validation
+                    ocr_results = self.ocr_reader.readtext(
+                        crop,
+                        allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
+                        detail=1
+                    )
+
+                    for (bbox, text, conf) in ocr_results:
+                        text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
+                        # 9 chars starting with valid Fed letter = potential star note
+                        if re.match(r'^[A-L]\d{8}$', text_clean):
+                            star_candidates.append((text_clean + '*', conf * 0.85))
+
+            if star_candidates:
+                # Use most common reading
+                from collections import Counter
+                serial_counts = Counter(s for s, c in star_candidates)
+                best_serial = serial_counts.most_common(1)[0][0]
+                best_conf = max(c for s, c in star_candidates if s == best_serial)
+                return best_serial, best_conf
+
             return None, 0
 
         # If only one reading, return it
