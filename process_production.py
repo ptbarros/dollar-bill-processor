@@ -399,9 +399,9 @@ class ProductionProcessor:
 
         pattern = r'[A-L]\d{8}[A-Y*]'
 
-        # Common OCR digit→letter confusions
+        # Common OCR digit→letter confusions (ordered by likelihood)
         digit_to_letter = {
-            '0': ['O', 'D', 'Q'], '1': ['I', 'L'], '5': ['S'],
+            '0': ['O', 'D', 'Q'], '1': ['L', 'I'], '5': ['S'],
             '6': ['G', 'C'], '8': ['B'],
         }
 
@@ -424,7 +424,7 @@ class ProductionProcessor:
                     valid_serials.append((match.group(0), conf))
                     continue
 
-                # Try digit→letter corrections for last position
+                # Try digit→letter corrections for last position (10 chars)
                 if re.match(r'^[A-L]\d{9}$', text_clean):
                     last_digit = text_clean[-1]
                     if last_digit in digit_to_letter:
@@ -434,7 +434,7 @@ class ProductionProcessor:
                                 valid_serials.append((corrected, conf))
                                 break
 
-                # Try digit→letter corrections for first position
+                # Try digit→letter corrections for first position (10 chars)
                 elif re.match(r'^\d{9}[A-Y*]$', text_clean):
                     first_digit = text_clean[0]
                     if first_digit in digit_to_letter:
@@ -444,7 +444,7 @@ class ProductionProcessor:
                                 valid_serials.append((corrected, conf))
                                 break
 
-                # Try both positions
+                # Try both positions (10 digits)
                 elif re.match(r'^\d{10}$', text_clean):
                     first_digit = text_clean[0]
                     last_digit = text_clean[-1]
@@ -455,6 +455,21 @@ class ProductionProcessor:
                                 if re.match(pattern, corrected):
                                     valid_serials.append((corrected, conf))
                                     break
+
+                # 9 chars starting with valid letter - likely star note missing *
+                elif re.match(r'^[A-L]\d{8}$', text_clean):
+                    corrected = text_clean + '*'
+                    valid_serials.append((corrected, conf * 0.9))  # Slightly lower confidence
+
+                # 9 chars ending with letter - likely missing first letter
+                elif re.match(r'^\d{8}[A-Y]$', text_clean):
+                    first_digit = text_clean[0]
+                    if first_digit in digit_to_letter:
+                        for letter in digit_to_letter[first_digit]:
+                            corrected = letter + text_clean
+                            if re.match(pattern, corrected):
+                                valid_serials.append((corrected, conf * 0.9))
+                                break
 
         if not valid_serials:
             return None, 0
@@ -522,11 +537,11 @@ class ProductionProcessor:
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
 
-                # Expand bounding box
+                # Expand bounding box (40% to catch edge letters)
                 box_width = x2 - x1
                 box_height = y2 - y1
-                padding_x = int(box_width * 0.30)
-                padding_y = int(box_height * 0.10)
+                padding_x = int(box_width * 0.40)
+                padding_y = int(box_height * 0.15)
 
                 x1_exp = max(0, x1 - padding_x)
                 y1_exp = max(0, y1 - padding_y)
