@@ -87,14 +87,12 @@ patterns:
     rarity: "1 in 5,000,000"
 
   SUPER_RADAR:
-    description: "Radar with internal symmetry (e.g., 01011010)"
+    description: "First/last same, all interior digits same (e.g., 10000001)"
     tier: 1
     enabled: true
     rules:
-      all:
-        - check: palindrome
-        - check: quad_symmetry
-    examples: ["01011010", "10000001"]
+      regex: "^(\\d)(\\d)\\2{5}\\1$"
+    examples: ["10000001", "42222224", "36666663"]
 
   RADAR_REPEATER:
     description: "Both radar AND repeater (e.g., 12121212)"
@@ -153,12 +151,12 @@ patterns:
     examples: ["01101001", "10010110"]
 
   SEVEN_OF_KIND:
-    description: "7 identical digits"
+    description: "7 of the same digit (anywhere in serial)"
     tier: 2
     enabled: true
     rules:
-      regex: "(\\d)\\1{6}"
-    examples: ["77777727", "11111118"]
+      check: seven_of_kind
+    examples: ["77777727", "17777777", "77277777"]
 
   DOUBLE_QUADS:
     description: "Two groups of 4 identical digits (AAAABBBB)"
@@ -189,12 +187,12 @@ patterns:
     examples: ["01010101", "10101010"]
 
   LOW_SERIAL:
-    description: "Serial number 100 or under"
+    description: "Serial number under 1000"
     tier: 2
     enabled: true
     rules:
       regex: "^0{5}\\d{3}$"
-    examples: ["00000001", "00000099"]
+    examples: ["00000001", "00000099", "00000999"]
 
   ULTRA_LOW_SERIAL:
     description: "Serial starts with 5+ zeros"
@@ -209,20 +207,12 @@ patterns:
 # =============================================================================
 
   TRINARY:
-    description: "Only 3 unique digits used"
-    tier: 3
-    enabled: true
-    rules:
-      unique_max: 3
-    examples: ["12312312", "11122233"]
-
-  TRUE_TRINARY:
-    description: "Exactly 3 unique digits"
+    description: "Exactly 3 unique digits used"
     tier: 3
     enabled: true
     rules:
       unique_count: 3
-    examples: ["12312312", "12332112"]
+    examples: ["12312312", "12332112", "29329939"]
 
   TRUE_QUADRINARY:
     description: "Exactly 4 unique digits"
@@ -256,9 +246,9 @@ patterns:
     examples: ["55555123", "12333334"]
 
   ALTERNATOR:
-    description: "Digits alternate ABABABAB"
+    description: "Digits alternate ABABABAB (same as SUPER_REPEATER)"
     tier: 3
-    enabled: true
+    enabled: false  # Disabled - redundant with SUPER_REPEATER
     rules:
       check: alternator
     examples: ["12121212", "89898989"]

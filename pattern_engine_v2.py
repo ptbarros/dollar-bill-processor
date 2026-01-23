@@ -136,6 +136,13 @@ class PatternEngine:
         counts = sorted(Counter(digits).values(), reverse=True)
         return counts == [5, 3]
 
+    def _check_seven_of_kind(self, digits: str) -> bool:
+        """7 of the same digit anywhere in the serial."""
+        if len(digits) != 8:
+            return False
+        counts = Counter(digits)
+        return any(c >= 7 for c in counts.values())
+
     def _check_two_pair_triple(self, digits: str) -> bool:
         """Triple + two pairs."""
         if len(digits) != 8:
@@ -334,6 +341,7 @@ class PatternEngine:
         'four_pairs': _check_four_pairs,
         'three_pairs': _check_three_pairs,
         'full_house': _check_full_house,
+        'seven_of_kind': _check_seven_of_kind,
         'two_pair_triple': _check_two_pair_triple,
         'triple_double_double': _check_triple_double_double,
         'consecutive_triples': _check_consecutive_triples,
