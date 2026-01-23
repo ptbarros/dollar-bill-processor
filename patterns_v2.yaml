@@ -296,20 +296,20 @@ patterns:
     examples: ["11223344", "99887766"]
 
   BOOKENDS:
-    description: "First and last digit match"
-    tier: 3
-    enabled: true
-    rules:
-      regex: "^(\\d)\\d{6}\\1$"
-    examples: ["51234565", "81234568"]
-
-  DOUBLE_BOOKEND:
     description: "First 2 and last 2 digits match"
     tier: 3
     enabled: true
     rules:
       regex: "^(\\d\\d)\\d{4}\\1$"
     examples: ["12345612", "99123499"]
+
+  TRIPLE_BOOKENDS:
+    description: "First 3 and last 3 digits match"
+    tier: 2
+    enabled: true
+    rules:
+      regex: "^(\\d\\d\\d)\\d{2}\\1$"
+    examples: ["12345123", "99109910"]
 
   BROKEN_RADAR:
     description: "One digit away from radar"
@@ -437,13 +437,6 @@ patterns:
     rules:
       regex: "^(\\d)\\1(\\d)\\2(\\d)\\3(\\d)\\4$"
     examples: ["11223344", "55667788"]
-
-  BOOKEND_LADDER:
-    description: "Bookend with different middle"
-    tier: 4
-    enabled: true
-    rules:
-      regex: "^(\\d)\\d{6}\\1$"
 
   DOUBLES_BOOKEND:
     description: "Double digits on each end match"
@@ -854,12 +847,6 @@ patterns:
     rules:
       contains: "666"
 
-  DOUBLE_99:
-    description: "Contains 99"
-    tier: 10
-    enabled: true
-    rules:
-      contains: "99"
 
 # =============================================================================
 # CUSTOM USER PATTERNS
