@@ -22,7 +22,8 @@ class NumericTreeWidgetItem(QTreeWidgetItem):
                 return int(self.text(0)) < int(other.text(0))
             except ValueError:
                 pass
-        return super().__lt__(other)
+        # Fall back to string comparison (avoid super().__lt__ which can recurse)
+        return self.text(column) < other.text(column)
 
 
 class ResultsList(QWidget):

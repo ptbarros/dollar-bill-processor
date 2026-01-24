@@ -381,8 +381,8 @@ class MainWindow(QMainWindow):
         import csv
         with open(path, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=[
-                'position', 'front_file', 'serial', 'fancy_types',
-                'confidence', 'is_fancy', 'needs_review', 'error'
+                'position', 'front_file', 'back_file', 'serial', 'fancy_types',
+                'confidence', 'is_fancy', 'needs_review', 'serial_region_path', 'error'
             ])
             writer.writeheader()
             writer.writerows(self.current_results)
