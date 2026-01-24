@@ -89,6 +89,13 @@ if exist "%SOURCE_DIR%\requirements.txt" (
     copy /y "%SOURCE_DIR%\requirements.txt" "." >nul
 )
 
+:: Copy gui folder (for GUI support)
+if exist "%SOURCE_DIR%\gui" (
+    echo Updating GUI files...
+    if not exist "gui" mkdir "gui"
+    xcopy /y /e /q "%SOURCE_DIR%\gui\*" "gui\" >nul 2>&1
+)
+
 :: Clean up temp files
 echo Cleaning up...
 del /f "%TEMP_ZIP%" 2>nul
