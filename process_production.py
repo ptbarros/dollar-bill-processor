@@ -22,13 +22,14 @@ import cv2
 import numpy as np
 import easyocr
 import re
+import json
 from pathlib import Path
 from ultralytics import YOLO
 import csv
 import time
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List, Dict
 import argparse
 import shutil
 import yaml
@@ -130,6 +131,49 @@ class BillPair:
     confidence: float = 0.0
     is_fancy: bool = False
     error: Optional[str] = None
+    needs_review: bool = False
+    review_reason: Optional[str] = None
+
+
+@dataclass
+class ReviewItem:
+    """Item in the review queue."""
+    filename: str
+    original_read: Optional[str]
+    confidence: float
+    review_reason: str
+    thumbnail_path: Optional[str] = None
+    serial_region_path: Optional[str] = None
+    corrected_serial: Optional[str] = None
+    reviewed: bool = False
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+
+    def to_dict(self) -> dict:
+        return {
+            'filename': self.filename,
+            'original_read': self.original_read,
+            'confidence': self.confidence,
+            'review_reason': self.review_reason,
+            'thumbnail_path': self.thumbnail_path,
+            'serial_region_path': self.serial_region_path,
+            'corrected_serial': self.corrected_serial,
+            'reviewed': self.reviewed,
+            'timestamp': self.timestamp
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'ReviewItem':
+        return cls(
+            filename=d['filename'],
+            original_read=d.get('original_read'),
+            confidence=d.get('confidence', 0.0),
+            review_reason=d['review_reason'],
+            thumbnail_path=d.get('thumbnail_path'),
+            serial_region_path=d.get('serial_region_path'),
+            corrected_serial=d.get('corrected_serial'),
+            reviewed=d.get('reviewed', False),
+            timestamp=d.get('timestamp', datetime.now().isoformat())
+        )
 
 
 # =============================================================================
@@ -326,9 +370,43 @@ class ScannerFormatDetector:
 class ProductionProcessor:
     """Main processor for production pipeline."""
 
+    # Multi-pass detection configuration
+    DETECTION_PASSES = [
+        {'conf': 0.1, 'preprocess': None, 'name': 'standard'},
+        {'conf': 0.05, 'preprocess': None, 'name': 'low_conf'},
+        {'conf': 0.1, 'preprocess': 'contrast', 'name': 'enhanced'},
+        {'conf': 0.05, 'preprocess': 'contrast', 'name': 'enhanced_low'},
+        {'conf': 0.1, 'preprocess': 'rotate180', 'name': 'rotated'},
+    ]
+
+    # Expanded OCR confusion matrix
+    CHAR_CONFUSIONS = {
+        # Digit to letter
+        '0': ['O', 'D', 'Q'],
+        '1': ['L', 'I', 'T'],
+        '5': ['S'],
+        '6': ['G', 'C'],
+        '8': ['B'],
+        # Letter to digit (reverse mappings)
+        'O': ['0'],
+        'D': ['0'],
+        'Q': ['0'],
+        'L': ['1'],
+        'I': ['1'],
+        'T': ['1', '7'],
+        'S': ['5'],
+        'G': ['6'],
+        'C': ['6'],
+        'B': ['8'],
+    }
+
+    # Valid Federal Reserve codes (A-L)
+    VALID_FED_CODES = set('ABCDEFGHIJKL')
+
     def __init__(self, yolo_model_path: Path, use_gpu: bool = False, cfg: Optional[Config] = None,
                  patterns_v2_path: Optional[Path] = None):
         self.cfg = cfg or Config()  # Use provided config or create default
+        self.use_gpu = use_gpu
 
         print(f"Loading YOLOv8 model: {yolo_model_path}")
         self.yolo_model = YOLO(str(yolo_model_path))
@@ -344,7 +422,131 @@ class ProductionProcessor:
         self.pattern_engine = PatternEngine(patterns_v2_path)
         pattern_count = len(self.pattern_engine.patterns)
         print(f"  Loaded {pattern_count} patterns from {self.pattern_engine.config_path}")
+
+        # Review queue for items needing manual review
+        self.review_queue: List[ReviewItem] = []
+
         print("Ready!\n")
+
+    def _add_to_review_queue(self, pair: BillPair, reason: str, output_dir: Optional[Path] = None):
+        """Add a bill to the review queue and optionally generate thumbnails."""
+        thumbnail_path = None
+        serial_region_path = None
+
+        if output_dir:
+            review_dir = output_dir / "review"
+            review_dir.mkdir(exist_ok=True)
+
+            # Generate thumbnail
+            img = cv2.imread(str(pair.front_path))
+            if img is not None:
+                # Create thumbnail (max 400px wide)
+                h, w = img.shape[:2]
+                scale = min(400 / w, 300 / h)
+                thumb = cv2.resize(img, (int(w * scale), int(h * scale)))
+                thumb_filename = f"thumb_{pair.front_path.stem}.jpg"
+                thumb_path = review_dir / thumb_filename
+                cv2.imwrite(str(thumb_path), thumb, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                thumbnail_path = str(thumb_path)
+
+                # Extract serial region if we have detections
+                aligned = self.aligner.align_image(pair.front_path)
+                if aligned is not None:
+                    boxes = self._detect_serials_single_pass(aligned, 0.05)
+                    if boxes:
+                        # Get the first detected region
+                        x1, y1, x2, y2, _ = boxes[0]
+                        h, w = aligned.shape[:2]
+                        padding_x = int((x2 - x1) * 0.40)
+                        padding_y = int((y2 - y1) * 0.15)
+                        x1_exp = max(0, x1 - padding_x)
+                        y1_exp = max(0, y1 - padding_y)
+                        x2_exp = min(w, x2 + padding_x)
+                        y2_exp = min(h, y2 + padding_y)
+                        region = aligned[y1_exp:y2_exp, x1_exp:x2_exp]
+                        region_filename = f"serial_{pair.front_path.stem}.jpg"
+                        region_path = review_dir / region_filename
+                        cv2.imwrite(str(region_path), region, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                        serial_region_path = str(region_path)
+
+        item = ReviewItem(
+            filename=str(pair.front_path),
+            original_read=pair.serial,
+            confidence=pair.confidence,
+            review_reason=reason,
+            thumbnail_path=thumbnail_path,
+            serial_region_path=serial_region_path
+        )
+        self.review_queue.append(item)
+        pair.needs_review = True
+        pair.review_reason = reason
+
+    def save_review_queue(self, output_path: Path):
+        """Save review queue to JSON manifest."""
+        manifest = {
+            'version': '1.0',
+            'created': datetime.now().isoformat(),
+            'total_items': len(self.review_queue),
+            'pending_review': sum(1 for item in self.review_queue if not item.reviewed),
+            'items': [item.to_dict() for item in self.review_queue]
+        }
+        with open(output_path, 'w') as f:
+            json.dump(manifest, f, indent=2)
+
+    def load_review_queue(self, input_path: Path) -> List[ReviewItem]:
+        """Load review queue from JSON manifest."""
+        if not input_path.exists():
+            return []
+        with open(input_path, 'r') as f:
+            manifest = json.load(f)
+        return [ReviewItem.from_dict(item) for item in manifest.get('items', [])]
+
+    def validate_serial(self, serial: str) -> tuple[bool, Optional[str]]:
+        """Validate serial number format and return (valid, reason if invalid)."""
+        if not serial:
+            return False, "No serial detected"
+
+        # Check length (should be 10 chars: letter + 8 digits + letter/*)
+        if len(serial) != 10:
+            return False, f"Invalid length: {len(serial)} (expected 10)"
+
+        # Check first character is valid Federal Reserve code (A-L)
+        first_char = serial[0]
+        if first_char not in self.VALID_FED_CODES:
+            return False, f"Invalid Federal Reserve code: {first_char} (must be A-L)"
+
+        # Check middle 8 characters are digits
+        middle = serial[1:9]
+        if not middle.isdigit():
+            return False, f"Invalid digits in middle: {middle}"
+
+        # Check last character
+        last_char = serial[-1]
+        if last_char != '*' and last_char not in 'ABCDEFGHIJKLMNPQRSTUVWXY':
+            return False, f"Invalid suffix: {last_char}"
+
+        return True, None
+
+    def _preprocess_image(self, img: np.ndarray, method: str) -> np.ndarray:
+        """Apply preprocessing to improve detection."""
+        if method == 'contrast':
+            # CLAHE contrast enhancement
+            if len(img.shape) == 3:
+                lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+                l, a, b = cv2.split(lab)
+                clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+                l = clahe.apply(l)
+                lab = cv2.merge([l, a, b])
+                return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+            else:
+                clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+                return clahe.apply(img)
+        elif method == 'rotate180':
+            return cv2.rotate(img, cv2.ROTATE_180)
+        elif method == 'sharpen':
+            kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
+            return cv2.filter2D(img, -1, kernel)
+        return img
 
     def count_serial_detections(self, image_path: Path) -> int:
         """Count how many serial numbers YOLO detects in an image."""
@@ -384,266 +586,333 @@ class ProductionProcessor:
         return verified
 
     def extract_serial_from_crop(self, crop_image) -> tuple[Optional[str], float]:
-        """Extract serial number from a cropped region using OCR."""
-        # Try OCR on original + CLAHE enhanced variant for better accuracy
-        variants = [crop_image]  # Original
+        """Extract serial number from a cropped region using OCR with expanded confusion matrix."""
+        pattern = r'[A-L]\d{8}[A-Y*]'
 
-        # CLAHE contrast enhancement helps with some letter recognition
+        # Try OCR on original image first
+        results = self.ocr_reader.readtext(
+            crop_image,
+            allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
+            detail=1
+        )
+
+        valid_serials = []
+        for (bbox, text, conf) in results:
+            text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
+
+            # Direct match
+            match = re.search(pattern, text_clean)
+            if match:
+                valid_serials.append((match.group(0), conf))
+                continue
+
+            # Apply confusion corrections
+            corrected = self._apply_confusion_corrections(text_clean, pattern)
+            if corrected:
+                valid_serials.append((corrected, conf * 0.95))
+
+        # If we got a good result, return it immediately
+        if valid_serials:
+            best = max(valid_serials, key=lambda x: x[1])
+            if best[1] >= 0.5:
+                return best
+
+        # Only try enhanced image if original didn't work well
         if len(crop_image.shape) == 3:
             gray = cv2.cvtColor(crop_image, cv2.COLOR_BGR2GRAY)
         else:
             gray = crop_image
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(gray)
-        variants.append(cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR))
 
-        pattern = r'[A-L]\d{8}[A-Y*]'
+        results = self.ocr_reader.readtext(
+            cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR),
+            allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
+            detail=1
+        )
 
-        # Common OCR digit→letter confusions (ordered by likelihood)
-        digit_to_letter = {
-            '0': ['O', 'D', 'Q'], '1': ['L', 'I'], '5': ['S'],
-            '6': ['G', 'C'], '8': ['B'],
-        }
-
-        # Collect ALL valid serial readings from all variants
-        valid_serials = []
-
-        for variant in variants:
-            results = self.ocr_reader.readtext(
-                variant,
-                allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
-                detail=1
-            )
-
-            for (bbox, text, conf) in results:
-                text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
-
-                # Direct match
-                match = re.search(pattern, text_clean)
-                if match:
-                    valid_serials.append((match.group(0), conf))
-                    continue
-
-                # Try digit→letter corrections for last position (10 chars)
-                if re.match(r'^[A-L]\d{9}$', text_clean):
-                    last_digit = text_clean[-1]
-                    if last_digit in digit_to_letter:
-                        for letter in digit_to_letter[last_digit]:
-                            corrected = text_clean[:-1] + letter
-                            if re.match(pattern, corrected):
-                                valid_serials.append((corrected, conf))
-                                break
-
-                # Try digit→letter corrections for first position (10 chars)
-                elif re.match(r'^\d{9}[A-Y*]$', text_clean):
-                    first_digit = text_clean[0]
-                    if first_digit in digit_to_letter:
-                        for letter in digit_to_letter[first_digit]:
-                            corrected = letter + text_clean[1:]
-                            if re.match(pattern, corrected):
-                                valid_serials.append((corrected, conf))
-                                break
-
-                # Try both positions (10 digits)
-                elif re.match(r'^\d{10}$', text_clean):
-                    first_digit = text_clean[0]
-                    last_digit = text_clean[-1]
-                    if first_digit in digit_to_letter and last_digit in digit_to_letter:
-                        for first_letter in digit_to_letter[first_digit]:
-                            for last_letter in digit_to_letter[last_digit]:
-                                corrected = first_letter + text_clean[1:-1] + last_letter
-                                if re.match(pattern, corrected):
-                                    valid_serials.append((corrected, conf))
-                                    break
-
-                # 9 chars starting with valid letter - could be missing last letter
-                # Don't auto-append * as it causes false star note detection
-                # The consensus voting will pick up the correct reading from other boxes
-
-                # 9 chars ending with letter - likely missing first letter
-                elif re.match(r'^\d{8}[A-Y]$', text_clean):
-                    first_digit = text_clean[0]
-                    if first_digit in digit_to_letter:
-                        for letter in digit_to_letter[first_digit]:
-                            corrected = letter + text_clean
-                            if re.match(pattern, corrected):
-                                valid_serials.append((corrected, conf * 0.9))
-                                break
+        for (bbox, text, conf) in results:
+            text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
+            match = re.search(pattern, text_clean)
+            if match:
+                valid_serials.append((match.group(0), conf))
+            else:
+                corrected = self._apply_confusion_corrections(text_clean, pattern)
+                if corrected:
+                    valid_serials.append((corrected, conf * 0.95))
 
         if not valid_serials:
             return None, 0
 
-        # If only one reading, return it
         if len(valid_serials) == 1:
             return valid_serials[0]
 
-        # Multiple readings - use consensus voting on first letter
+        # Use voting for best serial
+        return self._vote_best_serial(valid_serials, [{} for _ in range(10)])
+
+    def _apply_confusion_corrections(self, text: str, pattern: str) -> Optional[str]:
+        """Apply OCR confusion corrections to extract a valid serial."""
+        # 10 chars - try fixing both ends
+        if re.match(r'^\d{10}$', text):
+            first, last = text[0], text[-1]
+            first_opts = self.CHAR_CONFUSIONS.get(first, [first])
+            last_opts = self.CHAR_CONFUSIONS.get(last, [last])
+            for fl in first_opts:
+                for ll in last_opts:
+                    corrected = fl + text[1:-1] + ll
+                    if re.match(pattern, corrected):
+                        return corrected
+
+        # 10 chars with letter at start - try fixing end
+        if re.match(r'^[A-L]\d{9}$', text):
+            last = text[-1]
+            for letter in self.CHAR_CONFUSIONS.get(last, []):
+                corrected = text[:-1] + letter
+                if re.match(pattern, corrected):
+                    return corrected
+
+        # 10 chars with letter at end - try fixing start
+        if re.match(r'^\d{9}[A-Y*]$', text):
+            first = text[0]
+            for letter in self.CHAR_CONFUSIONS.get(first, []):
+                corrected = letter + text[1:]
+                if re.match(pattern, corrected):
+                    return corrected
+
+        # 9 chars ending with letter - try prepending Fed letter
+        if re.match(r'^\d{8}[A-Y*]$', text):
+            first = text[0]
+            for letter in self.CHAR_CONFUSIONS.get(first, []):
+                if letter in self.VALID_FED_CODES:
+                    corrected = letter + text
+                    if re.match(pattern, corrected):
+                        return corrected
+
+        # 9 chars starting with Fed letter - potential star note
+        if re.match(r'^[A-L]\d{8}$', text):
+            # Only add * if confident this is a star note
+            # Leave as None to avoid false star notes
+            pass
+
+        return None
+
+    def _vote_best_serial(self, serials: list, char_votes: list) -> tuple[str, float]:
+        """Use character-by-character voting to determine best serial."""
         from collections import Counter
 
-        # Group by middle digits (most reliable part)
+        # Group by middle digits
         digit_groups = {}
-        for serial, conf in valid_serials:
+        for serial, conf in serials:
             middle = serial[1:9]
             if middle not in digit_groups:
                 digit_groups[middle] = []
             digit_groups[middle].append((serial, conf))
 
-        # Use the most common middle-digit pattern
-        if digit_groups:
-            most_common_middle = max(digit_groups.keys(), key=lambda m: len(digit_groups[m]))
-            candidates = digit_groups[most_common_middle]
+        if not digit_groups:
+            return max(serials, key=lambda x: x[1])
 
-            # Vote on first letter weighted by confidence
-            letter_votes = Counter()
-            for serial, conf in candidates:
-                letter_votes[serial[0]] += conf
+        # Get most common middle pattern
+        most_common_middle = max(digit_groups.keys(), key=lambda m: len(digit_groups[m]))
+        candidates = digit_groups[most_common_middle]
 
-            # Pick highest voted letter
-            best_letter = letter_votes.most_common(1)[0][0]
+        # Vote on first character
+        first_votes = Counter()
+        last_votes = Counter()
+        for serial, conf in candidates:
+            first_votes[serial[0]] += conf
+            last_votes[serial[-1]] += conf
 
-            # Return candidate with that letter
-            for serial, conf in candidates:
-                if serial[0] == best_letter:
-                    return serial, conf
+        best_first = first_votes.most_common(1)[0][0]
+        best_last = last_votes.most_common(1)[0][0]
 
-            # Construct if needed
-            base = candidates[0][0]
-            best_conf = max(c for s, c in candidates)
-            return best_letter + base[1:], best_conf
+        # Validate first letter is valid Fed code
+        if best_first not in self.VALID_FED_CODES:
+            # Try alternatives
+            for alt in self.CHAR_CONFUSIONS.get(best_first, []):
+                if alt in self.VALID_FED_CODES:
+                    best_first = alt
+                    break
 
-        return max(valid_serials, key=lambda x: x[1])
+        # Construct best serial
+        best_serial = best_first + most_common_middle + best_last
+        best_conf = max(c for s, c in candidates)
+
+        # Verify it matches pattern
+        if not re.match(r'^[A-L]\d{8}[A-Y*]$', best_serial):
+            # Fall back to highest confidence match
+            return max(candidates, key=lambda x: x[1])
+
+        return best_serial, best_conf
+
+    def _detect_serials_single_pass(self, img: np.ndarray, conf: float) -> list:
+        """Run YOLO detection with given confidence threshold."""
+        results = self.yolo_model(img, verbose=False, conf=conf)
+        boxes = []
+        for result in results:
+            for box in result.boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                boxes.append((x1, y1, x2, y2, float(box.conf[0])))
+        return boxes
+
+    def _extract_serial_from_boxes(self, img: np.ndarray, boxes: list) -> list:
+        """Extract serial numbers from detected bounding boxes."""
+        serials_found = []
+        h, w = img.shape[:2]
+
+        for x1, y1, x2, y2, det_conf in boxes:
+            # Expand bounding box (40% to catch edge letters)
+            box_width = x2 - x1
+            box_height = y2 - y1
+            padding_x = int(box_width * 0.40)
+            padding_y = int(box_height * 0.15)
+
+            x1_exp = max(0, x1 - padding_x)
+            y1_exp = max(0, y1 - padding_y)
+            x2_exp = min(w, x2 + padding_x)
+            y2_exp = min(h, y2 + padding_y)
+
+            crop = img[y1_exp:y2_exp, x1_exp:x2_exp]
+            serial, conf = self.extract_serial_from_crop(crop)
+
+            if serial:
+                serials_found.append((serial, conf, det_conf))
+
+        return serials_found
 
     def extract_serial(self, image_path: Path) -> tuple[Optional[str], float]:
-        """Extract serial number from a bill image."""
+        """Extract serial number using multi-pass detection pipeline."""
         aligned_img = self.aligner.align_image(image_path)
         if aligned_img is None:
             return None, 0
 
-        # Use lower confidence threshold to handle scans with colored backgrounds
-        results = self.yolo_model(aligned_img, verbose=False, conf=0.1)
-        serials_found = []
-        h, w = aligned_img.shape[:2]
+        # First pass: standard detection (fastest path for most bills)
+        boxes = self._detect_serials_single_pass(aligned_img, conf=0.1)
+        if boxes:
+            serials = self._extract_serial_from_boxes(aligned_img, boxes)
+            if serials:
+                # Got results on first pass - use them
+                result = self._consensus_vote([(s, oc, dc, 'standard') for s, oc, dc in serials])
+                # If confidence is good, return immediately
+                if result[1] >= 0.5:
+                    return result
+
+        # Only run additional passes if first pass failed or had low confidence
+        all_serials = []
+
+        for pass_config in self.DETECTION_PASSES[1:]:  # Skip first pass, already done
+            conf = pass_config['conf']
+            preprocess = pass_config['preprocess']
+            pass_name = pass_config['name']
+
+            # Prepare image
+            img = aligned_img.copy()
+            if preprocess:
+                img = self._preprocess_image(img, preprocess)
+
+            # Run detection
+            boxes = self._detect_serials_single_pass(img, conf)
+
+            if boxes:
+                serials = self._extract_serial_from_boxes(img, boxes)
+                if serials:
+                    for s, ocr_conf, det_conf in serials:
+                        all_serials.append((s, ocr_conf, det_conf, pass_name))
+
+                    # If we got good results, stop early
+                    if serials and max(oc for s, oc, dc in serials) >= 0.6:
+                        break
+
+        if not all_serials:
+            # Last resort: try whole-image OCR scan for serial patterns
+            return self._fallback_ocr_scan(aligned_img)
+
+        return self._consensus_vote(all_serials)
+
+    def _fallback_ocr_scan(self, img: np.ndarray) -> tuple[Optional[str], float]:
+        """Fallback: scan entire image for serial patterns."""
+        pattern = r'[A-L]\d{8}[A-Y*]'
+
+        # Try OCR on full image
+        ocr_results = self.ocr_reader.readtext(
+            img,
+            allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
+            detail=1
+        )
+
+        candidates = []
+        for (bbox, text, conf) in ocr_results:
+            text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
+            match = re.search(pattern, text_clean)
+            if match:
+                candidates.append((match.group(0), conf))
+            # Check for 9-digit star note pattern
+            elif re.match(r'^[A-L]\d{8}$', text_clean):
+                candidates.append((text_clean + '*', conf * 0.85))
+
+        if candidates:
+            # Return highest confidence
+            best = max(candidates, key=lambda x: x[1])
+            return best
+
+        return None, 0
+
+    def _consensus_vote(self, all_serials: list) -> tuple[Optional[str], float]:
+        """Use weighted voting to pick best serial from multiple reads."""
+        if len(all_serials) == 1:
+            return all_serials[0][0], all_serials[0][1]
+
+        from collections import Counter
 
         # Letter confusions for consensus voting
         first_letter_alts = {
-            'C': 'G', 'G': 'C',  # Most common confusion
+            'C': 'G', 'G': 'C',
             'D': 'O', 'O': 'D',
             'B': 'R', 'R': 'B',
             'I': 'L', 'L': 'I',
         }
 
-        for result in results:
-            for box in result.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-
-                # Expand bounding box (40% to catch edge letters)
-                box_width = x2 - x1
-                box_height = y2 - y1
-                padding_x = int(box_width * 0.40)
-                padding_y = int(box_height * 0.15)
-
-                x1_exp = max(0, x1 - padding_x)
-                y1_exp = max(0, y1 - padding_y)
-                x2_exp = min(w, x2 + padding_x)
-                y2_exp = min(h, y2 + padding_y)
-
-                crop = aligned_img[y1_exp:y2_exp, x1_exp:x2_exp]
-                serial, conf = self.extract_serial_from_crop(crop)
-
-                if serial:
-                    serials_found.append((serial, conf))
-
-        if not serials_found:
-            # Fallback: Check if this might be a star note with * not detected
-            # Re-scan crops for 9-char patterns that could be star notes
-            star_candidates = []
-            for result in results:
-                for box in result.boxes:
-                    x1, y1, x2, y2 = map(int, box.xyxy[0])
-                    box_width = x2 - x1
-                    box_height = y2 - y1
-                    padding_x = int(box_width * 0.40)
-                    padding_y = int(box_height * 0.15)
-
-                    x1_exp = max(0, x1 - padding_x)
-                    y1_exp = max(0, y1 - padding_y)
-                    x2_exp = min(w, x2 + padding_x)
-                    y2_exp = min(h, y2 + padding_y)
-
-                    crop = aligned_img[y1_exp:y2_exp, x1_exp:x2_exp]
-
-                    # Try OCR without the full validation
-                    ocr_results = self.ocr_reader.readtext(
-                        crop,
-                        allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
-                        detail=1
-                    )
-
-                    for (bbox, text, conf) in ocr_results:
-                        text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
-                        # 9 chars starting with valid Fed letter = potential star note
-                        if re.match(r'^[A-L]\d{8}$', text_clean):
-                            star_candidates.append((text_clean + '*', conf * 0.85))
-
-            if star_candidates:
-                # Use most common reading
-                from collections import Counter
-                serial_counts = Counter(s for s, c in star_candidates)
-                best_serial = serial_counts.most_common(1)[0][0]
-                best_conf = max(c for s, c in star_candidates if s == best_serial)
-                return best_serial, best_conf
-
-            return None, 0
-
-        # If only one reading, return it
-        if len(serials_found) == 1:
-            return serials_found[0]
-
-        # Multiple readings - use consensus voting
-        # Group by the 8 middle digits (which are most reliable)
-        from collections import Counter
-
-        # Extract middle digits (positions 1-8) for grouping
+        # Group by the 8 middle digits (most reliable)
         digit_groups = {}
-        for serial, conf in serials_found:
-            middle = serial[1:9]  # 8 middle digits
+        for serial, ocr_conf, det_conf, pass_name in all_serials:
+            middle = serial[1:9]
             if middle not in digit_groups:
                 digit_groups[middle] = []
-            digit_groups[middle].append((serial, conf))
+            # Weight by both OCR and detection confidence
+            combined_weight = ocr_conf * (det_conf ** 0.5)
+            digit_groups[middle].append((serial, combined_weight, pass_name))
 
         # Find the most common middle-digit pattern
         most_common_middle = max(digit_groups.keys(), key=lambda m: len(digit_groups[m]))
         candidates = digit_groups[most_common_middle]
 
-        # If all candidates agree on first letter, return highest confidence
-        first_letters = set(s[0] for s, c in candidates)
+        # If all agree on first letter, return highest weight
+        first_letters = set(s[0] for s, w, p in candidates)
         if len(first_letters) == 1:
-            return max(candidates, key=lambda x: x[1])
+            best = max(candidates, key=lambda x: x[1])
+            return best[0], best[1]
 
-        # Disagreement on first letter - count votes including confusion alternatives
+        # Disagreement - weighted voting on first letter
         letter_votes = Counter()
-        for serial, conf in candidates:
+        for serial, weight, pass_name in candidates:
             first = serial[0]
-            letter_votes[first] += conf  # Weight by confidence
-            # Also give partial credit to confusion partner
+            letter_votes[first] += weight
+            # Partial credit for confusion partners
             if first in first_letter_alts:
                 alt = first_letter_alts[first]
-                # Check if alt is also a valid Fed letter
-                if alt in 'ABCDEFGHIJKL':
-                    letter_votes[alt] += conf * 0.3  # Lower weight for alternative
+                if alt in self.VALID_FED_CODES:
+                    letter_votes[alt] += weight * 0.3
 
-        # Pick the letter with highest weighted votes
         best_letter = letter_votes.most_common(1)[0][0]
 
-        # Return the candidate with that letter (or construct it)
-        for serial, conf in candidates:
+        # Return candidate with that letter
+        for serial, weight, pass_name in candidates:
             if serial[0] == best_letter:
-                return serial, conf
+                return serial, weight
 
-        # Construct the serial with the voted letter
-        base_serial = candidates[0][0]
-        best_conf = max(c for s, c in candidates)
-        return best_letter + base_serial[1:], best_conf
+        # Construct with voted letter
+        base = candidates[0][0]
+        best_weight = max(w for s, w, p in candidates)
+        return best_letter + base[1:], best_weight
 
     def create_crop(self, image: np.ndarray, side: str, region: str) -> np.ndarray:
         """Create a percentage-based crop from an image."""
@@ -738,16 +1007,27 @@ class ProductionProcessor:
                     'back_file': pair.back_path.name if pair.back_path else '',
                     'serial': '',
                     'fancy_types': '',
+                    'confidence': '0.00',
+                    'is_fancy': False,
+                    'needs_review': True,
                     'error': pair.error
                 })
+                self._add_to_review_queue(pair, pair.error, output_dir)
                 continue
 
-            # Extract serial
+            # Extract serial using multi-pass detection
             serial, confidence = self.extract_serial(pair.front_path)
             pair.serial = serial
             pair.confidence = confidence
 
-            if serial:
+            # Validate serial format
+            is_valid, validation_error = self.validate_serial(serial)
+
+            if serial and is_valid:
+                # Flag low confidence reads for review
+                if confidence < 0.5:
+                    self._add_to_review_queue(pair, f"Low confidence: {confidence:.2f}", output_dir)
+
                 # Check for fancy patterns (skip if --all flag)
                 if crop_all:
                     pair.fancy_types = ["ALL"]
@@ -758,7 +1038,8 @@ class ProductionProcessor:
                     pair.is_fancy = len(fancy_types) > 0
 
                 fancy_str = ", ".join(pair.fancy_types) if pair.fancy_types else ""
-                status = f"[{fancy_str}]" if pair.fancy_types else ""
+                review_flag = " [REVIEW]" if pair.needs_review else ""
+                status = f"[{fancy_str}]{review_flag}" if pair.fancy_types else review_flag
                 print(f"#{pair.stack_position:3d}: {serial} {status}")
 
                 if pair.is_fancy:
@@ -770,8 +1051,14 @@ class ProductionProcessor:
                     non_fancy_files.append(str(pair.front_path))
                     if pair.back_path:
                         non_fancy_files.append(str(pair.back_path))
+            elif serial and not is_valid:
+                # Invalid serial format - needs review
+                pair.error = validation_error
+                self._add_to_review_queue(pair, f"Validation failed: {validation_error}", output_dir)
+                print(f"#{pair.stack_position:3d}: {serial} [INVALID: {validation_error}]")
             else:
                 pair.error = "No serial detected"
+                self._add_to_review_queue(pair, "No serial detected", output_dir)
                 print(f"#{pair.stack_position:3d}: [ERROR] No serial detected")
 
             all_results.append({
@@ -782,6 +1069,7 @@ class ProductionProcessor:
                 'fancy_types': ", ".join(pair.fancy_types),
                 'confidence': f"{confidence:.2f}",
                 'is_fancy': pair.is_fancy,
+                'needs_review': pair.needs_review,
                 'error': pair.error or ''
             })
 
@@ -836,7 +1124,7 @@ class ProductionProcessor:
         with open(csv_path, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=[
                 'position', 'front_file', 'back_file', 'serial',
-                'fancy_types', 'confidence', 'is_fancy', 'error'
+                'fancy_types', 'confidence', 'is_fancy', 'needs_review', 'error'
             ])
             writer.writeheader()
             writer.writerows(all_results)
@@ -872,6 +1160,13 @@ class ProductionProcessor:
                 f.write(f"{filepath}\n")
         print(f"Cleanup list saved: {cleanup_path}")
         print(f"  ({len(non_fancy_files)} files can be deleted to save space)")
+
+        # 4. Review queue JSON manifest
+        if self.review_queue:
+            review_path = input_dir / f"review_queue_{timestamp}.json"
+            self.save_review_queue(review_path)
+            print(f"Review queue saved: {review_path}")
+            print(f"  ({len(self.review_queue)} items need manual review)")
 
 
 # =============================================================================

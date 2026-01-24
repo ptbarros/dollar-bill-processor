@@ -90,7 +90,9 @@ echo ============================================
 echo   SETUP COMPLETE!
 echo ============================================
 echo.
-echo You can now use run_processor.bat to process bills.
+echo You can now use:
+echo   - run_processor.bat  : Command-line processing
+echo   - run_gui.bat        : Graphical interface (recommended)
 echo.
 echo To edit patterns, open patterns_v2.yaml in Notepad.
 echo.

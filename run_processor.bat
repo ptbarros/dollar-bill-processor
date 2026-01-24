@@ -113,4 +113,7 @@ echo Results saved to: %OUTPUT_DIR%
 echo.
 echo Check the summary file for fancy bill positions.
 echo.
+echo TIP: For a graphical interface with review features,
+echo      run "run_gui.bat" instead.
+echo.
 pause
