@@ -52,6 +52,23 @@ class ExportSettings:
     include_thumbnails: bool = True
     excel_template: str = ""
     html_template: str = ""
+    auto_export_csv: bool = True  # Auto-generate CSV after processing
+    auto_export_summary: bool = True  # Auto-generate summary after processing
+
+
+@dataclass
+class CropSettings:
+    """Crop region settings (percentages 0.0-1.0)."""
+    # Front seal crop
+    front_seal_x: float = 0.605
+    front_seal_y: float = 0.233
+    front_seal_w: float = 0.254
+    front_seal_h: float = 0.537
+    # Back seal crop
+    back_seal_x: float = 0.635
+    back_seal_y: float = 0.221
+    back_seal_w: float = 0.261
+    back_seal_h: float = 0.557
 
 
 class SettingsManager:
@@ -72,6 +89,7 @@ class SettingsManager:
         self.processing = ProcessingSettings()
         self.ui = UISettings()
         self.export = ExportSettings()
+        self.crop = CropSettings()
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
         self.custom_values: Dict[str, Any] = {}  # Arbitrary user values
         self._load()
@@ -117,6 +135,20 @@ class SettingsManager:
             self.export.include_thumbnails = exp.get('include_thumbnails', True)
             self.export.excel_template = exp.get('excel_template', '')
             self.export.html_template = exp.get('html_template', '')
+            self.export.auto_export_csv = exp.get('auto_export_csv', True)
+            self.export.auto_export_summary = exp.get('auto_export_summary', True)
+
+        # Load crop settings
+        if 'crop' in data:
+            crop = data['crop']
+            self.crop.front_seal_x = crop.get('front_seal_x', 0.605)
+            self.crop.front_seal_y = crop.get('front_seal_y', 0.233)
+            self.crop.front_seal_w = crop.get('front_seal_w', 0.254)
+            self.crop.front_seal_h = crop.get('front_seal_h', 0.537)
+            self.crop.back_seal_x = crop.get('back_seal_x', 0.635)
+            self.crop.back_seal_y = crop.get('back_seal_y', 0.221)
+            self.crop.back_seal_w = crop.get('back_seal_w', 0.261)
+            self.crop.back_seal_h = crop.get('back_seal_h', 0.557)
 
         # Load pattern states
         self.pattern_states = data.get('pattern_states', {})
@@ -156,6 +188,18 @@ class SettingsManager:
                 'include_thumbnails': self.export.include_thumbnails,
                 'excel_template': self.export.excel_template,
                 'html_template': self.export.html_template,
+                'auto_export_csv': self.export.auto_export_csv,
+                'auto_export_summary': self.export.auto_export_summary,
+            },
+            'crop': {
+                'front_seal_x': self.crop.front_seal_x,
+                'front_seal_y': self.crop.front_seal_y,
+                'front_seal_w': self.crop.front_seal_w,
+                'front_seal_h': self.crop.front_seal_h,
+                'back_seal_x': self.crop.back_seal_x,
+                'back_seal_y': self.crop.back_seal_y,
+                'back_seal_w': self.crop.back_seal_w,
+                'back_seal_h': self.crop.back_seal_h,
             },
             'pattern_states': self.pattern_states,
             'custom_values': self.custom_values,
@@ -205,6 +249,7 @@ class SettingsManager:
         self.processing = ProcessingSettings()
         self.ui = UISettings()
         self.export = ExportSettings()
+        self.crop = CropSettings()
         self.pattern_states = {}
         self.custom_values = {}
 

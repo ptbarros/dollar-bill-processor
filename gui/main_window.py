@@ -330,7 +330,53 @@ class MainWindow(QMainWindow):
             if path:
                 self._export_html(path)
 
-    def _export_csv(self, path: str):
+    def _auto_export(self, summary: dict):
+        """Auto-export CSV and/or summary if enabled in settings."""
+        from datetime import datetime
+        input_dir = Path(self.settings.ui.last_input_dir)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        exported = []
+
+        # Auto-export CSV
+        if self.settings.export.auto_export_csv:
+            csv_path = input_dir / f"results_{timestamp}.csv"
+            self._export_csv(str(csv_path), quiet=True)
+            exported.append(f"CSV: {csv_path.name}")
+
+        # Auto-export summary
+        if self.settings.export.auto_export_summary:
+            summary_path = input_dir / f"summary_{timestamp}.txt"
+            self._export_summary(str(summary_path), summary)
+            exported.append(f"Summary: {summary_path.name}")
+
+        if exported:
+            self.status_label.setText(
+                f"Complete: {summary.get('total', 0)} bills | Auto-exported: {', '.join(exported)}"
+            )
+
+    def _export_summary(self, path: str, summary: dict):
+        """Export processing summary to text file."""
+        from datetime import datetime
+        fancy_bills = [r for r in self.current_results if r.get('is_fancy')]
+
+        with open(path, 'w') as f:
+            f.write("Dollar Bill Processing Summary\n")
+            f.write("=" * 40 + "\n")
+            f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Input: {self.settings.ui.last_input_dir}\n\n")
+
+            f.write(f"Total bills processed: {summary.get('total', 0)}\n")
+            f.write(f"Fancy bills found: {summary.get('fancy_count', 0)}\n")
+            f.write(f"Bills needing review: {summary.get('review_count', 0)}\n\n")
+
+            if fancy_bills:
+                f.write("Fancy Bills:\n")
+                f.write("-" * 40 + "\n")
+                for bill in fancy_bills:
+                    f.write(f"  {bill.get('serial', 'N/A')}: {bill.get('fancy_types', '')}\n")
+
+    def _export_csv(self, path: str, quiet: bool = False):
         """Export results to CSV."""
         import csv
         with open(path, 'w', newline='') as f:
@@ -340,7 +386,8 @@ class MainWindow(QMainWindow):
             ])
             writer.writeheader()
             writer.writerows(self.current_results)
-        self.status_label.setText(f"Exported to {path}")
+        if not quiet:
+            self.status_label.setText(f"Exported to {path}")
 
     def _export_excel(self, path: str):
         """Export results to Excel."""
@@ -486,6 +533,10 @@ class MainWindow(QMainWindow):
             f"Complete: {total} bills processed, {fancy} fancy, {review} need review"
         )
         self.progress_label.setText("")
+
+        # Auto-export if enabled
+        if self.current_results:
+            self._auto_export(summary)
 
     @Slot(str)
     def _on_processing_error(self, error: str):
