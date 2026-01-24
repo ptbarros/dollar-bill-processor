@@ -75,8 +75,11 @@ class ProcessingThread(QThread):
                 patterns_v2_path=patterns_path if patterns_path.exists() else None
             )
 
-            # Detect format and find pairs
+            # Validate directory - check it's not an output directory
             self.progress_updated.emit(0, 0, "Scanning directory...")
+            self._validate_input_directory()
+
+            # Detect format and find pairs
             scanner_format, pairs = ScannerFormatDetector.find_pairs(self.input_dir)
 
             total = len(pairs)
@@ -224,3 +227,26 @@ class ProcessingThread(QThread):
     def request_stop(self):
         """Request the thread to stop."""
         self._stop_requested = True
+
+    def _validate_input_directory(self):
+        """Validate the input directory contains scanner images, not cropped output."""
+        import re
+
+        files = list(self.input_dir.glob("*.jpg")) + list(self.input_dir.glob("*.jpeg"))
+
+        if not files:
+            raise ValueError(
+                f"No JPEG images found in {self.input_dir}\n\n"
+                "Please select a folder containing scanned bill images."
+            )
+
+        # Check for cropped output pattern (serial_XX.jpg)
+        cropped_pattern = re.compile(r'^[A-L]\d{8}[A-Z*]_\d{2}\.jpe?g$', re.IGNORECASE)
+        cropped_count = sum(1 for f in files if cropped_pattern.match(f.name))
+
+        if cropped_count > len(files) * 0.5:  # More than 50% look like cropped output
+            raise ValueError(
+                f"This directory appears to contain cropped output files, not scanner images.\n\n"
+                f"Found {cropped_count} files matching cropped pattern (e.g., B12345678A_01.jpg).\n\n"
+                "Please select the original scanner output folder instead."
+            )
