@@ -1021,7 +1021,7 @@ class PreviewPanel(QWidget):
             status_parts.append(f"Error: {result['error']}")
         self.status_label.setText(', '.join(status_parts) if status_parts else "OK")
 
-        self.file_label.setText(front_file or "-")
+        self.file_label.setText(self._current_front_file or "-")
 
         # Pre-fill correction with current serial
         self.correction_edit.setText(result.get('serial', ''))
