@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
     QPushButton, QLineEdit, QFrame, QGroupBox, QGridLayout,
     QSizePolicy, QTabWidget, QSlider, QApplication, QStackedWidget,
-    QComboBox
+    QComboBox, QSplitter
 )
 from PySide6.QtCore import Qt, Signal, Slot, QPoint, QSize
 from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QPainter
@@ -247,6 +247,269 @@ class ScrollableImageViewer(QWidget):
             self._zoom_fit()
 
 
+class ImagePane(QWidget):
+    """Simple image pane without zoom controls, for use in synced split view."""
+
+    pan_changed = Signal(float, float)  # Emits scroll position as fraction (0-1)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.original_pixmap = None
+        self.zoom_factor = 1.0
+        self._is_panning = False
+        self._syncing = False  # Prevent sync loops
+        self._setup_ui()
+
+    def _setup_ui(self):
+        """Setup the image pane."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Scroll area for panning (no scrollbars - use drag panning only)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(False)
+        self.scroll_area.setAlignment(Qt.AlignCenter)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+        self.scroll_area.setStyleSheet("QScrollArea { background-color: #2d2d2d; border: none; }")
+
+        # Connect scroll bars for sync
+        self.scroll_area.horizontalScrollBar().valueChanged.connect(self._on_scroll_changed)
+        self.scroll_area.verticalScrollBar().valueChanged.connect(self._on_scroll_changed)
+
+        # Image label with panning
+        self.image_label = PannableImageLabel()
+        self.image_label.set_scroll_area(self.scroll_area)
+        self.image_label.set_viewer(self)
+        self.image_label.setCursor(QCursor(Qt.OpenHandCursor))
+        self.scroll_area.setWidget(self.image_label)
+
+        layout.addWidget(self.scroll_area, 1)
+
+    def _on_scroll_changed(self):
+        """Emit pan position when scrolling."""
+        if self._syncing:
+            return
+
+        h_bar = self.scroll_area.horizontalScrollBar()
+        v_bar = self.scroll_area.verticalScrollBar()
+
+        # Calculate position as fraction (0-1)
+        h_frac = h_bar.value() / max(1, h_bar.maximum()) if h_bar.maximum() > 0 else 0
+        v_frac = v_bar.value() / max(1, v_bar.maximum()) if v_bar.maximum() > 0 else 0
+
+        self.pan_changed.emit(h_frac, v_frac)
+
+    def sync_pan_to(self, h_frac: float, v_frac: float):
+        """Sync pan position from another pane."""
+        self._syncing = True
+        h_bar = self.scroll_area.horizontalScrollBar()
+        v_bar = self.scroll_area.verticalScrollBar()
+
+        h_bar.setValue(int(h_frac * h_bar.maximum()))
+        v_bar.setValue(int(v_frac * v_bar.maximum()))
+        self._syncing = False
+
+    def set_image(self, path: str):
+        """Load and display an image."""
+        if not path or not Path(path).exists():
+            self.original_pixmap = None
+            self.image_label.clear()
+            self.image_label.setText("No image")
+            return
+
+        pixmap = QPixmap(path)
+        if pixmap.isNull():
+            self.original_pixmap = None
+            self.image_label.clear()
+            self.image_label.setText("Failed to load")
+            return
+
+        self.original_pixmap = pixmap
+        self._update_display()
+
+    def set_zoom(self, factor: float):
+        """Set zoom factor."""
+        self.zoom_factor = max(0.1, min(4.0, factor))
+        self._update_display()
+
+    def _update_display(self):
+        """Update the displayed image based on zoom level."""
+        if self.original_pixmap is None:
+            return
+
+        new_size = self.original_pixmap.size() * self.zoom_factor
+        scaled = self.original_pixmap.scaled(
+            new_size,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation
+        )
+        self.image_label.setPixmap(scaled)
+        self.image_label.resize(scaled.size())
+
+    def zoom_fit(self):
+        """Fit image to viewport."""
+        if self.original_pixmap is None:
+            return 1.0
+
+        viewport_size = self.scroll_area.viewport().size()
+        img_size = self.original_pixmap.size()
+
+        scale_w = viewport_size.width() / img_size.width()
+        scale_h = viewport_size.height() / img_size.height()
+        self.zoom_factor = min(scale_w, scale_h) * 0.95
+
+        self._update_display()
+        return self.zoom_factor
+
+    def wheelEvent(self, event: QWheelEvent):
+        """Forward Ctrl+wheel to parent for zoom."""
+        if event.modifiers() == Qt.ControlModifier:
+            # Let parent handle zoom
+            event.ignore()
+        else:
+            super().wheelEvent(event)
+
+
+class SyncedSplitViewer(QWidget):
+    """Split view with two synced image panes and shared zoom controls."""
+
+    def __init__(self, orientation: Qt.Orientation = Qt.Vertical, parent=None):
+        super().__init__(parent)
+        self.orientation = orientation
+        self.zoom_factor = 1.0
+        self._setup_ui()
+
+    def _setup_ui(self):
+        """Setup the split viewer."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+
+        # Splitter with two image panes - minimal handle for tight spacing
+        self.splitter = QSplitter(self.orientation)
+        self.splitter.setHandleWidth(4)  # Minimal but still grabbable
+        self.splitter.setStyleSheet("""
+            QSplitter::handle {
+                background-color: #555;
+            }
+            QSplitter::handle:hover {
+                background-color: #888;
+            }
+        """)
+
+        # Front pane (no labels - minimal gap)
+        self.front_pane = ImagePane()
+        self.front_pane.pan_changed.connect(self._sync_pan_from_front)
+        self.splitter.addWidget(self.front_pane)
+
+        # Back pane
+        self.back_pane = ImagePane()
+        self.back_pane.pan_changed.connect(self._sync_pan_from_back)
+        self.splitter.addWidget(self.back_pane)
+
+        # Equal split by default
+        self.splitter.setSizes([100, 100])
+
+        layout.addWidget(self.splitter, 1)
+
+        # Shared zoom controls
+        zoom_layout = QHBoxLayout()
+
+        self.zoom_fit_btn = QPushButton("Fit")
+        self.zoom_fit_btn.clicked.connect(self._zoom_fit)
+        zoom_layout.addWidget(self.zoom_fit_btn)
+
+        self.zoom_out_btn = QPushButton("-")
+        self.zoom_out_btn.clicked.connect(self._zoom_out)
+        zoom_layout.addWidget(self.zoom_out_btn)
+
+        self.zoom_slider = QSlider(Qt.Horizontal)
+        self.zoom_slider.setMinimum(10)
+        self.zoom_slider.setMaximum(400)
+        self.zoom_slider.setValue(100)
+        self.zoom_slider.setTickPosition(QSlider.TicksBelow)
+        self.zoom_slider.setTickInterval(50)
+        self.zoom_slider.valueChanged.connect(self._on_slider_changed)
+        zoom_layout.addWidget(self.zoom_slider, 1)
+
+        self.zoom_in_btn = QPushButton("+")
+        self.zoom_in_btn.clicked.connect(self._zoom_in)
+        zoom_layout.addWidget(self.zoom_in_btn)
+
+        self.zoom_label = QLabel("100%")
+        self.zoom_label.setMinimumWidth(45)
+        zoom_layout.addWidget(self.zoom_label)
+
+        layout.addLayout(zoom_layout)
+
+    def set_images(self, front_path: str, back_path: str):
+        """Set both images."""
+        self.front_pane.set_image(front_path)
+        self.back_pane.set_image(back_path)
+        self._zoom_fit()
+
+    def _sync_pan_from_front(self, h_frac: float, v_frac: float):
+        """Sync back pane to front pane's pan position."""
+        self.back_pane.sync_pan_to(h_frac, v_frac)
+
+    def _sync_pan_from_back(self, h_frac: float, v_frac: float):
+        """Sync front pane to back pane's pan position."""
+        self.front_pane.sync_pan_to(h_frac, v_frac)
+
+    def _update_zoom(self):
+        """Apply current zoom to both panes."""
+        self.front_pane.set_zoom(self.zoom_factor)
+        self.back_pane.set_zoom(self.zoom_factor)
+
+        # Update UI
+        percent = int(self.zoom_factor * 100)
+        self.zoom_label.setText(f"{percent}%")
+        self.zoom_slider.blockSignals(True)
+        self.zoom_slider.setValue(percent)
+        self.zoom_slider.blockSignals(False)
+
+    def _zoom_fit(self):
+        """Fit both images to their viewports."""
+        # Get the smaller fit factor from both panes
+        front_factor = self.front_pane.zoom_fit()
+        back_factor = self.back_pane.zoom_fit()
+
+        # Use the smaller factor so both fit
+        self.zoom_factor = min(front_factor, back_factor) if front_factor and back_factor else 1.0
+
+        self._update_zoom()
+
+    def _zoom_in(self):
+        """Zoom in by 25%."""
+        self.zoom_factor = min(4.0, self.zoom_factor * 1.25)
+        self._update_zoom()
+
+    def _zoom_out(self):
+        """Zoom out by 25%."""
+        self.zoom_factor = max(0.1, self.zoom_factor / 1.25)
+        self._update_zoom()
+
+    def _on_slider_changed(self, value):
+        """Handle zoom slider change."""
+        self.zoom_factor = value / 100.0
+        self._update_zoom()
+
+    def wheelEvent(self, event: QWheelEvent):
+        """Handle Ctrl+wheel for zoom."""
+        if event.modifiers() == Qt.ControlModifier:
+            delta = event.angleDelta().y()
+            if delta > 0:
+                self._zoom_in()
+            else:
+                self._zoom_out()
+            event.accept()
+        else:
+            super().wheelEvent(event)
+
+
 class ImageLabel(QLabel):
     """Simple label for small images like serial region."""
 
@@ -320,13 +583,15 @@ class PreviewPanel(QWidget):
         view_mode_layout.addWidget(QLabel("View:"))
         self.view_mode_combo = QComboBox()
         self.view_mode_combo.addItem("Tabbed", "tabbed")
-        self.view_mode_combo.addItem("Stacked", "stacked")
+        self.view_mode_combo.addItem("Stitched", "stitched")
+        self.view_mode_combo.addItem("Split Vertical", "split_v")
+        self.view_mode_combo.addItem("Split Horizontal", "split_h")
         self.view_mode_combo.currentIndexChanged.connect(self._on_view_mode_changed)
         view_mode_layout.addWidget(self.view_mode_combo)
         view_mode_layout.addStretch()
         preview_layout.addLayout(view_mode_layout)
 
-        # Stacked widget to hold both view modes
+        # Stacked widget to hold all view modes
         self.view_stack = QStackedWidget()
 
         # === Tabbed view (index 0) ===
@@ -337,10 +602,18 @@ class PreviewPanel(QWidget):
         self.image_tabs.addTab(self.back_viewer_tabbed, "Back")
         self.view_stack.addWidget(self.image_tabs)
 
-        # === Stacked view (index 1) ===
+        # === Stitched view (index 1) ===
         # Single viewer showing front+back stitched as one image
         self.combined_viewer = ScrollableImageViewer()
         self.view_stack.addWidget(self.combined_viewer)
+
+        # === Split Vertical view (index 2) ===
+        self.split_v_viewer = SyncedSplitViewer(Qt.Vertical)
+        self.view_stack.addWidget(self.split_v_viewer)
+
+        # === Split Horizontal view (index 3) ===
+        self.split_h_viewer = SyncedSplitViewer(Qt.Horizontal)
+        self.view_stack.addWidget(self.split_h_viewer)
 
         preview_layout.addWidget(self.view_stack, 1)
 
@@ -456,11 +729,20 @@ class PreviewPanel(QWidget):
         layout.addWidget(correction_group)
 
     def _on_view_mode_changed(self, index: int):
-        """Handle view mode toggle between tabbed and stacked."""
+        """Handle view mode toggle."""
         self.view_stack.setCurrentIndex(index)
-        # Refresh combined view when switching to stacked mode
-        if index == 1:
+        # Refresh views when switching modes
+        if index == 1:  # Stitched
             self._update_combined_view()
+        elif index == 2:  # Split Vertical
+            self._update_split_views()
+        elif index == 3:  # Split Horizontal
+            self._update_split_views()
+
+    def _update_split_views(self):
+        """Update split viewers with current images."""
+        self.split_v_viewer.set_images(self._current_front_file, self._current_back_file)
+        self.split_h_viewer.set_images(self._current_front_file, self._current_back_file)
 
     def _create_combined_pixmap(self, front_path: str, back_path: str) -> Optional[QPixmap]:
         """Create a combined pixmap with front on top, back on bottom, edge-to-edge."""
@@ -535,8 +817,11 @@ class PreviewPanel(QWidget):
         self.front_viewer_tabbed.set_image(self._current_front_file)
         self.back_viewer_tabbed.set_image(self._current_back_file)
 
-        # Update combined/stacked view
+        # Update stitched view
         self._update_combined_view()
+
+        # Update split views
+        self._update_split_views()
 
         # Update tab text to indicate if back exists
         if has_back:
@@ -643,3 +928,59 @@ class PreviewPanel(QWidget):
     def is_details_visible(self) -> bool:
         """Check if bill details panel is visible."""
         return self.details_group.isVisible()
+
+    def _get_active_viewer(self):
+        """Get the currently active viewer based on view mode."""
+        index = self.view_stack.currentIndex()
+        if index == 0:  # Tabbed
+            # Return the visible tab's viewer
+            if self.image_tabs.currentIndex() == 0:
+                return self.front_viewer_tabbed
+            else:
+                return self.back_viewer_tabbed
+        elif index == 1:  # Stitched
+            return self.combined_viewer
+        elif index == 2:  # Split Vertical
+            return self.split_v_viewer
+        elif index == 3:  # Split Horizontal
+            return self.split_h_viewer
+        return None
+
+    def zoom_in(self):
+        """Zoom in on current view."""
+        viewer = self._get_active_viewer()
+        if viewer:
+            if hasattr(viewer, '_zoom_in'):
+                viewer._zoom_in()
+
+    def zoom_out(self):
+        """Zoom out on current view."""
+        viewer = self._get_active_viewer()
+        if viewer:
+            if hasattr(viewer, '_zoom_out'):
+                viewer._zoom_out()
+
+    def zoom_fit(self):
+        """Fit zoom on current view."""
+        viewer = self._get_active_viewer()
+        if viewer:
+            if hasattr(viewer, '_zoom_fit'):
+                viewer._zoom_fit()
+
+    def pan(self, dx: int, dy: int):
+        """Pan the current view by given delta."""
+        viewer = self._get_active_viewer()
+        if viewer is None:
+            return
+
+        # For split viewers, pan both panes
+        if hasattr(viewer, 'front_pane'):
+            h_bar = viewer.front_pane.scroll_area.horizontalScrollBar()
+            v_bar = viewer.front_pane.scroll_area.verticalScrollBar()
+            h_bar.setValue(h_bar.value() + dx)
+            v_bar.setValue(v_bar.value() + dy)
+        elif hasattr(viewer, 'scroll_area'):
+            h_bar = viewer.scroll_area.horizontalScrollBar()
+            v_bar = viewer.scroll_area.verticalScrollBar()
+            h_bar.setValue(h_bar.value() + dx)
+            v_bar.setValue(v_bar.value() + dy)

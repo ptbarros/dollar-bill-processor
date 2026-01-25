@@ -16,6 +16,7 @@ from PySide6.QtGui import QColor, QBrush, QAction
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from pattern_engine_v2 import PatternEngine
+from settings_manager import get_settings
 
 
 class NumericTreeWidgetItem(QTreeWidgetItem):
@@ -45,6 +46,7 @@ class ResultsList(QWidget):
         self.filtered_results: List[dict] = []
         self.filters: Dict[str, bool] = {}
         self.pattern_engine = PatternEngine()
+        self.settings = get_settings()
         self._setup_ui()
 
     def _setup_ui(self):
@@ -249,9 +251,21 @@ class ResultsList(QWidget):
 
             # Color coding with explicit text color for contrast
             if result.get('is_fancy'):
+                # Check for custom pattern color
+                bg_color = QColor(46, 125, 50)  # Default dark green
+                pattern_names = [p.strip() for p in patterns.split(',')] if patterns else []
+                for pname in pattern_names:
+                    custom_color = self.settings.get_pattern_color(pname)
+                    if custom_color:
+                        bg_color = QColor(custom_color)
+                        break  # Use first pattern's custom color
+
                 for i in range(5):
-                    item.setBackground(i, QBrush(QColor(46, 125, 50)))    # Dark green background
-                    item.setForeground(i, QBrush(QColor(255, 255, 255)))  # White text
+                    item.setBackground(i, QBrush(bg_color))
+                    # Use white or black text based on brightness
+                    brightness = (bg_color.red() * 299 + bg_color.green() * 587 + bg_color.blue() * 114) / 1000
+                    text_color = QColor(0, 0, 0) if brightness > 128 else QColor(255, 255, 255)
+                    item.setForeground(i, QBrush(text_color))
             elif result.get('needs_review'):
                 for i in range(5):
                     item.setBackground(i, QBrush(QColor(245, 124, 0)))    # Orange background

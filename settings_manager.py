@@ -92,6 +92,7 @@ class SettingsManager:
         self.export = ExportSettings()
         self.crop = CropSettings()
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
+        self.pattern_colors: Dict[str, str] = {}  # Pattern name -> hex color
         self.custom_values: Dict[str, Any] = {}  # Arbitrary user values
         self._load()
 
@@ -155,6 +156,9 @@ class SettingsManager:
         # Load pattern states
         self.pattern_states = data.get('pattern_states', {})
 
+        # Load pattern colors
+        self.pattern_colors = data.get('pattern_colors', {})
+
         # Load custom values
         self.custom_values = data.get('custom_values', {})
 
@@ -205,6 +209,7 @@ class SettingsManager:
                 'back_seal_h': self.crop.back_seal_h,
             },
             'pattern_states': self.pattern_states,
+            'pattern_colors': self.pattern_colors,
             'custom_values': self.custom_values,
         }
 
@@ -226,6 +231,17 @@ class SettingsManager:
     def get_disabled_patterns(self) -> List[str]:
         """Get list of explicitly disabled patterns."""
         return [name for name, enabled in self.pattern_states.items() if not enabled]
+
+    def get_pattern_color(self, pattern_name: str, default: str = "") -> str:
+        """Get custom color for a pattern (hex format like '#FF0000')."""
+        return self.pattern_colors.get(pattern_name, default)
+
+    def set_pattern_color(self, pattern_name: str, color: str):
+        """Set custom color for a pattern (hex format like '#FF0000')."""
+        if color:
+            self.pattern_colors[pattern_name] = color
+        elif pattern_name in self.pattern_colors:
+            del self.pattern_colors[pattern_name]
 
     def set_custom_value(self, key: str, value: Any):
         """Set a custom user value."""

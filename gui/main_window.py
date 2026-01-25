@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QProgressBar, QLabel, QPushButton
 )
 from PySide6.QtCore import Qt, Signal, Slot, QThread
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence, QShortcut
 
 # Import our components
 from .processing_panel import ProcessingPanel
@@ -44,6 +44,7 @@ class MainWindow(QMainWindow):
         # Setup UI
         self._setup_ui()
         self._setup_menus()
+        self._setup_shortcuts()
         self._setup_statusbar()
         self._restore_geometry()
         self._apply_settings()  # Apply font size and other settings
@@ -172,6 +173,75 @@ class MainWindow(QMainWindow):
         about_action = QAction("&About...", self)
         about_action.triggered.connect(self._on_about)
         help_menu.addAction(about_action)
+
+    def _setup_shortcuts(self):
+        """Setup keyboard shortcuts for navigation and zoom."""
+        # Bill navigation
+        QShortcut(QKeySequence(Qt.Key_PageDown), self, self._next_bill)
+        QShortcut(QKeySequence(Qt.Key_PageUp), self, self._prev_bill)
+        QShortcut(QKeySequence(Qt.Key_N), self, self._next_bill)
+        QShortcut(QKeySequence(Qt.Key_P), self, self._prev_bill)
+        QShortcut(QKeySequence(Qt.Key_Down), self, self._next_bill)
+        QShortcut(QKeySequence(Qt.Key_Up), self, self._prev_bill)
+
+        # Zoom controls
+        QShortcut(QKeySequence(Qt.Key_Plus), self, self._zoom_in)
+        QShortcut(QKeySequence(Qt.Key_Equal), self, self._zoom_in)  # = key (unshifted +)
+        QShortcut(QKeySequence(Qt.Key_Minus), self, self._zoom_out)
+        QShortcut(QKeySequence(Qt.Key_0), self, self._zoom_fit)
+        QShortcut(QKeySequence(Qt.Key_F), self, self._zoom_fit)
+
+        # Pan controls (Shift + arrow keys)
+        QShortcut(QKeySequence(Qt.SHIFT | Qt.Key_Left), self, self._pan_left)
+        QShortcut(QKeySequence(Qt.SHIFT | Qt.Key_Right), self, self._pan_right)
+        QShortcut(QKeySequence(Qt.SHIFT | Qt.Key_Up), self, self._pan_up)
+        QShortcut(QKeySequence(Qt.SHIFT | Qt.Key_Down), self, self._pan_down)
+
+    def _next_bill(self):
+        """Navigate to next bill in results."""
+        current = self.results_list.tree.currentItem()
+        if current:
+            index = self.results_list.tree.indexOfTopLevelItem(current)
+            if index < self.results_list.tree.topLevelItemCount() - 1:
+                next_item = self.results_list.tree.topLevelItem(index + 1)
+                self.results_list.tree.setCurrentItem(next_item)
+
+    def _prev_bill(self):
+        """Navigate to previous bill in results."""
+        current = self.results_list.tree.currentItem()
+        if current:
+            index = self.results_list.tree.indexOfTopLevelItem(current)
+            if index > 0:
+                prev_item = self.results_list.tree.topLevelItem(index - 1)
+                self.results_list.tree.setCurrentItem(prev_item)
+
+    def _zoom_in(self):
+        """Zoom in on preview."""
+        self.preview_panel.zoom_in()
+
+    def _zoom_out(self):
+        """Zoom out on preview."""
+        self.preview_panel.zoom_out()
+
+    def _zoom_fit(self):
+        """Fit zoom on preview."""
+        self.preview_panel.zoom_fit()
+
+    def _pan_left(self):
+        """Pan preview left."""
+        self.preview_panel.pan(-50, 0)
+
+    def _pan_right(self):
+        """Pan preview right."""
+        self.preview_panel.pan(50, 0)
+
+    def _pan_up(self):
+        """Pan preview up."""
+        self.preview_panel.pan(0, -50)
+
+    def _pan_down(self):
+        """Pan preview down."""
+        self.preview_panel.pan(0, 50)
 
     def _setup_statusbar(self):
         """Setup the status bar."""

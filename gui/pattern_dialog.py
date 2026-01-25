@@ -9,13 +9,15 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
     QGroupBox, QLineEdit, QPushButton, QDialogButtonBox, QLabel,
     QTextEdit, QSplitter, QHeaderView, QCheckBox, QListWidget,
-    QListWidgetItem, QFormLayout, QComboBox, QMessageBox
+    QListWidgetItem, QFormLayout, QComboBox, QMessageBox, QColorDialog
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from pattern_engine_v2 import PatternEngine
+from settings_manager import get_settings
 
 
 class PatternDialog(QDialog):
@@ -24,9 +26,10 @@ class PatternDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.engine = PatternEngine()
+        self.settings = get_settings()
 
         self.setWindowTitle("Pattern Manager")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(900, 600)
         self._setup_ui()
         self._load_patterns()
 
@@ -57,15 +60,17 @@ class PatternDialog(QDialog):
 
         # Pattern tree
         self.pattern_tree = QTreeWidget()
-        self.pattern_tree.setHeaderLabels(["Pattern", "Tier", "Enabled"])
+        self.pattern_tree.setHeaderLabels(["Pattern", "Tier", "Enabled", "Color"])
         self.pattern_tree.setRootIsDecorated(True)
         self.pattern_tree.itemChanged.connect(self._on_item_changed)
         self.pattern_tree.itemSelectionChanged.connect(self._on_selection_changed)
+        self.pattern_tree.itemDoubleClicked.connect(self._on_color_double_click)
 
         header = self.pattern_tree.header()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
         left_layout.addWidget(self.pattern_tree)
 
@@ -246,6 +251,15 @@ class PatternDialog(QDialog):
                 pattern_item.setCheckState(2, Qt.Checked if enabled else Qt.Unchecked)
                 pattern_item.setData(0, Qt.UserRole, {'name': name, 'defn': defn})
 
+                # Color indicator (double-click to change)
+                color = self.settings.get_pattern_color(name)
+                if color:
+                    pattern_item.setText(3, "●")
+                    pattern_item.setForeground(3, QColor(color))
+                else:
+                    pattern_item.setText(3, "○")
+                    pattern_item.setForeground(3, QColor("#888888"))
+
             self.pattern_tree.addTopLevelItem(tier_item)
 
         self.pattern_tree.expandAll()
@@ -292,6 +306,29 @@ class PatternDialog(QDialog):
         name = data['name']
         enabled = item.checkState(2) == Qt.Checked
         self.engine.set_pattern_enabled(name, enabled)
+
+    def _on_color_double_click(self, item, column):
+        """Handle double-click on color column to pick color."""
+        if column != 3:
+            return
+
+        data = item.data(0, Qt.UserRole)
+        if not data or data.get('is_tier'):
+            return
+
+        name = data['name']
+        current_color = self.settings.get_pattern_color(name)
+
+        # Show color dialog
+        initial = QColor(current_color) if current_color else QColor("#2e7d32")
+        color = QColorDialog.getColor(initial, self, f"Choose color for {name}")
+
+        if color.isValid():
+            hex_color = color.name()
+            self.settings.set_pattern_color(name, hex_color)
+            item.setText(3, "●")
+            item.setForeground(3, color)
+        # If user cancels, keep current color
 
     def _on_selection_changed(self):
         """Handle selection change to show details."""
@@ -375,6 +412,7 @@ class PatternDialog(QDialog):
     def _save_and_close(self):
         """Save pattern states and close."""
         self.engine.save_config()
+        self.settings.save()  # Save colors
         self.accept()
 
     def _load_custom_patterns(self):
