@@ -1,0 +1,379 @@
+FANCY BILL SUMMARY
+==================================================
+
+Stack positions with fancy bills:
+  2, 8, 9, 10, 16, 20, 22, 23, 26, 30, 31, 32, 39, 40, 52, 58, 60, 64, 65, 73, 75, 76, 80, 81, 82, 85, 86, 90, 95, 97, 98, 100, 101, 102, 103, 104, 106, 111, 117, 118, 122, 125, 127, 134, 135, 136, 141, 148, 149, 151, 152, 159, 164, 166, 171, 174, 175, 179, 183, 184, 186, 195, 196, 212, 214, 217, 219, 224, 229, 232, 234, 236, 241, 242, 244, 245, 248, 250, 255, 258, 259, 262, 266, 267, 268, 270, 274, 279, 283, 288, 292, 296, 298
+
+Details:
+  Position #2: B29954889A
+    Types: DOUBLE_99
+    Crops: 1db_test/B29954889A_01.jpg ... _10.jpg
+
+  Position #8: B00309566*
+    Types: STAR
+    Crops: 1db_test/B00309566*_01.jpg ... _10.jpg
+
+  Position #9: F14115761E
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/F14115761E_01.jpg ... _10.jpg
+
+  Position #10: D27234511E
+    Types: LADDER_4
+    Crops: 1db_test/D27234511E_01.jpg ... _10.jpg
+
+  Position #16: K81505089B
+    Types: MAGIC_SUM
+    Crops: 1db_test/K81505089B_01.jpg ... _10.jpg
+
+  Position #20: E70585870A
+    Types: DOUBLE_BOOKEND, TRUE_QUADRINARY
+    Crops: 1db_test/E70585870A_01.jpg ... _10.jpg
+
+  Position #22: D38170746D
+    Types: MAGIC_SUM
+    Crops: 1db_test/D38170746D_01.jpg ... _10.jpg
+
+  Position #23: D01839995B
+    Types: TRIPLES, DOUBLE_99
+    Crops: 1db_test/D01839995B_01.jpg ... _10.jpg
+
+  Position #26: D79367547F
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/D79367547F_01.jpg ... _10.jpg
+
+  Position #30: F43817204G
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/F43817204G_01.jpg ... _10.jpg
+
+  Position #31: F39084228A
+    Types: MAGIC_SUM
+    Crops: 1db_test/F39084228A_01.jpg ... _10.jpg
+
+  Position #32: F94851459E
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/F94851459E_01.jpg ... _10.jpg
+
+  Position #39: K21846452F
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/K21846452F_01.jpg ... _10.jpg
+
+  Position #40: F09983045T
+    Types: DOUBLE_99
+    Crops: 1db_test/F09983045T_01.jpg ... _10.jpg
+
+  Position #52: C51707077G
+    Types: TRUE_QUADRINARY
+    Crops: 1db_test/C51707077G_01.jpg ... _10.jpg
+
+  Position #58: D21771216C
+    Types: TRUE_QUADRINARY, TRIPLE_DOUBLE_DOUBLE, TWO_PAIR_TRIPLE
+    Crops: 1db_test/D21771216C_01.jpg ... _10.jpg
+
+  Position #60: C02229388I
+    Types: TRIPLES
+    Crops: 1db_test/C02229388I_01.jpg ... _10.jpg
+
+  Position #64: C59936025A
+    Types: BOOKENDS, BOOKEND_LADDER, DOUBLE_99
+    Crops: 1db_test/C59936025A_01.jpg ... _10.jpg
+
+  Position #65: E33000779C
+    Types: TRUE_QUADRINARY, THREE_PAIRS, TRIPLES, TRIPLE_DOUBLE_DOUBLE, TWO_PAIR_TRIPLE
+    Crops: 1db_test/E33000779C_01.jpg ... _10.jpg
+
+  Position #73: L18662517A
+    Types: MAGIC_SUM
+    Crops: 1db_test/L18662517A_01.jpg ... _10.jpg
+
+  Position #75: F88081999B
+    Types: TRUE_QUADRINARY, TRIPLES, FLIPPER, DOUBLE_99
+    Crops: 1db_test/F88081999B_01.jpg ... _10.jpg
+
+  Position #76: A65439295A
+    Types: LADDER_4
+    Crops: 1db_test/A65439295A_01.jpg ... _10.jpg
+
+  Position #80: B68144841K
+    Types: TRUE_QUADRINARY, TRIPLE_DOUBLE_DOUBLE, TWO_PAIR_TRIPLE, MAGIC_SUM
+    Crops: 1db_test/B68144841K_01.jpg ... _10.jpg
+
+  Position #81: A65222380B
+    Types: TRIPLES
+    Crops: 1db_test/A65222380B_01.jpg ... _10.jpg
+
+  Position #82: D30165903D
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/D30165903D_01.jpg ... _10.jpg
+
+  Position #85: K30586603A
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/K30586603A_01.jpg ... _10.jpg
+
+  Position #86: K10122126D
+    Types: TRUE_QUADRINARY
+    Crops: 1db_test/K10122126D_01.jpg ... _10.jpg
+
+  Position #90: F34213124C
+    Types: TRUE_QUADRINARY
+    Crops: 1db_test/F34213124C_01.jpg ... _10.jpg
+
+  Position #95: F91505150B
+    Types: TRUE_QUADRINARY, TRIPLE_DOUBLE_DOUBLE, TWO_PAIR_TRIPLE
+    Crops: 1db_test/F91505150B_01.jpg ... _10.jpg
+
+  Position #97: K46994079A
+    Types: DOUBLE_99
+    Crops: 1db_test/K46994079A_01.jpg ... _10.jpg
+
+  Position #98: D75656764A
+    Types: TRUE_QUADRINARY, TRIPLE_DOUBLE_DOUBLE, TWO_PAIR_TRIPLE
+    Crops: 1db_test/D75656764A_01.jpg ... _10.jpg
+
+  Position #100: F93451099D
+    Types: BOOKENDS, BOOKEND_LADDER, DOUBLE_99
+    Crops: 1db_test/F93451099D_01.jpg ... _10.jpg
+
+  Position #101: L35998206B
+    Types: DOUBLE_99
+    Crops: 1db_test/L35998206B_01.jpg ... _10.jpg
+
+  Position #102: F81148748H
+    Types: BOOKENDS, TRUE_QUADRINARY, BOOKEND_LADDER, TRIPLE_DOUBLE_DOUBLE, TWO_PAIR_TRIPLE
+    Crops: 1db_test/F81148748H_01.jpg ... _10.jpg
+
+  Position #103: D80008722E
+    Types: TRUE_QUADRINARY, TRIPLES, TRIPLE_DOUBLE_DOUBLE, TWO_PAIR_TRIPLE
+    Crops: 1db_test/D80008722E_01.jpg ... _10.jpg
+
+  Position #104: F09444415C
+    Types: QUADS, TRIPLES
+    Crops: 1db_test/F09444415C_01.jpg ... _10.jpg
+
+  Position #106: B65336567H
+    Types: TRUE_QUADRINARY, TRIPLE_DOUBLE_DOUBLE, TWO_PAIR_TRIPLE
+    Crops: 1db_test/B65336567H_01.jpg ... _10.jpg
+
+  Position #111: L92555153B
+    Types: TRIPLES
+    Crops: 1db_test/L92555153B_01.jpg ... _10.jpg
+
+  Position #117: I76116159A
+    Types: MAGIC_SUM
+    Crops: 1db_test/I76116159A_01.jpg ... _10.jpg
+
+  Position #118: E43213998B
+    Types: LADDER_4, DOUBLE_99
+    Crops: 1db_test/E43213998B_01.jpg ... _10.jpg
+
+  Position #122: F14995749A
+    Types: DOUBLE_99
+    Crops: 1db_test/F14995749A_01.jpg ... _10.jpg
+
+  Position #125: D34708233B
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/D34708233B_01.jpg ... _10.jpg
+
+  Position #127: K21259845A
+    Types: MAGIC_SUM
+    Crops: 1db_test/K21259845A_01.jpg ... _10.jpg
+
+  Position #134: D36621765*
+    Types: STAR, MAGIC_SUM
+    Crops: 1db_test/D36621765*_01.jpg ... _10.jpg
+
+  Position #135: L85292982D
+    Types: TRUE_QUADRINARY, TRIPLE_DOUBLE_DOUBLE, TWO_PAIR_TRIPLE
+    Crops: 1db_test/L85292982D_01.jpg ... _10.jpg
+
+  Position #136: D11536901A
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/D11536901A_01.jpg ... _10.jpg
+
+  Position #141: F75545757C
+    Types: BOOKENDS, TRINARY, TRUE_TRINARY, BOOKEND_LADDER
+    Crops: 1db_test/F75545757C_01.jpg ... _10.jpg
+
+  Position #148: D72900037E
+    Types: BOOKENDS, BOOKEND_LADDER, TRIPLES
+    Crops: 1db_test/D72900037E_01.jpg ... _10.jpg
+
+  Position #149: H23678883A
+    Types: TRIPLES
+    Crops: 1db_test/H23678883A_01.jpg ... _10.jpg
+
+  Position #151: K09928540A
+    Types: BOOKENDS, BOOKEND_LADDER, DOUBLE_99
+    Crops: 1db_test/K09928540A_01.jpg ... _10.jpg
+
+  Position #152: F93661909C
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/F93661909C_01.jpg ... _10.jpg
+
+  Position #159: F43216413D
+    Types: LADDER_4
+    Crops: 1db_test/F43216413D_01.jpg ... _10.jpg
+
+  Position #164: F40047067D
+    Types: TRUE_QUADRINARY, TRIPLE_DOUBLE_DOUBLE, TWO_PAIR_TRIPLE
+    Crops: 1db_test/F40047067D_01.jpg ... _10.jpg
+
+  Position #166: D04993037C
+    Types: DOUBLE_99
+    Crops: 1db_test/D04993037C_01.jpg ... _10.jpg
+
+  Position #171: B82444756A
+    Types: TRIPLES
+    Crops: 1db_test/B82444756A_01.jpg ... _10.jpg
+
+  Position #174: B90861729F
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/B90861729F_01.jpg ... _10.jpg
+
+  Position #175: F89954217F
+    Types: DOUBLE_99
+    Crops: 1db_test/F89954217F_01.jpg ... _10.jpg
+
+  Position #179: F66682685A
+    Types: TRUE_QUADRINARY, TRIPLES
+    Crops: 1db_test/F66682685A_01.jpg ... _10.jpg
+
+  Position #183: C16557531B
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/C16557531B_01.jpg ... _10.jpg
+
+  Position #184: F25499010B
+    Types: DOUBLE_99
+    Crops: 1db_test/F25499010B_01.jpg ... _10.jpg
+
+  Position #186: G16890281E
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/G16890281E_01.jpg ... _10.jpg
+
+  Position #195: F07995150C
+    Types: BOOKENDS, BOOKEND_LADDER, MAGIC_SUM, DOUBLE_99
+    Crops: 1db_test/F07995150C_01.jpg ... _10.jpg
+
+  Position #196: F30534199A
+    Types: DOUBLE_99
+    Crops: 1db_test/F30534199A_01.jpg ... _10.jpg
+
+  Position #212: F14998998E
+    Types: TRUE_QUADRINARY, MINI_REPEATER, DOUBLE_99
+    Crops: 1db_test/F14998998E_01.jpg ... _10.jpg
+
+  Position #214: C90266966C
+    Types: TRUE_QUADRINARY
+    Crops: 1db_test/C90266966C_01.jpg ... _10.jpg
+
+  Position #217: L53444371G
+    Types: TRIPLES
+    Crops: 1db_test/L53444371G_01.jpg ... _10.jpg
+
+  Position #219: F06943406A
+    Types: DOUBLE_BOOKEND
+    Crops: 1db_test/F06943406A_01.jpg ... _10.jpg
+
+  Position #224: K16309946A
+    Types: DOUBLE_99
+    Crops: 1db_test/K16309946A_01.jpg ... _10.jpg
+
+  Position #229: F10929947B
+    Types: DOUBLE_99
+    Crops: 1db_test/F10929947B_01.jpg ... _10.jpg
+
+  Position #232: B53812853B
+    Types: DOUBLE_BOOKEND
+    Crops: 1db_test/B53812853B_01.jpg ... _10.jpg
+
+  Position #234: D87851987A
+    Types: DOUBLE_BOOKEND
+    Crops: 1db_test/D87851987A_01.jpg ... _10.jpg
+
+  Position #236: L27159890*
+    Types: STAR
+    Crops: 1db_test/L27159890*_01.jpg ... _10.jpg
+
+  Position #241: K49674274D
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/K49674274D_01.jpg ... _10.jpg
+
+  Position #242: C59904479A
+    Types: DOUBLE_99
+    Crops: 1db_test/C59904479A_01.jpg ... _10.jpg
+
+  Position #244: J14997431D
+    Types: BOOKENDS, BOOKEND_LADDER, DOUBLE_99
+    Crops: 1db_test/J14997431D_01.jpg ... _10.jpg
+
+  Position #245: F90975159D
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/F90975159D_01.jpg ... _10.jpg
+
+  Position #248: B08071368*
+    Types: STAR
+    Crops: 1db_test/B08071368*_01.jpg ... _10.jpg
+
+  Position #250: C77698727B
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/C77698727B_01.jpg ... _10.jpg
+
+  Position #255: C67188877C
+    Types: TRUE_QUADRINARY, TRIPLES
+    Crops: 1db_test/C67188877C_01.jpg ... _10.jpg
+
+  Position #258: I23617666J
+    Types: TRIPLES
+    Crops: 1db_test/I23617666J_01.jpg ... _10.jpg
+
+  Position #259: L74139840C
+    Types: MAGIC_SUM
+    Crops: 1db_test/L74139840C_01.jpg ... _10.jpg
+
+  Position #262: B95725551B
+    Types: TRIPLES
+    Crops: 1db_test/B95725551B_01.jpg ... _10.jpg
+
+  Position #266: L91175797O
+    Types: TRUE_QUADRINARY, ALL_ODDS, TRIPLE_DOUBLE_DOUBLE, TWO_PAIR_TRIPLE
+    Crops: 1db_test/L91175797O_01.jpg ... _10.jpg
+
+  Position #267: F40486124A
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/F40486124A_01.jpg ... _10.jpg
+
+  Position #268: A43214985C
+    Types: LADDER_4, MAGIC_SUM
+    Crops: 1db_test/A43214985C_01.jpg ... _10.jpg
+
+  Position #270: L91286859N
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/L91286859N_01.jpg ... _10.jpg
+
+  Position #274: C32177724E
+    Types: TRIPLES, LUCKY_777
+    Crops: 1db_test/C32177724E_01.jpg ... _10.jpg
+
+  Position #279: F02528585A
+    Types: TRUE_QUADRINARY, TRIPLE_DOUBLE_DOUBLE, TWO_PAIR_TRIPLE
+    Crops: 1db_test/F02528585A_01.jpg ... _10.jpg
+
+  Position #283: B22292203A
+    Types: TRUE_QUADRINARY, TRIPLES
+    Crops: 1db_test/B22292203A_01.jpg ... _10.jpg
+
+  Position #288: B44750925G
+    Types: MAGIC_SUM
+    Crops: 1db_test/B44750925G_01.jpg ... _10.jpg
+
+  Position #292: F85222622A
+    Types: TRUE_QUADRINARY, TRIPLES
+    Crops: 1db_test/F85222622A_01.jpg ... _10.jpg
+
+  Position #296: E43076764C
+    Types: BOOKENDS, BOOKEND_LADDER
+    Crops: 1db_test/E43076764C_01.jpg ... _10.jpg
+
+  Position #298: E41143412C
+    Types: TRUE_QUADRINARY
+    Crops: 1db_test/E41143412C_01.jpg ... _10.jpg
+

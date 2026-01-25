@@ -133,6 +133,7 @@ class BillPair:
     error: Optional[str] = None
     needs_review: bool = False
     review_reason: Optional[str] = None
+    is_upside_down: bool = False  # True if bill was scanned upside-down
 
 
 @dataclass
@@ -779,11 +780,16 @@ class ProductionProcessor:
 
         return serials_found
 
-    def extract_serial(self, image_path: Path) -> tuple[Optional[str], float]:
-        """Extract serial number using multi-pass detection pipeline."""
+    def extract_serial(self, image_path: Path) -> tuple[Optional[str], float, bool]:
+        """
+        Extract serial number using multi-pass detection pipeline.
+
+        Returns:
+            tuple: (serial, confidence, is_upside_down)
+        """
         aligned_img = self.aligner.align_image(image_path)
         if aligned_img is None:
-            return None, 0
+            return None, 0, False
 
         # First pass: standard detection (fastest path for most bills)
         boxes = self._detect_serials_single_pass(aligned_img, conf=0.1)
@@ -792,12 +798,13 @@ class ProductionProcessor:
             if serials:
                 # Got results on first pass - use them
                 result = self._consensus_vote([(s, oc, dc, 'standard') for s, oc, dc in serials])
-                # If confidence is good, return immediately
+                # If confidence is good, return immediately (not upside down)
                 if result[1] >= 0.5:
-                    return result
+                    return result[0], result[1], False
 
         # Only run additional passes if first pass failed or had low confidence
         all_serials = []
+        found_via_rotation = False
 
         for pass_config in self.DETECTION_PASSES[1:]:  # Skip first pass, already done
             conf = pass_config['conf']
@@ -818,15 +825,29 @@ class ProductionProcessor:
                     for s, ocr_conf, det_conf in serials:
                         all_serials.append((s, ocr_conf, det_conf, pass_name))
 
+                    # Track if best result came from rotated pass
+                    if preprocess == 'rotate180':
+                        found_via_rotation = True
+
                     # If we got good results, stop early
                     if serials and max(oc for s, oc, dc in serials) >= 0.6:
                         break
 
         if not all_serials:
             # Last resort: try whole-image OCR scan for serial patterns
-            return self._fallback_ocr_scan(aligned_img)
+            serial, conf = self._fallback_ocr_scan(aligned_img)
+            return serial, conf, False
 
-        return self._consensus_vote(all_serials)
+        result = self._consensus_vote(all_serials)
+
+        # Determine if the winning result came from a rotated pass
+        # Check if most of the good serials came from rotation
+        if all_serials:
+            rotated_count = sum(1 for s, oc, dc, name in all_serials if 'rotated' in name)
+            normal_count = len(all_serials) - rotated_count
+            found_via_rotation = rotated_count > normal_count
+
+        return result[0], result[1], found_via_rotation
 
     def _fallback_ocr_scan(self, img: np.ndarray) -> tuple[Optional[str], float]:
         """Fallback: scan entire image for serial patterns."""
@@ -935,6 +956,14 @@ class ProductionProcessor:
         front_img = self.aligner.align_image(pair.front_path)
         back_img = self.aligner.align_image(pair.back_path) if pair.back_path else None
 
+        # Correct orientation if bill was scanned upside-down
+        # Both front and back get flipped together (same physical orientation)
+        if pair.is_upside_down:
+            if front_img is not None:
+                front_img = cv2.rotate(front_img, cv2.ROTATE_180)
+            if back_img is not None:
+                back_img = cv2.rotate(back_img, cv2.ROTATE_180)
+
         crop_order = self.cfg.crop_order
         jpeg_quality = self.cfg.jpeg_quality
 
@@ -1016,9 +1045,10 @@ class ProductionProcessor:
                 continue
 
             # Extract serial using multi-pass detection
-            serial, confidence = self.extract_serial(pair.front_path)
+            serial, confidence, is_upside_down = self.extract_serial(pair.front_path)
             pair.serial = serial
             pair.confidence = confidence
+            pair.is_upside_down = is_upside_down
 
             # Validate serial format
             is_valid, validation_error = self.validate_serial(serial)

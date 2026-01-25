@@ -1,0 +1,15 @@
+FANCY BILL SUMMARY
+==================================================
+
+Stack positions with fancy bills:
+  1, 4
+
+Details:
+  Position #1: B00309566*
+    Types: STAR
+    Crops: /tmp/test_fix3/B00309566*_01.jpg ... _10.jpg
+
+  Position #4: B08071368*
+    Types: STAR
+    Crops: /tmp/test_fix3/B08071368*_01.jpg ... _10.jpg
+

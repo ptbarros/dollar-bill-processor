@@ -1,0 +1,11 @@
+FANCY BILL SUMMARY
+==================================================
+
+Stack positions with fancy bills:
+  3
+
+Details:
+  Position #3: D36621765F
+    Types: MAGIC_SUM
+    Crops: /tmp/test_fix4/D36621765F_01.jpg ... _10.jpg
+

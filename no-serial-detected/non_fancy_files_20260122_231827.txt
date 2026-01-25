@@ -1,0 +1,8 @@
+# Non-fancy bill scan files
+# These can be deleted to save space
+# Review before deleting!
+
+no-serial-detected/1db_0187.jpg
+no-serial-detected/1db_0187_b.jpg
+no-serial-detected/1db_0271.jpg
+no-serial-detected/1db_0271_b.jpg

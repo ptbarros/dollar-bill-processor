@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "created": "2026-01-24T00:17:04.295072",
+  "total_items": 1,
+  "pending_review": 1,
+  "items": [
+    {
+      "filename": "/home/pbarros/projects/dollar-bill-processor/1db/1db_0266.jpg",
+      "original_read": "L91175797O",
+      "confidence": 0.6363811423102763,
+      "review_reason": "Validation failed: Invalid suffix: O",
+      "thumbnail_path": "/home/pbarros/projects/dollar-bill-processor/1db/fancy_bills/review/thumb_1db_0266.jpg",
+      "serial_region_path": "/home/pbarros/projects/dollar-bill-processor/1db/fancy_bills/review/serial_1db_0266.jpg",
+      "corrected_serial": null,
+      "reviewed": false,
+      "timestamp": "2026-01-24T00:16:48.316647"
+    }
+  ]
+}

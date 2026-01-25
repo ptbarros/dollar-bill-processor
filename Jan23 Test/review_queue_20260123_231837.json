@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "created": "2026-01-23T23:18:37.862869",
+  "total_items": 1,
+  "pending_review": 1,
+  "items": [
+    {
+      "filename": "/home/pbarros/projects/dollar-bill-processor/Jan23 Test/Dollar_03.jpg",
+      "original_read": "A03322473*",
+      "confidence": 0.46615287062243127,
+      "review_reason": "Low confidence: 0.47",
+      "thumbnail_path": "/home/pbarros/projects/dollar-bill-processor/Jan23 Test/fancy_bills/review/thumb_Dollar_03.jpg",
+      "serial_region_path": "/home/pbarros/projects/dollar-bill-processor/Jan23 Test/fancy_bills/review/serial_Dollar_03.jpg",
+      "corrected_serial": null,
+      "reviewed": false,
+      "timestamp": "2026-01-23T23:18:37.858096"
+    }
+  ]
+}

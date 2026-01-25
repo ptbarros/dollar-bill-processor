@@ -119,9 +119,10 @@ class ProcessingThread(QThread):
                     continue
 
                 # Extract serial
-                serial, confidence = processor.extract_serial(pair.front_path)
+                serial, confidence, is_upside_down = processor.extract_serial(pair.front_path)
                 pair.serial = serial
                 pair.confidence = confidence
+                pair.is_upside_down = is_upside_down
 
                 # Validate
                 is_valid, validation_error = processor.validate_serial(serial)

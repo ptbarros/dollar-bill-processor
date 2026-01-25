@@ -1,0 +1,328 @@
+# =============================================================================
+# UNIFIED PATTERN DEFINITION SYSTEM - v2 Design Sketch
+# =============================================================================
+#
+# This file defines ALL fancy number patterns in one place.
+# Supports: regex, conditions, and built-in checks
+#
+# Benefits:
+# - Single source of truth for all patterns
+# - GUI can read/edit this directly
+# - Easy to add denomination-specific patterns
+# - Non-programmers can add simple patterns
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# GLOBAL SETTINGS
+# -----------------------------------------------------------------------------
+settings:
+  # Which denomination profiles to load
+  active_denominations: [us_dollar]
+
+  # Default state for new patterns
+  default_enabled: true
+
+# -----------------------------------------------------------------------------
+# DENOMINATION PROFILES
+# -----------------------------------------------------------------------------
+# Each denomination can have different serial formats and patterns
+
+denominations:
+  us_dollar:
+    name: "US Dollar"
+    serial_format: "[A-L]\\d{8}[A-Y*]"  # Letter + 8 digits + Letter/Star
+    digit_positions: [1, 9]  # Start and end index of digits (0-indexed)
+    star_indicator: "*"
+
+  us_hundred:
+    name: "US $100 Bill"
+    serial_format: "[A-L]{2}\\d{8}[A-Y]"  # Two letters + 8 digits + Letter
+    digit_positions: [2, 10]
+    star_indicator: "*"
+
+# -----------------------------------------------------------------------------
+# PATTERN DEFINITIONS
+# -----------------------------------------------------------------------------
+#
+# Each pattern can use one or more rule types:
+#
+# RULE TYPES:
+#   regex:        Regular expression match
+#   unique_count: Number of unique digits (e.g., =2 for binary)
+#   digit_sum:    Sum of all digits (e.g., =36 for magic sum)
+#   check:        Built-in check function (palindrome, ladder, etc.)
+#   all:          ALL conditions must match (AND)
+#   any:          ANY condition must match (OR)
+#
+# BUILT-IN CHECKS:
+#   palindrome    - Reads same forwards and backwards
+#   ladder_asc    - Ascending sequence (01234567)
+#   ladder_desc   - Descending sequence (76543210)
+#   ladder_N      - Contains N consecutive ascending/descending digits
+#   repeater      - Pattern like ABABABAB
+#   solid         - All digits same
+#   all_even      - All digits are even
+#   all_odd       - All digits are odd
+#   has_pair      - Contains at least one pair
+#   has_triple    - Contains at least one triple
+#   has_quad      - Contains at least one quad
+#
+# =============================================================================
+
+patterns:
+
+  # ---------------------------------------------------------------------------
+  # TIER 1: Holy Grail Patterns (Extremely Rare)
+  # ---------------------------------------------------------------------------
+
+  SOLID:
+    description: "All 8 digits are identical (e.g., 88888888)"
+    tier: 1
+    enabled: true
+    rules:
+      check: solid
+    example: "A88888888B"
+    rarity: "1 in 10,000,000"
+
+  LADDER:
+    description: "Perfect ascending or descending sequence"
+    tier: 1
+    enabled: true
+    rules:
+      any:
+        - check: ladder_asc
+        - check: ladder_desc
+    examples: ["A01234567B", "A76543210B"]
+
+  SUPER_RADAR:
+    description: "Radar with solid outer digits (e.g., 10000001)"
+    tier: 1
+    enabled: true
+    rules:
+      all:
+        - check: palindrome
+        - regex: "^(\\d)0+\\1$"
+    example: "A10000001B"
+
+  # ---------------------------------------------------------------------------
+  # TIER 2: Premium Patterns (Very Rare)
+  # ---------------------------------------------------------------------------
+
+  RADAR:
+    description: "Palindrome - reads same forwards and backwards"
+    tier: 2
+    enabled: true
+    rules:
+      check: palindrome
+    examples: ["A12344321B", "A68888886B"]
+
+  REPEATER:
+    description: "Two-digit pattern repeated 4 times"
+    tier: 2
+    enabled: true
+    rules:
+      regex: "^(\\d\\d)\\1\\1\\1$"
+    example: "A12121212B"
+
+  SUPER_REPEATER:
+    description: "Single digit alternating with another"
+    tier: 2
+    enabled: true
+    rules:
+      regex: "^(\\d)(\\d)\\1\\2\\1\\2\\1\\2$"
+    example: "A12121212B"
+
+  BINARY:
+    description: "Only 2 unique digits used"
+    tier: 2
+    enabled: true
+    rules:
+      unique_count: 2
+    example: "A11211121B"
+
+  LOW_SERIAL:
+    description: "Serial number under 1000"
+    tier: 2
+    enabled: true
+    rules:
+      regex: "^0{5}\\d{3}$"
+    example: "A00000123B"
+
+  # ---------------------------------------------------------------------------
+  # TIER 3: Collector Patterns (Uncommon)
+  # ---------------------------------------------------------------------------
+
+  TRINARY:
+    description: "Only 3 unique digits used"
+    tier: 3
+    enabled: true
+    rules:
+      unique_count: 3
+    example: "A12312312B"
+
+  TRUE_BINARY:
+    description: "Binary using only 0 and 1"
+    tier: 3
+    enabled: true
+    rules:
+      all:
+        - unique_count: 2
+        - regex: "^[01]+$"
+    example: "A01101001B"
+
+  SEVEN_OF_A_KIND:
+    description: "7 digits are the same"
+    tier: 3
+    enabled: true
+    rules:
+      regex: "(\\d)(?:.*\\1){6}"
+      # More precise: one digit appears 7+ times
+    example: "A77777727B"
+
+  BOOKENDS:
+    description: "First and last digit match"
+    tier: 3
+    enabled: true
+    rules:
+      regex: "^(\\d)\\d{6}\\1$"
+    example: "A51234565B"
+
+  DOUBLE_BOOKEND:
+    description: "First two and last two digits match"
+    tier: 3
+    enabled: true
+    rules:
+      regex: "^(\\d\\d)\\d{4}\\1$"
+    example: "A12345612B"
+
+  # ---------------------------------------------------------------------------
+  # TIER 4: Interesting Patterns (Somewhat Common)
+  # ---------------------------------------------------------------------------
+
+  TRIPLES:
+    description: "Contains three consecutive identical digits"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "(\\d)\\1\\1"
+    example: "A12333456B"
+
+  QUADS:
+    description: "Contains four consecutive identical digits"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "(\\d)\\1{3}"
+    example: "A12333345B"
+
+  MAGIC_SUM:
+    description: "Digits sum to 36"
+    tier: 4
+    enabled: true
+    rules:
+      digit_sum: 36
+    example: "A99999999B"  # 9*8=72, need 36
+
+  ALL_EVENS:
+    description: "All digits are even (0,2,4,6,8)"
+    tier: 4
+    enabled: true
+    rules:
+      check: all_even
+    example: "A24680246B"
+
+  ALL_ODDS:
+    description: "All digits are odd (1,3,5,7,9)"
+    tier: 4
+    enabled: true
+    rules:
+      check: all_odd
+    example: "A13579135B"
+
+  THREE_PAIRS:
+    description: "Contains 3 pairs of digits"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "(\\d)\\1.*(\\d)\\2.*(\\d)\\3"
+    example: "A11223344B"
+
+  FOUR_PAIRS:
+    description: "Four consecutive pairs"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "^(\\d)\\1(\\d)\\2(\\d)\\3(\\d)\\4$"
+    example: "A11223344B"
+
+  # ---------------------------------------------------------------------------
+  # TIER 5: Novelty Patterns (User Customizable)
+  # ---------------------------------------------------------------------------
+
+  LUCKY_777:
+    description: "Contains 777"
+    tier: 5
+    enabled: true
+    rules:
+      contains: "777"
+    example: "A12777456B"
+
+  DEVIL_666:
+    description: "Contains 666"
+    tier: 5
+    enabled: false  # Disabled by default
+    rules:
+      contains: "666"
+    example: "A12666456B"
+
+  BIRTH_YEAR:
+    description: "Contains a birth year (customize below)"
+    tier: 5
+    enabled: false
+    rules:
+      any:
+        - contains: "1990"
+        - contains: "1985"
+        - contains: "1776"
+    example: "A19901234B"
+
+  DOUBLE_99:
+    description: "Contains 99"
+    tier: 5
+    enabled: true
+    rules:
+      contains: "99"
+
+  # ---------------------------------------------------------------------------
+  # STAR NOTES (Special - uses full serial)
+  # ---------------------------------------------------------------------------
+
+  STAR:
+    description: "Star note (replacement bill)"
+    tier: 3
+    enabled: true
+    uses_full_serial: true  # Check full serial, not just digits
+    rules:
+      ends_with: "*"
+    example: "A12345678*"
+
+# -----------------------------------------------------------------------------
+# CUSTOM USER PATTERNS
+# -----------------------------------------------------------------------------
+# Users can add simple patterns here without touching the complex ones above
+
+custom_patterns:
+
+  # Example: Uncomment to enable
+  # MY_BIRTHDAY:
+  #   description: "My birthday"
+  #   enabled: true
+  #   rules:
+  #     contains: "0704"  # July 4th
+
+  # ANNIVERSARY:
+  #   description: "Wedding anniversary"
+  #   enabled: true
+  #   rules:
+  #     contains: "1225"  # Dec 25th
