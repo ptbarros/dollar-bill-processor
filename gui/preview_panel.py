@@ -589,58 +589,79 @@ class PreviewPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        # Image preview area
-        preview_group = QGroupBox("Bill Preview")
-        preview_layout = QVBoxLayout(preview_group)
+        # Image preview area - custom header instead of QGroupBox
+        preview_container = QWidget()
+        preview_layout = QVBoxLayout(preview_container)
+        preview_layout.setContentsMargins(0, 0, 0, 0)
+        preview_layout.setSpacing(4)
 
-        # Single-line header: Prev | View dropdown | Next
+        # Header row: "Bill Preview" | view buttons | spacer | nav buttons
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(4)
 
-        self.prev_btn = QPushButton("\u25c0")
-        self.prev_btn.setToolTip("Previous bill (Page Up)")
-        self.prev_btn.setMaximumWidth(40)
+        title_label = QLabel("Bill Preview")
+        title_label.setStyleSheet("font-weight: bold;")
+        header_layout.addWidget(title_label)
+
+        header_layout.addSpacing(10)
+
+        # View mode buttons
+        self.view_buttons = []
+        view_modes = [
+            ("Front", "front", "View front of bill"),
+            ("Back", "back", "View back of bill"),
+            ("Stitched", "stitched", "View front and back stitched together"),
+            ("Split V", "split_v", "View front and back side by side vertically"),
+            ("Split H", "split_h", "View front and back side by side horizontally"),
+        ]
+        for label, mode, tooltip in view_modes:
+            btn = QPushButton(label)
+            btn.setToolTip(tooltip)
+            btn.setCheckable(True)
+            btn.clicked.connect(lambda checked, m=mode: self._on_view_mode_clicked(m))
+            header_layout.addWidget(btn)
+            self.view_buttons.append((btn, mode))
+
+        # Select "Front" by default
+        self.view_buttons[0][0].setChecked(True)
+        self._current_view_mode = "front"
+
+        header_layout.addStretch()
+
+        # Navigation buttons
+        self.prev_btn = QPushButton("Prev (P)")
+        self.prev_btn.setToolTip("Previous bill (Page Up / P)")
         self.prev_btn.clicked.connect(self.prev_requested.emit)
         header_layout.addWidget(self.prev_btn)
 
-        self.view_mode_combo = QComboBox()
-        self.view_mode_combo.addItem("Tabbed", "tabbed")
-        self.view_mode_combo.addItem("Stitched", "stitched")
-        self.view_mode_combo.addItem("Split V", "split_v")
-        self.view_mode_combo.addItem("Split H", "split_h")
-        self.view_mode_combo.currentIndexChanged.connect(self._on_view_mode_changed)
-        header_layout.addWidget(self.view_mode_combo)
-
-        self.next_btn = QPushButton("\u25b6")
-        self.next_btn.setToolTip("Next bill (Page Down)")
-        self.next_btn.setMaximumWidth(40)
+        self.next_btn = QPushButton("Next (N)")
+        self.next_btn.setToolTip("Next bill (Page Down / N)")
         self.next_btn.clicked.connect(self.next_requested.emit)
         header_layout.addWidget(self.next_btn)
 
-        header_layout.addStretch()  # Push everything left
         preview_layout.addLayout(header_layout)
 
         # Stacked widget to hold all view modes
         self.view_stack = QStackedWidget()
 
-        # === Tabbed view (index 0) ===
-        self.image_tabs = QTabWidget()
-        self.front_viewer_tabbed = ScrollableImageViewer()
-        self.image_tabs.addTab(self.front_viewer_tabbed, "Front")
-        self.back_viewer_tabbed = ScrollableImageViewer()
-        self.image_tabs.addTab(self.back_viewer_tabbed, "Back")
-        self.view_stack.addWidget(self.image_tabs)
+        # === Front view (index 0) ===
+        self.front_viewer = ScrollableImageViewer()
+        self.view_stack.addWidget(self.front_viewer)
 
-        # === Stitched view (index 1) ===
-        # Single viewer showing front+back stitched as one image
+        # === Back view (index 1) ===
+        self.back_viewer = ScrollableImageViewer()
+        self.view_stack.addWidget(self.back_viewer)
+
+        # === Stitched view (index 2) ===
         self.combined_viewer = ScrollableImageViewer()
         self.view_stack.addWidget(self.combined_viewer)
 
-        # === Split Vertical view (index 2) ===
+        # === Split Vertical view (index 3) ===
         self.split_v_viewer = SyncedSplitViewer(Qt.Vertical)
         self.view_stack.addWidget(self.split_v_viewer)
 
-        # === Split Horizontal view (index 3) ===
+        # === Split Horizontal view (index 4) ===
         self.split_h_viewer = SyncedSplitViewer(Qt.Horizontal)
         self.view_stack.addWidget(self.split_h_viewer)
 
@@ -666,7 +687,7 @@ class PreviewPanel(QWidget):
         zoom_tip.setStyleSheet("color: gray;")
         preview_layout.addWidget(zoom_tip)
 
-        layout.addWidget(preview_group, 1)
+        layout.addWidget(preview_container, 1)
 
         # Details section (toggleable via View menu)
         self.details_group = QGroupBox("Bill Details")
@@ -757,15 +778,29 @@ class PreviewPanel(QWidget):
 
         layout.addWidget(correction_group)
 
-    def _on_view_mode_changed(self, index: int):
-        """Handle view mode toggle."""
+    def _on_view_mode_clicked(self, mode: str):
+        """Handle view mode button click."""
+        # Update button states
+        for btn, btn_mode in self.view_buttons:
+            btn.setChecked(btn_mode == mode)
+
+        self._current_view_mode = mode
+
+        # Map mode to stack index
+        mode_to_index = {
+            "front": 0,
+            "back": 1,
+            "stitched": 2,
+            "split_v": 3,
+            "split_h": 4,
+        }
+        index = mode_to_index.get(mode, 0)
         self.view_stack.setCurrentIndex(index)
+
         # Refresh views when switching modes
-        if index == 1:  # Stitched
+        if mode == "stitched":
             self._update_combined_view()
-        elif index == 2:  # Split Vertical
-            self._update_split_views()
-        elif index == 3:  # Split Horizontal
+        elif mode in ("split_v", "split_h"):
             self._update_split_views()
 
     def _update_split_views(self, preserve_zoom: bool = False):
@@ -924,9 +959,9 @@ class PreviewPanel(QWidget):
         # Determine if we should preserve zoom (only when navigating, not first load)
         preserve = has_previous and self._preserved_zoom is not None
 
-        # Update tabbed view
-        self.front_viewer_tabbed.set_image(self._current_front_file, preserve_zoom=preserve)
-        self.back_viewer_tabbed.set_image(self._current_back_file, preserve_zoom=preserve)
+        # Update front and back views
+        self.front_viewer.set_image(self._current_front_file, preserve_zoom=preserve)
+        self.back_viewer.set_image(self._current_back_file, preserve_zoom=preserve)
 
         # Update stitched view
         self._update_combined_view(preserve_zoom=preserve)
@@ -938,11 +973,14 @@ class PreviewPanel(QWidget):
         if preserve:
             self._restore_zoom_pan_state()
 
-        # Update tab text to indicate if back exists
+        # Update Back button to indicate if back exists
+        back_btn = self.view_buttons[1][0]
         if has_back:
-            self.image_tabs.setTabText(1, "Back")
+            back_btn.setText("Back")
+            back_btn.setEnabled(True)
         else:
-            self.image_tabs.setTabText(1, "Back (none)")
+            back_btn.setText("Back (none)")
+            back_btn.setEnabled(False)
 
         # Serial region image if available
         serial_region = result.get('serial_region_path', '')
@@ -1047,17 +1085,15 @@ class PreviewPanel(QWidget):
     def _get_active_viewer(self):
         """Get the currently active viewer based on view mode."""
         index = self.view_stack.currentIndex()
-        if index == 0:  # Tabbed
-            # Return the visible tab's viewer
-            if self.image_tabs.currentIndex() == 0:
-                return self.front_viewer_tabbed
-            else:
-                return self.back_viewer_tabbed
-        elif index == 1:  # Stitched
+        if index == 0:  # Front
+            return self.front_viewer
+        elif index == 1:  # Back
+            return self.back_viewer
+        elif index == 2:  # Stitched
             return self.combined_viewer
-        elif index == 2:  # Split Vertical
+        elif index == 3:  # Split Vertical
             return self.split_v_viewer
-        elif index == 3:  # Split Horizontal
+        elif index == 4:  # Split Horizontal
             return self.split_h_viewer
         return None
 
