@@ -138,7 +138,7 @@ class ScrollableImageViewer(QWidget):
 
         layout.addLayout(zoom_layout)
 
-    def set_image(self, path: str):
+    def set_image(self, path: str, preserve_zoom: bool = False):
         """Load and display an image from file path."""
         if not path or not Path(path).exists():
             self.original_pixmap = None
@@ -154,9 +154,12 @@ class ScrollableImageViewer(QWidget):
             return
 
         self.original_pixmap = pixmap
-        self._zoom_fit()
+        if not preserve_zoom:
+            self._zoom_fit()
+        else:
+            self._update_display()
 
-    def set_pixmap(self, pixmap: QPixmap):
+    def set_pixmap(self, pixmap: QPixmap, preserve_zoom: bool = False):
         """Set a pixmap directly (for combined images)."""
         if pixmap is None or pixmap.isNull():
             self.original_pixmap = None
@@ -165,7 +168,10 @@ class ScrollableImageViewer(QWidget):
             return
 
         self.original_pixmap = pixmap
-        self._zoom_fit()
+        if not preserve_zoom:
+            self._zoom_fit()
+        else:
+            self._update_display()
 
     def _update_display(self):
         """Update the displayed image based on zoom level."""
@@ -445,11 +451,14 @@ class SyncedSplitViewer(QWidget):
 
         layout.addLayout(zoom_layout)
 
-    def set_images(self, front_path: str, back_path: str):
+    def set_images(self, front_path: str, back_path: str, preserve_zoom: bool = False):
         """Set both images."""
         self.front_pane.set_image(front_path)
         self.back_pane.set_image(back_path)
-        self._zoom_fit()
+        if not preserve_zoom:
+            self._zoom_fit()
+        else:
+            self._update_zoom()
 
     def _sync_pan_from_front(self, h_frac: float, v_frac: float):
         """Sync back pane to front pane's pan position."""
@@ -559,6 +568,8 @@ class PreviewPanel(QWidget):
 
     # Signals
     correction_submitted = Signal(str, str, str)  # filename, original, corrected
+    prev_requested = Signal()  # Request to navigate to previous bill
+    next_requested = Signal()  # Request to navigate to next bill
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -566,6 +577,10 @@ class PreviewPanel(QWidget):
         self.pattern_engine = PatternEngine()
         self._current_front_file = ""
         self._current_back_file = ""
+        # Preserved zoom/pan state for navigation
+        self._preserved_zoom: Optional[float] = None
+        self._preserved_scroll_h: Optional[float] = None  # as fraction 0-1
+        self._preserved_scroll_v: Optional[float] = None  # as fraction 0-1
         self._setup_ui()
 
     def _setup_ui(self):
@@ -578,18 +593,32 @@ class PreviewPanel(QWidget):
         preview_group = QGroupBox("Bill Preview")
         preview_layout = QVBoxLayout(preview_group)
 
-        # View mode toggle
-        view_mode_layout = QHBoxLayout()
-        view_mode_layout.addWidget(QLabel("View:"))
+        # Single-line header: Prev | View dropdown | Next
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.prev_btn = QPushButton("\u25c0")
+        self.prev_btn.setToolTip("Previous bill (Page Up)")
+        self.prev_btn.setMaximumWidth(40)
+        self.prev_btn.clicked.connect(self.prev_requested.emit)
+        header_layout.addWidget(self.prev_btn)
+
         self.view_mode_combo = QComboBox()
         self.view_mode_combo.addItem("Tabbed", "tabbed")
         self.view_mode_combo.addItem("Stitched", "stitched")
-        self.view_mode_combo.addItem("Split Vertical", "split_v")
-        self.view_mode_combo.addItem("Split Horizontal", "split_h")
+        self.view_mode_combo.addItem("Split V", "split_v")
+        self.view_mode_combo.addItem("Split H", "split_h")
         self.view_mode_combo.currentIndexChanged.connect(self._on_view_mode_changed)
-        view_mode_layout.addWidget(self.view_mode_combo)
-        view_mode_layout.addStretch()
-        preview_layout.addLayout(view_mode_layout)
+        header_layout.addWidget(self.view_mode_combo)
+
+        self.next_btn = QPushButton("\u25b6")
+        self.next_btn.setToolTip("Next bill (Page Down)")
+        self.next_btn.setMaximumWidth(40)
+        self.next_btn.clicked.connect(self.next_requested.emit)
+        header_layout.addWidget(self.next_btn)
+
+        header_layout.addStretch()  # Push everything left
+        preview_layout.addLayout(header_layout)
 
         # Stacked widget to hold all view modes
         self.view_stack = QStackedWidget()
@@ -739,10 +768,10 @@ class PreviewPanel(QWidget):
         elif index == 3:  # Split Horizontal
             self._update_split_views()
 
-    def _update_split_views(self):
+    def _update_split_views(self, preserve_zoom: bool = False):
         """Update split viewers with current images."""
-        self.split_v_viewer.set_images(self._current_front_file, self._current_back_file)
-        self.split_h_viewer.set_images(self._current_front_file, self._current_back_file)
+        self.split_v_viewer.set_images(self._current_front_file, self._current_back_file, preserve_zoom=preserve_zoom)
+        self.split_h_viewer.set_images(self._current_front_file, self._current_back_file, preserve_zoom=preserve_zoom)
 
     def _create_combined_pixmap(self, front_path: str, back_path: str) -> Optional[QPixmap]:
         """Create a combined pixmap with front on top, back on bottom, edge-to-edge."""
@@ -793,19 +822,98 @@ class PreviewPanel(QWidget):
 
         return combined
 
-    def _update_combined_view(self):
+    def _update_combined_view(self, preserve_zoom: bool = False):
         """Update the combined view with stitched front+back image."""
         combined = self._create_combined_pixmap(
             self._current_front_file,
             self._current_back_file
         )
         if combined:
-            self.combined_viewer.set_pixmap(combined)
+            self.combined_viewer.set_pixmap(combined, preserve_zoom=preserve_zoom)
         else:
             self.combined_viewer.set_pixmap(None)
 
+    def _save_zoom_pan_state(self):
+        """Save the current zoom and pan state from the active viewer."""
+        viewer = self._get_active_viewer()
+        if viewer is None:
+            return
+
+        # Get zoom factor
+        if hasattr(viewer, 'zoom_factor'):
+            self._preserved_zoom = viewer.zoom_factor
+        elif hasattr(viewer, 'front_pane'):
+            # Split viewer
+            self._preserved_zoom = viewer.zoom_factor
+
+        # Get scroll position as fraction (0-1)
+        scroll_area = None
+        if hasattr(viewer, 'scroll_area'):
+            scroll_area = viewer.scroll_area
+        elif hasattr(viewer, 'front_pane'):
+            scroll_area = viewer.front_pane.scroll_area
+
+        if scroll_area:
+            h_bar = scroll_area.horizontalScrollBar()
+            v_bar = scroll_area.verticalScrollBar()
+            self._preserved_scroll_h = h_bar.value() / max(1, h_bar.maximum()) if h_bar.maximum() > 0 else 0.5
+            self._preserved_scroll_v = v_bar.value() / max(1, v_bar.maximum()) if v_bar.maximum() > 0 else 0.5
+
+    def _restore_zoom_pan_state(self):
+        """Restore the saved zoom and pan state to the active viewer."""
+        if self._preserved_zoom is None:
+            return
+
+        viewer = self._get_active_viewer()
+        if viewer is None:
+            return
+
+        # Restore zoom
+        if hasattr(viewer, 'set_zoom'):
+            viewer.set_zoom(self._preserved_zoom)
+            viewer._update_display()
+        elif hasattr(viewer, '_update_zoom'):
+            viewer.zoom_factor = self._preserved_zoom
+            viewer._update_zoom()
+
+        # Restore scroll position after a brief delay to ensure layout is complete
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(10, self._apply_preserved_scroll)
+
+    def _apply_preserved_scroll(self):
+        """Apply preserved scroll position after layout update."""
+        if self._preserved_scroll_h is None or self._preserved_scroll_v is None:
+            return
+
+        viewer = self._get_active_viewer()
+        if viewer is None:
+            return
+
+        scroll_area = None
+        if hasattr(viewer, 'scroll_area'):
+            scroll_area = viewer.scroll_area
+        elif hasattr(viewer, 'front_pane'):
+            scroll_area = viewer.front_pane.scroll_area
+
+        if scroll_area:
+            h_bar = scroll_area.horizontalScrollBar()
+            v_bar = scroll_area.verticalScrollBar()
+            h_bar.setValue(int(self._preserved_scroll_h * h_bar.maximum()))
+            v_bar.setValue(int(self._preserved_scroll_v * v_bar.maximum()))
+
+    def clear_preserved_state(self):
+        """Clear the preserved zoom/pan state (e.g., when user resets view)."""
+        self._preserved_zoom = None
+        self._preserved_scroll_h = None
+        self._preserved_scroll_v = None
+
     def show_bill(self, result: dict):
         """Display a bill result."""
+        # Save current zoom/pan state BEFORE loading new images
+        has_previous = self.current_result is not None
+        if has_previous:
+            self._save_zoom_pan_state()
+
         self.current_result = result
 
         # Store file paths for combined view
@@ -813,15 +921,22 @@ class PreviewPanel(QWidget):
         self._current_back_file = result.get('back_file', '')
         has_back = self._current_back_file and Path(self._current_back_file).exists()
 
+        # Determine if we should preserve zoom (only when navigating, not first load)
+        preserve = has_previous and self._preserved_zoom is not None
+
         # Update tabbed view
-        self.front_viewer_tabbed.set_image(self._current_front_file)
-        self.back_viewer_tabbed.set_image(self._current_back_file)
+        self.front_viewer_tabbed.set_image(self._current_front_file, preserve_zoom=preserve)
+        self.back_viewer_tabbed.set_image(self._current_back_file, preserve_zoom=preserve)
 
         # Update stitched view
-        self._update_combined_view()
+        self._update_combined_view(preserve_zoom=preserve)
 
         # Update split views
-        self._update_split_views()
+        self._update_split_views(preserve_zoom=preserve)
+
+        # Restore zoom/pan state after loading
+        if preserve:
+            self._restore_zoom_pan_state()
 
         # Update tab text to indicate if back exists
         if has_back:
@@ -962,6 +1077,8 @@ class PreviewPanel(QWidget):
 
     def zoom_fit(self):
         """Fit zoom on current view."""
+        # Clear preserved state when user explicitly resets to fit
+        self.clear_preserved_state()
         viewer = self._get_active_viewer()
         if viewer:
             if hasattr(viewer, '_zoom_fit'):

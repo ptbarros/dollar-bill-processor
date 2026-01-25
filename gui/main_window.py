@@ -78,6 +78,8 @@ class MainWindow(QMainWindow):
         # Right panel - Preview
         self.preview_panel = PreviewPanel()
         self.preview_panel.correction_submitted.connect(self._on_correction_submitted)
+        self.preview_panel.prev_requested.connect(self._prev_bill)
+        self.preview_panel.next_requested.connect(self._next_bill)
         splitter.addWidget(self.preview_panel)
 
         # Set splitter sizes (40% list, 60% preview)

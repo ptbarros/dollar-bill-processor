@@ -9,8 +9,9 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
     QGroupBox, QFormLayout, QSpinBox, QDoubleSpinBox, QCheckBox,
     QComboBox, QLineEdit, QPushButton, QDialogButtonBox, QLabel,
-    QFileDialog
+    QFileDialog, QColorDialog
 )
+from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
 
 # Add parent for imports
@@ -24,6 +25,7 @@ class SettingsDialog(QDialog):
     def __init__(self, settings: SettingsManager, parent=None):
         super().__init__(parent)
         self.settings = settings
+        self._fancy_color = settings.ui.default_fancy_color or "#2e7d32"
 
         self.setWindowTitle("Settings")
         self.setMinimumWidth(500)
@@ -150,6 +152,20 @@ class SettingsDialog(QDialog):
         font_hint = QLabel("Larger fonts for easier reading (default: 10 pt)")
         font_hint.setStyleSheet("color: gray; font-size: 9px;")
         appearance_layout.addRow("", font_hint)
+
+        # Default fancy color
+        fancy_color_layout = QHBoxLayout()
+        self.fancy_color_btn = QPushButton()
+        self.fancy_color_btn.setMinimumWidth(80)
+        self.fancy_color_btn.setMaximumWidth(80)
+        self.fancy_color_btn.clicked.connect(self._pick_fancy_color)
+        fancy_color_layout.addWidget(self.fancy_color_btn)
+        fancy_color_layout.addStretch()
+        appearance_layout.addRow("Default Fancy Color:", fancy_color_layout)
+
+        fancy_color_hint = QLabel("Color for fancy bills without pattern-specific colors")
+        fancy_color_hint.setStyleSheet("color: gray; font-size: 9px;")
+        appearance_layout.addRow("", fancy_color_hint)
 
         layout.addWidget(appearance_group)
 
@@ -330,6 +346,8 @@ class SettingsDialog(QDialog):
         self.thumbnails_check.setChecked(self.settings.ui.show_thumbnails)
         self.thumbnail_size_spin.setValue(self.settings.ui.thumbnail_size)
         self.font_size_spin.setValue(self.settings.ui.font_size)
+        self._fancy_color = self.settings.ui.default_fancy_color or "#2e7d32"
+        self._update_fancy_color_button()
         self.last_input_edit.setText(self.settings.ui.last_input_dir)
         self.last_output_edit.setText(self.settings.ui.last_output_dir)
 
@@ -369,6 +387,7 @@ class SettingsDialog(QDialog):
         self.settings.ui.show_thumbnails = self.thumbnails_check.isChecked()
         self.settings.ui.thumbnail_size = self.thumbnail_size_spin.value()
         self.settings.ui.font_size = self.font_size_spin.value()
+        self.settings.ui.default_fancy_color = self._fancy_color
         self.settings.ui.last_input_dir = self.last_input_edit.text()
         self.settings.ui.last_output_dir = self.last_output_edit.text()
 
@@ -404,6 +423,9 @@ class SettingsDialog(QDialog):
         self.settings.ui = UISettings()
         self.settings.export = ExportSettings()
         self.settings.crop = CropSettings()
+
+        # Reset fancy color
+        self._fancy_color = "#2e7d32"
 
         # Reload UI
         self._load_settings()
@@ -445,3 +467,22 @@ class SettingsDialog(QDialog):
         )
         if path:
             self.html_template_edit.setText(path)
+
+    def _pick_fancy_color(self):
+        """Open color picker for default fancy color."""
+        current_color = QColor(self._fancy_color)
+        color = QColorDialog.getColor(current_color, self, "Select Default Fancy Color")
+        if color.isValid():
+            self._fancy_color = color.name()
+            self._update_fancy_color_button()
+
+    def _update_fancy_color_button(self):
+        """Update the fancy color button's appearance."""
+        color = QColor(self._fancy_color)
+        # Calculate text color based on brightness
+        brightness = (color.red() * 299 + color.green() * 587 + color.blue() * 114) / 1000
+        text_color = "#000000" if brightness > 128 else "#ffffff"
+        self.fancy_color_btn.setStyleSheet(
+            f"background-color: {self._fancy_color}; color: {text_color}; border: 1px solid #555;"
+        )
+        self.fancy_color_btn.setText(self._fancy_color)

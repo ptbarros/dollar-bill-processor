@@ -250,15 +250,22 @@ class ResultsList(QWidget):
             item.setText(4, ', '.join(status_parts) if status_parts else "OK")
 
             # Color coding with explicit text color for contrast
+            # Tiered color system: Pattern color > Default fancy color
             if result.get('is_fancy'):
-                # Check for custom pattern color
-                bg_color = QColor(46, 125, 50)  # Default dark green
+                bg_color = None
                 pattern_names = [p.strip() for p in patterns.split(',')] if patterns else []
+
+                # Tier 1: Check for pattern-specific custom color
                 for pname in pattern_names:
                     custom_color = self.settings.get_pattern_color(pname)
                     if custom_color:
                         bg_color = QColor(custom_color)
                         break  # Use first pattern's custom color
+
+                # Tier 2: Fall back to default fancy color (user-customizable)
+                if bg_color is None:
+                    default_color = self.settings.ui.default_fancy_color
+                    bg_color = QColor(default_color) if default_color else QColor(46, 125, 50)
 
                 for i in range(5):
                     item.setBackground(i, QBrush(bg_color))

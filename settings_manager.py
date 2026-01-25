@@ -44,6 +44,7 @@ class UISettings:
     thumbnail_size: int = 200
     theme: str = "system"  # system, light, dark
     font_size: int = 10  # Base font size in points (default 10)
+    default_fancy_color: str = "#2e7d32"  # Default green for fancy bills (user-customizable)
 
 
 @dataclass
@@ -130,6 +131,7 @@ class SettingsManager:
             self.ui.thumbnail_size = ui.get('thumbnail_size', 200)
             self.ui.theme = ui.get('theme', 'system')
             self.ui.font_size = ui.get('font_size', 10)
+            self.ui.default_fancy_color = ui.get('default_fancy_color', '#2e7d32')
 
         # Load export settings
         if 'export' in data:
@@ -189,6 +191,7 @@ class SettingsManager:
                 'thumbnail_size': self.ui.thumbnail_size,
                 'theme': self.ui.theme,
                 'font_size': self.ui.font_size,
+                'default_fancy_color': self.ui.default_fancy_color,
             },
             'export': {
                 'default_format': self.export.default_format,
