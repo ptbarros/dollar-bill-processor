@@ -9,10 +9,11 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
     QPushButton, QLineEdit, QFrame, QGroupBox, QGridLayout,
-    QSizePolicy, QTabWidget, QSlider, QApplication
+    QSizePolicy, QTabWidget, QSlider, QApplication, QStackedWidget,
+    QComboBox
 )
 from PySide6.QtCore import Qt, Signal, Slot, QPoint, QSize
-from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor
+from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QPainter
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -26,36 +27,51 @@ class PannableImageLabel(QLabel):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
         self.setMouseTracking(True)
-        self._drag_start = None
+        self._drag_start_global = None  # Use global/screen coordinates
         self._scroll_area = None
+        self._viewer = None  # Reference to parent viewer
 
     def set_scroll_area(self, scroll_area: QScrollArea):
         """Set the parent scroll area for panning."""
         self._scroll_area = scroll_area
 
+    def set_viewer(self, viewer):
+        """Set the parent viewer to notify about pan state."""
+        self._viewer = viewer
+
     def mousePressEvent(self, event: QMouseEvent):
         """Start panning on mouse press."""
         if event.button() == Qt.LeftButton:
-            self._drag_start = event.position().toPoint()
+            # Use global position to avoid jitter from widget movement
+            self._drag_start_global = event.globalPosition().toPoint()
             self.setCursor(QCursor(Qt.ClosedHandCursor))
+            if self._viewer:
+                self._viewer._is_panning = True
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent):
         """Pan the image while dragging."""
-        if self._drag_start and self._scroll_area:
-            delta = event.position().toPoint() - self._drag_start
+        if self._drag_start_global and self._scroll_area:
+            # Calculate delta using global coordinates (stable during scroll)
+            current_global = event.globalPosition().toPoint()
+            delta = current_global - self._drag_start_global
+
             h_bar = self._scroll_area.horizontalScrollBar()
             v_bar = self._scroll_area.verticalScrollBar()
             h_bar.setValue(h_bar.value() - delta.x())
             v_bar.setValue(v_bar.value() - delta.y())
-            self._drag_start = event.position().toPoint()
+
+            # Update start position for next move
+            self._drag_start_global = current_global
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         """End panning on mouse release."""
         if event.button() == Qt.LeftButton:
-            self._drag_start = None
+            self._drag_start_global = None
             self.setCursor(QCursor(Qt.OpenHandCursor))
+            if self._viewer:
+                self._viewer._is_panning = False
         super().mouseReleaseEvent(event)
 
 
@@ -68,6 +84,7 @@ class ScrollableImageViewer(QWidget):
         super().__init__(parent)
         self.original_pixmap = None
         self.zoom_factor = 1.0
+        self._is_panning = False  # Track if user is panning
         self._setup_ui()
 
     def _setup_ui(self):
@@ -85,6 +102,7 @@ class ScrollableImageViewer(QWidget):
         # Image label
         self.image_label = PannableImageLabel()
         self.image_label.set_scroll_area(self.scroll_area)
+        self.image_label.set_viewer(self)  # Connect for pan state tracking
         self.image_label.setCursor(QCursor(Qt.OpenHandCursor))
         self.scroll_area.setWidget(self.image_label)
 
@@ -94,12 +112,10 @@ class ScrollableImageViewer(QWidget):
         zoom_layout = QHBoxLayout()
 
         self.zoom_fit_btn = QPushButton("Fit")
-        self.zoom_fit_btn.setMaximumWidth(50)
         self.zoom_fit_btn.clicked.connect(self._zoom_fit)
         zoom_layout.addWidget(self.zoom_fit_btn)
 
         self.zoom_out_btn = QPushButton("-")
-        self.zoom_out_btn.setMaximumWidth(30)
         self.zoom_out_btn.clicked.connect(self._zoom_out)
         zoom_layout.addWidget(self.zoom_out_btn)
 
@@ -113,7 +129,6 @@ class ScrollableImageViewer(QWidget):
         zoom_layout.addWidget(self.zoom_slider, 1)
 
         self.zoom_in_btn = QPushButton("+")
-        self.zoom_in_btn.setMaximumWidth(30)
         self.zoom_in_btn.clicked.connect(self._zoom_in)
         zoom_layout.addWidget(self.zoom_in_btn)
 
@@ -124,7 +139,7 @@ class ScrollableImageViewer(QWidget):
         layout.addLayout(zoom_layout)
 
     def set_image(self, path: str):
-        """Load and display an image."""
+        """Load and display an image from file path."""
         if not path or not Path(path).exists():
             self.original_pixmap = None
             self.image_label.clear()
@@ -136,6 +151,17 @@ class ScrollableImageViewer(QWidget):
             self.original_pixmap = None
             self.image_label.clear()
             self.image_label.setText("Failed to load image")
+            return
+
+        self.original_pixmap = pixmap
+        self._zoom_fit()
+
+    def set_pixmap(self, pixmap: QPixmap):
+        """Set a pixmap directly (for combined images)."""
+        if pixmap is None or pixmap.isNull():
+            self.original_pixmap = None
+            self.image_label.clear()
+            self.image_label.setText("No image")
             return
 
         self.original_pixmap = pixmap
@@ -214,10 +240,10 @@ class ScrollableImageViewer(QWidget):
             super().wheelEvent(event)
 
     def resizeEvent(self, event):
-        """Handle resize - refit if at fit zoom."""
+        """Handle resize - refit if at fit zoom and not panning."""
         super().resizeEvent(event)
-        # Only auto-fit if we're close to fit zoom
-        if self.original_pixmap and self.zoom_factor < 1.0:
+        # Only auto-fit if we're close to fit zoom and not currently panning
+        if self.original_pixmap and self.zoom_factor < 1.0 and not self._is_panning:
             self._zoom_fit()
 
 
@@ -275,6 +301,8 @@ class PreviewPanel(QWidget):
         super().__init__(parent)
         self.current_result: Optional[dict] = None
         self.pattern_engine = PatternEngine()
+        self._current_front_file = ""
+        self._current_back_file = ""
         self._setup_ui()
 
     def _setup_ui(self):
@@ -283,26 +311,42 @@ class PreviewPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        # Tabbed image preview area
+        # Image preview area
         preview_group = QGroupBox("Bill Preview")
         preview_layout = QVBoxLayout(preview_group)
 
-        # Tab widget for Front/Back
+        # View mode toggle
+        view_mode_layout = QHBoxLayout()
+        view_mode_layout.addWidget(QLabel("View:"))
+        self.view_mode_combo = QComboBox()
+        self.view_mode_combo.addItem("Tabbed", "tabbed")
+        self.view_mode_combo.addItem("Stacked", "stacked")
+        self.view_mode_combo.currentIndexChanged.connect(self._on_view_mode_changed)
+        view_mode_layout.addWidget(self.view_mode_combo)
+        view_mode_layout.addStretch()
+        preview_layout.addLayout(view_mode_layout)
+
+        # Stacked widget to hold both view modes
+        self.view_stack = QStackedWidget()
+
+        # === Tabbed view (index 0) ===
         self.image_tabs = QTabWidget()
+        self.front_viewer_tabbed = ScrollableImageViewer()
+        self.image_tabs.addTab(self.front_viewer_tabbed, "Front")
+        self.back_viewer_tabbed = ScrollableImageViewer()
+        self.image_tabs.addTab(self.back_viewer_tabbed, "Back")
+        self.view_stack.addWidget(self.image_tabs)
 
-        # Front tab
-        self.front_viewer = ScrollableImageViewer()
-        self.image_tabs.addTab(self.front_viewer, "Front")
+        # === Stacked view (index 1) ===
+        # Single viewer showing front+back stitched as one image
+        self.combined_viewer = ScrollableImageViewer()
+        self.view_stack.addWidget(self.combined_viewer)
 
-        # Back tab
-        self.back_viewer = ScrollableImageViewer()
-        self.image_tabs.addTab(self.back_viewer, "Back")
+        preview_layout.addWidget(self.view_stack, 1)
 
-        preview_layout.addWidget(self.image_tabs, 1)
-
-        # Serial region image (always visible)
-        serial_frame = QFrame()
-        serial_layout = QHBoxLayout(serial_frame)
+        # Serial region image (toggleable via View menu)
+        self.serial_frame = QFrame()
+        serial_layout = QHBoxLayout(self.serial_frame)
         serial_layout.setContentsMargins(0, 0, 0, 0)
 
         serial_label = QLabel("Serial Region:")
@@ -313,18 +357,18 @@ class PreviewPanel(QWidget):
         self.serial_image.setMaximumHeight(80)
         serial_layout.addWidget(self.serial_image, 1)
 
-        preview_layout.addWidget(serial_frame)
+        preview_layout.addWidget(self.serial_frame)
 
         # Zoom tip
         zoom_tip = QLabel("Tip: Ctrl+Scroll to zoom, drag to pan")
-        zoom_tip.setStyleSheet("color: gray; font-size: 10px;")
+        zoom_tip.setStyleSheet("color: gray;")
         preview_layout.addWidget(zoom_tip)
 
         layout.addWidget(preview_group, 1)
 
-        # Details section
-        details_group = QGroupBox("Bill Details")
-        details_layout = QGridLayout(details_group)
+        # Details section (toggleable via View menu)
+        self.details_group = QGroupBox("Bill Details")
+        details_layout = QGridLayout(self.details_group)
 
         # Serial number
         details_layout.addWidget(QLabel("Serial:"), 0, 0)
@@ -362,7 +406,7 @@ class PreviewPanel(QWidget):
         self.file_label.setWordWrap(True)
         details_layout.addWidget(self.file_label, 5, 1)
 
-        layout.addWidget(details_group)
+        layout.addWidget(self.details_group)
 
         # Correction section
         correction_group = QGroupBox("Serial Correction")
@@ -403,7 +447,6 @@ class PreviewPanel(QWidget):
 
         for label, from_char, to_char in self.quick_fixes:
             btn = QPushButton(label)
-            btn.setMaximumWidth(50)
             btn.clicked.connect(lambda checked, f=from_char, t=to_char: self._apply_quick_fix(f, t))
             quick_layout.addWidget(btn)
 
@@ -412,20 +455,91 @@ class PreviewPanel(QWidget):
 
         layout.addWidget(correction_group)
 
+    def _on_view_mode_changed(self, index: int):
+        """Handle view mode toggle between tabbed and stacked."""
+        self.view_stack.setCurrentIndex(index)
+        # Refresh combined view when switching to stacked mode
+        if index == 1:
+            self._update_combined_view()
+
+    def _create_combined_pixmap(self, front_path: str, back_path: str) -> Optional[QPixmap]:
+        """Create a combined pixmap with front on top, back on bottom, edge-to-edge."""
+        front_pixmap = None
+        back_pixmap = None
+
+        # Load front image
+        if front_path and Path(front_path).exists():
+            front_pixmap = QPixmap(front_path)
+            if front_pixmap.isNull():
+                front_pixmap = None
+
+        # Load back image
+        if back_path and Path(back_path).exists():
+            back_pixmap = QPixmap(back_path)
+            if back_pixmap.isNull():
+                back_pixmap = None
+
+        # Handle cases
+        if front_pixmap is None and back_pixmap is None:
+            return None
+        if front_pixmap is None:
+            return back_pixmap
+        if back_pixmap is None:
+            return front_pixmap
+
+        # Both images exist - combine them
+        # Scale back image to match front image width for seamless stitching
+        if back_pixmap.width() != front_pixmap.width():
+            back_pixmap = back_pixmap.scaledToWidth(
+                front_pixmap.width(),
+                Qt.SmoothTransformation
+            )
+
+        # Create combined image
+        combined_height = front_pixmap.height() + back_pixmap.height()
+        combined_width = front_pixmap.width()
+
+        combined = QPixmap(combined_width, combined_height)
+        combined.fill(Qt.transparent)
+
+        painter = QPainter(combined)
+        # Draw front at top
+        painter.drawPixmap(0, 0, front_pixmap)
+        # Draw back directly below (no gap)
+        painter.drawPixmap(0, front_pixmap.height(), back_pixmap)
+        painter.end()
+
+        return combined
+
+    def _update_combined_view(self):
+        """Update the combined view with stitched front+back image."""
+        combined = self._create_combined_pixmap(
+            self._current_front_file,
+            self._current_back_file
+        )
+        if combined:
+            self.combined_viewer.set_pixmap(combined)
+        else:
+            self.combined_viewer.set_pixmap(None)
+
     def show_bill(self, result: dict):
         """Display a bill result."""
         self.current_result = result
 
-        # Load front image
-        front_file = result.get('front_file', '')
-        self.front_viewer.set_image(front_file)
+        # Store file paths for combined view
+        self._current_front_file = result.get('front_file', '')
+        self._current_back_file = result.get('back_file', '')
+        has_back = self._current_back_file and Path(self._current_back_file).exists()
 
-        # Load back image
-        back_file = result.get('back_file', '')
-        self.back_viewer.set_image(back_file)
+        # Update tabbed view
+        self.front_viewer_tabbed.set_image(self._current_front_file)
+        self.back_viewer_tabbed.set_image(self._current_back_file)
+
+        # Update combined/stacked view
+        self._update_combined_view()
 
         # Update tab text to indicate if back exists
-        if back_file and Path(back_file).exists():
+        if has_back:
             self.image_tabs.setTabText(1, "Back")
         else:
             self.image_tabs.setTabText(1, "Back (none)")
@@ -513,3 +627,19 @@ class PreviewPanel(QWidget):
             fixed = current.replace(from_char, to_char, 1)
             self.correction_edit.setText(fixed)
         self.correction_edit.setFocus()
+
+    def set_serial_region_visible(self, visible: bool):
+        """Show or hide the serial region panel."""
+        self.serial_frame.setVisible(visible)
+
+    def set_details_visible(self, visible: bool):
+        """Show or hide the bill details panel."""
+        self.details_group.setVisible(visible)
+
+    def is_serial_region_visible(self) -> bool:
+        """Check if serial region panel is visible."""
+        return self.serial_frame.isVisible()
+
+    def is_details_visible(self) -> bool:
+        """Check if bill details panel is visible."""
+        return self.details_group.isVisible()

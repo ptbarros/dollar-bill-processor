@@ -148,6 +148,19 @@ class MainWindow(QMainWindow):
 
         view_menu.addSeparator()
 
+        # Panel visibility toggles
+        self.show_serial_region_action = QAction("Show &Serial Region", self, checkable=True)
+        self.show_serial_region_action.setChecked(True)
+        self.show_serial_region_action.triggered.connect(self._toggle_serial_region)
+        view_menu.addAction(self.show_serial_region_action)
+
+        self.show_details_action = QAction("Show Bill &Details", self, checkable=True)
+        self.show_details_action.setChecked(True)
+        self.show_details_action.triggered.connect(self._toggle_details)
+        view_menu.addAction(self.show_details_action)
+
+        view_menu.addSeparator()
+
         refresh_action = QAction("&Refresh", self)
         refresh_action.setShortcut(QKeySequence.Refresh)
         refresh_action.triggered.connect(self._refresh_view)
@@ -287,6 +300,14 @@ class MainWindow(QMainWindow):
     def _toggle_fancy_filter(self, checked: bool):
         """Toggle showing only fancy bills."""
         self.results_list.set_filter('is_fancy', checked)
+
+    def _toggle_serial_region(self, checked: bool):
+        """Toggle serial region panel visibility."""
+        self.preview_panel.set_serial_region_visible(checked)
+
+    def _toggle_details(self, checked: bool):
+        """Toggle bill details panel visibility."""
+        self.preview_panel.set_details_visible(checked)
 
     def _refresh_view(self):
         """Refresh the current view."""

@@ -34,7 +34,6 @@ class ProcessingPanel(QWidget):
         input_layout.setContentsMargins(0, 0, 0, 0)
 
         input_label = QLabel("Input:")
-        input_label.setFixedWidth(50)
         input_layout.addWidget(input_label)
 
         self.input_edit = QLineEdit()
@@ -54,7 +53,6 @@ class ProcessingPanel(QWidget):
         output_layout.setContentsMargins(0, 0, 0, 0)
 
         output_label = QLabel("Output:")
-        output_label.setFixedWidth(50)
         output_layout.addWidget(output_label)
 
         self.output_edit = QLineEdit()
