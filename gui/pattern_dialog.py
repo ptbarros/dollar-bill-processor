@@ -8,7 +8,8 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
     QGroupBox, QLineEdit, QPushButton, QDialogButtonBox, QLabel,
-    QTextEdit, QSplitter, QHeaderView, QCheckBox
+    QTextEdit, QSplitter, QHeaderView, QCheckBox, QListWidget,
+    QListWidgetItem, QFormLayout, QComboBox, QMessageBox
 )
 from PySide6.QtCore import Qt
 
@@ -105,6 +106,10 @@ class PatternDialog(QDialog):
         self.pattern_examples_label.setWordWrap(True)
         details_layout.addWidget(self.pattern_examples_label)
 
+        self.pattern_odds_label = QLabel("Odds: -")
+        self.pattern_odds_label.setStyleSheet("color: #1976D2; font-weight: bold;")
+        details_layout.addWidget(self.pattern_odds_label)
+
         right_layout.addWidget(details_group)
 
         # Serial tester
@@ -149,6 +154,34 @@ class PatternDialog(QDialog):
             examples_layout.addWidget(btn)
 
         right_layout.addWidget(examples_group)
+
+        # Custom patterns section
+        custom_group = QGroupBox("Custom Patterns (Birthdays, Anniversaries, etc.)")
+        custom_layout = QVBoxLayout(custom_group)
+
+        self.custom_list = QListWidget()
+        self.custom_list.itemSelectionChanged.connect(self._on_custom_selection_changed)
+        custom_layout.addWidget(self.custom_list)
+
+        custom_btn_layout = QHBoxLayout()
+        add_custom_btn = QPushButton("Add...")
+        add_custom_btn.clicked.connect(self._add_custom_pattern)
+        custom_btn_layout.addWidget(add_custom_btn)
+
+        edit_custom_btn = QPushButton("Edit...")
+        edit_custom_btn.clicked.connect(self._edit_custom_pattern)
+        custom_btn_layout.addWidget(edit_custom_btn)
+
+        delete_custom_btn = QPushButton("Delete")
+        delete_custom_btn.clicked.connect(self._delete_custom_pattern)
+        custom_btn_layout.addWidget(delete_custom_btn)
+
+        custom_layout.addLayout(custom_btn_layout)
+
+        right_layout.addWidget(custom_group)
+
+        # Load custom patterns
+        self._load_custom_patterns()
 
         right_layout.addStretch()
 
@@ -283,6 +316,12 @@ class PatternDialog(QDialog):
         else:
             self.pattern_examples_label.setText("Examples: (none)")
 
+        odds = defn.get('odds', '')
+        if odds:
+            self.pattern_odds_label.setText(f"Odds: {odds}")
+        else:
+            self.pattern_odds_label.setText("Odds: (not calculated)")
+
     def _test_serial(self):
         """Test a serial number against all patterns."""
         serial = self.test_edit.text().strip()
@@ -303,6 +342,10 @@ class PatternDialog(QDialog):
             for match in matches:
                 result_text += f"  - {match.name} (Tier {match.tier})\n"
                 result_text += f"    {match.description}\n"
+                # Get odds from pattern definition
+                pattern_info = self.engine.get_pattern_info(match.name)
+                if pattern_info and 'odds' in pattern_info:
+                    result_text += f"    Odds: {pattern_info['odds']}\n"
         else:
             result_text = f"Serial: {serial}\n\nNo patterns matched."
 
@@ -333,6 +376,203 @@ class PatternDialog(QDialog):
         """Save pattern states and close."""
         self.engine.save_config()
         self.accept()
+
+    def _load_custom_patterns(self):
+        """Load custom patterns into the list."""
+        self.custom_list.clear()
+        custom = self.engine.get_custom_patterns()
+        if custom:
+            for name, defn in custom.items():
+                if defn is None:
+                    continue
+                desc = defn.get('description', '')
+                rules = defn.get('rules', {})
+                value = rules.get('contains', rules.get('regex', rules.get('starts_with', rules.get('ends_with', ''))))
+                enabled = defn.get('enabled', True)
+
+                item = QListWidgetItem()
+                item.setText(f"{name}: {desc}")
+                item.setData(Qt.UserRole, {'name': name, 'defn': defn})
+                item.setCheckState(Qt.Checked if enabled else Qt.Unchecked)
+                self.custom_list.addItem(item)
+
+    def _on_custom_selection_changed(self):
+        """Handle custom pattern selection change."""
+        pass  # Could show details if needed
+
+    def _add_custom_pattern(self):
+        """Add a new custom pattern."""
+        dialog = CustomPatternDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            name, defn = dialog.get_pattern()
+            if name:
+                self.engine.add_custom_pattern(name, defn)
+                self._load_custom_patterns()
+
+    def _edit_custom_pattern(self):
+        """Edit the selected custom pattern."""
+        item = self.custom_list.currentItem()
+        if not item:
+            QMessageBox.information(self, "Edit Pattern", "Please select a pattern to edit.")
+            return
+
+        data = item.data(Qt.UserRole)
+        name = data['name']
+        defn = data['defn']
+
+        dialog = CustomPatternDialog(self, name, defn)
+        if dialog.exec() == QDialog.Accepted:
+            new_name, new_defn = dialog.get_pattern()
+            if new_name:
+                # Remove old pattern if name changed
+                if new_name != name:
+                    self.engine.remove_custom_pattern(name)
+                # Add updated pattern
+                self.engine.add_custom_pattern(new_name, new_defn)
+                self._load_custom_patterns()
+
+    def _delete_custom_pattern(self):
+        """Delete the selected custom pattern."""
+        item = self.custom_list.currentItem()
+        if not item:
+            QMessageBox.information(self, "Delete Pattern", "Please select a pattern to delete.")
+            return
+
+        data = item.data(Qt.UserRole)
+        name = data['name']
+
+        reply = QMessageBox.question(
+            self, "Delete Pattern",
+            f"Are you sure you want to delete '{name}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            self.engine.remove_custom_pattern(name)
+            self._load_custom_patterns()
+
+
+class CustomPatternDialog(QDialog):
+    """Dialog for adding/editing a custom pattern."""
+
+    def __init__(self, parent=None, name: str = "", defn: dict = None):
+        super().__init__(parent)
+        self.setWindowTitle("Add Custom Pattern" if not name else "Edit Custom Pattern")
+        self.setMinimumWidth(400)
+
+        self.original_name = name
+        self.defn = defn or {}
+
+        self._setup_ui()
+        if name:
+            self._load_existing()
+
+    def _setup_ui(self):
+        """Setup the dialog UI."""
+        layout = QVBoxLayout(self)
+
+        form = QFormLayout()
+
+        # Pattern name
+        self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText("e.g., MY_BIRTHDAY, ANNIVERSARY, LUCKY_NUMBER")
+        form.addRow("Pattern Name:", self.name_edit)
+
+        # Description
+        self.desc_edit = QLineEdit()
+        self.desc_edit.setPlaceholderText("e.g., Mom's birthday (July 4)")
+        form.addRow("Description:", self.desc_edit)
+
+        # Rule type
+        self.rule_type = QComboBox()
+        self.rule_type.addItems(["contains", "starts_with", "ends_with", "regex"])
+        self.rule_type.setCurrentText("contains")
+        self.rule_type.currentTextChanged.connect(self._update_hint)
+        form.addRow("Rule Type:", self.rule_type)
+
+        # Value
+        self.value_edit = QLineEdit()
+        self.value_edit.setPlaceholderText("e.g., 0704 for July 4th")
+        form.addRow("Value:", self.value_edit)
+
+        # Hint label
+        self.hint_label = QLabel()
+        self.hint_label.setWordWrap(True)
+        self.hint_label.setStyleSheet("color: gray; font-style: italic;")
+        self._update_hint()
+        form.addRow("", self.hint_label)
+
+        # Tier (default to 10 for custom)
+        self.tier_combo = QComboBox()
+        self.tier_combo.addItems(["10 - Novelty", "9 - Structural", "4 - Interesting", "3 - Collector"])
+        form.addRow("Tier:", self.tier_combo)
+
+        layout.addLayout(form)
+
+        # Buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self._validate_and_accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+    def _update_hint(self):
+        """Update the hint based on rule type."""
+        rule = self.rule_type.currentText()
+        hints = {
+            "contains": "Matches if serial contains this value anywhere.\nExamples: '0704' matches July 4, '1990' matches birth year",
+            "starts_with": "Matches if serial starts with this value.\nExample: '000' matches low serial numbers",
+            "ends_with": "Matches if serial ends with this value.\nExample: '0000' matches round numbers",
+            "regex": "Advanced: Regular expression pattern.\nExample: '(\\d)\\1{3}' matches 4 repeated digits"
+        }
+        self.hint_label.setText(hints.get(rule, ""))
+
+    def _load_existing(self):
+        """Load existing pattern data."""
+        self.name_edit.setText(self.original_name)
+        self.desc_edit.setText(self.defn.get('description', ''))
+
+        rules = self.defn.get('rules', {})
+        for rule_type in ['contains', 'starts_with', 'ends_with', 'regex']:
+            if rule_type in rules:
+                self.rule_type.setCurrentText(rule_type)
+                self.value_edit.setText(str(rules[rule_type]))
+                break
+
+        tier = self.defn.get('tier', 10)
+        tier_map = {10: 0, 9: 1, 4: 2, 3: 3}
+        self.tier_combo.setCurrentIndex(tier_map.get(tier, 0))
+
+    def _validate_and_accept(self):
+        """Validate input and accept."""
+        name = self.name_edit.text().strip().upper().replace(' ', '_')
+        if not name:
+            QMessageBox.warning(self, "Validation Error", "Please enter a pattern name.")
+            return
+
+        value = self.value_edit.text().strip()
+        if not value:
+            QMessageBox.warning(self, "Validation Error", "Please enter a value to match.")
+            return
+
+        self.accept()
+
+    def get_pattern(self) -> tuple:
+        """Return the pattern name and definition."""
+        name = self.name_edit.text().strip().upper().replace(' ', '_')
+        rule_type = self.rule_type.currentText()
+        value = self.value_edit.text().strip()
+
+        tier_text = self.tier_combo.currentText()
+        tier = int(tier_text.split(' ')[0])
+
+        defn = {
+            'description': self.desc_edit.text().strip() or f"Custom pattern: {value}",
+            'tier': tier,
+            'enabled': True,
+            'rules': {rule_type: value}
+        }
+
+        return name, defn
 
 
 # Test dialog standalone

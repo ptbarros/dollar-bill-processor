@@ -2,6 +2,8 @@
 Results List - Tree/table view of processed bills.
 """
 
+import sys
+from pathlib import Path
 from typing import Optional, Dict, List
 
 from PySide6.QtWidgets import (
@@ -10,6 +12,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QColor, QBrush, QAction
+
+# Add parent for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from pattern_engine_v2 import PatternEngine
 
 
 class NumericTreeWidgetItem(QTreeWidgetItem):
@@ -38,6 +44,7 @@ class ResultsList(QWidget):
         self.results: List[dict] = []
         self.filtered_results: List[dict] = []
         self.filters: Dict[str, bool] = {}
+        self.pattern_engine = PatternEngine()
         self._setup_ui()
 
     def _setup_ui(self):
@@ -210,8 +217,21 @@ class ResultsList(QWidget):
                 serial = f"{serial} (corrected)"
             item.setText(1, serial)
 
-            # Patterns
-            item.setText(2, result.get('fancy_types', ''))
+            # Patterns with odds tooltip
+            patterns = result.get('fancy_types', '')
+            item.setText(2, patterns)
+
+            # Build tooltip with odds for each pattern
+            if patterns:
+                tooltip_parts = []
+                for name in [p.strip() for p in patterns.split(',')]:
+                    info = self.pattern_engine.get_pattern_info(name)
+                    if info:
+                        odds = info.get('odds', 'unknown')
+                        desc = info.get('description', '')
+                        tooltip_parts.append(f"{name}: {odds}\n  {desc}")
+                if tooltip_parts:
+                    item.setToolTip(2, '\n\n'.join(tooltip_parts))
 
             # Confidence
             conf = result.get('confidence', '0.00')

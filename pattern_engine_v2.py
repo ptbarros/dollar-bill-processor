@@ -29,7 +29,9 @@ class PatternEngine:
 
     def __init__(self, config_path: Path = None):
         self.config_path = config_path or Path(__file__).parent / "patterns_v2.yaml"
+        self.user_config_path = self.config_path.parent / "user_patterns.yaml"
         self.config = self._load_config()
+        self.user_config = self._load_user_config()
         self.patterns = self._build_patterns()
 
     def _load_config(self) -> dict:
@@ -39,26 +41,49 @@ class PatternEngine:
         with open(self.config_path, 'r') as f:
             return yaml.safe_load(f)
 
+    def _load_user_config(self) -> dict:
+        """Load user-specific pattern settings (custom patterns, enable/disable overrides)."""
+        if self.user_config_path.exists():
+            with open(self.user_config_path, 'r') as f:
+                return yaml.safe_load(f) or {}
+        return {'custom_patterns': {}, 'disabled_patterns': [], 'enabled_patterns': []}
+
     def _build_patterns(self) -> dict:
         """Build pattern lookup from config."""
         patterns = {}
 
-        # Load main patterns
+        # Get user overrides
+        disabled = set(self.user_config.get('disabled_patterns', []))
+        enabled = set(self.user_config.get('enabled_patterns', []))
+
+        # Load main patterns (with user enable/disable overrides)
         for name, defn in self.config.get('patterns', {}).items():
-            if defn and defn.get('enabled', True):
+            if defn is None:
+                continue
+            # Check user override first, then default
+            if name in disabled:
+                continue
+            if name in enabled or defn.get('enabled', True):
                 patterns[name] = defn
 
-        # Load custom patterns
+        # Load custom patterns from main config (legacy support)
         custom = self.config.get('custom_patterns') or {}
         for name, defn in custom.items():
+            if defn and defn.get('enabled', True) and name not in disabled:
+                patterns[name] = defn
+
+        # Load user custom patterns (takes precedence)
+        user_custom = self.user_config.get('custom_patterns') or {}
+        for name, defn in user_custom.items():
             if defn and defn.get('enabled', True):
                 patterns[name] = defn
 
         return patterns
 
     def reload(self):
-        """Reload patterns from config file."""
+        """Reload patterns from config files."""
         self.config = self._load_config()
+        self.user_config = self._load_user_config()
         self.patterns = self._build_patterns()
 
     # =========================================================================
@@ -490,17 +515,65 @@ class PatternEngine:
         return {k: v for k, v in self.patterns.items() if v.get('tier') == tier}
 
     def set_pattern_enabled(self, name: str, enabled: bool):
-        """Enable/disable a pattern."""
-        if name in self.config.get('patterns', {}):
-            self.config['patterns'][name]['enabled'] = enabled
-        elif name in (self.config.get('custom_patterns') or {}):
-            self.config['custom_patterns'][name]['enabled'] = enabled
+        """Enable/disable a pattern (stored in user config, not main file)."""
+        # Initialize lists if needed
+        if 'disabled_patterns' not in self.user_config:
+            self.user_config['disabled_patterns'] = []
+        if 'enabled_patterns' not in self.user_config:
+            self.user_config['enabled_patterns'] = []
+
+        disabled = self.user_config['disabled_patterns']
+        enabled_list = self.user_config['enabled_patterns']
+
+        # Get the default state from main config
+        main_patterns = self.config.get('patterns', {})
+        default_enabled = True
+        if name in main_patterns and main_patterns[name]:
+            default_enabled = main_patterns[name].get('enabled', True)
+
+        if enabled:
+            # User wants it enabled
+            if name in disabled:
+                disabled.remove(name)
+            # Only add to enabled if it's disabled by default
+            if not default_enabled and name not in enabled_list:
+                enabled_list.append(name)
+        else:
+            # User wants it disabled
+            if name in enabled_list:
+                enabled_list.remove(name)
+            # Only add to disabled if it's enabled by default
+            if default_enabled and name not in disabled:
+                disabled.append(name)
+
+        # Handle user custom patterns
+        user_custom = self.user_config.get('custom_patterns', {})
+        if name in user_custom:
+            user_custom[name]['enabled'] = enabled
+
         self.patterns = self._build_patterns()
 
+    def add_custom_pattern(self, name: str, defn: dict):
+        """Add a custom pattern to user config."""
+        if 'custom_patterns' not in self.user_config:
+            self.user_config['custom_patterns'] = {}
+        self.user_config['custom_patterns'][name] = defn
+        self.patterns = self._build_patterns()
+
+    def remove_custom_pattern(self, name: str):
+        """Remove a custom pattern from user config."""
+        if 'custom_patterns' in self.user_config and name in self.user_config['custom_patterns']:
+            del self.user_config['custom_patterns'][name]
+        self.patterns = self._build_patterns()
+
+    def get_custom_patterns(self) -> dict:
+        """Get all custom patterns from user config."""
+        return self.user_config.get('custom_patterns', {}).copy()
+
     def save_config(self):
-        """Save config back to file."""
-        with open(self.config_path, 'w') as f:
-            yaml.dump(self.config, f, default_flow_style=False, sort_keys=False)
+        """Save user config to file (preserves main patterns file)."""
+        with open(self.user_config_path, 'w') as f:
+            yaml.dump(self.user_config, f, default_flow_style=False, sort_keys=False)
 
 
 # =============================================================================

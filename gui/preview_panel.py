@@ -2,6 +2,7 @@
 Preview Panel - Bill image preview and details.
 """
 
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtGui import QPixmap, QImage
+
+# Add parent for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from pattern_engine_v2 import PatternEngine
 
 
 class ImageLabel(QLabel):
@@ -84,6 +89,7 @@ class PreviewPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_result: Optional[dict] = None
+        self.pattern_engine = PatternEngine()
         self._setup_ui()
 
     def _setup_ui(self):
@@ -155,21 +161,28 @@ class PreviewPanel(QWidget):
         self.patterns_label.setWordWrap(True)
         details_layout.addWidget(self.patterns_label, 1, 1)
 
+        # Rarity/Odds
+        details_layout.addWidget(QLabel("Rarity:"), 2, 0)
+        self.odds_label = QLabel("-")
+        self.odds_label.setWordWrap(True)
+        self.odds_label.setStyleSheet("color: #1976D2; font-weight: bold;")
+        details_layout.addWidget(self.odds_label, 2, 1)
+
         # Confidence
-        details_layout.addWidget(QLabel("Confidence:"), 2, 0)
+        details_layout.addWidget(QLabel("Confidence:"), 3, 0)
         self.confidence_label = QLabel("-")
-        details_layout.addWidget(self.confidence_label, 2, 1)
+        details_layout.addWidget(self.confidence_label, 3, 1)
 
         # Status
-        details_layout.addWidget(QLabel("Status:"), 3, 0)
+        details_layout.addWidget(QLabel("Status:"), 4, 0)
         self.status_label = QLabel("-")
-        details_layout.addWidget(self.status_label, 3, 1)
+        details_layout.addWidget(self.status_label, 4, 1)
 
         # File info
-        details_layout.addWidget(QLabel("File:"), 4, 0)
+        details_layout.addWidget(QLabel("File:"), 5, 0)
         self.file_label = QLabel("-")
         self.file_label.setWordWrap(True)
-        details_layout.addWidget(self.file_label, 4, 1)
+        details_layout.addWidget(self.file_label, 5, 1)
 
         layout.addWidget(details_group)
 
@@ -246,6 +259,19 @@ class PreviewPanel(QWidget):
 
         patterns = result.get('fancy_types', '')
         self.patterns_label.setText(patterns or "None")
+
+        # Look up odds for matched patterns
+        odds_parts = []
+        if patterns:
+            pattern_names = [p.strip() for p in patterns.split(',')]
+            for name in pattern_names:
+                info = self.pattern_engine.get_pattern_info(name)
+                if info and 'odds' in info:
+                    odds_parts.append(f"{name}: {info['odds']}")
+        if odds_parts:
+            self.odds_label.setText('\n'.join(odds_parts))
+        else:
+            self.odds_label.setText("-")
 
         conf = result.get('confidence', 0)
         self.confidence_label.setText(f"{conf}" if conf else "-")
