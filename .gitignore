@@ -40,6 +40,21 @@ canon/
 epson/
 *_test/
 *_output/
+1db/
+2db/
+no-serial-detected/
+Jan23 Test/
+
+# User data files
+user_settings.yaml
+corrections.yaml
+
+# Example/test files
+*_example.py
+*_example.yaml
+
+# Misc
+GEMINI.md
 
 # OS
 .DS_Store
