@@ -1,5 +1,5 @@
 """
-Preview Panel - Bill image preview and details.
+Preview Panel - Bill image preview and details with zoom/pan support.
 """
 
 import sys
@@ -9,25 +9,226 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
     QPushButton, QLineEdit, QFrame, QGroupBox, QGridLayout,
-    QSizePolicy
+    QSizePolicy, QTabWidget, QSlider, QApplication
 )
-from PySide6.QtCore import Qt, Signal, Slot
-from PySide6.QtGui import QPixmap, QImage
+from PySide6.QtCore import Qt, Signal, Slot, QPoint, QSize
+from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from pattern_engine_v2 import PatternEngine
 
 
-class ImageLabel(QLabel):
-    """Label that displays an image with zoom capability."""
+class PannableImageLabel(QLabel):
+    """Label that displays an image with pan support via mouse drag."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
-        self.setMinimumSize(200, 150)
+        self.setMouseTracking(True)
+        self._drag_start = None
+        self._scroll_area = None
+
+    def set_scroll_area(self, scroll_area: QScrollArea):
+        """Set the parent scroll area for panning."""
+        self._scroll_area = scroll_area
+
+    def mousePressEvent(self, event: QMouseEvent):
+        """Start panning on mouse press."""
+        if event.button() == Qt.LeftButton:
+            self._drag_start = event.position().toPoint()
+            self.setCursor(QCursor(Qt.ClosedHandCursor))
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        """Pan the image while dragging."""
+        if self._drag_start and self._scroll_area:
+            delta = event.position().toPoint() - self._drag_start
+            h_bar = self._scroll_area.horizontalScrollBar()
+            v_bar = self._scroll_area.verticalScrollBar()
+            h_bar.setValue(h_bar.value() - delta.x())
+            v_bar.setValue(v_bar.value() - delta.y())
+            self._drag_start = event.position().toPoint()
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        """End panning on mouse release."""
+        if event.button() == Qt.LeftButton:
+            self._drag_start = None
+            self.setCursor(QCursor(Qt.OpenHandCursor))
+        super().mouseReleaseEvent(event)
+
+
+class ScrollableImageViewer(QWidget):
+    """Image viewer with zoom and pan capabilities."""
+
+    zoom_changed = Signal(int)  # Emits zoom percentage
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.original_pixmap = None
         self.zoom_factor = 1.0
+        self._setup_ui()
+
+    def _setup_ui(self):
+        """Setup the scrollable image viewer."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        # Scroll area for panning
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(False)
+        self.scroll_area.setAlignment(Qt.AlignCenter)
+        self.scroll_area.setStyleSheet("QScrollArea { background-color: #2d2d2d; }")
+
+        # Image label
+        self.image_label = PannableImageLabel()
+        self.image_label.set_scroll_area(self.scroll_area)
+        self.image_label.setCursor(QCursor(Qt.OpenHandCursor))
+        self.scroll_area.setWidget(self.image_label)
+
+        layout.addWidget(self.scroll_area, 1)
+
+        # Zoom controls
+        zoom_layout = QHBoxLayout()
+
+        self.zoom_fit_btn = QPushButton("Fit")
+        self.zoom_fit_btn.setMaximumWidth(50)
+        self.zoom_fit_btn.clicked.connect(self._zoom_fit)
+        zoom_layout.addWidget(self.zoom_fit_btn)
+
+        self.zoom_out_btn = QPushButton("-")
+        self.zoom_out_btn.setMaximumWidth(30)
+        self.zoom_out_btn.clicked.connect(self._zoom_out)
+        zoom_layout.addWidget(self.zoom_out_btn)
+
+        self.zoom_slider = QSlider(Qt.Horizontal)
+        self.zoom_slider.setMinimum(10)
+        self.zoom_slider.setMaximum(400)
+        self.zoom_slider.setValue(100)
+        self.zoom_slider.setTickPosition(QSlider.TicksBelow)
+        self.zoom_slider.setTickInterval(50)
+        self.zoom_slider.valueChanged.connect(self._on_slider_changed)
+        zoom_layout.addWidget(self.zoom_slider, 1)
+
+        self.zoom_in_btn = QPushButton("+")
+        self.zoom_in_btn.setMaximumWidth(30)
+        self.zoom_in_btn.clicked.connect(self._zoom_in)
+        zoom_layout.addWidget(self.zoom_in_btn)
+
+        self.zoom_label = QLabel("100%")
+        self.zoom_label.setMinimumWidth(45)
+        zoom_layout.addWidget(self.zoom_label)
+
+        layout.addLayout(zoom_layout)
+
+    def set_image(self, path: str):
+        """Load and display an image."""
+        if not path or not Path(path).exists():
+            self.original_pixmap = None
+            self.image_label.clear()
+            self.image_label.setText("No image")
+            return
+
+        pixmap = QPixmap(path)
+        if pixmap.isNull():
+            self.original_pixmap = None
+            self.image_label.clear()
+            self.image_label.setText("Failed to load image")
+            return
+
+        self.original_pixmap = pixmap
+        self._zoom_fit()
+
+    def _update_display(self):
+        """Update the displayed image based on zoom level."""
+        if self.original_pixmap is None:
+            return
+
+        new_size = self.original_pixmap.size() * self.zoom_factor
+        scaled = self.original_pixmap.scaled(
+            new_size,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation
+        )
+        self.image_label.setPixmap(scaled)
+        self.image_label.resize(scaled.size())
+
+        # Update zoom label
+        percent = int(self.zoom_factor * 100)
+        self.zoom_label.setText(f"{percent}%")
+
+        # Update slider without triggering signal
+        self.zoom_slider.blockSignals(True)
+        self.zoom_slider.setValue(percent)
+        self.zoom_slider.blockSignals(False)
+
+        self.zoom_changed.emit(percent)
+
+    def _zoom_fit(self):
+        """Fit image to viewport."""
+        if self.original_pixmap is None:
+            return
+
+        viewport_size = self.scroll_area.viewport().size()
+        img_size = self.original_pixmap.size()
+
+        # Calculate scale to fit
+        scale_w = viewport_size.width() / img_size.width()
+        scale_h = viewport_size.height() / img_size.height()
+        self.zoom_factor = min(scale_w, scale_h) * 0.95  # 95% to leave margin
+
+        self._update_display()
+
+    def _zoom_in(self):
+        """Zoom in by 25%."""
+        self.zoom_factor = min(4.0, self.zoom_factor * 1.25)
+        self._update_display()
+
+    def _zoom_out(self):
+        """Zoom out by 25%."""
+        self.zoom_factor = max(0.1, self.zoom_factor / 1.25)
+        self._update_display()
+
+    def _on_slider_changed(self, value):
+        """Handle zoom slider change."""
+        self.zoom_factor = value / 100.0
+        self._update_display()
+
+    def set_zoom(self, factor: float):
+        """Set zoom factor directly."""
+        self.zoom_factor = max(0.1, min(4.0, factor))
+        self._update_display()
+
+    def wheelEvent(self, event: QWheelEvent):
+        """Handle mouse wheel for zooming."""
+        if event.modifiers() == Qt.ControlModifier:
+            delta = event.angleDelta().y()
+            if delta > 0:
+                self._zoom_in()
+            else:
+                self._zoom_out()
+            event.accept()
+        else:
+            super().wheelEvent(event)
+
+    def resizeEvent(self, event):
+        """Handle resize - refit if at fit zoom."""
+        super().resizeEvent(event)
+        # Only auto-fit if we're close to fit zoom
+        if self.original_pixmap and self.zoom_factor < 1.0:
+            self._zoom_fit()
+
+
+class ImageLabel(QLabel):
+    """Simple label for small images like serial region."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignCenter)
+        self.setMinimumSize(200, 60)
+        self.original_pixmap = None
 
     def set_image(self, path: str):
         """Load and display an image."""
@@ -45,32 +246,16 @@ class ImageLabel(QLabel):
         self.original_pixmap = pixmap
         self._update_display()
 
-    def set_zoom(self, factor: float):
-        """Set zoom factor (1.0 = fit to window)."""
-        self.zoom_factor = factor
-        self._update_display()
-
     def _update_display(self):
-        """Update the displayed image."""
+        """Update the displayed image scaled to fit."""
         if self.original_pixmap is None:
             return
 
-        if self.zoom_factor == 1.0:
-            # Fit to container
-            scaled = self.original_pixmap.scaled(
-                self.size(),
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
-            )
-        else:
-            # Apply zoom
-            new_size = self.original_pixmap.size() * self.zoom_factor
-            scaled = self.original_pixmap.scaled(
-                new_size,
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
-            )
-
+        scaled = self.original_pixmap.scaled(
+            self.size(),
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation
+        )
         self.setPixmap(scaled)
 
     def resizeEvent(self, event):
@@ -98,17 +283,24 @@ class PreviewPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        # Image preview area
+        # Tabbed image preview area
         preview_group = QGroupBox("Bill Preview")
         preview_layout = QVBoxLayout(preview_group)
 
-        # Main bill image
-        self.bill_image = ImageLabel()
-        self.bill_image.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.bill_image.setMinimumHeight(200)
-        preview_layout.addWidget(self.bill_image, 1)
+        # Tab widget for Front/Back
+        self.image_tabs = QTabWidget()
 
-        # Serial region image
+        # Front tab
+        self.front_viewer = ScrollableImageViewer()
+        self.image_tabs.addTab(self.front_viewer, "Front")
+
+        # Back tab
+        self.back_viewer = ScrollableImageViewer()
+        self.image_tabs.addTab(self.back_viewer, "Back")
+
+        preview_layout.addWidget(self.image_tabs, 1)
+
+        # Serial region image (always visible)
         serial_frame = QFrame()
         serial_layout = QHBoxLayout(serial_frame)
         serial_layout.setContentsMargins(0, 0, 0, 0)
@@ -123,24 +315,10 @@ class PreviewPanel(QWidget):
 
         preview_layout.addWidget(serial_frame)
 
-        # Zoom controls
-        zoom_layout = QHBoxLayout()
-        zoom_layout.addWidget(QLabel("Zoom:"))
-
-        self.zoom_fit_btn = QPushButton("Fit")
-        self.zoom_fit_btn.clicked.connect(lambda: self.bill_image.set_zoom(1.0))
-        zoom_layout.addWidget(self.zoom_fit_btn)
-
-        self.zoom_100_btn = QPushButton("100%")
-        self.zoom_100_btn.clicked.connect(lambda: self.bill_image.set_zoom(1.5))
-        zoom_layout.addWidget(self.zoom_100_btn)
-
-        self.zoom_200_btn = QPushButton("200%")
-        self.zoom_200_btn.clicked.connect(lambda: self.bill_image.set_zoom(2.0))
-        zoom_layout.addWidget(self.zoom_200_btn)
-
-        zoom_layout.addStretch()
-        preview_layout.addLayout(zoom_layout)
+        # Zoom tip
+        zoom_tip = QLabel("Tip: Ctrl+Scroll to zoom, drag to pan")
+        zoom_tip.setStyleSheet("color: gray; font-size: 10px;")
+        preview_layout.addWidget(zoom_tip)
 
         layout.addWidget(preview_group, 1)
 
@@ -211,21 +389,21 @@ class PreviewPanel(QWidget):
 
         # Common character confusions
         self.quick_fixes = [
-            ("G->C", "G", "C"),
-            ("C->G", "C", "G"),
-            ("O->Q", "O", "Q"),
-            ("Q->O", "Q", "O"),
-            ("0->O", "0", "O"),
-            ("O->0", "O", "0"),
-            ("1->L", "1", "L"),
-            ("L->1", "L", "1"),
-            ("8->B", "8", "B"),
-            ("B->8", "B", "8"),
+            ("G→C", "G", "C"),
+            ("C→G", "C", "G"),
+            ("O→Q", "O", "Q"),
+            ("Q→O", "Q", "O"),
+            ("0→O", "0", "O"),
+            ("O→0", "O", "0"),
+            ("1→L", "1", "L"),
+            ("L→1", "L", "1"),
+            ("8→B", "8", "B"),
+            ("B→8", "B", "8"),
         ]
 
         for label, from_char, to_char in self.quick_fixes:
             btn = QPushButton(label)
-            btn.setMaximumWidth(60)
+            btn.setMaximumWidth(50)
             btn.clicked.connect(lambda checked, f=from_char, t=to_char: self._apply_quick_fix(f, t))
             quick_layout.addWidget(btn)
 
@@ -238,14 +416,19 @@ class PreviewPanel(QWidget):
         """Display a bill result."""
         self.current_result = result
 
-        # Load images
+        # Load front image
         front_file = result.get('front_file', '')
-        # Try to find the full path
-        if front_file and not Path(front_file).exists():
-            # Try relative to the input directory stored in result
-            pass  # Path resolution would go here
+        self.front_viewer.set_image(front_file)
 
-        self.bill_image.set_image(front_file)
+        # Load back image
+        back_file = result.get('back_file', '')
+        self.back_viewer.set_image(back_file)
+
+        # Update tab text to indicate if back exists
+        if back_file and Path(back_file).exists():
+            self.image_tabs.setTabText(1, "Back")
+        else:
+            self.image_tabs.setTabText(1, "Back (none)")
 
         # Serial region image if available
         serial_region = result.get('serial_region_path', '')

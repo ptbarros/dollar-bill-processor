@@ -43,6 +43,7 @@ class UISettings:
     show_thumbnails: bool = True
     thumbnail_size: int = 200
     theme: str = "system"  # system, light, dark
+    font_size: int = 10  # Base font size in points (default 10)
 
 
 @dataclass
@@ -127,6 +128,7 @@ class SettingsManager:
             self.ui.show_thumbnails = ui.get('show_thumbnails', True)
             self.ui.thumbnail_size = ui.get('thumbnail_size', 200)
             self.ui.theme = ui.get('theme', 'system')
+            self.ui.font_size = ui.get('font_size', 10)
 
         # Load export settings
         if 'export' in data:
@@ -182,6 +184,7 @@ class SettingsManager:
                 'show_thumbnails': self.ui.show_thumbnails,
                 'thumbnail_size': self.ui.thumbnail_size,
                 'theme': self.ui.theme,
+                'font_size': self.ui.font_size,
             },
             'export': {
                 'default_format': self.export.default_format,

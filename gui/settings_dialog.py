@@ -140,6 +140,17 @@ class SettingsDialog(QDialog):
         self.thumbnail_size_spin.setSingleStep(50)
         appearance_layout.addRow("Thumbnail size:", self.thumbnail_size_spin)
 
+        # Font size for accessibility
+        self.font_size_spin = QSpinBox()
+        self.font_size_spin.setRange(8, 24)
+        self.font_size_spin.setSingleStep(1)
+        self.font_size_spin.setSuffix(" pt")
+        appearance_layout.addRow("Font size:", self.font_size_spin)
+
+        font_hint = QLabel("Larger fonts for easier reading (default: 10 pt)")
+        font_hint.setStyleSheet("color: gray; font-size: 9px;")
+        appearance_layout.addRow("", font_hint)
+
         layout.addWidget(appearance_group)
 
         # Directories
@@ -318,6 +329,7 @@ class SettingsDialog(QDialog):
             self.theme_combo.setCurrentIndex(idx)
         self.thumbnails_check.setChecked(self.settings.ui.show_thumbnails)
         self.thumbnail_size_spin.setValue(self.settings.ui.thumbnail_size)
+        self.font_size_spin.setValue(self.settings.ui.font_size)
         self.last_input_edit.setText(self.settings.ui.last_input_dir)
         self.last_output_edit.setText(self.settings.ui.last_output_dir)
 
@@ -356,6 +368,7 @@ class SettingsDialog(QDialog):
         self.settings.ui.theme = self.theme_combo.currentData()
         self.settings.ui.show_thumbnails = self.thumbnails_check.isChecked()
         self.settings.ui.thumbnail_size = self.thumbnail_size_spin.value()
+        self.settings.ui.font_size = self.font_size_spin.value()
         self.settings.ui.last_input_dir = self.last_input_edit.text()
         self.settings.ui.last_output_dir = self.last_output_edit.text()
 

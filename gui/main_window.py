@@ -46,6 +46,7 @@ class MainWindow(QMainWindow):
         self._setup_menus()
         self._setup_statusbar()
         self._restore_geometry()
+        self._apply_settings()  # Apply font size and other settings
 
         self.setWindowTitle("Dollar Bill Processor")
 
@@ -548,8 +549,70 @@ class MainWindow(QMainWindow):
 
     def _apply_settings(self):
         """Apply changed settings to the UI."""
-        # Update theme if needed
-        pass  # Theme changes would go here
+        # Apply font size
+        font_size = self.settings.ui.font_size
+        self._apply_font_size(font_size)
+
+    def _apply_font_size(self, size: int):
+        """Apply font size to the application."""
+        # Create stylesheet with the specified font size
+        stylesheet = f"""
+            QWidget {{
+                font-size: {size}pt;
+            }}
+            QTreeWidget {{
+                font-size: {size}pt;
+            }}
+            QTreeWidget::item {{
+                padding: {max(2, size // 4)}px;
+            }}
+            QListWidget {{
+                font-size: {size}pt;
+            }}
+            QTableWidget {{
+                font-size: {size}pt;
+            }}
+            QPushButton {{
+                font-size: {size}pt;
+                padding: {max(4, size // 3)}px {max(8, size // 2)}px;
+            }}
+            QLabel {{
+                font-size: {size}pt;
+            }}
+            QLineEdit {{
+                font-size: {size}pt;
+                padding: {max(2, size // 4)}px;
+            }}
+            QComboBox {{
+                font-size: {size}pt;
+            }}
+            QSpinBox, QDoubleSpinBox {{
+                font-size: {size}pt;
+            }}
+            QGroupBox {{
+                font-size: {size}pt;
+            }}
+            QGroupBox::title {{
+                font-size: {size}pt;
+            }}
+            QTabWidget::tab-bar {{
+                font-size: {size}pt;
+            }}
+            QTabBar::tab {{
+                font-size: {size}pt;
+                padding: {max(4, size // 3)}px {max(8, size // 2)}px;
+            }}
+            QMenuBar {{
+                font-size: {size}pt;
+            }}
+            QMenu {{
+                font-size: {size}pt;
+            }}
+            QStatusBar {{
+                font-size: {size}pt;
+            }}
+        """
+        QApplication.instance().setStyleSheet(stylesheet)
 
 
 def run_gui():
