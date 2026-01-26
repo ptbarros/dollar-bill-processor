@@ -356,13 +356,13 @@ class ResultsList(QWidget):
                 ("G → 6", "G", "6"),
                 ("Z → 2", "Z", "2"),
             ]
-            for pos in range(1, 9):
-                char = serial[pos]
+            for idx in range(1, 9):
+                char = serial[idx]
                 for label, from_char, to_char in middle_fixes:
                     if char == from_char:
-                        action = QAction(f"Pos {pos+1}: {label}", self)
+                        action = QAction(f"Pos {idx+1}: {label}", self)
                         action.triggered.connect(
-                            lambda checked, r=result, p=pos, t=to_char: self._apply_positional_fix(r, p, t)
+                            lambda checked, r=result, p=idx, t=to_char: self._apply_positional_fix(r, p, t)
                         )
                         quick_menu.addAction(action)
                         fixes_added = True
