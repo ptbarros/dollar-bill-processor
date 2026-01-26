@@ -321,30 +321,76 @@ class ResultsList(QWidget):
         correct_action.triggered.connect(lambda: self._open_correction_dialog(result))
         menu.addAction(correct_action)
 
-        # Quick fixes submenu
-        if serial:
+        # Quick fixes submenu - position-aware for bill serial format
+        # Format: [A-L] + 8 digits + [A-Y or *]
+        if serial and len(serial) == 10:
             quick_menu = menu.addMenu("Quick Fixes")
-            quick_fixes = [
+            fixes_added = False
+
+            # Position 0: First letter (must be A-L)
+            first_char = serial[0]
+            # If digit misread as letter, or letter confusion
+            first_pos_fixes = [
+                ("6 → G", "6", "G"),  # 6 misread as G
+                ("8 → B", "8", "B"),  # 8 misread as B
+                ("C → G", "C", "G"),  # C/G confusion
                 ("G → C", "G", "C"),
-                ("C → G", "C", "G"),
-                ("0 → O", "0", "O"),
-                ("O → 0", "O", "0"),
-                ("1 → L", "1", "L"),
-                ("L → 1", "L", "1"),
-                ("8 → B", "8", "B"),
-                ("B → 8", "B", "8"),
-                ("5 → S", "5", "S"),
-                ("S → 5", "S", "5"),
             ]
-            for label, from_char, to_char in quick_fixes:
-                if from_char in serial:
-                    action = QAction(label, self)
+            for label, from_char, to_char in first_pos_fixes:
+                if first_char == from_char:
+                    action = QAction(f"Pos 1: {label}", self)
                     action.triggered.connect(
-                        lambda checked, r=result, f=from_char, t=to_char: self._apply_quick_fix(r, f, t)
+                        lambda checked, r=result, pos=0, t=to_char: self._apply_positional_fix(r, pos, t)
                     )
                     quick_menu.addAction(action)
+                    fixes_added = True
 
-            if quick_menu.isEmpty():
+            # Positions 1-8: Middle digits (must be 0-9)
+            # Only offer letter→digit fixes (letters shouldn't be here)
+            middle_fixes = [
+                ("O → 0", "O", "0"),
+                ("I → 1", "I", "1"),
+                ("L → 1", "L", "1"),
+                ("S → 5", "S", "5"),
+                ("B → 8", "B", "8"),
+                ("G → 6", "G", "6"),
+                ("Z → 2", "Z", "2"),
+            ]
+            for pos in range(1, 9):
+                char = serial[pos]
+                for label, from_char, to_char in middle_fixes:
+                    if char == from_char:
+                        action = QAction(f"Pos {pos+1}: {label}", self)
+                        action.triggered.connect(
+                            lambda checked, r=result, p=pos, t=to_char: self._apply_positional_fix(r, p, t)
+                        )
+                        quick_menu.addAction(action)
+                        fixes_added = True
+
+            # Position 9: Last letter (must be A-Y or *)
+            last_char = serial[9]
+            # Digit→letter fixes and letter confusions
+            last_pos_fixes = [
+                ("0 → O", "0", "O"),
+                ("0 → Q", "0", "Q"),
+                ("1 → I", "1", "I"),
+                ("1 → L", "1", "L"),
+                ("8 → B", "8", "B"),
+                ("5 → S", "5", "S"),
+                ("2 → Z", "2", "Z"),
+                ("O → Q", "O", "Q"),  # O/Q confusion (both valid)
+                ("Q → O", "Q", "O"),
+            ]
+            for label, from_char, to_char in last_pos_fixes:
+                if last_char == from_char:
+                    action = QAction(f"Pos 10: {label}", self)
+                    action.triggered.connect(
+                        lambda checked, r=result, pos=9, t=to_char: self._apply_positional_fix(r, pos, t)
+                    )
+                    quick_menu.addAction(action)
+                    fixes_added = True
+
+            if not fixes_added:
                 quick_menu.addAction("(no applicable fixes)").setEnabled(False)
 
         menu.addSeparator()
@@ -380,11 +426,11 @@ class ResultsList(QWidget):
             if corrected and corrected != serial:
                 self._apply_correction(result, corrected)
 
-    def _apply_quick_fix(self, result: dict, from_char: str, to_char: str):
-        """Apply a quick fix character replacement."""
+    def _apply_positional_fix(self, result: dict, position: int, to_char: str):
+        """Apply a fix at a specific position in the serial."""
         serial = result.get('serial', '')
-        if from_char in serial:
-            corrected = serial.replace(from_char, to_char, 1)
+        if len(serial) > position:
+            corrected = serial[:position] + to_char + serial[position + 1:]
             self._apply_correction(result, corrected)
 
     def _apply_correction(self, result: dict, corrected: str):
