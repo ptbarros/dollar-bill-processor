@@ -221,6 +221,102 @@ class CorrectionDialog(QDialog):
         return self.corrected_serial
 
 
+class ReviewNoteDialog(QDialog):
+    """
+    Dialog for adding a note when saving a bill for review.
+
+    Usage:
+        dialog = ReviewNoteDialog(serial="G12345678A", parent=self)
+        if dialog.exec() == QDialog.Accepted:
+            note = dialog.get_note()
+    """
+
+    # Common review reasons as quick buttons
+    COMMON_REASONS = [
+        "OCR misread",
+        "Low confidence",
+        "Blurry image",
+        "Partial serial",
+        "Verify pattern",
+        "Other",
+    ]
+
+    def __init__(self, serial: str = "", filename: str = "", parent=None):
+        super().__init__(parent)
+        self.serial = serial
+        self.filename = filename
+        self.note = ""
+
+        self.setWindowTitle("Save for Review")
+        self.setMinimumWidth(400)
+        self._setup_ui()
+
+    def _setup_ui(self):
+        """Setup the dialog UI."""
+        layout = QVBoxLayout(self)
+
+        # Info
+        if self.filename:
+            file_label = QLabel(f"File: {self.filename}")
+            file_label.setStyleSheet("color: gray;")
+            layout.addWidget(file_label)
+
+        if self.serial:
+            serial_label = QLabel(f"Serial: {self.serial}")
+            serial_label.setStyleSheet("font-weight: bold; font-family: monospace;")
+            layout.addWidget(serial_label)
+
+        # Quick reason buttons
+        reason_group = QGroupBox("Quick Reasons")
+        reason_layout = QGridLayout(reason_group)
+
+        for i, reason in enumerate(self.COMMON_REASONS):
+            btn = QPushButton(reason)
+            btn.clicked.connect(lambda checked, r=reason: self._set_reason(r))
+            reason_layout.addWidget(btn, i // 3, i % 3)
+
+        layout.addWidget(reason_group)
+
+        # Custom note input
+        note_group = QGroupBox("Note")
+        note_layout = QVBoxLayout(note_group)
+
+        self.note_edit = QLineEdit()
+        self.note_edit.setPlaceholderText("Enter review note or click a quick reason above...")
+        note_layout.addWidget(self.note_edit)
+
+        layout.addWidget(note_group)
+
+        # Buttons
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        button_box.accepted.connect(self._on_accept)
+        button_box.rejected.connect(self.reject)
+        self.ok_button = button_box.button(QDialogButtonBox.Ok)
+        self.ok_button.setText("Save for Review")
+        layout.addWidget(button_box)
+
+    def _set_reason(self, reason: str):
+        """Set a quick reason in the note field."""
+        current = self.note_edit.text()
+        if current and not current.endswith(": "):
+            self.note_edit.setText(f"{reason}: {current}")
+        else:
+            self.note_edit.setText(reason)
+        self.note_edit.setFocus()
+        self.note_edit.setCursorPosition(len(self.note_edit.text()))
+
+    def _on_accept(self):
+        """Handle accept button."""
+        self.note = self.note_edit.text().strip() or "No note provided"
+        self.accept()
+
+    def get_note(self) -> str:
+        """Get the review note."""
+        return self.note
+
+
 # Test dialog standalone
 if __name__ == "__main__":
     from PySide6.QtWidgets import QApplication

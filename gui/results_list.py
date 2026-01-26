@@ -3,7 +3,10 @@ Results List - Tree/table view of processed bills.
 """
 
 import sys
+import csv
+import shutil
 from pathlib import Path
+from datetime import datetime
 from typing import Optional, Dict, List
 
 from PySide6.QtWidgets import (
@@ -17,7 +20,7 @@ from PySide6.QtGui import QColor, QBrush, QAction
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from pattern_engine_v2 import PatternEngine
 from settings_manager import get_settings
-from gui.correction_dialog import CorrectionDialog
+from gui.correction_dialog import CorrectionDialog, ReviewNoteDialog
 
 
 class NumericTreeWidgetItem(QTreeWidgetItem):
@@ -400,11 +403,18 @@ class ResultsList(QWidget):
 
         menu.addSeparator()
 
+        # Save for review
+        review_action = QAction("Save for Review...", self)
+        review_action.triggered.connect(lambda: self._save_for_review(result))
+        menu.addAction(review_action)
+
         # Mark as reviewed
         if result.get('needs_review'):
             mark_reviewed = QAction("Mark as Reviewed", self)
             mark_reviewed.triggered.connect(lambda: self._mark_reviewed(result))
             menu.addAction(mark_reviewed)
+
+        menu.addSeparator()
 
         # Copy serial
         copy_action = QAction("Copy Serial", self)
@@ -467,6 +477,80 @@ class ResultsList(QWidget):
         serial = result.get('serial', '')
         if serial:
             QApplication.clipboard().setText(serial)
+
+    def _save_for_review(self, result: dict):
+        """Save a bill to the review folder with a note."""
+        serial = result.get('serial', '')
+        front_file = result.get('front_file', '')
+        filename = Path(front_file).name if front_file else 'unknown'
+
+        # Show dialog to get note
+        dialog = ReviewNoteDialog(serial=serial, filename=filename, parent=self)
+        if not dialog.exec():
+            return
+
+        note = dialog.get_note()
+
+        # Determine review folder location (next to output or input folder)
+        output_dir = self.settings.ui.last_output_dir or self.settings.ui.last_input_dir
+        if not output_dir:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "No Output Directory",
+                "Please process a batch first to set the output directory.")
+            return
+
+        review_folder = Path(output_dir) / "review"
+        review_folder.mkdir(exist_ok=True)
+
+        # Copy files to review folder
+        files_copied = []
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Front image
+        if front_file and Path(front_file).exists():
+            dest = review_folder / f"{timestamp}_{Path(front_file).name}"
+            shutil.copy2(front_file, dest)
+            files_copied.append(dest.name)
+
+        # Back image
+        back_file = result.get('back_file', '')
+        if back_file and Path(back_file).exists():
+            dest = review_folder / f"{timestamp}_{Path(back_file).name}"
+            shutil.copy2(back_file, dest)
+            files_copied.append(dest.name)
+
+        # Serial region image
+        serial_region = result.get('serial_region_path', '')
+        if serial_region and Path(serial_region).exists():
+            dest = review_folder / f"{timestamp}_serial_{Path(serial_region).name}"
+            shutil.copy2(serial_region, dest)
+            files_copied.append(dest.name)
+
+        # Append to CSV log
+        csv_path = review_folder / "review_log.csv"
+        file_exists = csv_path.exists()
+
+        with open(csv_path, 'a', newline='') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(['timestamp', 'serial', 'note', 'confidence',
+                                'patterns', 'front_file', 'files_copied'])
+            writer.writerow([
+                datetime.now().isoformat(),
+                serial,
+                note,
+                result.get('confidence', ''),
+                result.get('fancy_types', ''),
+                filename,
+                '; '.join(files_copied)
+            ])
+
+        # Show confirmation
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.information(self, "Saved for Review",
+            f"Bill saved to review folder:\n{review_folder}\n\n"
+            f"Files copied: {len(files_copied)}\n"
+            f"Note: {note}")
 
     def get_selected_result(self) -> Optional[dict]:
         """Get currently selected result."""
