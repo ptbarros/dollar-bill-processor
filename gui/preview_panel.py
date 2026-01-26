@@ -567,7 +567,6 @@ class PreviewPanel(QWidget):
     """Panel showing bill preview and correction interface."""
 
     # Signals
-    correction_submitted = Signal(str, str, str)  # filename, original, corrected
     prev_requested = Signal()  # Request to navigate to previous bill
     next_requested = Signal()  # Request to navigate to next bill
 
@@ -730,53 +729,6 @@ class PreviewPanel(QWidget):
         details_layout.addWidget(self.file_label, 5, 1)
 
         layout.addWidget(self.details_group)
-
-        # Correction section
-        correction_group = QGroupBox("Serial Correction")
-        correction_layout = QVBoxLayout(correction_group)
-
-        # Correction input
-        input_layout = QHBoxLayout()
-
-        self.correction_edit = QLineEdit()
-        self.correction_edit.setPlaceholderText("Enter corrected serial (e.g., C12345678A)")
-        self.correction_edit.setMaxLength(10)
-        self.correction_edit.returnPressed.connect(self._submit_correction)
-        input_layout.addWidget(self.correction_edit, 1)
-
-        self.submit_btn = QPushButton("Apply")
-        self.submit_btn.clicked.connect(self._submit_correction)
-        input_layout.addWidget(self.submit_btn)
-
-        correction_layout.addLayout(input_layout)
-
-        # Quick fix buttons
-        quick_layout = QHBoxLayout()
-        quick_layout.addWidget(QLabel("Quick fixes:"))
-
-        # Common character confusions
-        self.quick_fixes = [
-            ("G→C", "G", "C"),
-            ("C→G", "C", "G"),
-            ("O→Q", "O", "Q"),
-            ("Q→O", "Q", "O"),
-            ("0→O", "0", "O"),
-            ("O→0", "O", "0"),
-            ("1→L", "1", "L"),
-            ("L→1", "L", "1"),
-            ("8→B", "8", "B"),
-            ("B→8", "B", "8"),
-        ]
-
-        for label, from_char, to_char in self.quick_fixes:
-            btn = QPushButton(label)
-            btn.clicked.connect(lambda checked, f=from_char, t=to_char: self._apply_quick_fix(f, t))
-            quick_layout.addWidget(btn)
-
-        quick_layout.addStretch()
-        correction_layout.addLayout(quick_layout)
-
-        layout.addWidget(correction_group)
 
     def _on_view_mode_clicked(self, mode: str):
         """Handle view mode button click."""
@@ -1022,49 +974,6 @@ class PreviewPanel(QWidget):
         self.status_label.setText(', '.join(status_parts) if status_parts else "OK")
 
         self.file_label.setText(self._current_front_file or "-")
-
-        # Pre-fill correction with current serial
-        self.correction_edit.setText(result.get('serial', ''))
-
-    def start_correction(self):
-        """Start correction mode - focus on the edit field."""
-        self.correction_edit.setFocus()
-        self.correction_edit.selectAll()
-
-    def _submit_correction(self):
-        """Submit the correction."""
-        if not self.current_result:
-            return
-
-        corrected = self.correction_edit.text().strip().upper()
-        if not corrected:
-            return
-
-        # Validate format
-        import re
-        if not re.match(r'^[A-L]\d{8}[A-Y*]$', corrected):
-            self.status_label.setText("Invalid serial format!")
-            self.status_label.setStyleSheet("color: red;")
-            return
-
-        filename = self.current_result.get('front_file', '')
-        original = self.current_result.get('serial', '')
-
-        self.correction_submitted.emit(filename, original, corrected)
-
-        # Update display
-        self.serial_label.setText(f"{corrected} (corrected)")
-        self.status_label.setText("Correction saved")
-        self.status_label.setStyleSheet("color: green;")
-
-    def _apply_quick_fix(self, from_char: str, to_char: str):
-        """Apply a quick character replacement."""
-        current = self.correction_edit.text()
-        # Replace first occurrence of from_char
-        if from_char in current:
-            fixed = current.replace(from_char, to_char, 1)
-            self.correction_edit.setText(fixed)
-        self.correction_edit.setFocus()
 
     def set_serial_region_visible(self, visible: bool):
         """Show or hide the serial region panel."""

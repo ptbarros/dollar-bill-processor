@@ -72,12 +72,11 @@ class MainWindow(QMainWindow):
         # Left panel - Results list
         self.results_list = ResultsList()
         self.results_list.item_selected.connect(self._on_result_selected)
-        self.results_list.correction_requested.connect(self._on_correction_requested)
+        self.results_list.correction_applied.connect(self._on_correction_applied)
         splitter.addWidget(self.results_list)
 
         # Right panel - Preview
         self.preview_panel = PreviewPanel()
-        self.preview_panel.correction_submitted.connect(self._on_correction_submitted)
         self.preview_panel.prev_requested.connect(self._prev_bill)
         self.preview_panel.next_requested.connect(self._next_bill)
         splitter.addWidget(self.preview_panel)
@@ -318,29 +317,20 @@ class MainWindow(QMainWindow):
         """Handle selection of a result item."""
         self.preview_panel.show_bill(result)
 
-    @Slot(dict)
-    def _on_correction_requested(self, result: dict):
-        """Handle correction request for a result."""
-        self.preview_panel.show_bill(result)
-        self.preview_panel.start_correction()
-
     @Slot(str, str, str)
-    def _on_correction_submitted(self, filename: str, original: str, corrected: str):
-        """Handle a submitted correction."""
+    def _on_correction_applied(self, filename: str, original: str, corrected: str):
+        """Handle a correction applied via context menu."""
+        # Save to correction manager
         self.correction_manager.add_correction(filename, original, corrected)
         self.correction_manager.save()
 
-        # Update the result in our list
-        for result in self.current_results:
-            if result.get('front_file') == filename:
-                result['serial'] = corrected
-                result['corrected'] = True
-                break
+        # Update status
+        self.status_label.setText(f"Correction saved: {original} → {corrected}")
 
-        # Refresh the display, preserving selection
-        self.results_list.refresh()
-        self.results_list.select_by_filename(filename)
-        self.status_label.setText(f"Correction saved: {filename}")
+        # Refresh preview if showing this bill
+        selected = self.results_list.get_selected_result()
+        if selected and selected.get('front_file') == filename:
+            self.preview_panel.show_bill(selected)
 
     def _on_open_folder(self):
         """Handle open folder action."""

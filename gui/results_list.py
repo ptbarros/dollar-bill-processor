@@ -17,6 +17,7 @@ from PySide6.QtGui import QColor, QBrush, QAction
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from pattern_engine_v2 import PatternEngine
 from settings_manager import get_settings
+from gui.correction_dialog import CorrectionDialog
 
 
 class NumericTreeWidgetItem(QTreeWidgetItem):
@@ -38,7 +39,7 @@ class ResultsList(QWidget):
 
     # Signals
     item_selected = Signal(dict)  # Emits the selected result
-    correction_requested = Signal(dict)  # Emits result needing correction
+    correction_applied = Signal(str, str, str)  # filename, original, corrected
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -312,12 +313,41 @@ class ResultsList(QWidget):
             return
 
         result = item.data(0, Qt.UserRole)
+        serial = result.get('serial', '')
         menu = QMenu(self)
 
-        # Correct serial action
+        # Correct serial action - opens dialog
         correct_action = QAction("Correct Serial...", self)
-        correct_action.triggered.connect(lambda: self.correction_requested.emit(result))
+        correct_action.triggered.connect(lambda: self._open_correction_dialog(result))
         menu.addAction(correct_action)
+
+        # Quick fixes submenu
+        if serial:
+            quick_menu = menu.addMenu("Quick Fixes")
+            quick_fixes = [
+                ("G → C", "G", "C"),
+                ("C → G", "C", "G"),
+                ("0 → O", "0", "O"),
+                ("O → 0", "O", "0"),
+                ("1 → L", "1", "L"),
+                ("L → 1", "L", "1"),
+                ("8 → B", "8", "B"),
+                ("B → 8", "B", "8"),
+                ("5 → S", "5", "S"),
+                ("S → 5", "S", "5"),
+            ]
+            for label, from_char, to_char in quick_fixes:
+                if from_char in serial:
+                    action = QAction(label, self)
+                    action.triggered.connect(
+                        lambda checked, r=result, f=from_char, t=to_char: self._apply_quick_fix(r, f, t)
+                    )
+                    quick_menu.addAction(action)
+
+            if quick_menu.isEmpty():
+                quick_menu.addAction("(no applicable fixes)").setEnabled(False)
+
+        menu.addSeparator()
 
         # Mark as reviewed
         if result.get('needs_review'):
@@ -325,14 +355,52 @@ class ResultsList(QWidget):
             mark_reviewed.triggered.connect(lambda: self._mark_reviewed(result))
             menu.addAction(mark_reviewed)
 
-        menu.addSeparator()
-
         # Copy serial
         copy_action = QAction("Copy Serial", self)
         copy_action.triggered.connect(lambda: self._copy_serial(result))
         menu.addAction(copy_action)
 
         menu.exec(self.tree.viewport().mapToGlobal(pos))
+
+    def _open_correction_dialog(self, result: dict):
+        """Open the correction dialog for a result."""
+        serial = result.get('serial', '')
+        filename = result.get('front_file', '')
+        image_path = result.get('serial_region_path', '')
+
+        dialog = CorrectionDialog(
+            serial=serial,
+            image_path=image_path,
+            filename=filename,
+            parent=self
+        )
+
+        if dialog.exec():
+            corrected = dialog.get_corrected_serial()
+            if corrected and corrected != serial:
+                self._apply_correction(result, corrected)
+
+    def _apply_quick_fix(self, result: dict, from_char: str, to_char: str):
+        """Apply a quick fix character replacement."""
+        serial = result.get('serial', '')
+        if from_char in serial:
+            corrected = serial.replace(from_char, to_char, 1)
+            self._apply_correction(result, corrected)
+
+    def _apply_correction(self, result: dict, corrected: str):
+        """Apply a correction to a result."""
+        filename = result.get('front_file', '')
+        original = result.get('serial', '')
+
+        # Update the result
+        result['serial'] = corrected
+        result['corrected'] = True
+
+        # Emit signal for main window to save
+        self.correction_applied.emit(filename, original, corrected)
+
+        # Refresh display
+        self._apply_filters()
 
     def _mark_reviewed(self, result: dict):
         """Mark an item as reviewed."""
