@@ -312,6 +312,9 @@ class ResultsList(QWidget):
         if not item:
             return
 
+        # Select the item when right-clicking (ensures consistency)
+        self.tree.setCurrentItem(item)
+
         result = item.data(0, Qt.UserRole)
         serial = result.get('serial', '')
         menu = QMenu(self)
@@ -380,6 +383,8 @@ class ResultsList(QWidget):
                 ("2 → Z", "2", "Z"),
                 ("O → Q", "O", "Q"),  # O/Q confusion (both valid)
                 ("Q → O", "Q", "O"),
+                ("C → G", "C", "G"),  # C/G confusion (both valid)
+                ("G → C", "G", "C"),
             ]
             for label, from_char, to_char in last_pos_fixes:
                 if last_char == from_char:
@@ -438,9 +443,12 @@ class ResultsList(QWidget):
         filename = result.get('front_file', '')
         original = result.get('serial', '')
 
-        # Update the result
-        result['serial'] = corrected
-        result['corrected'] = True
+        # Find and update the result in self.results (the authoritative source)
+        for r in self.results:
+            if r.get('front_file') == filename:
+                r['serial'] = corrected
+                r['corrected'] = True
+                break
 
         # Emit signal for main window to save
         self.correction_applied.emit(filename, original, corrected)
