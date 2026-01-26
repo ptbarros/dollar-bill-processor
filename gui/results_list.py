@@ -479,7 +479,11 @@ class ResultsList(QWidget):
             QApplication.clipboard().setText(serial)
 
     def _save_for_review(self, result: dict):
-        """Save a bill to the review folder with a note."""
+        """Save a bill to the review folder with a note.
+
+        The review folder is at the project root level, not inside any
+        specific batch output. This acts as a universal dev testing tool.
+        """
         serial = result.get('serial', '')
         front_file = result.get('front_file', '')
         filename = Path(front_file).name if front_file else 'unknown'
@@ -491,15 +495,9 @@ class ResultsList(QWidget):
 
         note = dialog.get_note()
 
-        # Determine review folder location (next to output or input folder)
-        output_dir = self.settings.ui.last_output_dir or self.settings.ui.last_input_dir
-        if not output_dir:
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "No Output Directory",
-                "Please process a batch first to set the output directory.")
-            return
-
-        review_folder = Path(output_dir) / "review"
+        # Universal review folder at project root (not inside batch output)
+        project_root = Path(__file__).parent.parent
+        review_folder = project_root / "review"
         review_folder.mkdir(exist_ok=True)
 
         # Copy files to review folder
@@ -548,9 +546,10 @@ class ResultsList(QWidget):
         # Show confirmation
         from PySide6.QtWidgets import QMessageBox
         QMessageBox.information(self, "Saved for Review",
-            f"Bill saved to review folder:\n{review_folder}\n\n"
+            f"Bill saved to review folder.\n\n"
             f"Files copied: {len(files_copied)}\n"
-            f"Note: {note}")
+            f"Note: {note}\n\n"
+            f"See: {review_folder}")
 
     def get_selected_result(self) -> Optional[dict]:
         """Get currently selected result."""
