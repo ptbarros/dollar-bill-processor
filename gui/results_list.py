@@ -88,7 +88,7 @@ class ResultsList(QWidget):
 
         # Results tree
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Status"])
+        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Est. Price"])
         self.tree.setAlternatingRowColors(True)
         self.tree.setRootIsDecorated(False)
         self.tree.setSortingEnabled(True)
@@ -97,14 +97,21 @@ class ResultsList(QWidget):
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
 
-        # Set column widths
+        # Set column widths - all interactive for user resizing
         header = self.tree.header()
         header.setStretchLastSection(True)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Interactive)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.Interactive)  # # column
+        header.setSectionResizeMode(1, QHeaderView.Interactive)  # Serial
+        header.setSectionResizeMode(2, QHeaderView.Stretch)      # Patterns (takes remaining space)
+        header.setSectionResizeMode(3, QHeaderView.Interactive)  # Conf
+        header.setSectionResizeMode(4, QHeaderView.Interactive)  # Est. Price
+
+        # Set minimum and default widths
+        self.tree.setColumnWidth(0, 35)   # # column
+        self.tree.setColumnWidth(1, 130)  # Serial - enough for full serial at font 14
+        self.tree.setColumnWidth(3, 50)   # Conf
+        self.tree.setColumnWidth(4, 100)  # Est. Price
+        header.setMinimumSectionSize(30)  # Minimum for any column
 
         layout.addWidget(self.tree)
 
@@ -243,15 +250,15 @@ class ResultsList(QWidget):
             conf = result.get('confidence', '0.00')
             item.setText(3, str(conf))
 
-            # Status
-            status_parts = []
-            if result.get('is_fancy'):
-                status_parts.append("Fancy")
-            if result.get('needs_review'):
-                status_parts.append("Review")
-            if result.get('error'):
-                status_parts.append("Error")
-            item.setText(4, ', '.join(status_parts) if status_parts else "OK")
+            # Est. Price - get from first matched pattern
+            price_text = ""
+            if patterns:
+                for name in [p.strip() for p in patterns.split(',')]:
+                    info = self.pattern_engine.get_pattern_info(name)
+                    if info and 'price_range' in info:
+                        price_text = info['price_range']
+                        break  # Use first pattern's price
+            item.setText(4, price_text)
 
             # Color coding with explicit text color for contrast
             # Tiered color system: Pattern color > Default fancy color
