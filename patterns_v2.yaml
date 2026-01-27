@@ -2,8 +2,8 @@
 # UNIFIED PATTERN DEFINITION SYSTEM - Complete v2
 # =============================================================================
 #
-# All fancy serial number patterns in one file.
-# Single source of truth for CLI, GUI, and multi-denomination support.
+# Odds and pricing from "Fancy Serial Number Master List 05192025.xlsx"
+# - Collector community reference for US currency serial numbers
 #
 # PATTERN FIELDS:
 #   description:    Human-readable description of the pattern
@@ -11,8 +11,8 @@
 #   enabled:        Whether to detect this pattern
 #   rules:          Detection rules (see RULE TYPES below)
 #   examples:       Example serial numbers matching this pattern
-#   odds:           Mathematical probability of finding this pattern
-#                   (e.g., "1 in 10,000" means ~10 per 100,000 bills)
+#   odds:           Probability of finding this pattern
+#   price_range:    Expected selling price range (raw/circulated)
 #
 # RULE TYPES:
 #   regex:          Regular expression match on digits
@@ -24,6 +24,7 @@
 #   digit_sum:      Sum of all digits equals value
 #   digit_sum_min:  Sum >= value
 #   digit_sum_max:  Sum <= value
+#   only_digits:    Serial contains only these specific digits
 #   check:          Built-in function (see list below)
 #   all:            ALL sub-rules must match (AND)
 #   any:            ANY sub-rule must match (OR)
@@ -37,8 +38,9 @@
 # =============================================================================
 
 settings:
-  version: "2.0"
+  version: "2.1"
   default_enabled: true
+  source: "Fancy Serial Number Master List 05192025.xlsx"
 
 # =============================================================================
 # DENOMINATION PROFILES
@@ -81,8 +83,9 @@ patterns:
     enabled: true
     rules:
       check: solid
-    examples: ["11111111", "88888888"]
-    odds: "1 in 10,000,000"
+    examples: ["11111111", "88888888", "77777777"]
+    odds: "1 in 12,000,000"
+    price_range: "$500-$25,000"
 
   LADDER:
     description: "Perfect 8-digit ascending or descending sequence"
@@ -92,79 +95,53 @@ patterns:
       any:
         - check: ladder_asc
         - check: ladder_desc
-    examples: ["01234567", "12345678", "87654321"]
-    odds: "1 in 25,000,000"
+    examples: ["01234567", "12345678", "87654321", "98765432"]
+    odds: "1 in 19,200,000"
+    price_range: "$500-$15,000"
 
-  SUPER_RADAR:
-    description: "First/last same, all interior digits same (e.g., 10000001)"
+  SERIAL_UNDER_10:
+    description: "Serial number 00000001-00000009"
     tier: 1
     enabled: true
     rules:
-      regex: "^(\\d)(\\d)\\2{5}\\1$"
-    examples: ["10000001", "42222224", "36666663"]
-    odds: "1 in 1,111,111"
+      regex: "^0{7}[1-9]$"
+    examples: ["00000001", "00000003", "00000009"]
+    odds: "1 in 10,666,667"
+    price_range: "$300-$25,000"
 
-  RADAR_REPEATER:
-    description: "Both radar AND repeater (e.g., 12121212)"
+  MULTI_MILLIONAIRE:
+    description: "Multi-millionaire (X0000000)"
     tier: 1
     enabled: true
     rules:
-      all:
-        - check: palindrome
-        - check: repeater
-    examples: ["12121212", "21212121"]
-    odds: "1 in 1,000,000"
+      regex: "^[1-9]0{7}$"
+    examples: ["10000000", "50000000", "70000000"]
+    odds: "1 in 10,666,667"
+    price_range: "$100-$9,000"
+
+  DOUBLES_LADDER:
+    description: "Pairs in ascending/descending order (AABBCCDD)"
+    tier: 1
+    enabled: true
+    rules:
+      check: doubles_ladder
+    examples: ["11223344", "22334455", "99887766"]
+    odds: "1 in 6,400,000"
+    price_range: "$100-$4,500"
 
 # =============================================================================
-# TIER 2: PREMIUM (Very Rare - $100-500)
+# TIER 2: PREMIUM (Very Rare - $80-500)
 # =============================================================================
 
-  RADAR:
-    description: "Palindrome - reads same forwards and backwards"
+  SEVEN_IN_A_ROW:
+    description: "7 consecutive identical digits"
     tier: 2
     enabled: true
     rules:
-      check: palindrome
-    examples: ["12344321", "68888886"]
-    odds: "1 in 10,000"
-
-  REPEATER:
-    description: "First 4 digits repeat (ABCDABCD)"
-    tier: 2
-    enabled: true
-    rules:
-      check: repeater
-    examples: ["12341234", "56785678"]
-    odds: "1 in 10,000"
-
-  SUPER_REPEATER:
-    description: "2-digit pattern repeated 4 times (ABABABAB)"
-    tier: 2
-    enabled: true
-    rules:
-      regex: "^(\\d\\d)\\1\\1\\1$"
-    examples: ["12121212", "78787878"]
-    odds: "1 in 1,000,000"
-
-  BINARY:
-    description: "Only 2 unique digits used"
-    tier: 2
-    enabled: true
-    rules:
-      unique_count: 2
-    examples: ["11211121", "10010010"]
-    odds: "1 in 8,749"
-
-  TRUE_BINARY:
-    description: "Binary using only 0 and 1"
-    tier: 2
-    enabled: true
-    rules:
-      all:
-        - unique_count: 2
-        - check: binary_digits
-    examples: ["01101001", "10010110"]
-    odds: "1 in 393,701"
+      regex: "(\\d)\\1{6}"
+    examples: ["11111112", "27777777", "88888883"]
+    odds: "1 in 555,556"
+    price_range: "$80-$2,400"
 
   SEVEN_OF_KIND:
     description: "7 of the same digit (anywhere in serial)"
@@ -174,6 +151,39 @@ patterns:
       check: seven_of_kind
     examples: ["77777727", "17777777", "77277777"]
     odds: "1 in 138,889"
+    price_range: "$80-$500"
+
+  SUPER_RADAR:
+    description: "First/last same, all interior digits same (e.g., 10000001)"
+    tier: 2
+    enabled: true
+    rules:
+      regex: "^(\\d)(\\d)\\2{5}\\1$"
+    examples: ["10000001", "42222224", "91111119"]
+    odds: "1 in 1,010,526"
+    price_range: "$80-$2,500"
+
+  RADAR_REPEATER:
+    description: "Both radar AND repeater (e.g., 12121212)"
+    tier: 2
+    enabled: true
+    rules:
+      all:
+        - check: palindrome
+        - check: repeater
+    examples: ["12121212", "59955995", "34433443"]
+    odds: "1 in 1,111,111"
+    price_range: "$80-$450"
+
+  SUPER_REPEATER:
+    description: "2-digit pattern repeated 4 times (ABABABAB)"
+    tier: 2
+    enabled: true
+    rules:
+      regex: "^(\\d\\d)\\1\\1\\1$"
+    examples: ["12121212", "78787878", "39393939"]
+    odds: "1 in 1,185,185"
+    price_range: "$80-$900"
 
   DOUBLE_QUADS:
     description: "Two groups of 4 identical digits (AAAABBBB)"
@@ -181,8 +191,21 @@ patterns:
     enabled: true
     rules:
       regex: "^(\\d)\\1{3}(\\d)\\2{3}$"
-    examples: ["11112222", "99990000"]
-    odds: "1 in 1,111,111"
+    examples: ["11112222", "99990000", "22226666"]
+    odds: "1 in 1,185,185"
+    price_range: "$80-$1,500"
+
+  BINARY_REPEATER:
+    description: "Binary AND repeater"
+    tier: 2
+    enabled: true
+    rules:
+      all:
+        - unique_count: 2
+        - check: repeater
+    examples: ["01010101", "10101010", "33993399"]
+    odds: "1 in 1,185,185"
+    price_range: "$80-$450"
 
   BINARY_RADAR:
     description: "Binary AND palindrome"
@@ -192,161 +215,277 @@ patterns:
       all:
         - unique_count: 2
         - check: palindrome
-    examples: ["10011001", "01100110"]
-    odds: "1 in 250,000"
+    examples: ["10011001", "66166166", "01100110"]
+    odds: "1 in 914,285"
+    price_range: "$80-$4,500"
 
-  BINARY_REPEATER:
-    description: "Binary AND repeater"
+  MILLIONAIRE:
+    description: "Millionaire note (XX000000 or 0X000000)"
     tier: 2
     enabled: true
     rules:
-      all:
-        - check: binary_digits
-        - check: repeater
-    examples: ["01010101", "10101010"]
-    odds: "1 in 50,000,000"
+      regex: "^.{1,2}0{6}$"
+    examples: ["12000000", "10000000", "01000000"]
+    odds: "1 in 1,103,448"
+    price_range: "$80-$1,000"
 
-  LOW_SERIAL:
-    description: "Serial number under 1000"
+  TRAILING_7:
+    description: "Ends with 7 identical digits"
     tier: 2
     enabled: true
     rules:
-      regex: "^0{5}\\d{3}$"
-    examples: ["00000001", "00000099", "00000999"]
-    odds: "1 in 100,100"
+      regex: "^\\d(\\d)\\1{6}$"
+    examples: ["31111111", "28888888"]
+    odds: "1 in 1,000,000"
+    price_range: "$100-$450"
 
-  ULTRA_LOW_SERIAL:
-    description: "Serial starts with 5+ zeros"
+  LOW_000000:
+    description: "Starts with 000000 (serial under 100)"
     tier: 2
     enabled: true
     rules:
-      starts_with: "00000"
-    examples: ["00000123", "00000001"]
-    odds: "1 in 100,000"
+      starts_with: "000000"
+    examples: ["00000012", "00000099"]
+    odds: "1 in 1,066,667"
+    price_range: "$100-$800"
+
+  LADDER_7:
+    description: "Contains 7-digit ladder sequence"
+    tier: 2
+    enabled: true
+    rules:
+      check: ladder_7
+    examples: ["12345670", "01234567", "76543210"]
+    odds: "1 in 1,263,157"
+    price_range: "$90-$500"
+
+  PYRAMID_LADDER:
+    description: "Up then down (ABCDEDCBA or BCDEDCBA)"
+    tier: 2
+    enabled: true
+    rules:
+      check: pyramid_ladder
+    examples: ["12321000", "23432100", "34543212"]
+    odds: "1 in 1,200,000"
+    price_range: "$10-$50"
 
 # =============================================================================
 # TIER 3: COLLECTOR (Uncommon - $20-100)
 # =============================================================================
 
-  TRINARY:
-    description: "Exactly 3 unique digits used"
+  RADAR:
+    description: "Palindrome - reads same forwards and backwards"
     tier: 3
     enabled: true
     rules:
-      unique_count: 3
-    examples: ["12312312", "12332112", "29329939"]
-    odds: "1 in 179"
+      check: palindrome
+    examples: ["12344321", "68888886", "25722752"]
+    odds: "1 in 10,000"
+    price_range: "$20-$100 raw / $101-$300 graded"
 
-  TRUE_QUADRINARY:
-    description: "Exactly 4 unique digits"
+  REPEATER:
+    description: "First 4 digits repeat (ABCDABCD)"
     tier: 3
     enabled: true
     rules:
-      unique_count: 4
-    examples: ["12341234", "11223344"]
-    odds: "1 in 18"
+      check: repeater
+    examples: ["12341234", "56785678", "19301930"]
+    odds: "1 in 10,000"
+    price_range: "$15-$90"
 
-  QUINARY:
-    description: "Only 5 unique digits (too common - disabled by default)"
+  BINARY:
+    description: "Only 2 unique digits used"
     tier: 3
-    enabled: false
+    enabled: true
     rules:
-      unique_max: 5
-    odds: "1 in 5"
+      unique_count: 2
+    examples: ["11211121", "99944444", "74774774"]
+    odds: "1 in 9,091"
+    price_range: "$20-$100 raw / $101-$300 graded"
+
+  TRUE_BINARY:
+    description: "Binary using only 0 and 1"
+    tier: 3
+    enabled: true
+    rules:
+      only_digits: "01"
+    examples: ["01101001", "10010110", "10100100"]
+    odds: "1 in 375,000"
+    price_range: "$50-$4,500"
+
+  TRUE_TRINARY:
+    description: "Only contains digits 0, 1, and 2"
+    tier: 3
+    enabled: true
+    rules:
+      only_digits: "012"
+    examples: ["01201210", "12021012", "00112201"]
+    odds: "1 in 14,632"
+    price_range: "$20-$100"
+
+  TRUE_FLIPPER:
+    description: "Reads same upside down (only 0, 6, 9)"
+    tier: 3
+    enabled: true
+    rules:
+      check: true_flipper
+    examples: ["69000069", "96099069", "00699600"]
+    odds: "1 in 18,443"
+    price_range: "$20-$100"
 
   SIX_OF_KIND:
-    description: "6 identical digits"
+    description: "6 of the same digit (anywhere)"
+    tier: 3
+    enabled: true
+    rules:
+      check: six_of_kind
+    examples: ["66666612", "11111189", "12111311"]
+    odds: "1 in 17,778"
+    price_range: "$20-$100"
+
+  FOUR_CONSEC_PAIRS:
+    description: "Four consecutive pairs (AABBCCDD)"
+    tier: 3
+    enabled: true
+    rules:
+      regex: "^(\\d)\\1(\\d)\\2(\\d)\\3(\\d)\\4$"
+    examples: ["11223344", "55667788", "44227733"]
+    odds: "1 in 21,164"
+    price_range: "$20-$100"
+
+  TRIPLE_AND_QUAD:
+    description: "Triple + Quad combination"
+    tier: 3
+    enabled: true
+    rules:
+      check: triple_and_quad
+    examples: ["11122222", "33334445", "00011111"]
+    odds: "1 in 24,691"
+    price_range: "$20-$100+"
+
+  SUPER_TRINARY:
+    description: "Trinary with structured groups (AAACCCEE, etc.)"
+    tier: 3
+    enabled: true
+    rules:
+      check: super_trinary
+    examples: ["11133355", "22244466", "00022244"]
+    odds: "1 in 24,691"
+    price_range: "$20-$100+"
+
+  DOUBLE_FOUR_OF_KIND:
+    description: "Two groups of 4 of a kind (33343444)"
+    tier: 3
+    enabled: true
+    rules:
+      check: double_four_of_kind
+    examples: ["33343444", "11121222", "55545666"]
+    odds: "1 in 31,250"
+    price_range: "$20-$120"
+
+  SIX_IN_A_ROW:
+    description: "6 consecutive identical digits"
     tier: 3
     enabled: true
     rules:
       regex: "(\\d)\\1{5}"
-    examples: ["66666612", "11111189"]
-    odds: "1 in 3,704"
+    examples: ["66666612", "23333339", "11111189"]
+    odds: "1 in 35,556"
+    price_range: "$25-$150"
 
-  FIVE_OF_KIND:
-    description: "5 identical consecutive digits"
+  LADDER_6:
+    description: "Contains 6-digit ladder"
     tier: 3
     enabled: true
     rules:
-      regex: "(\\d)\\1{4}"
-    examples: ["55555123", "12333334"]
-    odds: "1 in 2,500"
+      check: ladder_6
+    examples: ["12345622", "34567822", "65432100"]
+    odds: "1 in 71,428"
+    price_range: "$30-$350"
 
-  ALTERNATOR:
-    description: "Digits alternate ABABABAB (same as SUPER_REPEATER)"
-    tier: 3
-    enabled: false  # Disabled - redundant with SUPER_REPEATER
-    rules:
-      check: alternator
-    examples: ["12121212", "89898989"]
-    odds: "1 in 1,000,000"
-
-  STAR:
-    description: "Star note (replacement bill)"
-    tier: 3
-    enabled: true
-    uses_full_serial: true
-    rules:
-      ends_with: "*"
-    examples: ["A12345678*"]
-    odds: "~3% of print run"
-
-  LADDER_7:
-    description: "Contains 7-digit ladder sequence"
+  FIVE_IN_ROW_AND_PAIR:
+    description: "5 in a row plus a pair"
     tier: 3
     enabled: true
     rules:
-      check: ladder_7
-    odds: "1 in 6,250,000"
+      check: five_in_row_and_pair
+    examples: ["11111122", "33333344", "22255555"]
+    odds: "1 in 66,667"
+    price_range: "$10-$50"
 
-  CHUNKY_LADDER:
-    description: "Paired ladder (11223344)"
+  LADDER_BOOKEND:
+    description: "Ladder sequence bookended by same digits"
     tier: 3
     enabled: true
     rules:
-      check: chunky_ladder
-    examples: ["11223344", "44332211"]
-    odds: "1 in 12,500,000"
+      check: ladder_bookend
+    examples: ["12345621", "77234577", "11234511"]
+    odds: "1 in 41,666"
+    price_range: "$10-$50"
 
-  DOUBLES_LADDER:
-    description: "Pairs in ascending/descending order"
+  TRAILING_6:
+    description: "Ends with 6 identical digits"
     tier: 3
     enabled: true
     rules:
-      check: doubles_ladder
-    examples: ["11223344", "99887766"]
-    odds: "1 in 12,500,000"
+      regex: "(\\d)\\1{5}$"
+    examples: ["24888888", "12000000"]
+    odds: "1 in 100,000"
+    price_range: "$30-$150"
 
-  BOOKENDS:
-    description: "First 2 and last 2 digits match"
+  LOW_00000:
+    description: "Starts with 00000 (serial under 1000)"
     tier: 3
     enabled: true
     rules:
-      regex: "^(\\d\\d)\\d{4}\\1$"
-    examples: ["12345612", "99123499"]
-    odds: "1 in 100"
+      starts_with: "00000"
+    examples: ["00000123", "00000999"]
+    odds: "1 in 106,666"
+    price_range: "$40-$200"
 
-  TRIPLE_BOOKENDS:
-    description: "First 3 and last 3 digits match"
-    tier: 2
-    enabled: true
-    rules:
-      regex: "^(\\d\\d\\d)\\d{2}\\1$"
-    examples: ["12345123", "99109910"]
-    odds: "1 in 1,000"
-
-  BROKEN_RADAR:
-    description: "One digit away from radar"
+  TRIPLES_BOOKEND:
+    description: "Triple on each end (111XX111)"
     tier: 3
     enabled: true
     rules:
-      check: broken_radar
-    examples: ["12344322", "12345321"]
-    odds: "1 in 1,250"
+      regex: "^(\\d)\\1\\1.{2}\\1\\1\\1$"
+    examples: ["11122111", "99912999", "33345333"]
+    odds: "1 in 148,148"
+    price_range: "$20-$150"
+
+  LADDER_AND_QUAD:
+    description: "Contains 4+ ladder AND quad"
+    tier: 3
+    enabled: true
+    rules:
+      check: ladder_and_quad
+    examples: ["12343333", "44445678", "11112345"]
+    odds: "1 in 140,350"
+    price_range: "$40-$350+"
 
 # =============================================================================
-# TIER 4: INTERESTING (Somewhat Common - $5-20)
+# TIER 4: INTERESTING ($5-50)
 # =============================================================================
+
+  TRINARY:
+    description: "Exactly 3 unique digits used"
+    tier: 4
+    enabled: true
+    rules:
+      unique_count: 3
+    examples: ["12312312", "30093339", "29329939"]
+    odds: "1 in 146"
+    price_range: "$3-$15"
+
+  FOUR_PAIRS:
+    description: "Four pairs of digits (AABBCCDD pattern)"
+    tier: 4
+    enabled: true
+    rules:
+      check: four_pairs
+    examples: ["11223344", "99887766", "31898391"]
+    odds: "1 in 188"
+    price_range: "$3-$8"
 
   QUADS:
     description: "4 consecutive identical digits"
@@ -354,41 +493,29 @@ patterns:
     enabled: true
     rules:
       regex: "(\\d)\\1{3}"
-    examples: ["12333345", "11114567"]
+    examples: ["12333345", "11114567", "22229034"]
     odds: "1 in 217"
+    price_range: "$3-$8 / $9-$20"
 
-  TRIPLES:
-    description: "3 consecutive identical digits"
+  FIVE_OF_KIND:
+    description: "5 of the same digit (anywhere)"
     tier: 4
     enabled: true
     rules:
-      regex: "(\\d)\\1\\1"
-    examples: ["12333456", "11123456"]
-    odds: "1 in 19"
+      check: five_of_kind
+    examples: ["55555123", "49446144", "12555553"]
+    odds: "1 in 232"
+    price_range: "$3-$25"
 
-  LADDER_6:
-    description: "Contains 6-digit ladder"
+  TRUE_QUINARY:
+    description: "Only contains digits 0, 1, 2, 3, 4"
     tier: 4
     enabled: true
     rules:
-      check: ladder_6
-    odds: "1 in 416,667"
-
-  LADDER_5:
-    description: "Contains 5-digit ladder"
-    tier: 4
-    enabled: true
-    rules:
-      check: ladder_5
-    odds: "1 in 31,250"
-
-  LADDER_4:
-    description: "Contains 4-digit ladder"
-    tier: 4
-    enabled: true
-    rules:
-      check: ladder_4
-    odds: "1 in 2,381"
+      only_digits: "01234"
+    examples: ["01234123", "12340123", "00112233"]
+    odds: "1 in 245"
+    price_range: "$3-$10"
 
   ALL_EVENS:
     description: "All digits even (0,2,4,6,8)"
@@ -396,8 +523,9 @@ patterns:
     enabled: true
     rules:
       check: all_even
-    examples: ["24680246", "20486420"]
+    examples: ["24680246", "20486420", "24688864"]
     odds: "1 in 256"
+    price_range: "$3-$10"
 
   ALL_ODDS:
     description: "All digits odd (1,3,5,7,9)"
@@ -405,26 +533,29 @@ patterns:
     enabled: true
     rules:
       check: all_odd
-    examples: ["13579135", "97531975"]
+    examples: ["13579135", "97531975", "13579997"]
     odds: "1 in 256"
+    price_range: "$3-$10"
 
-  FOUR_PAIRS:
-    description: "Four consecutive pairs (AABBCCDD)"
+  LADDER_4:
+    description: "Contains 4-digit ladder"
     tier: 4
     enabled: true
     rules:
-      check: four_pairs
-    examples: ["11223344", "99887766"]
-    odds: "1 in 10,000"
+      check: ladder_4
+    examples: ["12349876", "01234999", "98765111"]
+    odds: "1 in 303"
+    price_range: "$3-$10"
 
-  THREE_PAIRS:
-    description: "Contains at least 3 pairs"
+  THREE_CONSEC_PAIRS:
+    description: "Three consecutive pairs (AABBCCXX)"
     tier: 4
     enabled: true
     rules:
-      check: three_pairs
-    examples: ["11223345", "99881234"]
-    odds: "1 in 100"
+      regex: "(\\d)\\1(\\d)\\2(\\d)\\3"
+    examples: ["11223345", "99887712", "11883374"]
+    odds: "1 in 399"
+    price_range: "$3-$8"
 
   FULL_HOUSE:
     description: "5 of one digit, 3 of another"
@@ -432,87 +563,29 @@ patterns:
     enabled: true
     rules:
       check: full_house
-    examples: ["11111222", "33333888"]
-    odds: "1 in 17,857"
-
-  TWO_PAIR_TRIPLE:
-    description: "Triple + two pairs"
-    tier: 4
-    enabled: true
-    rules:
-      check: two_pair_triple
-    odds: "1 in 500"
-
-  TRIPLE_DOUBLE_DOUBLE:
-    description: "Triple + double + double + single"
-    tier: 4
-    enabled: true
-    rules:
-      check: triple_double_double
-    odds: "1 in 150"
-
-  CONSECUTIVE_TRIPLES:
-    description: "Two triples back-to-back (111222xx)"
-    tier: 4
-    enabled: true
-    rules:
-      check: consecutive_triples
-    examples: ["11122234", "33344456"]
-    odds: "1 in 50,000"
-
-  THREE_CONSEC_PAIRS:
-    description: "Three consecutive pairs"
-    tier: 4
-    enabled: true
-    rules:
-      regex: "(\\d)\\1(\\d)\\2(\\d)\\3"
-    examples: ["11223345", "99887712"]
-    odds: "1 in 333"
-
-  FOUR_CONSEC_PAIRS:
-    description: "Four consecutive pairs"
-    tier: 4
-    enabled: true
-    rules:
-      regex: "^(\\d)\\1(\\d)\\2(\\d)\\3(\\d)\\4$"
-    examples: ["11223344", "55667788"]
-    odds: "1 in 10,000"
-
-  DOUBLES_BOOKEND:
-    description: "Double digits on each end match"
-    tier: 4
-    enabled: true
-    rules:
-      regex: "^(\\d)\\1.{4}\\1\\1$"
-    examples: ["11234511", "99123499"]
-    odds: "1 in 1,000"
-
-  TRIPLES_BOOKEND:
-    description: "Triple on each end"
-    tier: 4
-    enabled: true
-    rules:
-      regex: "^(\\d)\\1\\1.{2}\\1\\1\\1$"
-    examples: ["11122111", "99912999"]
-    odds: "1 in 10,000"
+    examples: ["11111222", "33333888", "55555333"]
+    odds: "1 in 514"
+    price_range: "$3-$8"
 
   MINI_REPEATER:
-    description: "3-digit pattern repeats (xx123123)"
+    description: "3-digit pattern repeats (XX123123)"
     tier: 4
     enabled: true
     rules:
       regex: "^.{2}(\\d{3})\\1$"
-    examples: ["12345345", "00123123"]
-    odds: "1 in 1,000"
+    examples: ["12345345", "00123123", "99079079"]
+    odds: "1 in 548"
+    price_range: "$3-$10"
 
-  MINI_SUPER_REPEATER:
-    description: "Alternating start pattern"
+  ALTERNATOR:
+    description: "Digits alternate XAXAXAXA or AXAXAXAX"
     tier: 4
     enabled: true
     rules:
-      regex: "^(\\d)(\\d)\\1\\2\\1\\2.{2}$"
-    examples: ["12121234", "89898912"]
-    odds: "1 in 10,000"
+      check: alternator
+    examples: ["12121212", "89898989", "37373737"]
+    odds: "1 in 823"
+    price_range: "$3-$10"
 
   TRAILING_QUAD:
     description: "Ends with 4 identical digits"
@@ -520,8 +593,249 @@ patterns:
     enabled: true
     rules:
       regex: "(\\d)\\1{3}$"
-    examples: ["12340000", "56781111"]
+    examples: ["12340000", "93891111", "56781111"]
     odds: "1 in 1,000"
+    price_range: "$3-$20"
+
+  LOW_000:
+    description: "Starts with 000"
+    tier: 4
+    enabled: true
+    rules:
+      starts_with: "000"
+    examples: ["00012345", "00098765"]
+    odds: "1 in 1,066"
+    price_range: "$5-$35"
+
+  BROKEN_RADAR:
+    description: "One digit away from radar"
+    tier: 4
+    enabled: true
+    rules:
+      check: broken_radar
+    examples: ["12344322", "12345321", "15700751"]
+    odds: "1 in 1,048"
+    price_range: "$3-$20"
+
+  TRUE_QUADRINARY:
+    description: "Only contains digits 0, 1, 2, 3"
+    tier: 4
+    enabled: true
+    rules:
+      only_digits: "0123"
+    examples: ["01230123", "12301230", "00112233"]
+    odds: "1 in 1,465"
+    price_range: "$5-$25"
+
+  NEAR_FLIPPER:
+    description: "One digit from true flipper"
+    tier: 4
+    enabled: true
+    rules:
+      check: near_flipper
+    examples: ["68889806", "69009860"]
+    odds: "1 in 1,465"
+    price_range: "$5-$15"
+
+  DOUBLES_BOOKEND:
+    description: "Double digits on each end match (11XXXX11)"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "^(\\d)\\1.{4}\\1\\1$"
+    examples: ["11234511", "99123499", "22567822"]
+    odds: "1 in 1,828"
+    price_range: "$3-$15"
+
+  SEQUENTIAL_TRINARY:
+    description: "Trinary with 3 sequential digits"
+    tier: 4
+    enabled: true
+    rules:
+      check: sequential_trinary
+    examples: ["12121212", "23232323", "34343434"]
+    odds: "1 in 2,090"
+    price_range: "$5-$25"
+
+  BROKEN_LADDER_8:
+    description: "8-digit broken ladder"
+    tier: 4
+    enabled: true
+    rules:
+      check: broken_ladder_8
+    examples: ["23546718", "12354678"]
+    odds: "1 in 2,380"
+    price_range: "$10-$35"
+
+  TRIPLE_DOUBLE_DOUBLE:
+    description: "Triple + double + double pattern"
+    tier: 4
+    enabled: true
+    rules:
+      check: triple_double_double
+    examples: ["11122334", "33344556"]
+    odds: "1 in 2,469"
+    price_range: "$5-$25"
+
+  FIVE_IN_A_ROW:
+    description: "5 consecutive identical digits"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "(\\d)\\1{4}"
+    examples: ["55555123", "38177777", "12333334"]
+    odds: "1 in 2,702"
+    price_range: "$8-$50"
+
+  LADDER_5:
+    description: "Contains 5-digit ladder"
+    tier: 4
+    enabled: true
+    rules:
+      check: ladder_5
+    examples: ["12345999", "63567893", "98765123"]
+    odds: "1 in 4,348"
+    price_range: "$4-$20"
+
+  MINI_SUPER_REPEATER:
+    description: "Alternating start pattern (12121234)"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "^(\\d)(\\d)\\1\\2\\1\\2.{2}$"
+    examples: ["12121234", "89898912", "80808093"]
+    odds: "1 in 4,938"
+    price_range: "$4-$20"
+
+  CONSECUTIVE_TRIPLES:
+    description: "Two triples back-to-back (AAACCCXX)"
+    tier: 4
+    enabled: true
+    rules:
+      check: consecutive_triples
+    examples: ["11122234", "33344456", "22233345"]
+    odds: "1 in 4,938"
+    price_range: "$10-$30+"
+
+  QUAD_AND_PAIR_CONSEC:
+    description: "4 in a row plus consecutive pair"
+    tier: 4
+    enabled: true
+    rules:
+      check: quad_and_pair_consec
+    examples: ["11112234", "22223345"]
+    odds: "1 in 5,643"
+    price_range: "$5-$25"
+
+  BOOKENDED_PAIR:
+    description: "Pattern bookended by a repeating pair"
+    tier: 4
+    enabled: true
+    rules:
+      check: bookended_pair
+    examples: ["12341234", "56785678"]
+    odds: "1 in 5,925"
+    price_range: "$6-$20"
+
+  STEP_LADDER:
+    description: "Steps of 2 (02468xxx or similar)"
+    tier: 4
+    enabled: true
+    rules:
+      check: step_ladder
+    examples: ["02468135", "13579246"]
+    odds: "1 in 5,000"
+    price_range: "$5-$30"
+
+  CHUNKY_TRINARY:
+    description: "Trinary with chunked digits"
+    tier: 4
+    enabled: true
+    rules:
+      check: chunky_trinary
+    examples: ["11133355", "22244466"]
+    odds: "1 in 6,666"
+    price_range: "$10-$50+"
+
+  HYBRID_NOTES:
+    description: "Complex hybrid patterns (ABDCDCAB, etc.)"
+    tier: 4
+    enabled: true
+    rules:
+      check: hybrid_notes
+    examples: ["12343421", "12343412"]
+    odds: "1 in 8,333"
+    price_range: "$10-$50+"
+
+  LOW_0000:
+    description: "Starts with 0000"
+    tier: 4
+    enabled: true
+    rules:
+      starts_with: "0000"
+    examples: ["00001234", "00009999"]
+    odds: "1 in 10,667"
+    price_range: "$10-$30"
+
+  BRIDGED_BOOKEND:
+    description: "Bookend with bridge pattern"
+    tier: 4
+    enabled: true
+    rules:
+      check: bridged_bookend
+    examples: ["12233221", "34455443"]
+    odds: "1 in 12,176"
+    price_range: "$5-$25"
+
+  TWIN_PAIR_DOUBLES:
+    description: "Twin pair doubles (4141, 9696, 1212, etc.)"
+    tier: 4
+    enabled: true
+    rules:
+      check: twin_pair_doubles
+    examples: ["41419696", "12121919"]
+    odds: "1 in 14,814"
+    price_range: "$5-$30"
+
+  THREE_AND_FOUR_LADDER:
+    description: "3-digit and 4-digit ladder combined"
+    tier: 4
+    enabled: true
+    rules:
+      check: three_and_four_ladder
+    examples: ["12376543", "32187654"]
+    odds: "1 in 22,222"
+    price_range: "$10-$100+"
+
+  CONSEC_SEQ_TRIPLES:
+    description: "Consecutive sequential triples (AAABBBXX)"
+    tier: 4
+    enabled: true
+    rules:
+      check: consec_seq_triples
+    examples: ["11122234", "22233345"]
+    odds: "1 in 24,691"
+    price_range: "$5-$15"
+
+  THREE_PAIRS_LADDER:
+    description: "3 pairs forming ladder (AABBCCXX)"
+    tier: 4
+    enabled: true
+    rules:
+      check: three_pairs_ladder
+    examples: ["11223345", "22334456"]
+    odds: "1 in 27,777"
+    price_range: "$10-$50"
+
+  TRIPLE_DOUBLE_SINGLE_LADDER:
+    description: "Triple + double + single ladder consecutive"
+    tier: 4
+    enabled: true
+    rules:
+      check: triple_double_single_ladder
+    examples: ["11122345", "22233456"]
+    odds: "1 in 27,777"
+    price_range: "$5-$40"
 
   TRAILING_5:
     description: "Ends with 5 identical digits"
@@ -531,50 +845,162 @@ patterns:
       regex: "(\\d)\\1{4}$"
     examples: ["12300000", "56711111"]
     odds: "1 in 10,000"
+    price_range: "$10-$50"
 
-  TRAILING_6:
-    description: "Ends with 6 identical digits"
+  THREE_PAIRS_NOT_TOGETHER:
+    description: "3 pairs not consecutive"
     tier: 4
     enabled: true
     rules:
-      regex: "(\\d)\\1{5}$"
-    odds: "1 in 100,000"
+      check: three_pairs
+    examples: ["33566088", "11224456"]
+    odds: "1 in 200"
+    price_range: "$3-$15"
 
-  TRAILING_7:
-    description: "Ends with 7 identical digits"
+  BOOKENDS:
+    description: "First 2 and last 2 digits match"
     tier: 4
     enabled: true
     rules:
-      regex: "(\\d)\\1{6}$"
-    odds: "1 in 1,000,000"
+      regex: "^(\\d\\d)\\d{4}\\1$"
+    examples: ["12345612", "99123499"]
+    odds: "1 in 100"
+    price_range: "$3-$10"
+
+  TRIPLE_BOOKENDS:
+    description: "First 3 and last 3 digits match"
+    tier: 4
+    enabled: true
+    rules:
+      regex: "^(\\d\\d\\d)\\d{2}\\1$"
+    examples: ["12312312", "45645645"]
+    odds: "1 in 1,000"
+    price_range: "$5-$20"
+
+  STAR:
+    description: "Star note (replacement bill)"
+    tier: 4
+    enabled: true
+    uses_full_serial: true
+    rules:
+      ends_with: "*"
+    examples: ["A12345678*"]
+    odds: "~3% of print run"
+    price_range: "Face value to $5+ (depends on other patterns)"
 
 # =============================================================================
 # TIER 5: SUM PATTERNS
 # =============================================================================
 
-  MAGIC_SUM:
-    description: "Digit sum is 36 (perfect middle)"
+  SUM_61_OR_11:
+    description: "Digit sum equals 61 or 11"
     tier: 5
     enabled: true
     rules:
-      digit_sum: 36
-    odds: "1 in 12"
+      any:
+        - digit_sum: 61
+        - digit_sum: 11
+    odds: "1 in 1,315"
+    price_range: "$5-$20"
 
-  SUM_72:
-    description: "Maximum sum (all 9s)"
+  SUM_62_OR_10:
+    description: "Digit sum equals 62 or 10"
     tier: 5
     enabled: true
     rules:
-      digit_sum: 72
-    odds: "1 in 100,000,000"
+      any:
+        - digit_sum: 62
+        - digit_sum: 10
+    odds: "1 in 2,272"
+    price_range: "$5-$25+"
 
-  SUM_0:
-    description: "Minimum sum (all 0s)"
+  SUM_63_OR_9:
+    description: "Digit sum equals 63 or 9"
     tier: 5
     enabled: true
     rules:
-      digit_sum: 0
-    odds: "1 in 100,000,000"
+      any:
+        - digit_sum: 63
+        - digit_sum: 9
+    odds: "1 in 4,166"
+    price_range: "$10-$40+"
+
+  SUM_64_OR_8:
+    description: "Digit sum equals 64 or 8"
+    tier: 5
+    enabled: true
+    rules:
+      any:
+        - digit_sum: 64
+        - digit_sum: 8
+    odds: "1 in 7,692"
+    price_range: "$10-$50+"
+
+  SUM_65_OR_7:
+    description: "Digit sum equals 65 or 7"
+    tier: 5
+    enabled: true
+    rules:
+      any:
+        - digit_sum: 65
+        - digit_sum: 7
+    odds: "1 in 15,625"
+    price_range: "$5-$100+"
+
+  SUM_66_OR_6:
+    description: "Digit sum equals 66 or 6"
+    tier: 5
+    enabled: true
+    rules:
+      any:
+        - digit_sum: 66
+        - digit_sum: 6
+    odds: "1 in 33,333"
+    price_range: "$10-$100"
+
+  SUM_67_OR_5:
+    description: "Digit sum equals 67 or 5"
+    tier: 5
+    enabled: true
+    rules:
+      any:
+        - digit_sum: 67
+        - digit_sum: 5
+    odds: "1 in 76,923"
+    price_range: "$20-$140+"
+
+  SUM_68_OR_4:
+    description: "Digit sum equals 68 or 4"
+    tier: 5
+    enabled: true
+    rules:
+      any:
+        - digit_sum: 68
+        - digit_sum: 4
+    odds: "1 in 200,000"
+    price_range: "$40-$300+"
+
+  SUM_69_OR_3:
+    description: "Digit sum equals 69 or 3"
+    tier: 5
+    enabled: true
+    rules:
+      any:
+        - digit_sum: 69
+        - digit_sum: 3
+    odds: "1 in 588,957"
+    price_range: "$50-$500+"
+
+  SUM_70_OR_2:
+    description: "Digit sum equals 70 or 2"
+    tier: 5
+    enabled: true
+    rules:
+      any:
+        - digit_sum: 70
+        - digit_sum: 2
+    odds: "1 in 2,232,558"
+    price_range: "$100-$1,000+"
 
   SUM_1:
     description: "Sum equals 1"
@@ -582,346 +1008,268 @@ patterns:
     enabled: true
     rules:
       digit_sum: 1
-    odds: "1 in 12,500,000"
+    examples: ["10000000", "00001000", "00000001"]
+    odds: "1 in 16,000,000"
+    price_range: "$100-$1,500"
 
-  SUM_61:
-    description: "High sum (61)"
+  SUM_72:
+    description: "Maximum sum (all 9s)"
     tier: 5
     enabled: true
     rules:
-      digit_sum: 61
-    odds: "1 in 8,065"
+      digit_sum: 72
+    examples: ["99999999"]
+    odds: "1 in 100,000,000"
+    price_range: "$500+"
 
-  SUM_62:
-    description: "High sum (62)"
+  SUM_0:
+    description: "Minimum sum (all 0s)"
     tier: 5
     enabled: true
     rules:
-      digit_sum: 62
-    odds: "1 in 14,706"
-
-  SUM_63:
-    description: "High sum (63)"
-    tier: 5
-    enabled: true
-    rules:
-      digit_sum: 63
-    odds: "1 in 27,778"
-
-  SUM_64:
-    description: "High sum (64)"
-    tier: 5
-    enabled: true
-    rules:
-      digit_sum: 64
-    odds: "1 in 55,556"
-
-  SUM_65:
-    description: "High sum (65)"
-    tier: 5
-    enabled: true
-    rules:
-      digit_sum: 65
-    odds: "1 in 119,048"
-
-  SUM_66:
-    description: "High sum (66)"
-    tier: 5
-    enabled: true
-    rules:
-      digit_sum: 66
-    odds: "1 in 277,778"
-
-  SUM_67:
-    description: "High sum (67)"
-    tier: 5
-    enabled: true
-    rules:
-      digit_sum: 67
-    odds: "1 in 714,286"
-
-  SUM_68:
-    description: "High sum (68)"
-    tier: 5
-    enabled: true
-    rules:
-      digit_sum: 68
-    odds: "1 in 2,083,333"
-
-  SUM_69:
-    description: "High sum (69)"
-    tier: 5
-    enabled: true
-    rules:
-      digit_sum: 69
-    odds: "1 in 7,142,857"
-
-  SUM_70:
-    description: "High sum (70)"
-    tier: 5
-    enabled: true
-    rules:
-      digit_sum: 70
-    odds: "1 in 33,333,333"
-
-  SUM_71:
-    description: "High sum (71)"
-    tier: 5
-    enabled: true
-    rules:
-      digit_sum: 71
-    odds: "1 in 12,500,000"
+      digit_sum: 0
+    examples: ["00000000"]
+    odds: "1 in 100,000,000"
+    price_range: "$500+"
 
 # =============================================================================
-# TIER 6: LADDER VARIANTS
+# TIER 6: CHUNKY LADDER VARIANTS
 # =============================================================================
 
-  PYRAMID_LADDER:
-    description: "Up then down (12321xxx)"
+  CHUNKY_LADDER_4:
+    description: "4-digit chunky ladder (AAABCCDD)"
     tier: 6
     enabled: true
     rules:
-      check: pyramid_ladder
-    examples: ["12321000", "34543212"]
-    odds: "1 in 500,000"
+      check: chunky_ladder_4
+    examples: ["11123344", "22234455"]
+    odds: "1 in 217,194"
+    price_range: "$50-$700+"
+
+  CHUNKY_LADDER_5:
+    description: "5-digit chunky ladder (AAABBCDE)"
+    tier: 6
+    enabled: true
+    rules:
+      check: chunky_ladder_5
+    examples: ["11122345", "22233456"]
+    odds: "1 in 396,694"
+    price_range: "$40-$350"
+
+  CHUNKY_LADDER_3:
+    description: "3-digit chunky ladder (AAAABCCC)"
+    tier: 6
+    enabled: true
+    rules:
+      check: chunky_ladder_3
+    examples: ["11112333", "22223444"]
+    odds: "1 in 426,666"
+    price_range: "$40-$350"
+
+  CHUNKY_LADDER_6:
+    description: "6-digit chunky ladder (AABBCDEF)"
+    tier: 6
+    enabled: true
+    rules:
+      check: chunky_ladder_6
+    examples: ["11223456", "22334567"]
+    odds: "1 in 507,936"
+    price_range: "$40-$350"
+
+  TRIPLE_DOUBLE_DOUBLE_LADDER:
+    description: "Triple + double + double ladder (AAABBCCX)"
+    tier: 6
+    enabled: true
+    rules:
+      check: triple_double_double_ladder
+    examples: ["11122334", "22233445"]
+    odds: "1 in 90,071"
+    price_range: "$40-$200+"
+
+  CHUNKY_LADDER_7:
+    description: "7-digit chunky ladder (ABCDEFGG)"
+    tier: 6
+    enabled: true
+    rules:
+      check: chunky_ladder_7
+    examples: ["12345677", "23456788"]
+    odds: "1 in 1,959,183"
+    price_range: "$100-$1,500+"
+
+  BOOKENDED_LADDER:
+    description: "Ladder bookended by matching digits"
+    tier: 6
+    enabled: true
+    rules:
+      check: bookended_ladder
+    examples: ["77234577", "11234511"]
+    odds: "1 in 266,666"
+    price_range: "$20-$100"
+
+# =============================================================================
+# TIER 7: COUNTING LADDERS
+# =============================================================================
 
   COUNTING_LADDER:
-    description: "Counting pattern (12123123)"
-    tier: 6
+    description: "Counting pattern (10203040)"
+    tier: 7
     enabled: true
     rules:
       check: counting_ladder
-    odds: "1 in 1,000,000"
+    examples: ["10203040", "20304050"]
+    odds: "1 in 558,139"
+    price_range: "$30-$200"
 
-  STEP_LADDER:
-    description: "Steps of 2 (02468xxx)"
-    tier: 6
-    enabled: false
+  COUNTING_10S_LADDER:
+    description: "Counting by 10s (21314151)"
+    tier: 7
+    enabled: true
     rules:
-      check: step_ladder
-    examples: ["02468135", "97531086"]
-    odds: "1 in 10,000,000"
+      check: counting_10s
+    examples: ["21314151", "31415161"]
+    odds: "1 in 932,038"
+    price_range: "$100-$1,000+"
 
   SUPER_LADDER:
-    description: "Two-digit increments (01020304)"
-    tier: 6
+    description: "Super ladder patterns (AAABBBCC, etc.)"
+    tier: 7
     enabled: true
     rules:
       check: super_ladder
-    examples: ["01020304", "10203040"]
-    odds: "1 in 12,500,000"
+    examples: ["11122233", "22233344"]
+    odds: "1 in 941,176"
+    price_range: "$40-$300"
 
   COUNTING_2S:
-    description: "Counting by 2s ladder"
-    tier: 6
+    description: "Counting by 2s ladder (02040608)"
+    tier: 7
     enabled: true
     rules:
       check: counting_2s
-    odds: "1 in 12,500,000"
+    examples: ["02040608", "12141618"]
+    odds: "1 in 1,116,279"
+    price_range: "$100-$1,000+"
 
   COUNTING_3S:
-    description: "Counting by 3s ladder"
-    tier: 6
+    description: "Counting by 3s ladder (06091215)"
+    tier: 7
     enabled: true
     rules:
       check: counting_3s
-    odds: "1 in 12,500,000"
+    examples: ["03060912", "06091215"]
+    odds: "1 in 1,684,210"
+    price_range: "$100-$1,000+"
 
   COUNTING_4S:
-    description: "Counting by 4s ladder"
-    tier: 6
+    description: "Counting by 4s ladder (04081216)"
+    tier: 7
     enabled: true
     rules:
       check: counting_4s
-    odds: "1 in 12,500,000"
+    examples: ["04081216", "08121620"]
+    odds: "1 in 2,232,558"
+    price_range: "$100-$1,000+"
 
   COUNTING_5S:
-    description: "Counting by 5s ladder"
-    tier: 6
+    description: "Counting by 5s ladder (05101520)"
+    tier: 7
     enabled: true
     rules:
       check: counting_5s
-    odds: "1 in 12,500,000"
+    examples: ["05101520", "10152025"]
+    odds: "1 in 2,823,529"
+    price_range: "$100-$1,000+"
 
   COUNTING_6S:
-    description: "Counting by 6s ladder"
-    tier: 6
+    description: "Counting by 6s ladder (06121824)"
+    tier: 7
     enabled: true
     rules:
       check: counting_6s
-    odds: "1 in 12,500,000"
+    examples: ["06121824", "12182430"]
+    odds: "1 in 3,428,571"
+    price_range: "$100-$1,000+"
 
   COUNTING_7S:
-    description: "Counting by 7s ladder"
-    tier: 6
+    description: "Counting by 7s ladder (07142128)"
+    tier: 7
     enabled: true
     rules:
       check: counting_7s
-    odds: "1 in 12,500,000"
+    examples: ["07142128", "14212835"]
+    odds: "1 in 4,000,000"
+    price_range: "$100-$1,000+"
 
   COUNTING_8S:
-    description: "Counting by 8s ladder"
-    tier: 6
+    description: "Counting by 8s ladder (08162432)"
+    tier: 7
     enabled: true
     rules:
       check: counting_8s
-    odds: "1 in 12,500,000"
+    examples: ["08162432", "16243240"]
+    odds: "1 in 4,571,428"
+    price_range: "$100-$1,000+"
 
   COUNTING_9S:
-    description: "Counting by 9s ladder"
-    tier: 6
+    description: "Counting by 9s ladder (09182736)"
+    tier: 7
     enabled: true
     rules:
       check: counting_9s
-    odds: "1 in 12,500,000"
+    examples: ["09182736", "18273645"]
+    odds: "1 in 5,052,631"
+    price_range: "$100-$1,000+"
+
+  MULTIPLES_OF_10:
+    description: "Multiples of 10 ladder (10203040)"
+    tier: 7
+    enabled: true
+    rules:
+      check: multiples_of_10
+    examples: ["10203040", "20304050"]
+    odds: "1 in 5,647,058"
+    price_range: "$100-$1,000+"
 
 # =============================================================================
-# TIER 7: FLIPPER PATTERNS (Upside-down readable)
+# TIER 8: FLIPPER PATTERNS
 # =============================================================================
 
   FLIPPER:
     description: "Only flippable digits (0,1,6,8,9)"
-    tier: 7
+    tier: 8
     enabled: true
     rules:
       check: flipper_digits
-    examples: ["01689018", "96801896"]
+    examples: ["01689018", "96801896", "18906890"]
     odds: "1 in 256"
-
-  TRUE_FLIPPER:
-    description: "Reads same upside down"
-    tier: 7
-    enabled: true
-    rules:
-      check: true_flipper
-    examples: ["10011001", "69000069"]
-    odds: "1 in 160,000"
-
-  NEAR_FLIPPER:
-    description: "One digit from true flipper"
-    tier: 7
-    enabled: false
-    rules:
-      check: near_flipper
-    odds: "1 in 20,000"
+    price_range: "$3-$10"
 
 # =============================================================================
-# TIER 8: SPECIAL/LOW SERIAL VARIANTS
+# TIER 9: TRAILING PATTERNS
 # =============================================================================
-
-  LOW_000:
-    description: "Starts with 000"
-    tier: 8
-    enabled: true
-    rules:
-      starts_with: "000"
-    odds: "1 in 1,000"
-
-  LOW_0000:
-    description: "Starts with 0000"
-    tier: 8
-    enabled: true
-    rules:
-      starts_with: "0000"
-    odds: "1 in 10,000"
-
-  LOW_00000:
-    description: "Starts with 00000"
-    tier: 8
-    enabled: true
-    rules:
-      starts_with: "00000"
-    odds: "1 in 100,000"
-
-  LOW_000000:
-    description: "Starts with 000000"
-    tier: 8
-    enabled: true
-    rules:
-      starts_with: "000000"
-    odds: "1 in 1,000,000"
 
   TRAILING_000:
     description: "Ends with 000"
-    tier: 8
+    tier: 9
     enabled: true
     rules:
       ends_with: "000"
+    examples: ["12345000", "98765000"]
     odds: "1 in 1,000"
+    price_range: "$3-$10"
 
   TRAILING_0000:
     description: "Ends with 0000"
-    tier: 8
+    tier: 9
     enabled: true
     rules:
       ends_with: "0000"
+    examples: ["12340000", "98760000"]
     odds: "1 in 10,000"
-
-  MILLIONAIRE:
-    description: "Millionaire note (xx000000)"
-    tier: 8
-    enabled: true
-    rules:
-      regex: "^.{1,2}0{6}$"
-    examples: ["12000000", "10000000"]
-    odds: "1 in 1,000,000"
-
-  MULTI_MILLIONAIRE:
-    description: "Multi-millionaire (X0000000)"
-    tier: 8
-    enabled: true
-    rules:
-      regex: "^[1-9]0{7}$"
-    examples: ["10000000", "50000000"]
-    odds: "1 in 11,111,111"
+    price_range: "$5-$25"
 
 # =============================================================================
-# TIER 9: STRUCTURAL COMBOS
-# =============================================================================
-
-  SEQUENTIAL_TRINARY:
-    description: "Trinary with sequential digits"
-    tier: 9
-    enabled: true
-    rules:
-      check: sequential_trinary
-    examples: ["12121212", "23232323"]
-    odds: "1 in 500,000"
-
-  TRIPLE_QUAD:
-    description: "Triple + Quad combination"
-    tier: 9
-    enabled: true
-    rules:
-      regex: "^(\\d)\\1\\1(\\d)\\2{3}.?$|^.?(\\d)\\3{3}(\\d)\\4\\4$"
-    odds: "1 in 50,000"
-
-  FIVE_AND_PAIR:
-    description: "Five of a kind + pair"
-    tier: 9
-    enabled: true
-    rules:
-      regex: "^(\\d)\\1{4}(\\d)\\2|\\d*(\\d)\\3(\\d)\\4{4}$"
-    odds: "1 in 25,000"
-
-  LADDER_AND_QUAD:
-    description: "Contains 4+ ladder AND quad"
-    tier: 9
-    enabled: true
-    rules:
-      check: ladder_and_quad
-    odds: "1 in 100,000"
-
-  BIRTHDAY:
-    description: "Valid date format (MMDDYYYY or DDMMYYYY)"
-    tier: 9
-    enabled: false
-    rules:
-      check: birthday
-    odds: "~1 in 2,740"
-
-# =============================================================================
-# TIER 10: NOVELTY (User Customizable)
+# TIER 10: NOVELTY
 # =============================================================================
 
   LUCKY_777:
@@ -930,7 +1278,9 @@ patterns:
     enabled: true
     rules:
       contains: "777"
+    examples: ["12377712", "77712345"]
     odds: "1 in 167"
+    price_range: "$2-$5"
 
   DEVIL_666:
     description: "Contains 666"
@@ -938,12 +1288,12 @@ patterns:
     enabled: false
     rules:
       contains: "666"
+    examples: ["12366612", "66612345"]
     odds: "1 in 167"
-
+    price_range: "$2-$5"
 
 # =============================================================================
 # CUSTOM USER PATTERNS
-# Add your own patterns here!
 # =============================================================================
 
 custom_patterns:
@@ -962,10 +1312,3 @@ custom_patterns:
   #   enabled: true
   #   rules:
   #     contains: "1225"
-
-  # BIRTH_YEAR_1990:
-  #   description: "Contains 1990"
-  #   tier: 10
-  #   enabled: true
-  #   rules:
-  #     contains: "1990"
