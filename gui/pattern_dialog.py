@@ -115,6 +115,10 @@ class PatternDialog(QDialog):
         self.pattern_odds_label.setStyleSheet("color: #1976D2; font-weight: bold;")
         details_layout.addWidget(self.pattern_odds_label)
 
+        self.pattern_price_label = QLabel("Price: -")
+        self.pattern_price_label.setStyleSheet("color: #2e7d32; font-weight: bold;")
+        details_layout.addWidget(self.pattern_price_label)
+
         right_layout.addWidget(details_group)
 
         # Serial tester
@@ -359,6 +363,12 @@ class PatternDialog(QDialog):
         else:
             self.pattern_odds_label.setText("Odds: (not calculated)")
 
+        price = defn.get('price_range', '')
+        if price:
+            self.pattern_price_label.setText(f"Price: {price}")
+        else:
+            self.pattern_price_label.setText("Price: -")
+
     def _test_serial(self):
         """Test a serial number against all patterns."""
         serial = self.test_edit.text().strip()
@@ -379,10 +389,13 @@ class PatternDialog(QDialog):
             for match in matches:
                 result_text += f"  - {match.name} (Tier {match.tier})\n"
                 result_text += f"    {match.description}\n"
-                # Get odds from pattern definition
+                # Get odds and price from pattern definition
                 pattern_info = self.engine.get_pattern_info(match.name)
-                if pattern_info and 'odds' in pattern_info:
-                    result_text += f"    Odds: {pattern_info['odds']}\n"
+                if pattern_info:
+                    if 'odds' in pattern_info:
+                        result_text += f"    Odds: {pattern_info['odds']}\n"
+                    if 'price_range' in pattern_info:
+                        result_text += f"    Price: {pattern_info['price_range']}\n"
         else:
             result_text = f"Serial: {serial}\n\nNo patterns matched."
 

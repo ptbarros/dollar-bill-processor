@@ -712,21 +712,28 @@ class PreviewPanel(QWidget):
         self.odds_label.setStyleSheet("color: #1976D2; font-weight: bold;")
         details_layout.addWidget(self.odds_label, 2, 1)
 
+        # Price Range
+        details_layout.addWidget(QLabel("Est. Price:"), 3, 0)
+        self.price_label = QLabel("-")
+        self.price_label.setWordWrap(True)
+        self.price_label.setStyleSheet("color: #2e7d32; font-weight: bold;")
+        details_layout.addWidget(self.price_label, 3, 1)
+
         # Confidence
-        details_layout.addWidget(QLabel("Confidence:"), 3, 0)
+        details_layout.addWidget(QLabel("Confidence:"), 4, 0)
         self.confidence_label = QLabel("-")
-        details_layout.addWidget(self.confidence_label, 3, 1)
+        details_layout.addWidget(self.confidence_label, 4, 1)
 
         # Status
-        details_layout.addWidget(QLabel("Status:"), 4, 0)
+        details_layout.addWidget(QLabel("Status:"), 5, 0)
         self.status_label = QLabel("-")
-        details_layout.addWidget(self.status_label, 4, 1)
+        details_layout.addWidget(self.status_label, 5, 1)
 
         # File info
-        details_layout.addWidget(QLabel("File:"), 5, 0)
+        details_layout.addWidget(QLabel("File:"), 6, 0)
         self.file_label = QLabel("-")
         self.file_label.setWordWrap(True)
-        details_layout.addWidget(self.file_label, 5, 1)
+        details_layout.addWidget(self.file_label, 6, 1)
 
         layout.addWidget(self.details_group)
 
@@ -947,18 +954,26 @@ class PreviewPanel(QWidget):
         patterns = result.get('fancy_types', '')
         self.patterns_label.setText(patterns or "None")
 
-        # Look up odds for matched patterns
+        # Look up odds and price for matched patterns
         odds_parts = []
+        price_parts = []
         if patterns:
             pattern_names = [p.strip() for p in patterns.split(',')]
             for name in pattern_names:
                 info = self.pattern_engine.get_pattern_info(name)
-                if info and 'odds' in info:
-                    odds_parts.append(f"{name}: {info['odds']}")
+                if info:
+                    if 'odds' in info:
+                        odds_parts.append(f"{name}: {info['odds']}")
+                    if 'price_range' in info:
+                        price_parts.append(f"{name}: {info['price_range']}")
         if odds_parts:
             self.odds_label.setText('\n'.join(odds_parts))
         else:
             self.odds_label.setText("-")
+        if price_parts:
+            self.price_label.setText('\n'.join(price_parts))
+        else:
+            self.price_label.setText("-")
 
         conf = result.get('confidence', 0)
         self.confidence_label.setText(f"{conf}" if conf else "-")
