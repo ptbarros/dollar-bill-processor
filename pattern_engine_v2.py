@@ -416,11 +416,11 @@ class PatternEngine:
         """Evaluate a single rule.
 
         Args:
-            rule_type: Type of rule (regex, contains, height_ratio_min, etc.)
+            rule_type: Type of rule (regex, contains, baseline_variance_min, etc.)
             rule_value: Value to compare against
             digits: Numeric portion of serial
             full_serial: Complete serial string
-            metadata: Optional dict with detection metadata (height_ratio, etc.)
+            metadata: Optional dict with detection metadata (baseline_variance, etc.)
         """
         metadata = metadata or {}
 
@@ -451,14 +451,14 @@ class PatternEngine:
         elif rule_type == 'digit_sum_max':
             return sum(int(d) for d in digits) <= rule_value
 
-        elif rule_type == 'height_ratio_min':
+        elif rule_type == 'baseline_variance_min':
             # For gas pump detection - unusually tall bounding box
-            height_ratio = metadata.get('height_ratio', 0.0)
-            return height_ratio >= rule_value
+            baseline_variance = metadata.get('baseline_variance', 0.0)
+            return baseline_variance >= rule_value
 
-        elif rule_type == 'height_ratio_max':
-            height_ratio = metadata.get('height_ratio', 0.0)
-            return height_ratio <= rule_value
+        elif rule_type == 'baseline_variance_max':
+            baseline_variance = metadata.get('baseline_variance', 0.0)
+            return baseline_variance <= rule_value
 
         elif rule_type == 'check':
             check_fn = self.CHECK_FUNCTIONS.get(rule_value)
@@ -502,7 +502,7 @@ class PatternEngine:
 
         Args:
             serial: The serial number to classify
-            metadata: Optional dict with detection metadata (height_ratio, etc.)
+            metadata: Optional dict with detection metadata (baseline_variance, etc.)
                       Used for printing error patterns like GAS_PUMP
         """
         if not serial:

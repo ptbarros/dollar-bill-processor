@@ -88,7 +88,7 @@ class ResultsList(QWidget):
 
         # Results tree
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Ht Ratio", "Est. Price"])
+        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "BL Var", "Est. Price"])
         self.tree.setAlternatingRowColors(True)
         self.tree.setRootIsDecorated(False)
         self.tree.setSortingEnabled(True)
@@ -104,14 +104,14 @@ class ResultsList(QWidget):
         header.setSectionResizeMode(1, QHeaderView.Interactive)  # Serial
         header.setSectionResizeMode(2, QHeaderView.Stretch)      # Patterns (takes remaining space)
         header.setSectionResizeMode(3, QHeaderView.Interactive)  # Conf
-        header.setSectionResizeMode(4, QHeaderView.Interactive)  # Ht Ratio
+        header.setSectionResizeMode(4, QHeaderView.Interactive)  # BL Var
         header.setSectionResizeMode(5, QHeaderView.Interactive)  # Est. Price
 
         # Set minimum and default widths
         self.tree.setColumnWidth(0, 35)   # # column
         self.tree.setColumnWidth(1, 130)  # Serial - enough for full serial at font 14
         self.tree.setColumnWidth(3, 50)   # Conf
-        self.tree.setColumnWidth(4, 60)   # Ht Ratio
+        self.tree.setColumnWidth(4, 60)   # BL Var
         self.tree.setColumnWidth(5, 100)  # Est. Price
         header.setMinimumSectionSize(30)  # Minimum for any column
 
@@ -253,8 +253,8 @@ class ResultsList(QWidget):
             item.setText(3, str(conf))
 
             # Height Ratio (for gas pump detection)
-            height_ratio = result.get('height_ratio', '0.0000')
-            item.setText(4, str(height_ratio))
+            baseline_variance = result.get('baseline_variance', '0.0000')
+            item.setText(4, str(baseline_variance))
 
             # Est. Price - get from first matched pattern
             price_text = ""

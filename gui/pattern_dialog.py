@@ -392,7 +392,7 @@ class PatternDialog(QDialog):
         # Show threshold editor for height_ratio patterns
         rules = defn.get('rules', {})
         height_ratio_rule = None
-        for rule_type in ['height_ratio_min', 'height_ratio_max']:
+        for rule_type in ['baseline_variance_min', 'baseline_variance_max']:
             if rule_type in rules:
                 height_ratio_rule = (rule_type, rules[rule_type])
                 break
@@ -433,7 +433,7 @@ class PatternDialog(QDialog):
         rules = defn.get('rules', {})
 
         rule_type = None
-        for rt in ['height_ratio_min', 'height_ratio_max']:
+        for rt in ['baseline_variance_min', 'baseline_variance_max']:
             if rt in rules:
                 rule_type = rt
                 break
@@ -623,7 +623,7 @@ class CustomPatternDialog(QDialog):
 
         # Rule type
         self.rule_type = QComboBox()
-        self.rule_type.addItems(["contains", "starts_with", "ends_with", "regex", "height_ratio_min", "height_ratio_max"])
+        self.rule_type.addItems(["contains", "starts_with", "ends_with", "regex", "baseline_variance_min", "baseline_variance_max"])
         self.rule_type.setCurrentText("contains")
         self.rule_type.currentTextChanged.connect(self._update_hint)
         form.addRow("Rule Type:", self.rule_type)
@@ -661,8 +661,8 @@ class CustomPatternDialog(QDialog):
             "starts_with": "Matches if serial starts with this value.\nExample: '000' matches low serial numbers",
             "ends_with": "Matches if serial ends with this value.\nExample: '0000' matches round numbers",
             "regex": "Advanced: Regular expression pattern.\nExample: '(\\d)\\1{3}' matches 4 repeated digits",
-            "height_ratio_min": "Matches if height ratio >= this value.\nUsed for gas pump detection. Normal max is ~0.076, try 0.085+",
-            "height_ratio_max": "Matches if height ratio <= this value.\nUseful for filtering out abnormal detections."
+            "baseline_variance_min": "Matches if baseline variance >= this value.\nUsed for gas pump detection. Normal: 0-0.12, gas pump: >0.20",
+            "baseline_variance_max": "Matches if baseline variance <= this value.\nUseful for filtering out false positives."
         }
         self.hint_label.setText(hints.get(rule, ""))
 
@@ -672,7 +672,7 @@ class CustomPatternDialog(QDialog):
         self.desc_edit.setText(self.defn.get('description', ''))
 
         rules = self.defn.get('rules', {})
-        for rule_type in ['contains', 'starts_with', 'ends_with', 'regex', 'height_ratio_min', 'height_ratio_max']:
+        for rule_type in ['contains', 'starts_with', 'ends_with', 'regex', 'baseline_variance_min', 'baseline_variance_max']:
             if rule_type in rules:
                 self.rule_type.setCurrentText(rule_type)
                 self.value_edit.setText(str(rules[rule_type]))

@@ -120,11 +120,11 @@ class ProcessingThread(QThread):
                     continue
 
                 # Extract serial
-                serial, confidence, is_upside_down, height_ratio, star_detected = self.processor.extract_serial(pair.front_path)
+                serial, confidence, is_upside_down, baseline_variance, star_detected = self.processor.extract_serial(pair.front_path)
                 pair.serial = serial
                 pair.confidence = confidence
                 pair.is_upside_down = is_upside_down
-                pair.height_ratio = height_ratio
+                pair.baseline_variance = baseline_variance
                 pair.star_detected = star_detected
 
                 # Validate
@@ -161,7 +161,7 @@ class ProcessingThread(QThread):
                         'serial': serial,
                         'fancy_types': ', '.join(pair.fancy_types),
                         'confidence': f"{confidence:.2f}",
-                        'height_ratio': f"{pair.height_ratio:.4f}",
+                        'baseline_variance': f"{pair.baseline_variance:.4f}",
                         'is_fancy': pair.is_fancy,
                         'needs_review': needs_review,
                         'serial_region_path': serial_region_path,
@@ -181,7 +181,7 @@ class ProcessingThread(QThread):
                         'serial': serial,
                         'fancy_types': '',
                         'confidence': f"{confidence:.2f}",
-                        'height_ratio': f"{pair.height_ratio:.4f}",
+                        'baseline_variance': f"{pair.baseline_variance:.4f}",
                         'is_fancy': False,
                         'needs_review': True,
                         'serial_region_path': serial_region_path,
@@ -201,7 +201,7 @@ class ProcessingThread(QThread):
                         'serial': '',
                         'fancy_types': '',
                         'confidence': '0.00',
-                        'height_ratio': f"{pair.height_ratio:.4f}",
+                        'baseline_variance': f"{pair.baseline_variance:.4f}",
                         'is_fancy': False,
                         'needs_review': True,
                         'serial_region_path': serial_region_path,

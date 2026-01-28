@@ -28,6 +28,8 @@
 #   check:          Built-in function (see list below)
 #   all:            ALL sub-rules must match (AND)
 #   any:            ANY sub-rule must match (OR)
+#   baseline_variance_min: Digit vertical alignment variance >= value (for gas pump detection)
+#   baseline_variance_max: Digit vertical alignment variance <= value
 #
 # BUILT-IN CHECKS:
 #   solid, palindrome, repeater, ladder_asc, ladder_desc
@@ -1291,6 +1293,21 @@ patterns:
     examples: ["12366612", "66612345"]
     odds: "1 in 167"
     price_range: "$2-$5"
+
+# =============================================================================
+# PRINTING ERRORS (Detected via image analysis, not digit patterns)
+# =============================================================================
+
+  GAS_PUMP:
+    description: "Digit vertically shifted (misaligned like old gas pump display)"
+    tier: 5
+    enabled: false  # Enable after testing on your scans
+    rules:
+      baseline_variance_min: 0.20  # Normal is <0.12, definite gas pump >0.20
+    examples: []
+    odds: "Rare - printing error"
+    price_range: "$10-$100+"
+    notes: "Detected by analyzing vertical alignment of digits. Normal variance: 0-0.12. Values >0.20 indicate gas pump effect."
 
 # =============================================================================
 # CUSTOM USER PATTERNS

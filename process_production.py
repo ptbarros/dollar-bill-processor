@@ -134,7 +134,7 @@ class BillPair:
     needs_review: bool = False
     review_reason: Optional[str] = None
     is_upside_down: bool = False  # True if bill was scanned upside-down
-    height_ratio: float = 0.0  # Bounding box height ratio for gas pump detection
+    baseline_variance: float = 0.0  # Normalized vertical misalignment for gas pump detection
     star_detected: bool = False  # True if star symbol visually detected by YOLO
 
 
@@ -975,12 +975,73 @@ class ProductionProcessor:
                         boxes.append((x1, y1, x2, y2, float(box.conf[0])))
         return boxes
 
+    def _calculate_baseline_variance(self, serial_crop: np.ndarray) -> float:
+        """Calculate baseline variance of characters in a serial number crop.
+
+        This detects 'gas pump' printing errors where digits are vertically
+        misaligned like an old gas pump display.
+
+        Returns:
+            float: Normalized baseline variance (0.0 = perfect alignment, higher = more misaligned)
+                   Values > 0.15 typically indicate gas pump effect
+        """
+        if serial_crop is None or serial_crop.size == 0:
+            return 0.0
+
+        crop_h, crop_w = serial_crop.shape[:2]
+        if crop_h < 10 or crop_w < 20:
+            return 0.0
+
+        # Convert to grayscale
+        if len(serial_crop.shape) == 3:
+            gray = cv2.cvtColor(serial_crop, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = serial_crop
+
+        # Adaptive threshold to find text pixels
+        binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                        cv2.THRESH_BINARY_INV, 11, 2)
+
+        # Find contours of individual characters
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Filter contours by size (should be character-sized)
+        char_contours = []
+        for cnt in contours:
+            x, y, cw, ch = cv2.boundingRect(cnt)
+            area = cv2.contourArea(cnt)
+            # Filter: reasonable character size
+            if ch > crop_h * 0.3 and ch < crop_h * 0.95 and cw > 5 and area > 50:
+                char_contours.append((x, y, cw, ch))
+
+        if len(char_contours) < 5:
+            return 0.0
+
+        # Sort by x position (left to right)
+        char_contours.sort(key=lambda c: c[0])
+
+        # Calculate center Y positions for each character
+        centers_y = [(y + ch / 2) for x, y, cw, ch in char_contours]
+        heights = [ch for x, y, cw, ch in char_contours]
+
+        # Calculate normalized range (baseline variance)
+        center_range = max(centers_y) - min(centers_y)
+        avg_height = np.mean(heights)
+
+        if avg_height <= 0:
+            return 0.0
+
+        # Normalize by average character height
+        normalized_range = center_range / avg_height
+
+        return normalized_range
+
     def _extract_serial_from_boxes(self, img: np.ndarray, boxes: list) -> list:
         """Extract serial numbers from detected bounding boxes.
 
         Returns:
-            list of tuples: (serial, ocr_conf, det_conf, height_ratio)
-            height_ratio is box_height / image_height, useful for gas pump detection
+            list of tuples: (serial, ocr_conf, det_conf, baseline_variance)
+            baseline_variance is normalized vertical misalignment, for gas pump detection
         """
         serials_found = []
         h, w = img.shape[:2]
@@ -992,10 +1053,6 @@ class ProductionProcessor:
             padding_x = int(box_width * 0.40)
             padding_y = int(box_height * 0.15)
 
-            # Calculate height ratio for gas pump detection
-            # Taller boxes may indicate vertically shifted digits
-            height_ratio = box_height / h if h > 0 else 0.0
-
             x1_exp = max(0, x1 - padding_x)
             y1_exp = max(0, y1 - padding_y)
             x2_exp = min(w, x2 + padding_x)
@@ -1005,7 +1062,11 @@ class ProductionProcessor:
             serial, conf = self.extract_serial_from_crop(crop)
 
             if serial:
-                serials_found.append((serial, conf, det_conf, height_ratio))
+                # Calculate baseline variance for gas pump detection
+                # Use the tight crop (not expanded) for better character detection
+                tight_crop = img[y1:y2, x1:x2]
+                baseline_variance = self._calculate_baseline_variance(tight_crop)
+                serials_found.append((serial, conf, det_conf, baseline_variance))
 
         return serials_found
 
@@ -1014,12 +1075,12 @@ class ProductionProcessor:
         Extract serial number using multi-pass detection pipeline.
 
         Returns:
-            tuple: (serial, confidence, is_upside_down, height_ratio, star_detected)
-            - height_ratio: bounding box height / image height, for gas pump detection
+            tuple: (serial, confidence, is_upside_down, baseline_variance, star_detected)
+            - baseline_variance: normalized vertical misalignment of digits (gas pump detection)
             - star_detected: True if star symbol visually detected (definitive star note)
         """
         # Use YOLO-based alignment for more accurate straightening
-        # This improves height_ratio accuracy for gas pump detection
+        # This improves baseline variance accuracy for gas pump detection
         aligned_img, align_info = self.yolo_aligner.align_image(image_path)
         if aligned_img is None:
             # Fallback to contour-based alignment if YOLO fails
@@ -1031,8 +1092,8 @@ class ProductionProcessor:
         # Track if YOLO detected the bill was flipped
         yolo_detected_flip = align_info.get('flipped', False)
 
-        # Track best height_ratio across all passes
-        best_height_ratio = 0.0
+        # Track best baseline_variance across all passes
+        best_baseline_variance = 0.0
 
         # Check for star symbol (definitive star note detection)
         star_detected = self._detect_star_symbol(aligned_img)
@@ -1043,17 +1104,17 @@ class ProductionProcessor:
             serials = self._extract_serial_from_boxes(aligned_img, boxes)
             if serials:
                 # Got results on first pass - use them
-                # serials now includes height_ratio as 4th element
+                # serials now includes baseline_variance as 4th element
                 result = self._consensus_vote([(s, oc, dc, 'standard') for s, oc, dc, hr in serials])
                 # Track height ratio from best detection
-                best_height_ratio = max(hr for s, oc, dc, hr in serials)
+                best_baseline_variance = max(hr for s, oc, dc, hr in serials)
                 # If confidence is good, return immediately
                 if result[1] >= 0.5:
-                    return result[0], result[1], yolo_detected_flip, best_height_ratio, star_detected
+                    return result[0], result[1], yolo_detected_flip, best_baseline_variance, star_detected
 
         # Only run additional passes if first pass failed or had low confidence
         all_serials = []
-        all_height_ratios = []
+        all_baseline_variances = []
         found_via_rotation = False
 
         for pass_config in self.DETECTION_PASSES[1:]:  # Skip first pass, already done
@@ -1072,9 +1133,9 @@ class ProductionProcessor:
             if boxes:
                 serials = self._extract_serial_from_boxes(img, boxes)
                 if serials:
-                    for s, ocr_conf, det_conf, height_ratio in serials:
+                    for s, ocr_conf, det_conf, baseline_variance in serials:
                         all_serials.append((s, ocr_conf, det_conf, pass_name))
-                        all_height_ratios.append(height_ratio)
+                        all_baseline_variances.append(baseline_variance)
 
                     # Track if best result came from rotated pass
                     if preprocess == 'rotate180':
@@ -1092,8 +1153,8 @@ class ProductionProcessor:
         result = self._consensus_vote(all_serials)
 
         # Use the max height ratio from successful detections
-        if all_height_ratios:
-            best_height_ratio = max(all_height_ratios)
+        if all_baseline_variances:
+            best_baseline_variance = max(all_baseline_variances)
 
         # Determine if the bill was upside down
         # YOLO alignment already corrected flip if detected, but track it for reporting
@@ -1106,7 +1167,7 @@ class ProductionProcessor:
         # Bill was upside down if YOLO detected flip OR serial found via rotation
         is_upside_down = yolo_detected_flip or found_via_rotation
 
-        return result[0], result[1], is_upside_down, best_height_ratio, star_detected
+        return result[0], result[1], is_upside_down, best_baseline_variance, star_detected
 
     def _fallback_ocr_scan(self, img: np.ndarray) -> tuple[Optional[str], float]:
         """Fallback: scan entire image for serial patterns."""
@@ -1309,7 +1370,7 @@ class ProductionProcessor:
                     'serial': '',
                     'fancy_types': '',
                     'confidence': '0.00',
-                    'height_ratio': '0.0000',
+                    'baseline_variance': '0.0000',
                     'star_detected': False,
                     'is_fancy': False,
                     'needs_review': True,
@@ -1319,10 +1380,10 @@ class ProductionProcessor:
                 continue
 
             # Extract serial using multi-pass detection
-            serial, confidence, is_upside_down, height_ratio, star_detected = self.extract_serial(pair.front_path)
+            serial, confidence, is_upside_down, baseline_variance, star_detected = self.extract_serial(pair.front_path)
             pair.confidence = confidence
             pair.is_upside_down = is_upside_down
-            pair.height_ratio = height_ratio
+            pair.baseline_variance = baseline_variance
             pair.star_detected = star_detected
 
             # If star symbol visually detected but OCR missed it, append '*' to serial
@@ -1344,8 +1405,8 @@ class ProductionProcessor:
                     pair.fancy_types = ["ALL"]
                     pair.is_fancy = True
                 else:
-                    # Pass height_ratio for gas pump detection
-                    metadata = {'height_ratio': pair.height_ratio}
+                    # Pass baseline_variance for gas pump detection
+                    metadata = {'baseline_variance': pair.baseline_variance}
                     fancy_types = self.pattern_engine.classify_simple(serial, metadata)
                     pair.fancy_types = fancy_types
                     pair.is_fancy = len(fancy_types) > 0
@@ -1381,7 +1442,7 @@ class ProductionProcessor:
                 'serial': serial or '',
                 'fancy_types': ", ".join(pair.fancy_types),
                 'confidence': f"{confidence:.2f}",
-                'height_ratio': f"{pair.height_ratio:.4f}",
+                'baseline_variance': f"{pair.baseline_variance:.4f}",
                 'star_detected': pair.star_detected,
                 'is_fancy': pair.is_fancy,
                 'needs_review': pair.needs_review,
@@ -1439,7 +1500,7 @@ class ProductionProcessor:
         with open(csv_path, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=[
                 'position', 'front_file', 'back_file', 'serial',
-                'fancy_types', 'confidence', 'height_ratio', 'star_detected',
+                'fancy_types', 'confidence', 'baseline_variance', 'star_detected',
                 'is_fancy', 'needs_review', 'error'
             ])
             writer.writeheader()
