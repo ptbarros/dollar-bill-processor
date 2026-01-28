@@ -78,7 +78,7 @@ echo Installing updates...
 set "SOURCE_DIR=%TEMP_DIR%\dollar-bill-processor-main"
 
 :: Copy all files except directories we want to preserve
-for %%F in ("%SOURCE_DIR%\*.py" "%SOURCE_DIR%\*.bat" "%SOURCE_DIR%\*.sh" "%SOURCE_DIR%\*.txt" "%SOURCE_DIR%\*.yaml" "%SOURCE_DIR%\*.md") do (
+for %%F in ("%SOURCE_DIR%\*.py" "%SOURCE_DIR%\*.bat" "%SOURCE_DIR%\*.sh" "%SOURCE_DIR%\*.txt" "%SOURCE_DIR%\*.yaml" "%SOURCE_DIR%\*.md" "%SOURCE_DIR%\*.pt") do (
     if exist "%%F" (
         copy /y "%%F" "." >nul 2>&1
     )
