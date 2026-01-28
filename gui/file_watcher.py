@@ -32,8 +32,8 @@ class FileWatcher(QThread):
     def __init__(
         self,
         watch_dir: Path,
-        poll_interval: float = 2.0,
-        settle_time: float = 1.0,
+        poll_interval: float = 0.5,
+        settle_time: float = 0.2,
         parent=None
     ):
         """

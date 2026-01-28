@@ -79,8 +79,8 @@ class MonitorSettings:
     watch_directory: str = ""  # Directory to watch for new files
     output_directory: str = ""  # Output directory for fancy bill crops
     archive_directory: str = ""  # Where to move processed batches
-    poll_interval: float = 2.0  # Seconds between directory checks
-    file_settle_time: float = 1.0  # Wait for file write completion
+    poll_interval: float = 0.5  # Seconds between directory checks
+    file_settle_time: float = 0.2  # Wait for file write completion
     auto_archive: bool = True  # Move files to timestamped dir on stop
 
 
