@@ -10,10 +10,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
     QPushButton, QLineEdit, QFrame, QGroupBox, QGridLayout,
     QSizePolicy, QTabWidget, QSlider, QApplication, QStackedWidget,
-    QComboBox, QSplitter
+    QComboBox, QSplitter, QMenu, QColorDialog
 )
 from PySide6.QtCore import Qt, Signal, Slot, QPoint, QSize
-from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QPainter, QPen, QColor
+from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QPainter, QPen, QColor, QAction
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -22,6 +22,10 @@ from pattern_engine_v2 import PatternEngine
 
 class PannableImageLabel(QLabel):
     """Label that displays an image with pan support via mouse drag and optional crosshair."""
+
+    # Class-level crosshair settings (shared across all instances)
+    _crosshair_color = QColor(255, 0, 0, 180)  # Semi-transparent red
+    _crosshair_thickness = 1
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -32,6 +36,8 @@ class PannableImageLabel(QLabel):
         self._viewer = None  # Reference to parent viewer
         self._crosshair_enabled = False
         self._mouse_pos = None  # Track mouse position for crosshair
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_crosshair_menu)
 
     def set_scroll_area(self, scroll_area: QScrollArea):
         """Set the parent scroll area for panning."""
@@ -103,16 +109,75 @@ class PannableImageLabel(QLabel):
         if self._crosshair_enabled and self._mouse_pos is not None:
             painter = QPainter(self)
 
-            # Dotted line style
-            pen = QPen(QColor(255, 0, 0, 180))  # Semi-transparent red
+            # Use class-level crosshair settings
+            pen = QPen(PannableImageLabel._crosshair_color)
             pen.setStyle(Qt.DashLine)
-            pen.setWidth(1)
+            pen.setWidth(PannableImageLabel._crosshair_thickness)
             painter.setPen(pen)
 
             # Draw vertical line
             painter.drawLine(self._mouse_pos.x(), 0, self._mouse_pos.x(), self.height())
             # Draw horizontal line
             painter.drawLine(0, self._mouse_pos.y(), self.width(), self._mouse_pos.y())
+
+            painter.end()
+
+    def _show_crosshair_menu(self, pos):
+        """Show context menu for crosshair settings."""
+        if not self._crosshair_enabled:
+            return
+
+        menu = QMenu(self)
+
+        # Color submenu
+        color_menu = menu.addMenu("Crosshair Color")
+        colors = [
+            ("Red", QColor(255, 0, 0, 180)),
+            ("Green", QColor(0, 255, 0, 180)),
+            ("Blue", QColor(0, 100, 255, 180)),
+            ("Yellow", QColor(255, 255, 0, 180)),
+            ("Cyan", QColor(0, 255, 255, 180)),
+            ("Magenta", QColor(255, 0, 255, 180)),
+            ("White", QColor(255, 255, 255, 200)),
+            ("Black", QColor(0, 0, 0, 200)),
+        ]
+        for name, color in colors:
+            action = color_menu.addAction(name)
+            action.setData(color)
+            if color.rgb() == PannableImageLabel._crosshair_color.rgb():
+                action.setCheckable(True)
+                action.setChecked(True)
+        color_menu.addSeparator()
+        custom_color_action = color_menu.addAction("Custom...")
+
+        # Thickness submenu
+        thickness_menu = menu.addMenu("Line Thickness")
+        for t in [1, 2, 3, 4, 5]:
+            action = thickness_menu.addAction(f"{t}px")
+            action.setData(t)
+            if t == PannableImageLabel._crosshair_thickness:
+                action.setCheckable(True)
+                action.setChecked(True)
+
+        # Execute menu
+        action = menu.exec(self.mapToGlobal(pos))
+        if action:
+            if action == custom_color_action:
+                color = QColorDialog.getColor(
+                    PannableImageLabel._crosshair_color,
+                    self,
+                    "Select Crosshair Color"
+                )
+                if color.isValid():
+                    color.setAlpha(180)
+                    PannableImageLabel._crosshair_color = color
+                    self.update()
+            elif action.parent() == color_menu:
+                PannableImageLabel._crosshair_color = action.data()
+                self.update()
+            elif action.parent() == thickness_menu:
+                PannableImageLabel._crosshair_thickness = action.data()
+                self.update()
 
             painter.end()
 
@@ -981,6 +1046,12 @@ class PreviewPanel(QWidget):
         has_previous = self.current_result is not None
         if has_previous:
             self._save_zoom_pan_state()
+
+        # Reset aligned state when switching bills
+        self._aligned_pixmap = None
+        self._is_showing_aligned = False
+        self.align_btn.setText("Align")
+        self.align_btn.setToolTip("Auto-align image using YOLO bill detection")
 
         self.current_result = result
 
