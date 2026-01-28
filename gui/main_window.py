@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QProgressBar, QLabel, QPushButton
 )
 from PySide6.QtCore import Qt, Signal, Slot, QThread
-from PySide6.QtGui import QAction, QKeySequence, QShortcut
+from PySide6.QtGui import QAction, QKeySequence, QShortcut, QPixmap, QImage
 
 # Import our components
 from .processing_panel import ProcessingPanel
@@ -79,6 +79,7 @@ class MainWindow(QMainWindow):
         self.preview_panel = PreviewPanel()
         self.preview_panel.prev_requested.connect(self._prev_bill)
         self.preview_panel.next_requested.connect(self._next_bill)
+        self.preview_panel.align_requested.connect(self._on_align_image)
         splitter.addWidget(self.preview_panel)
 
         # Set splitter sizes (40% list, 60% preview)
@@ -215,6 +216,50 @@ class MainWindow(QMainWindow):
             if index > 0:
                 prev_item = self.results_list.tree.topLevelItem(index - 1)
                 self.results_list.tree.setCurrentItem(prev_item)
+
+    def _on_align_image(self, image_path: str):
+        """Handle alignment request from preview panel."""
+        # Check if showing aligned - if so, reset instead
+        if self.preview_panel._is_showing_aligned:
+            self.preview_panel.reset_aligned_image()
+            return
+
+        if not self.processor:
+            QMessageBox.warning(self, "No Processor", "Please process a folder first to enable alignment.")
+            return
+
+        if not image_path:
+            return
+
+        try:
+            # Align the image using YOLO
+            aligned_img, info = self.processor.align_for_preview(Path(image_path))
+
+            if aligned_img is None:
+                QMessageBox.warning(self, "Alignment Failed", "Could not align the image.")
+                return
+
+            # Convert OpenCV BGR image to QPixmap
+            h, w, ch = aligned_img.shape
+            bytes_per_line = ch * w
+            # Convert BGR to RGB for Qt
+            rgb_img = aligned_img[:, :, ::-1].copy()
+            q_img = QImage(rgb_img.data, w, h, bytes_per_line, QImage.Format_RGB888)
+            pixmap = QPixmap.fromImage(q_img)
+
+            # Show status info
+            angle = info.get('angle', 0)
+            flipped = info.get('flipped', False)
+            status_msg = f"Aligned: {angle:.1f}° rotation"
+            if flipped:
+                status_msg += ", flipped 180°"
+            self.statusBar().showMessage(status_msg, 5000)
+
+            # Display the aligned image
+            self.preview_panel.show_aligned_image(pixmap)
+
+        except Exception as e:
+            QMessageBox.warning(self, "Alignment Error", f"Error during alignment: {str(e)}")
 
     def _zoom_in(self):
         """Zoom in on preview."""
@@ -466,7 +511,7 @@ class MainWindow(QMainWindow):
         with open(path, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=[
                 'position', 'front_file', 'back_file', 'serial', 'fancy_types',
-                'confidence', 'is_fancy', 'needs_review', 'serial_region_path', 'error'
+                'confidence', 'height_ratio', 'is_fancy', 'needs_review', 'serial_region_path', 'error'
             ])
             writer.writeheader()
             writer.writerows(self.current_results)
@@ -608,6 +653,10 @@ class MainWindow(QMainWindow):
         """Handle processing completion."""
         self.is_processing = False
         self.processing_panel.set_processing(False)
+
+        # Grab the processor from the thread for alignment feature
+        if hasattr(self, 'processing_thread') and self.processing_thread:
+            self.processor = self.processing_thread.processor
 
         total = summary.get('total', 0)
         fancy = summary.get('fancy_count', 0)

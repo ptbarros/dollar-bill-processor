@@ -119,6 +119,26 @@ class PatternDialog(QDialog):
         self.pattern_price_label.setStyleSheet("color: #2e7d32; font-weight: bold;")
         details_layout.addWidget(self.pattern_price_label)
 
+        # Threshold editor for height_ratio patterns (like GAS_PUMP)
+        self.threshold_layout = QHBoxLayout()
+        self.threshold_label = QLabel("Threshold:")
+        self.threshold_layout.addWidget(self.threshold_label)
+        self.threshold_edit = QLineEdit()
+        self.threshold_edit.setPlaceholderText("e.g., 0.085")
+        self.threshold_edit.setMaximumWidth(100)
+        self.threshold_layout.addWidget(self.threshold_edit)
+        self.threshold_save_btn = QPushButton("Save")
+        self.threshold_save_btn.clicked.connect(self._save_threshold)
+        self.threshold_layout.addWidget(self.threshold_save_btn)
+        self.threshold_layout.addStretch()
+        details_layout.addLayout(self.threshold_layout)
+
+        # Initially hidden - shown only for height_ratio patterns
+        self.threshold_label.hide()
+        self.threshold_edit.hide()
+        self.threshold_save_btn.hide()
+        self._current_threshold_pattern = None
+
         right_layout.addWidget(details_group)
 
         # Serial tester
@@ -250,8 +270,8 @@ class PatternDialog(QDialog):
                 pattern_item.setText(0, name)
                 pattern_item.setText(1, str(tier))
 
-                # Checkbox for enabled
-                enabled = defn.get('enabled', True)
+                # Checkbox for enabled - check if pattern is active (considers user overrides)
+                enabled = name in self.engine.patterns
                 pattern_item.setCheckState(2, Qt.Checked if enabled else Qt.Unchecked)
                 pattern_item.setData(0, Qt.UserRole, {'name': name, 'defn': defn})
 
@@ -368,6 +388,73 @@ class PatternDialog(QDialog):
             self.pattern_price_label.setText(f"Price: {price}")
         else:
             self.pattern_price_label.setText("Price: -")
+
+        # Show threshold editor for height_ratio patterns
+        rules = defn.get('rules', {})
+        height_ratio_rule = None
+        for rule_type in ['height_ratio_min', 'height_ratio_max']:
+            if rule_type in rules:
+                height_ratio_rule = (rule_type, rules[rule_type])
+                break
+
+        if height_ratio_rule:
+            self._current_threshold_pattern = name
+            rule_type, value = height_ratio_rule
+            # Check for user override
+            overrides = self.engine.user_config.get('pattern_overrides', {})
+            if name in overrides and rule_type in overrides[name]:
+                value = overrides[name][rule_type]
+            self.threshold_label.setText(f"Threshold ({rule_type}):")
+            self.threshold_edit.setText(str(value))
+            self.threshold_label.show()
+            self.threshold_edit.show()
+            self.threshold_save_btn.show()
+        else:
+            self._current_threshold_pattern = None
+            self.threshold_label.hide()
+            self.threshold_edit.hide()
+            self.threshold_save_btn.hide()
+
+    def _save_threshold(self):
+        """Save threshold override for the selected pattern."""
+        if not self._current_threshold_pattern:
+            return
+
+        try:
+            value = float(self.threshold_edit.text().strip())
+        except ValueError:
+            QMessageBox.warning(self, "Invalid Value", "Please enter a valid number (e.g., 0.085)")
+            return
+
+        name = self._current_threshold_pattern
+        # Get the rule type from the pattern definition
+        all_patterns = self.engine.config.get('patterns', {})
+        defn = all_patterns.get(name, {})
+        rules = defn.get('rules', {})
+
+        rule_type = None
+        for rt in ['height_ratio_min', 'height_ratio_max']:
+            if rt in rules:
+                rule_type = rt
+                break
+
+        if not rule_type:
+            return
+
+        # Store override in user config
+        if 'pattern_overrides' not in self.engine.user_config:
+            self.engine.user_config['pattern_overrides'] = {}
+        if name not in self.engine.user_config['pattern_overrides']:
+            self.engine.user_config['pattern_overrides'][name] = {}
+
+        self.engine.user_config['pattern_overrides'][name][rule_type] = value
+        self.engine.save_config()
+
+        # Update the in-memory pattern definition
+        if name in self.engine.patterns:
+            self.engine.patterns[name]['rules'][rule_type] = value
+
+        QMessageBox.information(self, "Saved", f"Threshold for {name} set to {value}")
 
     def _test_serial(self):
         """Test a serial number against all patterns."""
@@ -536,7 +623,7 @@ class CustomPatternDialog(QDialog):
 
         # Rule type
         self.rule_type = QComboBox()
-        self.rule_type.addItems(["contains", "starts_with", "ends_with", "regex"])
+        self.rule_type.addItems(["contains", "starts_with", "ends_with", "regex", "height_ratio_min", "height_ratio_max"])
         self.rule_type.setCurrentText("contains")
         self.rule_type.currentTextChanged.connect(self._update_hint)
         form.addRow("Rule Type:", self.rule_type)
@@ -573,7 +660,9 @@ class CustomPatternDialog(QDialog):
             "contains": "Matches if serial contains this value anywhere.\nExamples: '0704' matches July 4, '1990' matches birth year",
             "starts_with": "Matches if serial starts with this value.\nExample: '000' matches low serial numbers",
             "ends_with": "Matches if serial ends with this value.\nExample: '0000' matches round numbers",
-            "regex": "Advanced: Regular expression pattern.\nExample: '(\\d)\\1{3}' matches 4 repeated digits"
+            "regex": "Advanced: Regular expression pattern.\nExample: '(\\d)\\1{3}' matches 4 repeated digits",
+            "height_ratio_min": "Matches if height ratio >= this value.\nUsed for gas pump detection. Normal max is ~0.076, try 0.085+",
+            "height_ratio_max": "Matches if height ratio <= this value.\nUseful for filtering out abnormal detections."
         }
         self.hint_label.setText(hints.get(rule, ""))
 
@@ -583,7 +672,7 @@ class CustomPatternDialog(QDialog):
         self.desc_edit.setText(self.defn.get('description', ''))
 
         rules = self.defn.get('rules', {})
-        for rule_type in ['contains', 'starts_with', 'ends_with', 'regex']:
+        for rule_type in ['contains', 'starts_with', 'ends_with', 'regex', 'height_ratio_min', 'height_ratio_max']:
             if rule_type in rules:
                 self.rule_type.setCurrentText(rule_type)
                 self.value_edit.setText(str(rules[rule_type]))

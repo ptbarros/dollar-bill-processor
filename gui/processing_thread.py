@@ -44,6 +44,7 @@ class ProcessingThread(QThread):
         self.verify_pairs = verify_pairs
         self.crop_all = crop_all
         self._stop_requested = False
+        self.processor = None  # Will be set during run()
 
     def run(self):
         """Main processing loop."""
@@ -68,7 +69,7 @@ class ProcessingThread(QThread):
             self.progress_updated.emit(0, 0, "Loading models...")
 
             cfg = Config(config_path if config_path.exists() else None)
-            processor = ProductionProcessor(
+            self.processor = ProductionProcessor(
                 model_path,
                 use_gpu=self.use_gpu,
                 cfg=cfg,
@@ -88,7 +89,7 @@ class ProcessingThread(QThread):
             # Verify pairs if requested
             if self.verify_pairs:
                 self.progress_updated.emit(0, total, "Verifying front/back...")
-                pairs = processor.verify_and_swap_pairs(pairs)
+                pairs = self.processor.verify_and_swap_pairs(pairs)
 
             # Process each pair
             fancy_count = 0
@@ -119,13 +120,15 @@ class ProcessingThread(QThread):
                     continue
 
                 # Extract serial
-                serial, confidence, is_upside_down = processor.extract_serial(pair.front_path)
+                serial, confidence, is_upside_down, height_ratio, star_detected = self.processor.extract_serial(pair.front_path)
                 pair.serial = serial
                 pair.confidence = confidence
                 pair.is_upside_down = is_upside_down
+                pair.height_ratio = height_ratio
+                pair.star_detected = star_detected
 
                 # Validate
-                is_valid, validation_error = processor.validate_serial(serial)
+                is_valid, validation_error = self.processor.validate_serial(serial)
 
                 if serial and is_valid:
                     # Check for fancy patterns
@@ -133,7 +136,7 @@ class ProcessingThread(QThread):
                         pair.fancy_types = ["ALL"]
                         pair.is_fancy = True
                     else:
-                        fancy_types = processor.pattern_engine.classify_simple(serial)
+                        fancy_types = self.processor.pattern_engine.classify_simple(serial)
                         pair.fancy_types = fancy_types
                         pair.is_fancy = len(fancy_types) > 0
 
@@ -141,15 +144,15 @@ class ProcessingThread(QThread):
 
                     if pair.is_fancy:
                         fancy_count += 1
-                        processor.generate_crops(pair, self.output_dir)
+                        self.processor.generate_crops(pair, self.output_dir)
 
                     serial_region_path = ''
                     if needs_review:
                         review_count += 1
-                        processor._add_to_review_queue(pair, f"Low confidence: {confidence:.2f}", self.output_dir)
+                        self.processor._add_to_review_queue(pair, f"Low confidence: {confidence:.2f}", self.output_dir)
                         # Get serial region path from the review item we just added
-                        if processor.review_queue:
-                            serial_region_path = processor.review_queue[-1].serial_region_path or ''
+                        if self.processor.review_queue:
+                            serial_region_path = self.processor.review_queue[-1].serial_region_path or ''
 
                     result = {
                         'position': pair.stack_position,
@@ -158,6 +161,7 @@ class ProcessingThread(QThread):
                         'serial': serial,
                         'fancy_types': ', '.join(pair.fancy_types),
                         'confidence': f"{confidence:.2f}",
+                        'height_ratio': f"{pair.height_ratio:.4f}",
                         'is_fancy': pair.is_fancy,
                         'needs_review': needs_review,
                         'serial_region_path': serial_region_path,
@@ -165,11 +169,11 @@ class ProcessingThread(QThread):
                     }
                 elif serial and not is_valid:
                     review_count += 1
-                    processor._add_to_review_queue(pair, f"Validation failed: {validation_error}", self.output_dir)
+                    self.processor._add_to_review_queue(pair, f"Validation failed: {validation_error}", self.output_dir)
                     # Get serial region path from the review item we just added
                     serial_region_path = ''
-                    if processor.review_queue:
-                        serial_region_path = processor.review_queue[-1].serial_region_path or ''
+                    if self.processor.review_queue:
+                        serial_region_path = self.processor.review_queue[-1].serial_region_path or ''
                     result = {
                         'position': pair.stack_position,
                         'front_file': str(pair.front_path),
@@ -177,6 +181,7 @@ class ProcessingThread(QThread):
                         'serial': serial,
                         'fancy_types': '',
                         'confidence': f"{confidence:.2f}",
+                        'height_ratio': f"{pair.height_ratio:.4f}",
                         'is_fancy': False,
                         'needs_review': True,
                         'serial_region_path': serial_region_path,
@@ -184,11 +189,11 @@ class ProcessingThread(QThread):
                     }
                 else:
                     review_count += 1
-                    processor._add_to_review_queue(pair, "No serial detected", self.output_dir)
+                    self.processor._add_to_review_queue(pair, "No serial detected", self.output_dir)
                     # Get serial region path from the review item we just added
                     serial_region_path = ''
-                    if processor.review_queue:
-                        serial_region_path = processor.review_queue[-1].serial_region_path or ''
+                    if self.processor.review_queue:
+                        serial_region_path = self.processor.review_queue[-1].serial_region_path or ''
                     result = {
                         'position': pair.stack_position,
                         'front_file': str(pair.front_path),
@@ -196,6 +201,7 @@ class ProcessingThread(QThread):
                         'serial': '',
                         'fancy_types': '',
                         'confidence': '0.00',
+                        'height_ratio': f"{pair.height_ratio:.4f}",
                         'is_fancy': False,
                         'needs_review': True,
                         'serial_region_path': serial_region_path,
@@ -205,11 +211,11 @@ class ProcessingThread(QThread):
                 self.result_ready.emit(result)
 
             # Save review queue
-            if processor.review_queue:
+            if self.processor.review_queue:
                 from datetime import datetime
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 review_path = self.input_dir / f"review_queue_{timestamp}.json"
-                processor.save_review_queue(review_path)
+                self.processor.save_review_queue(review_path)
 
             # Emit completion
             summary = {

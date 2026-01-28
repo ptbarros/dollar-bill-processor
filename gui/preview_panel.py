@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QComboBox, QSplitter
 )
 from PySide6.QtCore import Qt, Signal, Slot, QPoint, QSize
-from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QPainter
+from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QPainter, QPen, QColor
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -21,7 +21,7 @@ from pattern_engine_v2 import PatternEngine
 
 
 class PannableImageLabel(QLabel):
-    """Label that displays an image with pan support via mouse drag."""
+    """Label that displays an image with pan support via mouse drag and optional crosshair."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -30,6 +30,8 @@ class PannableImageLabel(QLabel):
         self._drag_start_global = None  # Use global/screen coordinates
         self._scroll_area = None
         self._viewer = None  # Reference to parent viewer
+        self._crosshair_enabled = False
+        self._mouse_pos = None  # Track mouse position for crosshair
 
     def set_scroll_area(self, scroll_area: QScrollArea):
         """Set the parent scroll area for panning."""
@@ -39,9 +41,18 @@ class PannableImageLabel(QLabel):
         """Set the parent viewer to notify about pan state."""
         self._viewer = viewer
 
+    def set_crosshair_enabled(self, enabled: bool):
+        """Enable or disable crosshair overlay."""
+        self._crosshair_enabled = enabled
+        if enabled:
+            self.setCursor(QCursor(Qt.CrossCursor))
+        else:
+            self.setCursor(QCursor(Qt.OpenHandCursor))
+        self.update()
+
     def mousePressEvent(self, event: QMouseEvent):
         """Start panning on mouse press."""
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.LeftButton and not self._crosshair_enabled:
             # Use global position to avoid jitter from widget movement
             self._drag_start_global = event.globalPosition().toPoint()
             self.setCursor(QCursor(Qt.ClosedHandCursor))
@@ -50,8 +61,13 @@ class PannableImageLabel(QLabel):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent):
-        """Pan the image while dragging."""
-        if self._drag_start_global and self._scroll_area:
+        """Pan the image while dragging, or update crosshair position."""
+        # Update mouse position for crosshair
+        self._mouse_pos = event.position().toPoint()
+
+        if self._crosshair_enabled:
+            self.update()  # Trigger repaint to update crosshair
+        elif self._drag_start_global and self._scroll_area:
             # Calculate delta using global coordinates (stable during scroll)
             current_global = event.globalPosition().toPoint()
             delta = current_global - self._drag_start_global
@@ -67,12 +83,38 @@ class PannableImageLabel(QLabel):
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         """End panning on mouse release."""
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.LeftButton and not self._crosshair_enabled:
             self._drag_start_global = None
             self.setCursor(QCursor(Qt.OpenHandCursor))
             if self._viewer:
                 self._viewer._is_panning = False
         super().mouseReleaseEvent(event)
+
+    def leaveEvent(self, event):
+        """Clear crosshair when mouse leaves."""
+        self._mouse_pos = None
+        self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+        """Paint the image and optional crosshair."""
+        super().paintEvent(event)
+
+        if self._crosshair_enabled and self._mouse_pos is not None:
+            painter = QPainter(self)
+
+            # Dotted line style
+            pen = QPen(QColor(255, 0, 0, 180))  # Semi-transparent red
+            pen.setStyle(Qt.DashLine)
+            pen.setWidth(1)
+            painter.setPen(pen)
+
+            # Draw vertical line
+            painter.drawLine(self._mouse_pos.x(), 0, self._mouse_pos.x(), self.height())
+            # Draw horizontal line
+            painter.drawLine(0, self._mouse_pos.y(), self.width(), self._mouse_pos.y())
+
+            painter.end()
 
 
 class ScrollableImageViewer(QWidget):
@@ -252,6 +294,10 @@ class ScrollableImageViewer(QWidget):
         if self.original_pixmap and self.zoom_factor < 1.0 and not self._is_panning:
             self._zoom_fit()
 
+    def set_crosshair_enabled(self, enabled: bool):
+        """Enable or disable crosshair overlay on the image."""
+        self.image_label.set_crosshair_enabled(enabled)
+
 
 class ImagePane(QWidget):
     """Simple image pane without zoom controls, for use in synced split view."""
@@ -377,6 +423,10 @@ class ImagePane(QWidget):
             event.ignore()
         else:
             super().wheelEvent(event)
+
+    def set_crosshair_enabled(self, enabled: bool):
+        """Enable or disable crosshair overlay."""
+        self.image_label.set_crosshair_enabled(enabled)
 
 
 class SyncedSplitViewer(QWidget):
@@ -518,6 +568,11 @@ class SyncedSplitViewer(QWidget):
         else:
             super().wheelEvent(event)
 
+    def set_crosshair_enabled(self, enabled: bool):
+        """Enable or disable crosshair overlay on both panes."""
+        self.front_pane.set_crosshair_enabled(enabled)
+        self.back_pane.set_crosshair_enabled(enabled)
+
 
 class ImageLabel(QLabel):
     """Simple label for small images like serial region."""
@@ -569,6 +624,7 @@ class PreviewPanel(QWidget):
     # Signals
     prev_requested = Signal()  # Request to navigate to previous bill
     next_requested = Signal()  # Request to navigate to next bill
+    align_requested = Signal(str)  # Request alignment for image path
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -580,6 +636,8 @@ class PreviewPanel(QWidget):
         self._preserved_zoom: Optional[float] = None
         self._preserved_scroll_h: Optional[float] = None  # as fraction 0-1
         self._preserved_scroll_v: Optional[float] = None  # as fraction 0-1
+        self._aligned_pixmap: Optional[QPixmap] = None  # Cache for aligned image
+        self._is_showing_aligned = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -625,6 +683,22 @@ class PreviewPanel(QWidget):
         # Select "Front" by default
         self.view_buttons[0][0].setChecked(True)
         self._current_view_mode = "front"
+
+        header_layout.addSpacing(15)
+
+        # Tool buttons
+        self.align_btn = QPushButton("Align")
+        self.align_btn.setToolTip("Auto-align image using YOLO bill detection")
+        self.align_btn.clicked.connect(self._on_align_clicked)
+        header_layout.addWidget(self.align_btn)
+
+        self.crosshair_btn = QPushButton("Crosshair")
+        self.crosshair_btn.setToolTip("Toggle crosshair overlay for alignment checking")
+        self.crosshair_btn.setCheckable(True)
+        self.crosshair_btn.clicked.connect(self._on_crosshair_toggled)
+        header_layout.addWidget(self.crosshair_btn)
+
+        self._crosshair_active = False
 
         header_layout.addStretch()
 
@@ -1061,3 +1135,52 @@ class PreviewPanel(QWidget):
             v_bar = viewer.scroll_area.verticalScrollBar()
             h_bar.setValue(h_bar.value() + dx)
             v_bar.setValue(v_bar.value() + dy)
+
+    def _on_crosshair_toggled(self, checked: bool):
+        """Handle crosshair button toggle."""
+        self._crosshair_active = checked
+        # Apply to all viewers
+        for viewer in [self.front_viewer, self.back_viewer, self.combined_viewer,
+                       self.split_v_viewer, self.split_h_viewer]:
+            if hasattr(viewer, 'set_crosshair_enabled'):
+                viewer.set_crosshair_enabled(checked)
+
+    def _on_align_clicked(self):
+        """Handle align button click."""
+        # Determine which image to align based on current view
+        if self._current_view_mode in ("front", "stitched", "split_v", "split_h"):
+            image_path = self._current_front_file
+        else:  # back
+            image_path = self._current_back_file
+
+        if image_path:
+            self.align_requested.emit(image_path)
+
+    def show_aligned_image(self, pixmap: QPixmap):
+        """Display an aligned image in the current viewer."""
+        if pixmap is None or pixmap.isNull():
+            return
+
+        self._aligned_pixmap = pixmap
+        self._is_showing_aligned = True
+
+        # Update the button to indicate aligned state
+        self.align_btn.setText("Reset")
+        self.align_btn.setToolTip("Reset to original image")
+
+        # Show in current viewer
+        viewer = self._get_active_viewer()
+        if viewer and hasattr(viewer, 'set_pixmap'):
+            viewer.set_pixmap(pixmap, preserve_zoom=True)
+
+    def reset_aligned_image(self):
+        """Reset to original (non-aligned) image."""
+        self._aligned_pixmap = None
+        self._is_showing_aligned = False
+
+        self.align_btn.setText("Align")
+        self.align_btn.setToolTip("Auto-align image using YOLO bill detection")
+
+        # Reload original image
+        if self.current_result:
+            self.show_bill(self.current_result)

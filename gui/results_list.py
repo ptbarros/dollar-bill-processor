@@ -88,7 +88,7 @@ class ResultsList(QWidget):
 
         # Results tree
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Est. Price"])
+        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Ht Ratio", "Est. Price"])
         self.tree.setAlternatingRowColors(True)
         self.tree.setRootIsDecorated(False)
         self.tree.setSortingEnabled(True)
@@ -104,13 +104,15 @@ class ResultsList(QWidget):
         header.setSectionResizeMode(1, QHeaderView.Interactive)  # Serial
         header.setSectionResizeMode(2, QHeaderView.Stretch)      # Patterns (takes remaining space)
         header.setSectionResizeMode(3, QHeaderView.Interactive)  # Conf
-        header.setSectionResizeMode(4, QHeaderView.Interactive)  # Est. Price
+        header.setSectionResizeMode(4, QHeaderView.Interactive)  # Ht Ratio
+        header.setSectionResizeMode(5, QHeaderView.Interactive)  # Est. Price
 
         # Set minimum and default widths
         self.tree.setColumnWidth(0, 35)   # # column
         self.tree.setColumnWidth(1, 130)  # Serial - enough for full serial at font 14
         self.tree.setColumnWidth(3, 50)   # Conf
-        self.tree.setColumnWidth(4, 100)  # Est. Price
+        self.tree.setColumnWidth(4, 60)   # Ht Ratio
+        self.tree.setColumnWidth(5, 100)  # Est. Price
         header.setMinimumSectionSize(30)  # Minimum for any column
 
         layout.addWidget(self.tree)
@@ -250,6 +252,10 @@ class ResultsList(QWidget):
             conf = result.get('confidence', '0.00')
             item.setText(3, str(conf))
 
+            # Height Ratio (for gas pump detection)
+            height_ratio = result.get('height_ratio', '0.0000')
+            item.setText(4, str(height_ratio))
+
             # Est. Price - get from first matched pattern
             price_text = ""
             if patterns:
@@ -258,7 +264,7 @@ class ResultsList(QWidget):
                     if info and 'price_range' in info:
                         price_text = info['price_range']
                         break  # Use first pattern's price
-            item.setText(4, price_text)
+            item.setText(5, price_text)
 
             # Color coding with explicit text color for contrast
             # Tiered color system: Pattern color > Default fancy color

@@ -56,6 +56,9 @@ class PatternEngine:
         disabled = set(self.user_config.get('disabled_patterns', []))
         enabled = set(self.user_config.get('enabled_patterns', []))
 
+        # Get user rule overrides (e.g., custom thresholds for GAS_PUMP)
+        pattern_overrides = self.user_config.get('pattern_overrides', {})
+
         # Load main patterns (with user enable/disable overrides)
         for name, defn in self.config.get('patterns', {}).items():
             if defn is None:
@@ -64,6 +67,13 @@ class PatternEngine:
             if name in disabled:
                 continue
             if name in enabled or defn.get('enabled', True):
+                # Apply any rule overrides from user config
+                if name in pattern_overrides:
+                    defn = defn.copy()  # Don't modify original
+                    if 'rules' in defn:
+                        defn['rules'] = defn['rules'].copy()
+                        for rule_type, value in pattern_overrides[name].items():
+                            defn['rules'][rule_type] = value
                 patterns[name] = defn
 
         # Load custom patterns from main config (legacy support)
@@ -402,8 +412,17 @@ class PatternEngine:
     # RULE EVALUATION
     # =========================================================================
 
-    def _evaluate_rule(self, rule_type: str, rule_value, digits: str, full_serial: str) -> bool:
-        """Evaluate a single rule."""
+    def _evaluate_rule(self, rule_type: str, rule_value, digits: str, full_serial: str, metadata: dict = None) -> bool:
+        """Evaluate a single rule.
+
+        Args:
+            rule_type: Type of rule (regex, contains, height_ratio_min, etc.)
+            rule_value: Value to compare against
+            digits: Numeric portion of serial
+            full_serial: Complete serial string
+            metadata: Optional dict with detection metadata (height_ratio, etc.)
+        """
+        metadata = metadata or {}
 
         if rule_type == 'regex':
             return bool(re.search(rule_value, digits))
@@ -432,6 +451,15 @@ class PatternEngine:
         elif rule_type == 'digit_sum_max':
             return sum(int(d) for d in digits) <= rule_value
 
+        elif rule_type == 'height_ratio_min':
+            # For gas pump detection - unusually tall bounding box
+            height_ratio = metadata.get('height_ratio', 0.0)
+            return height_ratio >= rule_value
+
+        elif rule_type == 'height_ratio_max':
+            height_ratio = metadata.get('height_ratio', 0.0)
+            return height_ratio <= rule_value
+
         elif rule_type == 'check':
             check_fn = self.CHECK_FUNCTIONS.get(rule_value)
             if check_fn:
@@ -440,22 +468,22 @@ class PatternEngine:
 
         elif rule_type == 'all':
             return all(
-                self._evaluate_rules(sub_rule, digits, full_serial)
+                self._evaluate_rules(sub_rule, digits, full_serial, metadata)
                 for sub_rule in rule_value
             )
 
         elif rule_type == 'any':
             return any(
-                self._evaluate_rules(sub_rule, digits, full_serial)
+                self._evaluate_rules(sub_rule, digits, full_serial, metadata)
                 for sub_rule in rule_value
             )
 
         return False
 
-    def _evaluate_rules(self, rules: dict, digits: str, full_serial: str) -> bool:
+    def _evaluate_rules(self, rules: dict, digits: str, full_serial: str, metadata: dict = None) -> bool:
         """Evaluate a rules dict."""
         for rule_type, rule_value in rules.items():
-            if not self._evaluate_rule(rule_type, rule_value, digits, full_serial):
+            if not self._evaluate_rule(rule_type, rule_value, digits, full_serial, metadata):
                 return False
         return True
 
@@ -467,10 +495,15 @@ class PatternEngine:
         """Extract numeric portion of serial."""
         return ''.join(c for c in serial if c.isdigit())
 
-    def classify(self, serial: str) -> List[PatternMatch]:
+    def classify(self, serial: str, metadata: dict = None) -> List[PatternMatch]:
         """
         Classify a serial number.
         Returns list of PatternMatch sorted by tier.
+
+        Args:
+            serial: The serial number to classify
+            metadata: Optional dict with detection metadata (height_ratio, etc.)
+                      Used for printing error patterns like GAS_PUMP
         """
         if not serial:
             return []
@@ -480,13 +513,14 @@ class PatternEngine:
             return []
 
         matches = []
+        metadata = metadata or {}
 
         for name, defn in self.patterns.items():
             rules = defn.get('rules', {})
             uses_full = defn.get('uses_full_serial', False)
 
             try:
-                if self._evaluate_rules(rules, digits, serial):
+                if self._evaluate_rules(rules, digits, serial, metadata):
                     matches.append(PatternMatch(
                         name=name,
                         description=defn.get('description', ''),
@@ -498,9 +532,9 @@ class PatternEngine:
         matches.sort(key=lambda m: (m.tier, m.name))
         return matches
 
-    def classify_simple(self, serial: str) -> List[str]:
+    def classify_simple(self, serial: str, metadata: dict = None) -> List[str]:
         """Return just pattern names."""
-        return [m.name for m in self.classify(serial)]
+        return [m.name for m in self.classify(serial, metadata)]
 
     def get_pattern_info(self, name: str) -> Optional[dict]:
         """Get info about a pattern."""

@@ -134,6 +134,8 @@ class BillPair:
     needs_review: bool = False
     review_reason: Optional[str] = None
     is_upside_down: bool = False  # True if bill was scanned upside-down
+    height_ratio: float = 0.0  # Bounding box height ratio for gas pump detection
+    star_detected: bool = False  # True if star symbol visually detected by YOLO
 
 
 @dataclass
@@ -261,6 +263,116 @@ class BillAligner:
                                   borderMode=cv2.BORDER_CONSTANT,
                                   borderValue=(255, 255, 255))
         return aligned
+
+
+class YOLOBillAligner:
+    """Aligns scanned bills using YOLO detection for more accurate results."""
+
+    # YOLO class indices
+    YOLO_CLASSES = {
+        'bill_front': 2,
+        'bill_back': 1,
+        'seal_t': 6,  # Treasury seal (right side on correct orientation)
+        'seal_f': 5,  # Federal Reserve seal (left side on correct orientation)
+    }
+
+    def __init__(self, yolo_model):
+        """Initialize with a YOLO model."""
+        self.yolo_model = yolo_model
+        self.contour_aligner = BillAligner()
+
+    def align_image(self, image_path: Path, check_flip: bool = True) -> tuple[Optional[np.ndarray], dict]:
+        """
+        Align a bill image using YOLO detection.
+
+        Args:
+            image_path: Path to the image file
+            check_flip: Whether to check and correct upside-down orientation
+
+        Returns:
+            tuple: (aligned_image, info_dict)
+            info_dict contains: 'angle', 'flipped', 'bill_detected'
+        """
+        img = cv2.imread(str(image_path))
+        if img is None:
+            return None, {'error': 'Failed to load image'}
+
+        h, w = img.shape[:2]
+        info = {'angle': 0.0, 'flipped': False, 'bill_detected': False}
+
+        # Run YOLO detection
+        results = self.yolo_model(img, verbose=False, conf=0.3)
+
+        bill_box = None
+        seal_t_box = None
+        seal_f_box = None
+
+        for result in results:
+            for box in result.boxes:
+                cls_id = int(box.cls[0])
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                conf = float(box.conf[0])
+
+                if cls_id == self.YOLO_CLASSES['bill_front']:
+                    if bill_box is None or conf > bill_box[4]:
+                        bill_box = (x1, y1, x2, y2, conf)
+                        info['bill_detected'] = True
+                elif cls_id == self.YOLO_CLASSES['bill_back']:
+                    if bill_box is None or conf > bill_box[4]:
+                        bill_box = (x1, y1, x2, y2, conf)
+                        info['bill_detected'] = True
+                elif cls_id == self.YOLO_CLASSES['seal_t']:
+                    if seal_t_box is None or conf > seal_t_box[4]:
+                        seal_t_box = (x1, y1, x2, y2, conf)
+                elif cls_id == self.YOLO_CLASSES['seal_f']:
+                    if seal_f_box is None or conf > seal_f_box[4]:
+                        seal_f_box = (x1, y1, x2, y2, conf)
+
+        # Calculate rotation angle using bill region
+        angle = 0.0
+        if bill_box:
+            x1, y1, x2, y2, _ = bill_box
+            # Add padding and crop to bill region
+            pad = 20
+            crop_x1 = max(0, x1 - pad)
+            crop_y1 = max(0, y1 - pad)
+            crop_x2 = min(w, x2 + pad)
+            crop_y2 = min(h, y2 + pad)
+
+            crop = img[crop_y1:crop_y2, crop_x1:crop_x2]
+            gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+
+            # Use contour detection within the bill region
+            angle = self.contour_aligner.detect_rotation_angle(gray)
+            info['angle'] = angle
+
+        # Apply rotation if needed
+        if abs(angle) >= 0.2:
+            center = (w // 2, h // 2)
+            M = cv2.getRotationMatrix2D(center, angle, 1.0)
+            img = cv2.warpAffine(img, M, (w, h),
+                                 flags=cv2.INTER_CUBIC,
+                                 borderMode=cv2.BORDER_CONSTANT,
+                                 borderValue=(255, 255, 255))
+
+        # Check if bill is upside down using seal positions
+        if check_flip and seal_t_box and seal_f_box and bill_box:
+            bx1, _, bx2, _, _ = bill_box
+            bill_cx = (bx1 + bx2) / 2
+
+            seal_t_cx = (seal_t_box[0] + seal_t_box[2]) / 2
+            seal_f_cx = (seal_f_box[0] + seal_f_box[2]) / 2
+
+            # Treasury seal should be on right, Federal Reserve on left
+            t_on_right = seal_t_cx > bill_cx
+            f_on_left = seal_f_cx < bill_cx
+
+            if not t_on_right or not f_on_left:
+                # Bill is upside down - rotate 180 degrees
+                img = cv2.rotate(img, cv2.ROTATE_180)
+                info['flipped'] = True
+
+        return img, info
 
 
 # =============================================================================
@@ -404,6 +516,21 @@ class ProductionProcessor:
     # Valid Federal Reserve codes (A-L)
     VALID_FED_CODES = set('ABCDEFGHIJKL')
 
+    # YOLO class indices for Dollar Detective model (10 classes)
+    # Set to None to use all classes (backward compatible with single-class model)
+    YOLO_CLASSES = {
+        'back_plate': 0,
+        'bill_back': 1,
+        'bill_front': 2,
+        'denomination': 3,
+        'front_plate': 4,
+        'seal_f': 5,       # Federal Reserve Bank seal
+        'seal_t': 6,       # Treasury seal
+        'serial_number': 7,
+        'series_year': 8,
+        'star_symbol': 9,
+    }
+
     def __init__(self, yolo_model_path: Path, use_gpu: bool = False, cfg: Optional[Config] = None,
                  patterns_v2_path: Optional[Path] = None):
         self.cfg = cfg or Config()  # Use provided config or create default
@@ -414,6 +541,9 @@ class ProductionProcessor:
 
         print(f"Loading border-based aligner...")
         self.aligner = BillAligner()  # No reference needed - uses border detection
+
+        # YOLO-based aligner for GUI alignment feature
+        self.yolo_aligner = YOLOBillAligner(self.yolo_model)
 
         print(f"Loading EasyOCR (GPU={use_gpu})...")
         self.ocr_reader = easyocr.Reader(['en'], gpu=use_gpu, verbose=False)
@@ -549,6 +679,19 @@ class ProductionProcessor:
             return cv2.filter2D(img, -1, kernel)
         return img
 
+    def align_for_preview(self, image_path: Path) -> tuple[Optional[np.ndarray], dict]:
+        """
+        Align an image for GUI preview using YOLO-based detection.
+
+        Args:
+            image_path: Path to the image to align
+
+        Returns:
+            tuple: (aligned_bgr_image, info_dict)
+            info_dict contains 'angle', 'flipped', 'bill_detected'
+        """
+        return self.yolo_aligner.align_image(Path(image_path))
+
     def count_serial_detections(self, image_path: Path) -> int:
         """Count how many serial numbers YOLO detects in an image."""
         img = cv2.imread(str(image_path))
@@ -601,6 +744,10 @@ class ProductionProcessor:
         for (bbox, text, conf) in results:
             text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
 
+            # O at suffix position is almost always a misread Q
+            if len(text_clean) == 10 and text_clean[-1] == 'O':
+                text_clean = text_clean[:-1] + 'Q'
+
             # Direct match
             match = re.search(pattern, text_clean)
             if match:
@@ -634,6 +781,11 @@ class ProductionProcessor:
 
         for (bbox, text, conf) in results:
             text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
+
+            # O at suffix position is almost always a misread Q
+            if len(text_clean) == 10 and text_clean[-1] == 'O':
+                text_clean = text_clean[:-1] + 'Q'
+
             match = re.search(pattern, text_clean)
             if match:
                 valid_serials.append((match.group(0), conf))
@@ -657,7 +809,10 @@ class ProductionProcessor:
         if re.match(r'^\d{10}$', text):
             first, last = text[0], text[-1]
             first_opts = self.CHAR_CONFUSIONS.get(first, [first])
+            # For suffix, try Q first (most common 0-lookalike), skip O (never used)
             last_opts = self.CHAR_CONFUSIONS.get(last, [last])
+            if last == '0':
+                last_opts = ['Q', 'D']  # Q most likely, O never used
             for fl in first_opts:
                 for ll in last_opts:
                     corrected = fl + text[1:-1] + ll
@@ -667,7 +822,11 @@ class ProductionProcessor:
         # 10 chars with letter at start - try fixing end
         if re.match(r'^[A-L]\d{9}$', text):
             last = text[-1]
-            for letter in self.CHAR_CONFUSIONS.get(last, []):
+            # For suffix position, try Q first (most common 0-lookalike), skip O (never used)
+            suffix_opts = self.CHAR_CONFUSIONS.get(last, [])
+            if last == '0':
+                suffix_opts = ['Q', 'D']  # Q most likely, O never used
+            for letter in suffix_opts:
                 corrected = text[:-1] + letter
                 if re.match(pattern, corrected):
                     return corrected
@@ -746,17 +905,83 @@ class ProductionProcessor:
         return best_serial, best_conf
 
     def _detect_serials_single_pass(self, img: np.ndarray, conf: float) -> list:
-        """Run YOLO detection with given confidence threshold."""
+        """Run YOLO detection with given confidence threshold.
+
+        Filters for serial_number class (7) if using multi-class model,
+        or returns all detections for backward compatibility with single-class model.
+        """
         results = self.yolo_model(img, verbose=False, conf=conf)
         boxes = []
+
+        # Check if model has class info (multi-class model)
+        serial_class_id = self.YOLO_CLASSES.get('serial_number', None)
+
         for result in results:
             for box in result.boxes:
+                # Filter by class if multi-class model
+                if serial_class_id is not None and hasattr(box, 'cls') and box.cls is not None:
+                    cls_id = int(box.cls[0])
+                    if cls_id != serial_class_id:
+                        continue
+
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 boxes.append((x1, y1, x2, y2, float(box.conf[0])))
         return boxes
 
+    def _detect_star_symbol(self, img: np.ndarray, conf: float = 0.3) -> bool:
+        """Detect if a star symbol is present in the image.
+
+        Uses YOLO star_symbol class (9) for definitive star note detection.
+        Returns True if star symbol detected, False otherwise.
+        """
+        results = self.yolo_model(img, verbose=False, conf=conf)
+        star_class_id = self.YOLO_CLASSES.get('star_symbol', None)
+
+        if star_class_id is None:
+            return False  # Model doesn't support star detection
+
+        for result in results:
+            for box in result.boxes:
+                if hasattr(box, 'cls') and box.cls is not None:
+                    cls_id = int(box.cls[0])
+                    if cls_id == star_class_id:
+                        return True
+        return False
+
+    def _detect_objects_by_class(self, img: np.ndarray, class_name: str, conf: float = 0.3) -> list:
+        """Detect all objects of a specific class.
+
+        Args:
+            img: Image to process
+            class_name: Name of class to detect (e.g., 'seal_t', 'front_plate')
+            conf: Confidence threshold
+
+        Returns:
+            List of (x1, y1, x2, y2, confidence) tuples
+        """
+        results = self.yolo_model(img, verbose=False, conf=conf)
+        boxes = []
+        class_id = self.YOLO_CLASSES.get(class_name, None)
+
+        if class_id is None:
+            return boxes  # Unknown class
+
+        for result in results:
+            for box in result.boxes:
+                if hasattr(box, 'cls') and box.cls is not None:
+                    cls_id = int(box.cls[0])
+                    if cls_id == class_id:
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        boxes.append((x1, y1, x2, y2, float(box.conf[0])))
+        return boxes
+
     def _extract_serial_from_boxes(self, img: np.ndarray, boxes: list) -> list:
-        """Extract serial numbers from detected bounding boxes."""
+        """Extract serial numbers from detected bounding boxes.
+
+        Returns:
+            list of tuples: (serial, ocr_conf, det_conf, height_ratio)
+            height_ratio is box_height / image_height, useful for gas pump detection
+        """
         serials_found = []
         h, w = img.shape[:2]
 
@@ -767,6 +992,10 @@ class ProductionProcessor:
             padding_x = int(box_width * 0.40)
             padding_y = int(box_height * 0.15)
 
+            # Calculate height ratio for gas pump detection
+            # Taller boxes may indicate vertically shifted digits
+            height_ratio = box_height / h if h > 0 else 0.0
+
             x1_exp = max(0, x1 - padding_x)
             y1_exp = max(0, y1 - padding_y)
             x2_exp = min(w, x2 + padding_x)
@@ -776,20 +1005,37 @@ class ProductionProcessor:
             serial, conf = self.extract_serial_from_crop(crop)
 
             if serial:
-                serials_found.append((serial, conf, det_conf))
+                serials_found.append((serial, conf, det_conf, height_ratio))
 
         return serials_found
 
-    def extract_serial(self, image_path: Path) -> tuple[Optional[str], float, bool]:
+    def extract_serial(self, image_path: Path) -> tuple[Optional[str], float, bool, float, bool]:
         """
         Extract serial number using multi-pass detection pipeline.
 
         Returns:
-            tuple: (serial, confidence, is_upside_down)
+            tuple: (serial, confidence, is_upside_down, height_ratio, star_detected)
+            - height_ratio: bounding box height / image height, for gas pump detection
+            - star_detected: True if star symbol visually detected (definitive star note)
         """
-        aligned_img = self.aligner.align_image(image_path)
+        # Use YOLO-based alignment for more accurate straightening
+        # This improves height_ratio accuracy for gas pump detection
+        aligned_img, align_info = self.yolo_aligner.align_image(image_path)
         if aligned_img is None:
-            return None, 0, False
+            # Fallback to contour-based alignment if YOLO fails
+            aligned_img = self.aligner.align_image(image_path)
+            if aligned_img is None:
+                return None, 0, False, 0.0, False
+            align_info = {'flipped': False}
+
+        # Track if YOLO detected the bill was flipped
+        yolo_detected_flip = align_info.get('flipped', False)
+
+        # Track best height_ratio across all passes
+        best_height_ratio = 0.0
+
+        # Check for star symbol (definitive star note detection)
+        star_detected = self._detect_star_symbol(aligned_img)
 
         # First pass: standard detection (fastest path for most bills)
         boxes = self._detect_serials_single_pass(aligned_img, conf=0.1)
@@ -797,13 +1043,17 @@ class ProductionProcessor:
             serials = self._extract_serial_from_boxes(aligned_img, boxes)
             if serials:
                 # Got results on first pass - use them
-                result = self._consensus_vote([(s, oc, dc, 'standard') for s, oc, dc in serials])
-                # If confidence is good, return immediately (not upside down)
+                # serials now includes height_ratio as 4th element
+                result = self._consensus_vote([(s, oc, dc, 'standard') for s, oc, dc, hr in serials])
+                # Track height ratio from best detection
+                best_height_ratio = max(hr for s, oc, dc, hr in serials)
+                # If confidence is good, return immediately
                 if result[1] >= 0.5:
-                    return result[0], result[1], False
+                    return result[0], result[1], yolo_detected_flip, best_height_ratio, star_detected
 
         # Only run additional passes if first pass failed or had low confidence
         all_serials = []
+        all_height_ratios = []
         found_via_rotation = False
 
         for pass_config in self.DETECTION_PASSES[1:]:  # Skip first pass, already done
@@ -822,32 +1072,41 @@ class ProductionProcessor:
             if boxes:
                 serials = self._extract_serial_from_boxes(img, boxes)
                 if serials:
-                    for s, ocr_conf, det_conf in serials:
+                    for s, ocr_conf, det_conf, height_ratio in serials:
                         all_serials.append((s, ocr_conf, det_conf, pass_name))
+                        all_height_ratios.append(height_ratio)
 
                     # Track if best result came from rotated pass
                     if preprocess == 'rotate180':
                         found_via_rotation = True
 
                     # If we got good results, stop early
-                    if serials and max(oc for s, oc, dc in serials) >= 0.6:
+                    if serials and max(oc for s, oc, dc, hr in serials) >= 0.6:
                         break
 
         if not all_serials:
             # Last resort: try whole-image OCR scan for serial patterns
             serial, conf = self._fallback_ocr_scan(aligned_img)
-            return serial, conf, False
+            return serial, conf, False, 0.0, star_detected
 
         result = self._consensus_vote(all_serials)
 
-        # Determine if the winning result came from a rotated pass
-        # Check if most of the good serials came from rotation
+        # Use the max height ratio from successful detections
+        if all_height_ratios:
+            best_height_ratio = max(all_height_ratios)
+
+        # Determine if the bill was upside down
+        # YOLO alignment already corrected flip if detected, but track it for reporting
+        # Also check if serial was found via rotated pass as fallback
         if all_serials:
             rotated_count = sum(1 for s, oc, dc, name in all_serials if 'rotated' in name)
             normal_count = len(all_serials) - rotated_count
             found_via_rotation = rotated_count > normal_count
 
-        return result[0], result[1], found_via_rotation
+        # Bill was upside down if YOLO detected flip OR serial found via rotation
+        is_upside_down = yolo_detected_flip or found_via_rotation
+
+        return result[0], result[1], is_upside_down, best_height_ratio, star_detected
 
     def _fallback_ocr_scan(self, img: np.ndarray) -> tuple[Optional[str], float]:
         """Fallback: scan entire image for serial patterns."""
@@ -863,6 +1122,11 @@ class ProductionProcessor:
         candidates = []
         for (bbox, text, conf) in ocr_results:
             text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
+
+            # O at suffix position is almost always a misread Q
+            if len(text_clean) == 10 and text_clean[-1] == 'O':
+                text_clean = text_clean[:-1] + 'Q'
+
             match = re.search(pattern, text_clean)
             if match:
                 candidates.append((match.group(0), conf))
@@ -952,13 +1216,21 @@ class ProductionProcessor:
         """Generate crops for a fancy bill pair based on config."""
         crop_paths = []
 
-        # Use aligned (straightened) images for consistent crops
-        front_img = self.aligner.align_image(pair.front_path)
-        back_img = self.aligner.align_image(pair.back_path) if pair.back_path else None
+        # Use YOLO-based alignment for better accuracy
+        # This handles both rotation correction and flip detection
+        front_img, front_info = self.yolo_aligner.align_image(pair.front_path)
 
-        # Correct orientation if bill was scanned upside-down
-        # Both front and back get flipped together (same physical orientation)
-        if pair.is_upside_down:
+        # For back, use YOLO alignment but don't check flip (no seals on back)
+        # Instead, flip the back if the front was flipped (same physical orientation)
+        back_img = None
+        if pair.back_path:
+            back_img, _ = self.yolo_aligner.align_image(pair.back_path, check_flip=False)
+            # If front was flipped, back should be too (same physical bill)
+            if front_info.get('flipped', False) and back_img is not None:
+                back_img = cv2.rotate(back_img, cv2.ROTATE_180)
+
+        # Also handle the is_upside_down flag from serial detection (legacy support)
+        if pair.is_upside_down and not front_info.get('flipped', False):
             if front_img is not None:
                 front_img = cv2.rotate(front_img, cv2.ROTATE_180)
             if back_img is not None:
@@ -1037,6 +1309,8 @@ class ProductionProcessor:
                     'serial': '',
                     'fancy_types': '',
                     'confidence': '0.00',
+                    'height_ratio': '0.0000',
+                    'star_detected': False,
                     'is_fancy': False,
                     'needs_review': True,
                     'error': pair.error
@@ -1045,10 +1319,17 @@ class ProductionProcessor:
                 continue
 
             # Extract serial using multi-pass detection
-            serial, confidence, is_upside_down = self.extract_serial(pair.front_path)
-            pair.serial = serial
+            serial, confidence, is_upside_down, height_ratio, star_detected = self.extract_serial(pair.front_path)
             pair.confidence = confidence
             pair.is_upside_down = is_upside_down
+            pair.height_ratio = height_ratio
+            pair.star_detected = star_detected
+
+            # If star symbol visually detected but OCR missed it, append '*' to serial
+            if serial and star_detected and not serial.endswith('*'):
+                serial = serial[:-1] + '*' if len(serial) == 10 else serial + '*'
+
+            pair.serial = serial
 
             # Validate serial format
             is_valid, validation_error = self.validate_serial(serial)
@@ -1063,7 +1344,9 @@ class ProductionProcessor:
                     pair.fancy_types = ["ALL"]
                     pair.is_fancy = True
                 else:
-                    fancy_types = self.pattern_engine.classify_simple(serial)
+                    # Pass height_ratio for gas pump detection
+                    metadata = {'height_ratio': pair.height_ratio}
+                    fancy_types = self.pattern_engine.classify_simple(serial, metadata)
                     pair.fancy_types = fancy_types
                     pair.is_fancy = len(fancy_types) > 0
 
@@ -1098,6 +1381,8 @@ class ProductionProcessor:
                 'serial': serial or '',
                 'fancy_types': ", ".join(pair.fancy_types),
                 'confidence': f"{confidence:.2f}",
+                'height_ratio': f"{pair.height_ratio:.4f}",
+                'star_detected': pair.star_detected,
                 'is_fancy': pair.is_fancy,
                 'needs_review': pair.needs_review,
                 'error': pair.error or ''
@@ -1154,7 +1439,8 @@ class ProductionProcessor:
         with open(csv_path, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=[
                 'position', 'front_file', 'back_file', 'serial',
-                'fancy_types', 'confidence', 'is_fancy', 'needs_review', 'error'
+                'fancy_types', 'confidence', 'height_ratio', 'star_detected',
+                'is_fancy', 'needs_review', 'error'
             ])
             writer.writeheader()
             writer.writerows(all_results)

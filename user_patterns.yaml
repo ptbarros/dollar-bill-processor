@@ -1,0 +1,7 @@
+custom_patterns: {}
+disabled_patterns: []
+enabled_patterns:
+- GAS_PUMP
+pattern_overrides:
+  GAS_PUMP:
+    height_ratio_min: 0.079
