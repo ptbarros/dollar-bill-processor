@@ -981,9 +981,13 @@ class ProductionProcessor:
         This detects 'gas pump' printing errors where digits are vertically
         misaligned like an old gas pump display.
 
+        The algorithm fits a line to the character centers to account for image tilt,
+        then measures the standard deviation of deviations from that line. This
+        distinguishes between tilted-but-aligned serials and true gas pump effect.
+
         Returns:
             float: Normalized baseline variance (0.0 = perfect alignment, higher = more misaligned)
-                   Values > 0.15 typically indicate gas pump effect
+                   Values > 0.10 typically indicate gas pump effect
         """
         if serial_crop is None or serial_crop.size == 0:
             return 0.0
@@ -1020,21 +1024,46 @@ class ProductionProcessor:
         # Sort by x position (left to right)
         char_contours.sort(key=lambda c: c[0])
 
-        # Calculate center Y positions for each character
-        centers_y = [(y + ch / 2) for x, y, cw, ch in char_contours]
+        # Calculate center X and Y positions for each character
+        centers_x = np.array([x + cw / 2 for x, y, cw, ch in char_contours])
+        centers_y = np.array([(y + ch / 2) for x, y, cw, ch in char_contours])
         heights = [ch for x, y, cw, ch in char_contours]
-
-        # Calculate normalized range (baseline variance)
-        center_range = max(centers_y) - min(centers_y)
         avg_height = np.mean(heights)
 
         if avg_height <= 0:
             return 0.0
 
-        # Normalize by average character height
-        normalized_range = center_range / avg_height
+        # Fit a line to the character centers to account for image tilt
+        # y = mx + b (linear regression)
+        n = len(centers_x)
+        sum_x = np.sum(centers_x)
+        sum_y = np.sum(centers_y)
+        sum_xy = np.sum(centers_x * centers_y)
+        sum_x2 = np.sum(centers_x ** 2)
 
-        return normalized_range
+        # Calculate slope (m) and intercept (b)
+        denom = n * sum_x2 - sum_x ** 2
+        if abs(denom) < 1e-10:
+            # Vertical line or single point - use simple range
+            return (max(centers_y) - min(centers_y)) / avg_height
+
+        m = (n * sum_xy - sum_x * sum_y) / denom
+        b = (sum_y - m * sum_x) / n
+
+        # Calculate predicted Y for each character along the fitted line
+        predicted_y = m * centers_x + b
+
+        # Calculate deviations from the fitted line
+        deviations = centers_y - predicted_y
+
+        # Use standard deviation of deviations (not range) for robustness
+        # This measures how much characters deviate from the expected baseline
+        std_dev = np.std(deviations)
+
+        # Normalize by average character height
+        normalized_variance = std_dev / avg_height
+
+        return normalized_variance
 
     def _extract_serial_from_boxes(self, img: np.ndarray, boxes: list) -> list:
         """Extract serial numbers from detected bounding boxes.

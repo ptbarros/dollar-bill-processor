@@ -28,7 +28,10 @@ class PatternEngine:
     """
 
     def __init__(self, config_path: Path = None):
-        self.config_path = config_path or Path(__file__).parent / "patterns_v2.yaml"
+        if config_path is None:
+            self.config_path = Path(__file__).parent / "patterns_v2.yaml"
+        else:
+            self.config_path = Path(config_path) if isinstance(config_path, str) else config_path
         self.user_config_path = self.config_path.parent / "user_patterns.yaml"
         self.config = self._load_config()
         self.user_config = self._load_user_config()

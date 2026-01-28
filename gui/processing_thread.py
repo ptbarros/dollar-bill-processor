@@ -136,7 +136,9 @@ class ProcessingThread(QThread):
                         pair.fancy_types = ["ALL"]
                         pair.is_fancy = True
                     else:
-                        fancy_types = self.processor.pattern_engine.classify_simple(serial)
+                        # Pass baseline_variance in metadata for gas pump detection
+                        metadata = {'baseline_variance': pair.baseline_variance}
+                        fancy_types = self.processor.pattern_engine.classify_simple(serial, metadata=metadata)
                         pair.fancy_types = fancy_types
                         pair.is_fancy = len(fancy_types) > 0
 
