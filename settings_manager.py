@@ -73,6 +73,17 @@ class CropSettings:
     back_seal_h: float = 0.557
 
 
+@dataclass
+class MonitorSettings:
+    """Monitor mode settings for real-time processing."""
+    watch_directory: str = ""  # Directory to watch for new files
+    output_directory: str = ""  # Output directory for fancy bill crops
+    archive_directory: str = ""  # Where to move processed batches
+    poll_interval: float = 2.0  # Seconds between directory checks
+    file_settle_time: float = 1.0  # Wait for file write completion
+    auto_archive: bool = True  # Move files to timestamped dir on stop
+
+
 class SettingsManager:
     """
     Manages persistent user settings.
@@ -92,6 +103,7 @@ class SettingsManager:
         self.ui = UISettings()
         self.export = ExportSettings()
         self.crop = CropSettings()
+        self.monitor = MonitorSettings()
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
         self.pattern_colors: Dict[str, str] = {}  # Pattern name -> hex color
         self.custom_values: Dict[str, Any] = {}  # Arbitrary user values
@@ -155,6 +167,16 @@ class SettingsManager:
             self.crop.back_seal_w = crop.get('back_seal_w', 0.261)
             self.crop.back_seal_h = crop.get('back_seal_h', 0.557)
 
+        # Load monitor settings
+        if 'monitor' in data:
+            mon = data['monitor']
+            self.monitor.watch_directory = mon.get('watch_directory', '')
+            self.monitor.output_directory = mon.get('output_directory', '')
+            self.monitor.archive_directory = mon.get('archive_directory', '')
+            self.monitor.poll_interval = mon.get('poll_interval', 2.0)
+            self.monitor.file_settle_time = mon.get('file_settle_time', 1.0)
+            self.monitor.auto_archive = mon.get('auto_archive', True)
+
         # Load pattern states
         self.pattern_states = data.get('pattern_states', {})
 
@@ -210,6 +232,14 @@ class SettingsManager:
                 'back_seal_y': self.crop.back_seal_y,
                 'back_seal_w': self.crop.back_seal_w,
                 'back_seal_h': self.crop.back_seal_h,
+            },
+            'monitor': {
+                'watch_directory': self.monitor.watch_directory,
+                'output_directory': self.monitor.output_directory,
+                'archive_directory': self.monitor.archive_directory,
+                'poll_interval': self.monitor.poll_interval,
+                'file_settle_time': self.monitor.file_settle_time,
+                'auto_archive': self.monitor.auto_archive,
             },
             'pattern_states': self.pattern_states,
             'pattern_colors': self.pattern_colors,
@@ -272,6 +302,7 @@ class SettingsManager:
         self.ui = UISettings()
         self.export = ExportSettings()
         self.crop = CropSettings()
+        self.monitor = MonitorSettings()
         self.pattern_states = {}
         self.custom_values = {}
 

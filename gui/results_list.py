@@ -43,6 +43,7 @@ class ResultsList(QWidget):
     # Signals
     item_selected = Signal(dict)  # Emits the selected result
     correction_applied = Signal(str, str, str)  # filename, original, corrected
+    batch_changed = Signal(str)  # Emits batch path when changed (empty for current session)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -51,6 +52,7 @@ class ResultsList(QWidget):
         self.filters: Dict[str, bool] = {}
         self.pattern_engine = PatternEngine()
         self.settings = get_settings()
+        self._current_batch_path: Optional[Path] = None  # None = current session
         self._setup_ui()
 
     def _setup_ui(self):
@@ -58,6 +60,24 @@ class ResultsList(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
+
+        # Batch selector bar
+        batch_layout = QHBoxLayout()
+        batch_label = QLabel("Batch:")
+        batch_layout.addWidget(batch_label)
+
+        self.batch_combo = QComboBox()
+        self.batch_combo.addItem("Current Session", "")
+        self.batch_combo.setMinimumWidth(200)
+        self.batch_combo.currentIndexChanged.connect(self._on_batch_changed)
+        batch_layout.addWidget(self.batch_combo, 1)
+
+        self.refresh_batches_btn = QPushButton("Refresh")
+        self.refresh_batches_btn.setMaximumWidth(60)
+        self.refresh_batches_btn.clicked.connect(self.refresh_batch_list)
+        batch_layout.addWidget(self.refresh_batches_btn)
+
+        layout.addLayout(batch_layout)
 
         # Filter bar
         filter_layout = QHBoxLayout()
@@ -590,3 +610,121 @@ class ResultsList(QWidget):
                 self.tree.setCurrentItem(item)
                 return True
         return False
+
+    # =========================================================================
+    # Batch Management
+    # =========================================================================
+
+    def refresh_batch_list(self):
+        """Scan archive directory and populate batch selector."""
+        # Remember current selection
+        current_data = self.batch_combo.currentData()
+
+        # Clear and re-add current session
+        self.batch_combo.blockSignals(True)
+        self.batch_combo.clear()
+        self.batch_combo.addItem("Current Session", "")
+
+        # Get archive directory from settings
+        archive_dir = self.settings.monitor.archive_directory
+        if not archive_dir:
+            # Fall back to default location
+            archive_dir = str(Path(self.settings.monitor.watch_directory) / "archive")
+
+        archive_path = Path(archive_dir)
+        if archive_path.exists():
+            # Find all batch directories, sorted newest first
+            batch_dirs = sorted(
+                [d for d in archive_path.iterdir() if d.is_dir() and d.name.startswith("batch_")],
+                key=lambda d: d.name,
+                reverse=True
+            )
+
+            for batch_dir in batch_dirs:
+                # Check if it has a results.csv
+                results_csv = batch_dir / "results.csv"
+                if results_csv.exists():
+                    # Count items in CSV for display
+                    try:
+                        with open(results_csv, 'r') as f:
+                            count = sum(1 for _ in f) - 1  # Subtract header
+                        label = f"{batch_dir.name} ({count} bills)"
+                    except Exception:
+                        label = batch_dir.name
+                    self.batch_combo.addItem(label, str(batch_dir))
+
+        # Restore selection if still valid
+        idx = self.batch_combo.findData(current_data)
+        if idx >= 0:
+            self.batch_combo.setCurrentIndex(idx)
+
+        self.batch_combo.blockSignals(False)
+
+    def _on_batch_changed(self, index: int):
+        """Handle batch selection change."""
+        batch_path = self.batch_combo.currentData()
+
+        if not batch_path:
+            # Current session selected
+            self._current_batch_path = None
+            self.batch_changed.emit("")
+        else:
+            # Archived batch selected
+            self._current_batch_path = Path(batch_path)
+            self._load_batch(self._current_batch_path)
+            self.batch_changed.emit(batch_path)
+
+    def _load_batch(self, batch_dir: Path):
+        """Load results from an archived batch."""
+        results_csv = batch_dir / "results.csv"
+        if not results_csv.exists():
+            return
+
+        results = []
+        try:
+            with open(results_csv, 'r', newline='') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    # Convert string booleans to actual booleans
+                    result = dict(row)
+                    result['is_fancy'] = result.get('is_fancy', '').lower() == 'true'
+                    result['needs_review'] = result.get('needs_review', '').lower() == 'true'
+
+                    # Convert position to int
+                    try:
+                        result['position'] = int(result.get('position', 0))
+                    except ValueError:
+                        result['position'] = 0
+
+                    # Update file paths to point to archive location
+                    front_file = result.get('front_file', '')
+                    if front_file:
+                        # Use just the filename and look in batch dir
+                        front_name = Path(front_file).name
+                        archived_path = batch_dir / front_name
+                        if archived_path.exists():
+                            result['front_file'] = str(archived_path)
+
+                    back_file = result.get('back_file', '')
+                    if back_file:
+                        back_name = Path(back_file).name
+                        archived_path = batch_dir / back_name
+                        if archived_path.exists():
+                            result['back_file'] = str(archived_path)
+
+                    results.append(result)
+
+        except Exception as e:
+            print(f"Error loading batch: {e}")
+            return
+
+        # Set results (this will update the display)
+        self.set_results(results)
+
+    def get_current_batch_path(self) -> Optional[Path]:
+        """Get the path of the currently selected batch, or None for current session."""
+        return self._current_batch_path
+
+    def select_current_session(self):
+        """Switch back to current session view."""
+        self.batch_combo.setCurrentIndex(0)

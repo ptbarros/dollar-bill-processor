@@ -41,6 +41,11 @@ class MainWindow(QMainWindow):
         self.current_results = []
         self.is_processing = False
 
+        # Monitor mode state
+        self.is_monitoring = False
+        self.file_watcher = None
+        self.monitor_thread = None
+
         # Setup UI
         self._setup_ui()
         self._setup_menus()
@@ -64,6 +69,9 @@ class MainWindow(QMainWindow):
         self.processing_panel = ProcessingPanel()
         self.processing_panel.process_requested.connect(self._on_process_requested)
         self.processing_panel.stop_requested.connect(self._on_stop_requested)
+        self.processing_panel.monitor_requested.connect(self._start_monitoring)
+        self.processing_panel.monitor_stop_requested.connect(self._stop_monitoring)
+        self.processing_panel.monitor_check.toggled.connect(self._on_monitor_mode_changed)
         main_layout.addWidget(self.processing_panel)
 
         # Main content area (splitter)
@@ -73,6 +81,7 @@ class MainWindow(QMainWindow):
         self.results_list = ResultsList()
         self.results_list.item_selected.connect(self._on_result_selected)
         self.results_list.correction_applied.connect(self._on_correction_applied)
+        self.results_list.batch_changed.connect(self._on_batch_changed)
         splitter.addWidget(self.results_list)
 
         # Right panel - Preview
@@ -327,6 +336,18 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
             self._on_stop_requested()
+        if self.is_monitoring:
+            reply = QMessageBox.question(
+                self, "Confirm Exit",
+                "Monitoring is active. Are you sure you want to exit?\n\n"
+                "Files will be archived if auto-archive is enabled.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply == QMessageBox.No:
+                event.ignore()
+                return
+            self._stop_monitoring()
         event.accept()
 
     # Slots
@@ -685,6 +706,9 @@ class MainWindow(QMainWindow):
         font_size = self.settings.ui.font_size
         self._apply_font_size(font_size)
 
+        # Refresh batch list from archive directory
+        self.results_list.refresh_batch_list()
+
     def _apply_font_size(self, size: int):
         """Apply font size to the application."""
         # Create stylesheet with the specified font size
@@ -745,6 +769,214 @@ class MainWindow(QMainWindow):
             }}
         """
         QApplication.instance().setStyleSheet(stylesheet)
+
+    # =========================================================================
+    # Monitor Mode Methods
+    # =========================================================================
+
+    def _on_monitor_mode_changed(self, enabled: bool):
+        """Handle monitor mode checkbox toggle."""
+        if enabled:
+            # Update display with configured directories
+            watch_dir = self.settings.monitor.watch_directory
+            output_dir = self.settings.monitor.output_directory
+            self.processing_panel.set_monitor_dirs(watch_dir, output_dir)
+
+    def _start_monitoring(self):
+        """Start monitor mode."""
+        from .file_watcher import FileWatcher
+        from .monitor_thread import MonitorThread
+
+        # Validate settings
+        watch_dir = self.settings.monitor.watch_directory
+        output_dir = self.settings.monitor.output_directory
+
+        if not watch_dir:
+            QMessageBox.warning(
+                self, "Configuration Required",
+                "Please configure the watch directory in Settings > Monitor."
+            )
+            return
+
+        watch_path = Path(watch_dir)
+        if not watch_path.exists():
+            QMessageBox.warning(
+                self, "Directory Not Found",
+                f"Watch directory does not exist:\n{watch_dir}\n\n"
+                "Please create the directory or configure a different path."
+            )
+            return
+
+        if not output_dir:
+            output_dir = str(watch_path / "fancy_bills")
+
+        # Switch to current session and clear previous results
+        self.results_list.select_current_session()
+        self.current_results = []
+        self.results_list.clear()
+        self.preview_panel.clear()
+
+        # Create monitor thread
+        self.monitor_thread = MonitorThread(
+            watch_dir=watch_path,
+            output_dir=Path(output_dir),
+            use_gpu=self.settings.processing.use_gpu,
+            verify_pairs=self.settings.processing.verify_pairs,
+            crop_all=self.settings.processing.crop_all
+        )
+
+        # Connect signals
+        self.monitor_thread.progress_updated.connect(self._on_progress_updated)
+        self.monitor_thread.result_ready.connect(self._on_result_ready)
+        self.monitor_thread.processing_complete.connect(self._on_monitor_complete)
+        self.monitor_thread.error_occurred.connect(self._on_processing_error)
+        self.monitor_thread.status_updated.connect(self._on_monitor_status)
+
+        # Create file watcher
+        self.file_watcher = FileWatcher(
+            watch_dir=watch_path,
+            poll_interval=self.settings.monitor.poll_interval,
+            settle_time=self.settings.monitor.file_settle_time
+        )
+
+        # Connect file watcher to monitor thread
+        self.file_watcher.new_file_detected.connect(self.monitor_thread.handle_new_file)
+        self.file_watcher.error_occurred.connect(self._on_processing_error)
+
+        # Start threads
+        self.monitor_thread.start()
+        self.file_watcher.start()
+
+        # Update UI state
+        self.is_monitoring = True
+        self.processing_panel.set_monitoring(True)
+        self.status_label.setText(f"Monitoring: {watch_dir}")
+
+    def _stop_monitoring(self):
+        """Stop monitor mode and optionally archive files."""
+        if not self.is_monitoring:
+            return
+
+        # Stop the file watcher
+        if self.file_watcher:
+            self.file_watcher.stop()
+            self.file_watcher.wait(2000)
+            self.file_watcher = None
+
+        # Stop the monitor thread
+        if self.monitor_thread:
+            self.monitor_thread.stop()
+            self.monitor_thread.wait(5000)
+
+            # Grab processor for alignment feature
+            self.processor = self.monitor_thread.processor
+
+            # Archive if enabled
+            if self.settings.monitor.auto_archive and self.monitor_thread.pair_count > 0:
+                self._archive_batch()
+
+            self.monitor_thread = None
+
+        # Update UI state
+        self.is_monitoring = False
+        self.processing_panel.set_monitoring(False)
+        self.status_label.setText("Monitoring stopped")
+
+        # Refresh batch list to show newly archived batch
+        self.results_list.refresh_batch_list()
+
+    @Slot(str)
+    def _on_monitor_status(self, message: str):
+        """Handle status updates from monitor thread."""
+        self.status_label.setText(message)
+
+    @Slot(str)
+    def _on_batch_changed(self, batch_path: str):
+        """Handle batch selection change in results list."""
+        if batch_path:
+            # Viewing archived batch
+            self.preview_panel.clear()
+            self.status_label.setText(f"Viewing archived batch: {Path(batch_path).name}")
+        else:
+            # Back to current session
+            self.preview_panel.clear()
+            self.status_label.setText("Current session")
+
+    @Slot(dict)
+    def _on_monitor_complete(self, summary: dict):
+        """Handle monitor mode completion."""
+        total = summary.get('total', 0)
+        fancy = summary.get('fancy_count', 0)
+        review = summary.get('review_count', 0)
+        pending_fronts = summary.get('pending_fronts', 0)
+        pending_backs = summary.get('pending_backs', 0)
+
+        status = f"Monitoring stopped: {total} pairs processed, {fancy} fancy"
+        if pending_fronts or pending_backs:
+            status += f" ({pending_fronts + pending_backs} unpaired files)"
+
+        self.status_label.setText(status)
+        self.progress_label.setText("")
+
+        # Auto-export if enabled and we have results
+        if self.current_results:
+            self._auto_export(summary)
+
+    def _archive_batch(self):
+        """Move processed files to a timestamped archive directory."""
+        import shutil
+        from datetime import datetime
+
+        if not self.monitor_thread:
+            return
+
+        archive_base = self.settings.monitor.archive_directory
+        if not archive_base:
+            archive_base = str(Path(self.settings.monitor.watch_directory) / "archive")
+
+        archive_path = Path(archive_base)
+        archive_path.mkdir(parents=True, exist_ok=True)
+
+        # Create timestamped batch directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        batch_dir = archive_path / f"batch_{timestamp}"
+        batch_dir.mkdir(parents=True, exist_ok=True)
+
+        # Move processed files
+        processed_files = self.monitor_thread.get_processed_files()
+        moved_count = 0
+
+        for file_path in processed_files:
+            if file_path.exists():
+                try:
+                    dest = batch_dir / file_path.name
+                    shutil.move(str(file_path), str(dest))
+                    moved_count += 1
+                except Exception as e:
+                    self.status_label.setText(f"Error moving {file_path.name}: {e}")
+
+        # Export batch CSV
+        if self.current_results:
+            csv_path = batch_dir / "results.csv"
+            self._export_batch_csv(csv_path)
+
+        self.status_label.setText(
+            f"Archived {moved_count} files to {batch_dir.name}"
+        )
+
+        return batch_dir
+
+    def _export_batch_csv(self, csv_path: Path):
+        """Export results to batch CSV file."""
+        import csv
+        with open(csv_path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=[
+                'position', 'front_file', 'back_file', 'serial', 'fancy_types',
+                'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
+                'serial_region_path', 'error'
+            ])
+            writer.writeheader()
+            writer.writerows(self.current_results)
 
 
 def run_gui():

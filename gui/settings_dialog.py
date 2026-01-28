@@ -59,6 +59,11 @@ class SettingsDialog(QDialog):
         self._setup_crop_tab(crop_tab)
         tabs.addTab(crop_tab, "Crop Regions")
 
+        # Monitor tab
+        monitor_tab = QWidget()
+        self._setup_monitor_tab(monitor_tab)
+        tabs.addTab(monitor_tab, "Monitor")
+
         layout.addWidget(tabs)
 
         # Buttons
@@ -328,6 +333,91 @@ class SettingsDialog(QDialog):
 
         layout.addStretch()
 
+    def _setup_monitor_tab(self, tab: QWidget):
+        """Setup the monitor mode settings tab."""
+        layout = QVBoxLayout(tab)
+
+        # Directories
+        dirs_group = QGroupBox("Monitor Mode Directories")
+        dirs_layout = QFormLayout(dirs_group)
+
+        # Watch directory
+        self.watch_dir_edit = QLineEdit()
+        self.watch_dir_edit.setPlaceholderText("Directory where scanner saves files...")
+        watch_layout = QHBoxLayout()
+        watch_layout.addWidget(self.watch_dir_edit)
+        watch_btn = QPushButton("...")
+        watch_btn.setMaximumWidth(30)
+        watch_btn.clicked.connect(self._browse_watch_dir)
+        watch_layout.addWidget(watch_btn)
+        dirs_layout.addRow("Watch Directory:", watch_layout)
+
+        watch_hint = QLabel("Scanner saves files here - monitored for new images")
+        watch_hint.setStyleSheet("color: gray; font-size: 9px;")
+        dirs_layout.addRow("", watch_hint)
+
+        # Output directory
+        self.monitor_output_edit = QLineEdit()
+        self.monitor_output_edit.setPlaceholderText("Directory for fancy bill crops...")
+        output_layout = QHBoxLayout()
+        output_layout.addWidget(self.monitor_output_edit)
+        output_btn = QPushButton("...")
+        output_btn.setMaximumWidth(30)
+        output_btn.clicked.connect(self._browse_monitor_output)
+        output_layout.addWidget(output_btn)
+        dirs_layout.addRow("Output Directory:", output_layout)
+
+        # Archive directory
+        self.archive_dir_edit = QLineEdit()
+        self.archive_dir_edit.setPlaceholderText("Directory for completed batches...")
+        archive_layout = QHBoxLayout()
+        archive_layout.addWidget(self.archive_dir_edit)
+        archive_btn = QPushButton("...")
+        archive_btn.setMaximumWidth(30)
+        archive_btn.clicked.connect(self._browse_archive_dir)
+        archive_layout.addWidget(archive_btn)
+        dirs_layout.addRow("Archive Directory:", archive_layout)
+
+        archive_hint = QLabel("Processed files are moved here when monitoring stops")
+        archive_hint.setStyleSheet("color: gray; font-size: 9px;")
+        dirs_layout.addRow("", archive_hint)
+
+        layout.addWidget(dirs_group)
+
+        # Options
+        options_group = QGroupBox("Monitor Options")
+        options_layout = QFormLayout(options_group)
+
+        self.auto_archive_check = QCheckBox("Auto-archive on stop")
+        self.auto_archive_check.setToolTip("Move processed files to timestamped directory when monitoring stops")
+        options_layout.addRow(self.auto_archive_check)
+
+        self.poll_interval_spin = QDoubleSpinBox()
+        self.poll_interval_spin.setRange(1.0, 10.0)
+        self.poll_interval_spin.setSingleStep(0.5)
+        self.poll_interval_spin.setDecimals(1)
+        self.poll_interval_spin.setSuffix(" seconds")
+        options_layout.addRow("Poll Interval:", self.poll_interval_spin)
+
+        poll_hint = QLabel("How often to check for new files")
+        poll_hint.setStyleSheet("color: gray; font-size: 9px;")
+        options_layout.addRow("", poll_hint)
+
+        self.settle_time_spin = QDoubleSpinBox()
+        self.settle_time_spin.setRange(0.5, 5.0)
+        self.settle_time_spin.setSingleStep(0.5)
+        self.settle_time_spin.setDecimals(1)
+        self.settle_time_spin.setSuffix(" seconds")
+        options_layout.addRow("File Settle Time:", self.settle_time_spin)
+
+        settle_hint = QLabel("Wait for file to finish writing before processing")
+        settle_hint.setStyleSheet("color: gray; font-size: 9px;")
+        options_layout.addRow("", settle_hint)
+
+        layout.addWidget(options_group)
+
+        layout.addStretch()
+
     def _load_settings(self):
         """Load current settings into the UI."""
         # Processing
@@ -371,6 +461,14 @@ class SettingsDialog(QDialog):
         self.back_seal_w.setValue(self.settings.crop.back_seal_w)
         self.back_seal_h.setValue(self.settings.crop.back_seal_h)
 
+        # Monitor
+        self.watch_dir_edit.setText(self.settings.monitor.watch_directory)
+        self.monitor_output_edit.setText(self.settings.monitor.output_directory)
+        self.archive_dir_edit.setText(self.settings.monitor.archive_directory)
+        self.auto_archive_check.setChecked(self.settings.monitor.auto_archive)
+        self.poll_interval_spin.setValue(self.settings.monitor.poll_interval)
+        self.settle_time_spin.setValue(self.settings.monitor.file_settle_time)
+
     def _save_settings(self):
         """Save UI values to settings."""
         # Processing
@@ -409,6 +507,14 @@ class SettingsDialog(QDialog):
         self.settings.crop.back_seal_w = self.back_seal_w.value()
         self.settings.crop.back_seal_h = self.back_seal_h.value()
 
+        # Monitor
+        self.settings.monitor.watch_directory = self.watch_dir_edit.text()
+        self.settings.monitor.output_directory = self.monitor_output_edit.text()
+        self.settings.monitor.archive_directory = self.archive_dir_edit.text()
+        self.settings.monitor.auto_archive = self.auto_archive_check.isChecked()
+        self.settings.monitor.poll_interval = self.poll_interval_spin.value()
+        self.settings.monitor.file_settle_time = self.settle_time_spin.value()
+
     def _save_and_accept(self):
         """Save settings and close."""
         self._save_settings()
@@ -416,13 +522,14 @@ class SettingsDialog(QDialog):
 
     def _restore_defaults(self):
         """Restore default settings."""
-        from settings_manager import ProcessingSettings, UISettings, ExportSettings, CropSettings
+        from settings_manager import ProcessingSettings, UISettings, ExportSettings, CropSettings, MonitorSettings
 
         # Reset to defaults
         self.settings.processing = ProcessingSettings()
         self.settings.ui = UISettings()
         self.settings.export = ExportSettings()
         self.settings.crop = CropSettings()
+        self.settings.monitor = MonitorSettings()
 
         # Reset fancy color
         self._fancy_color = "#2e7d32"
@@ -486,3 +593,36 @@ class SettingsDialog(QDialog):
             f"background-color: {self._fancy_color}; color: {text_color}; border: 1px solid #555;"
         )
         self.fancy_color_btn.setText(self._fancy_color)
+
+    def _browse_watch_dir(self):
+        """Browse for watch directory."""
+        folder = QFileDialog.getExistingDirectory(
+            self, "Select Watch Directory",
+            self.watch_dir_edit.text() or str(Path.home())
+        )
+        if folder:
+            self.watch_dir_edit.setText(folder)
+            # Auto-set output if empty
+            if not self.monitor_output_edit.text():
+                self.monitor_output_edit.setText(str(Path(folder) / "fancy_bills"))
+            # Auto-set archive if empty
+            if not self.archive_dir_edit.text():
+                self.archive_dir_edit.setText(str(Path(folder) / "archive"))
+
+    def _browse_monitor_output(self):
+        """Browse for monitor output directory."""
+        folder = QFileDialog.getExistingDirectory(
+            self, "Select Output Directory",
+            self.monitor_output_edit.text() or str(Path.home())
+        )
+        if folder:
+            self.monitor_output_edit.setText(folder)
+
+    def _browse_archive_dir(self):
+        """Browse for archive directory."""
+        folder = QFileDialog.getExistingDirectory(
+            self, "Select Archive Directory",
+            self.archive_dir_edit.text() or str(Path.home())
+        )
+        if folder:
+            self.archive_dir_edit.setText(folder)
