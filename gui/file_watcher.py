@@ -60,15 +60,22 @@ class FileWatcher(QThread):
 
     def run(self):
         """Main watch loop."""
+        # Expand user path (handle ~ on Windows)
+        self.watch_dir = self.watch_dir.expanduser().resolve()
+
+        print(f"[FileWatcher] Starting to watch: {self.watch_dir}")
+
         if not self.watch_dir.exists():
             self.error_occurred.emit(f"Watch directory does not exist: {self.watch_dir}")
             return
 
         # Initialize known files (don't process existing files)
         self._known_files = self._get_current_files()
+        print(f"[FileWatcher] Found {len(self._known_files)} existing files (will be ignored)")
 
         # Start watching the directory
-        self._fs_watcher.addPath(str(self.watch_dir))
+        success = self._fs_watcher.addPath(str(self.watch_dir))
+        print(f"[FileWatcher] QFileSystemWatcher registered: {success}")
 
         # Main loop with polling fallback
         while not self._stop_requested:
@@ -111,6 +118,9 @@ class FileWatcher(QThread):
         current_files = self._get_current_files()
         new_files = current_files - self._known_files
 
+        if new_files:
+            print(f"[FileWatcher] Detected {len(new_files)} new file(s): {[f.name for f in new_files]}")
+
         for file_path in new_files:
             if file_path not in self._pending_files:
                 self._pending_files[file_path] = time.time()
@@ -134,6 +144,7 @@ class FileWatcher(QThread):
 
         # Emit signals for settled files
         for file_path in sorted(settled_files, key=lambda p: p.name):
+            print(f"[FileWatcher] File ready, emitting: {file_path.name}")
             self.new_file_detected.emit(file_path)
 
     def _is_file_ready(self, file_path: Path) -> bool:

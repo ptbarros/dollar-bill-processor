@@ -8,7 +8,7 @@ import shutil
 import csv
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Set
+from typing import Optional, Set
 
 from PySide6.QtCore import QThread, Signal, Slot
 
@@ -58,9 +58,9 @@ class MonitorThread(QThread):
         self._stop_requested = False
         self.processor = None
 
-        # Tracking state
-        self.pending_fronts: Dict[str, Path] = {}  # base_name -> front_path
-        self.pending_backs: Dict[str, Path] = {}   # base_name -> back_path
+        # Tracking state - FIFO queues for detection-based pairing
+        self.front_queue: list[Path] = []  # Queue of unpaired fronts (arrival order)
+        self.back_queue: list[Path] = []   # Queue of unpaired backs (arrival order)
         self.processed_files: Set[Path] = set()    # Files already processed
         self.pair_count = 0
         self.fancy_count = 0
@@ -116,8 +116,8 @@ class MonitorThread(QThread):
             'fancy_count': self.fancy_count,
             'review_count': self.review_count,
             'stopped': True,
-            'pending_fronts': len(self.pending_fronts),
-            'pending_backs': len(self.pending_backs),
+            'pending_fronts': len(self.front_queue),
+            'pending_backs': len(self.back_queue),
         }
         self.processing_complete.emit(summary)
 
@@ -128,43 +128,55 @@ class MonitorThread(QThread):
 
         Called from the main thread via signal connection.
         """
+        print(f"[MonitorThread] Received file: {file_path.name}")
+
         if file_path in self.processed_files:
+            print(f"[MonitorThread] Already processed, skipping: {file_path.name}")
             return
 
         if self.processor is None:
+            print(f"[MonitorThread] Processor not ready yet!")
             return
 
         try:
-            # Extract base name for pairing
-            base_name = self._get_base_name(file_path)
+            print(f"[MonitorThread] Processing {file_path.name}...")
 
             # Determine if front or back using YOLO detection count
-            # Front of bill has 2 serial numbers, so should have >= 2 detections
-            # Back may have 1 false positive, so use threshold of 2
+            # Front of bill typically has 6-10 serial region detections
+            # Back of bill typically has 0-2 false positive detections
+            # Use threshold of 4 to reliably distinguish front from back
+            print(f"[MonitorThread] Running YOLO detection...")
             serial_count = self.processor.count_serial_detections(file_path)
-            is_front = serial_count >= 2
+            is_front = serial_count >= 4
+            print(f"[MonitorThread] Serial count: {serial_count}, is_front: {is_front}")
 
             self.status_updated.emit(f"Detected: {file_path.name} ({'front' if is_front else 'back'})")
 
+            # Pure detection-based pairing: pair first available front with first available back
+            # Ignores filenames entirely - uses YOLO detection + arrival order
             if is_front:
-                if base_name in self.pending_backs:
-                    # Found matching back - process pair
-                    back_path = self.pending_backs.pop(base_name)
+                if self.back_queue:
+                    # There's a back waiting - pair with it
+                    back_path = self.back_queue.pop(0)
+                    print(f"[MonitorThread] Paired: {file_path.name} (front) + {back_path.name} (back)")
                     self._process_pair(file_path, back_path)
                 else:
-                    # Store front, wait for back
-                    self.pending_fronts[base_name] = file_path
+                    # No back waiting - queue this front
+                    self.front_queue.append(file_path)
+                    print(f"[MonitorThread] Queued front: {file_path.name} (waiting for back, queue: {len(self.front_queue)})")
             else:
-                if base_name in self.pending_fronts:
-                    # Found matching front - process pair
-                    front_path = self.pending_fronts.pop(base_name)
+                if self.front_queue:
+                    # There's a front waiting - pair with it
+                    front_path = self.front_queue.pop(0)
+                    print(f"[MonitorThread] Paired: {front_path.name} (front) + {file_path.name} (back)")
                     self._process_pair(front_path, file_path)
                 else:
-                    # Store back, wait for front
-                    self.pending_backs[base_name] = file_path
+                    # No front waiting - queue this back
+                    self.back_queue.append(file_path)
+                    print(f"[MonitorThread] Queued back: {file_path.name} (waiting for front, queue: {len(self.back_queue)})")
 
             # Update progress
-            total_pending = len(self.pending_fronts) + len(self.pending_backs)
+            total_pending = len(self.front_queue) + len(self.back_queue)
             self.progress_updated.emit(
                 self.pair_count,
                 self.pair_count + total_pending // 2,
@@ -172,6 +184,9 @@ class MonitorThread(QThread):
             )
 
         except Exception as e:
+            import traceback
+            print(f"[MonitorThread] ERROR processing {file_path.name}: {e}")
+            traceback.print_exc()
             self.error_occurred.emit(f"Error processing {file_path.name}: {str(e)}")
 
     def _get_base_name(self, file_path: Path) -> str:
@@ -337,6 +352,20 @@ class MonitorThread(QThread):
         """Get the set of processed files for archiving."""
         return self.processed_files.copy()
 
+    def get_unpaired_files(self) -> Set[Path]:
+        """Get all unpaired files (fronts and backs still in queues)."""
+        unpaired = set()
+        unpaired.update(self.front_queue)
+        unpaired.update(self.back_queue)
+        return unpaired
+
+    def get_all_session_files(self) -> Set[Path]:
+        """Get all files from this session (processed + unpaired)."""
+        all_files = self.processed_files.copy()
+        all_files.update(self.front_queue)
+        all_files.update(self.back_queue)
+        return all_files
+
     def get_all_results(self) -> list:
         """Get all results for export."""
         # Results are emitted via signals; this is for summary export
@@ -344,8 +373,8 @@ class MonitorThread(QThread):
 
     def reset(self):
         """Reset state for a new monitoring session."""
-        self.pending_fronts.clear()
-        self.pending_backs.clear()
+        self.front_queue.clear()
+        self.back_queue.clear()
         self.processed_files.clear()
         self.pair_count = 0
         self.fancy_count = 0

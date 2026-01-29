@@ -179,8 +179,6 @@ class PannableImageLabel(QLabel):
                 PannableImageLabel._crosshair_thickness = action.data()
                 self.update()
 
-            painter.end()
-
 
 class ScrollableImageViewer(QWidget):
     """Image viewer with zoom and pan capabilities."""
@@ -1039,6 +1037,36 @@ class PreviewPanel(QWidget):
         self._preserved_zoom = None
         self._preserved_scroll_h = None
         self._preserved_scroll_v = None
+
+    def clear(self):
+        """Clear the preview panel, resetting all viewers and labels."""
+        # Clear current result
+        self.current_result = None
+        self._current_front_file = ""
+        self._current_back_file = ""
+        self._aligned_pixmap = None
+        self._is_showing_aligned = False
+
+        # Clear all image viewers
+        self.front_viewer.set_image("")
+        self.back_viewer.set_image("")
+        self.combined_viewer.set_pixmap(None)
+        self.split_v_viewer.set_images("", "")
+        self.split_h_viewer.set_images("", "")
+        self.serial_image.clear()
+
+        # Reset labels
+        self.serial_label.setText("-")
+        self.patterns_label.setText("-")
+        self.odds_label.setText("-")
+        self.price_label.setText("-")
+
+        # Reset align button
+        self.align_btn.setText("Align")
+        self.align_btn.setToolTip("Auto-align image using YOLO bill detection")
+
+        # Clear preserved zoom/pan state
+        self.clear_preserved_state()
 
     def show_bill(self, result: dict):
         """Display a bill result."""

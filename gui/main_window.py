@@ -668,6 +668,8 @@ class MainWindow(QMainWindow):
         """Handle a single result from processing."""
         self.current_results.append(result)
         self.results_list.add_result(result)
+        # Force UI to update immediately (important for monitor mode)
+        QApplication.processEvents()
 
     @Slot(dict)
     def _on_processing_complete(self, summary: dict):
@@ -798,7 +800,10 @@ class MainWindow(QMainWindow):
             )
             return
 
-        watch_path = Path(watch_dir)
+        # Expand user path (handle ~ on all platforms)
+        watch_path = Path(watch_dir).expanduser().resolve()
+        print(f"[MainWindow] Monitor watch path: {watch_path}")
+
         if not watch_path.exists():
             QMessageBox.warning(
                 self, "Directory Not Found",
@@ -809,6 +814,10 @@ class MainWindow(QMainWindow):
 
         if not output_dir:
             output_dir = str(watch_path / "fancy_bills")
+        else:
+            output_dir = str(Path(output_dir).expanduser().resolve())
+
+        print(f"[MainWindow] Monitor output path: {output_dir}")
 
         # Switch to current session and clear previous results
         self.results_list.select_current_session()
@@ -844,8 +853,12 @@ class MainWindow(QMainWindow):
         self.file_watcher.error_occurred.connect(self._on_processing_error)
 
         # Start threads
+        print("[MainWindow] Starting monitor thread...")
         self.monitor_thread.start()
+        print("[MainWindow] Starting file watcher...")
         self.file_watcher.start()
+
+        print("[MainWindow] Monitor mode started successfully")
 
         # Update UI state
         self.is_monitoring = True
@@ -872,6 +885,7 @@ class MainWindow(QMainWindow):
             self.processor = self.monitor_thread.processor
 
             # Archive if enabled
+            print(f"[MainWindow] Auto-archive enabled: {self.settings.monitor.auto_archive}, pairs: {self.monitor_thread.pair_count}")
             if self.settings.monitor.auto_archive and self.monitor_thread.pair_count > 0:
                 self._archive_batch()
 
@@ -942,18 +956,44 @@ class MainWindow(QMainWindow):
         batch_dir = archive_path / f"batch_{timestamp}"
         batch_dir.mkdir(parents=True, exist_ok=True)
 
-        # Move processed files
-        processed_files = self.monitor_thread.get_processed_files()
+        # Move all session files (processed + unpaired)
+        all_files = self.monitor_thread.get_all_session_files()
+        print(f"[MainWindow] Archiving {len(all_files)} files to {batch_dir}")
         moved_count = 0
 
-        for file_path in processed_files:
+        for file_path in all_files:
             if file_path.exists():
                 try:
                     dest = batch_dir / file_path.name
                     shutil.move(str(file_path), str(dest))
                     moved_count += 1
                 except Exception as e:
+                    print(f"[MainWindow] Error moving {file_path.name}: {e}")
                     self.status_label.setText(f"Error moving {file_path.name}: {e}")
+            else:
+                print(f"[MainWindow] File no longer exists: {file_path}")
+
+        # Move fancy_bills output to batch archive
+        output_dir = Path(self.settings.monitor.output_directory or
+                         (Path(self.settings.monitor.watch_directory) / "fancy_bills")).expanduser().resolve()
+
+        fancy_moved = 0
+        if output_dir.exists():
+            fancy_items = list(output_dir.glob("*"))
+            if fancy_items:
+                # Create fancy_bills subfolder in batch archive
+                batch_fancy_dir = batch_dir / "fancy_bills"
+                batch_fancy_dir.mkdir(parents=True, exist_ok=True)
+
+                for item_path in fancy_items:
+                    try:
+                        dest = batch_fancy_dir / item_path.name
+                        shutil.move(str(item_path), str(dest))
+                        fancy_moved += 1
+                    except Exception as e:
+                        print(f"[MainWindow] Error moving {item_path.name}: {e}")
+
+                print(f"[MainWindow] Moved {fancy_moved} items (files/folders) to {batch_fancy_dir}")
 
         # Export batch CSV
         if self.current_results:
@@ -961,7 +1001,7 @@ class MainWindow(QMainWindow):
             self._export_batch_csv(csv_path)
 
         self.status_label.setText(
-            f"Archived {moved_count} files to {batch_dir.name}"
+            f"Archived {moved_count} files + {fancy_moved} fancy crops to {batch_dir.name}"
         )
 
         return batch_dir
