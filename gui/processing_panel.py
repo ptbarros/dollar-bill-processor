@@ -2,6 +2,7 @@
 Processing Panel - Top toolbar for processing controls.
 """
 
+import sys
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -9,6 +10,10 @@ from PySide6.QtWidgets import (
     QProgressBar, QLabel, QFileDialog, QFrame
 )
 from PySide6.QtCore import Qt, Signal, Slot
+
+# Add parent for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from settings_manager import get_settings
 
 
 class ProcessingPanel(QWidget):
@@ -162,9 +167,13 @@ class ProcessingPanel(QWidget):
 
     def _browse_input(self):
         """Browse for input folder."""
+        settings = get_settings()
+        # Priority: current field > default_working_dir > home
+        start_dir = (self.input_edit.text() or
+                     settings.ui.default_working_dir or
+                     str(Path.home()))
         folder = QFileDialog.getExistingDirectory(
-            self, "Select Input Folder",
-            self.input_edit.text() or str(Path.home())
+            self, "Select Input Folder", start_dir
         )
         if folder:
             old_input = self.input_edit.text()
@@ -177,9 +186,13 @@ class ProcessingPanel(QWidget):
 
     def _browse_output(self):
         """Browse for output folder."""
+        settings = get_settings()
+        # Priority: current field > default_working_dir > home
+        start_dir = (self.output_edit.text() or
+                     settings.ui.default_working_dir or
+                     str(Path.home()))
         folder = QFileDialog.getExistingDirectory(
-            self, "Select Output Folder",
-            self.output_edit.text() or str(Path.home())
+            self, "Select Output Folder", start_dir
         )
         if folder:
             self.output_edit.setText(folder)

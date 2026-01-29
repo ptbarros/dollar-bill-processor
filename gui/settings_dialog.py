@@ -174,29 +174,23 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(appearance_group)
 
-        # Directories
-        dirs_group = QGroupBox("Default Directories")
+        # Default Working Directory
+        dirs_group = QGroupBox("Default Working Directory")
         dirs_layout = QFormLayout(dirs_group)
 
-        self.last_input_edit = QLineEdit()
-        self.last_input_edit.setReadOnly(True)
-        input_layout = QHBoxLayout()
-        input_layout.addWidget(self.last_input_edit)
-        input_btn = QPushButton("...")
-        input_btn.setMaximumWidth(30)
-        input_btn.clicked.connect(self._browse_input)
-        input_layout.addWidget(input_btn)
-        dirs_layout.addRow("Last input:", input_layout)
+        self.working_dir_edit = QLineEdit()
+        self.working_dir_edit.setPlaceholderText("Starting directory for file browse dialogs...")
+        working_layout = QHBoxLayout()
+        working_layout.addWidget(self.working_dir_edit)
+        working_btn = QPushButton("...")
+        working_btn.setMaximumWidth(30)
+        working_btn.clicked.connect(self._browse_working_dir)
+        working_layout.addWidget(working_btn)
+        dirs_layout.addRow("Directory:", working_layout)
 
-        self.last_output_edit = QLineEdit()
-        self.last_output_edit.setReadOnly(True)
-        output_layout = QHBoxLayout()
-        output_layout.addWidget(self.last_output_edit)
-        output_btn = QPushButton("...")
-        output_btn.setMaximumWidth(30)
-        output_btn.clicked.connect(self._browse_output)
-        output_layout.addWidget(output_btn)
-        dirs_layout.addRow("Last output:", output_layout)
+        working_hint = QLabel("Browse dialogs will start here instead of your home folder")
+        working_hint.setStyleSheet("color: gray; font-size: 9px;")
+        dirs_layout.addRow("", working_hint)
 
         layout.addWidget(dirs_group)
 
@@ -438,8 +432,7 @@ class SettingsDialog(QDialog):
         self.font_size_spin.setValue(self.settings.ui.font_size)
         self._fancy_color = self.settings.ui.default_fancy_color or "#2e7d32"
         self._update_fancy_color_button()
-        self.last_input_edit.setText(self.settings.ui.last_input_dir)
-        self.last_output_edit.setText(self.settings.ui.last_output_dir)
+        self.working_dir_edit.setText(self.settings.ui.default_working_dir)
 
         # Export
         idx = self.format_combo.findData(self.settings.export.default_format)
@@ -486,8 +479,7 @@ class SettingsDialog(QDialog):
         self.settings.ui.thumbnail_size = self.thumbnail_size_spin.value()
         self.settings.ui.font_size = self.font_size_spin.value()
         self.settings.ui.default_fancy_color = self._fancy_color
-        self.settings.ui.last_input_dir = self.last_input_edit.text()
-        self.settings.ui.last_output_dir = self.last_output_edit.text()
+        self.settings.ui.default_working_dir = self.working_dir_edit.text()
 
         # Export
         self.settings.export.default_format = self.format_combo.currentData()
@@ -537,23 +529,14 @@ class SettingsDialog(QDialog):
         # Reload UI
         self._load_settings()
 
-    def _browse_input(self):
-        """Browse for input directory."""
+    def _browse_working_dir(self):
+        """Browse for default working directory."""
         folder = QFileDialog.getExistingDirectory(
-            self, "Select Default Input Directory",
-            self.last_input_edit.text() or str(Path.home())
+            self, "Select Default Working Directory",
+            self.working_dir_edit.text() or str(Path.home())
         )
         if folder:
-            self.last_input_edit.setText(folder)
-
-    def _browse_output(self):
-        """Browse for output directory."""
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select Default Output Directory",
-            self.last_output_edit.text() or str(Path.home())
-        )
-        if folder:
-            self.last_output_edit.setText(folder)
+            self.working_dir_edit.setText(folder)
 
     def _browse_excel_template(self):
         """Browse for Excel template."""

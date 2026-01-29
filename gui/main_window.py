@@ -236,7 +236,14 @@ class MainWindow(QMainWindow):
             self.preview_panel.reset_aligned_image()
             return
 
-        if not self.processor:
+        # Get processor - could be from batch processing or monitor mode
+        processor = self.processor
+        if not processor and hasattr(self, 'processing_thread') and self.processing_thread:
+            processor = self.processing_thread.processor
+        if not processor and hasattr(self, 'monitor_thread') and self.monitor_thread:
+            processor = self.monitor_thread.processor
+
+        if not processor:
             QMessageBox.warning(self, "No Processor", "Please process a folder first to enable alignment.")
             return
 
@@ -245,7 +252,7 @@ class MainWindow(QMainWindow):
 
         try:
             # Align the image using YOLO
-            aligned_img, info = self.processor.align_for_preview(Path(image_path))
+            aligned_img, info = processor.align_for_preview(Path(image_path))
 
             if aligned_img is None:
                 QMessageBox.warning(self, "Alignment Failed", "Could not align the image.")
@@ -403,7 +410,10 @@ class MainWindow(QMainWindow):
 
     def _on_open_folder(self):
         """Handle open folder action."""
-        start_dir = self.settings.ui.last_input_dir or str(Path.home())
+        # Priority: default_working_dir (user setting) > last_input_dir (history) > home
+        start_dir = (self.settings.ui.default_working_dir or
+                     self.settings.ui.last_input_dir or
+                     str(Path.home()))
         folder = QFileDialog.getExistingDirectory(
             self, "Select Scan Folder", start_dir
         )

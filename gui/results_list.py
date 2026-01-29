@@ -236,7 +236,19 @@ class ResultsList(QWidget):
         self._update_summary()
 
     def _populate_tree(self):
-        """Populate tree with filtered results."""
+        """Populate tree with filtered results, preserving selection."""
+        # Remember current selection and scroll position
+        selected_file = None
+        selected_item = self.tree.currentItem()
+        if selected_item:
+            result_data = selected_item.data(0, Qt.UserRole)
+            if result_data:
+                selected_file = result_data.get('front_file')
+
+        # Remember scroll position
+        scrollbar = self.tree.verticalScrollBar()
+        scroll_pos = scrollbar.value() if scrollbar else 0
+
         self.tree.clear()
 
         for result in self.filtered_results:
@@ -252,27 +264,15 @@ class ResultsList(QWidget):
                 serial = f"{serial} (corrected)"
             item.setText(1, serial)
 
-            # Patterns with odds tooltip
+            # Patterns
             patterns = result.get('fancy_types', '')
             item.setText(2, patterns)
-
-            # Build tooltip with odds for each pattern
-            if patterns:
-                tooltip_parts = []
-                for name in [p.strip() for p in patterns.split(',')]:
-                    info = self.pattern_engine.get_pattern_info(name)
-                    if info:
-                        odds = info.get('odds', 'unknown')
-                        desc = info.get('description', '')
-                        tooltip_parts.append(f"{name}: {odds}\n  {desc}")
-                if tooltip_parts:
-                    item.setToolTip(2, '\n\n'.join(tooltip_parts))
 
             # Confidence
             conf = result.get('confidence', '0.00')
             item.setText(3, str(conf))
 
-            # Height Ratio (for gas pump detection)
+            # Baseline Variance (for gas pump detection)
             baseline_variance = result.get('baseline_variance', '0.0000')
             item.setText(4, str(baseline_variance))
 
@@ -285,6 +285,29 @@ class ResultsList(QWidget):
                         price_text = info['price_range']
                         break  # Use first pattern's price
             item.setText(5, price_text)
+
+            # Build comprehensive row tooltip with all bill details
+            tooltip_lines = [f"Serial: {serial}"]
+            if patterns:
+                tooltip_lines.append(f"Patterns: {patterns}")
+                # Add odds for each pattern
+                for name in [p.strip() for p in patterns.split(',')]:
+                    info = self.pattern_engine.get_pattern_info(name)
+                    if info:
+                        odds = info.get('odds', 'unknown')
+                        tooltip_lines.append(f"  {name}: {odds}")
+            tooltip_lines.append(f"Confidence: {conf}")
+            tooltip_lines.append(f"Baseline Var: {baseline_variance}")
+            if price_text:
+                tooltip_lines.append(f"Est. Price: {price_text}")
+            # Add filename
+            front_file = result.get('front_file', '')
+            if front_file:
+                tooltip_lines.append(f"File: {Path(front_file).name}")
+
+            row_tooltip = '\n'.join(tooltip_lines)
+            for col in range(6):
+                item.setToolTip(col, row_tooltip)
 
             # Color coding with explicit text color for contrast
             # Tiered color system: Pattern color > Default fancy color
@@ -320,6 +343,22 @@ class ResultsList(QWidget):
                     item.setForeground(i, QBrush(QColor(255, 255, 255)))  # White text
 
             self.tree.addTopLevelItem(item)
+
+        # Restore selection if the item still exists
+        if selected_file:
+            for i in range(self.tree.topLevelItemCount()):
+                item = self.tree.topLevelItem(i)
+                result_data = item.data(0, Qt.UserRole)
+                if result_data and result_data.get('front_file') == selected_file:
+                    # Block signals to prevent triggering item_selected during restoration
+                    self.tree.blockSignals(True)
+                    self.tree.setCurrentItem(item)
+                    self.tree.blockSignals(False)
+                    break
+
+        # Restore scroll position
+        if scrollbar and scroll_pos > 0:
+            scrollbar.setValue(scroll_pos)
 
     def _update_summary(self):
         """Update summary label."""

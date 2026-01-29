@@ -32,8 +32,9 @@ class ProcessingSettings:
 @dataclass
 class UISettings:
     """UI-related settings."""
-    last_input_dir: str = ""
-    last_output_dir: str = ""
+    default_working_dir: str = ""  # Starting directory for file browse dialogs
+    last_input_dir: str = ""  # Most recently used input (internal tracking)
+    last_output_dir: str = ""  # Most recently used output (internal tracking)
     window_width: int = 1200
     window_height: int = 800
     window_x: int = 100
@@ -137,6 +138,7 @@ class SettingsManager:
         # Load UI settings
         if 'ui' in data:
             ui = data['ui']
+            self.ui.default_working_dir = ui.get('default_working_dir', "")
             self.ui.last_input_dir = ui.get('last_input_dir', "")
             self.ui.last_output_dir = ui.get('last_output_dir', "")
             self.ui.window_width = ui.get('window_width', 1200)
@@ -211,6 +213,7 @@ class SettingsManager:
                 'crop_all': self.processing.crop_all,
             },
             'ui': {
+                'default_working_dir': self.ui.default_working_dir,
                 'last_input_dir': self.ui.last_input_dir,
                 'last_output_dir': self.ui.last_output_dir,
                 'window_width': self.ui.window_width,
