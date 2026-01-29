@@ -89,6 +89,9 @@ class MainWindow(QMainWindow):
         self.preview_panel.prev_requested.connect(self._prev_bill)
         self.preview_panel.next_requested.connect(self._next_bill)
         self.preview_panel.align_requested.connect(self._on_align_image)
+        # Apply saved visibility settings
+        self.preview_panel.set_serial_region_visible(self.settings.ui.show_serial_region)
+        self.preview_panel.set_details_visible(self.settings.ui.show_bill_details)
         splitter.addWidget(self.preview_panel)
 
         # Set splitter sizes (40% list, 60% preview)
@@ -160,14 +163,14 @@ class MainWindow(QMainWindow):
 
         view_menu.addSeparator()
 
-        # Panel visibility toggles
+        # Panel visibility toggles (load from settings)
         self.show_serial_region_action = QAction("Show &Serial Region", self, checkable=True)
-        self.show_serial_region_action.setChecked(True)
+        self.show_serial_region_action.setChecked(self.settings.ui.show_serial_region)
         self.show_serial_region_action.triggered.connect(self._toggle_serial_region)
         view_menu.addAction(self.show_serial_region_action)
 
         self.show_details_action = QAction("Show Bill &Details", self, checkable=True)
-        self.show_details_action.setChecked(True)
+        self.show_details_action.setChecked(self.settings.ui.show_bill_details)
         self.show_details_action.triggered.connect(self._toggle_details)
         view_menu.addAction(self.show_details_action)
 
@@ -432,10 +435,14 @@ class MainWindow(QMainWindow):
     def _toggle_serial_region(self, checked: bool):
         """Toggle serial region panel visibility."""
         self.preview_panel.set_serial_region_visible(checked)
+        self.settings.ui.show_serial_region = checked
+        self.settings.save()
 
     def _toggle_details(self, checked: bool):
         """Toggle bill details panel visibility."""
         self.preview_panel.set_details_visible(checked)
+        self.settings.ui.show_bill_details = checked
+        self.settings.save()
 
     def _refresh_view(self):
         """Refresh the current view."""

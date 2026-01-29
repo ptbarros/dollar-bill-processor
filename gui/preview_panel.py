@@ -18,17 +18,39 @@ from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QP
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from pattern_engine_v2 import PatternEngine
+from settings_manager import get_settings
+
+
+def _load_crosshair_settings():
+    """Load crosshair settings from user settings."""
+    settings = get_settings()
+    color_hex = settings.ui.crosshair_color
+    # Convert hex to QColor with alpha
+    color = QColor(color_hex)
+    color.setAlpha(180)
+    return color, settings.ui.crosshair_thickness
 
 
 class PannableImageLabel(QLabel):
     """Label that displays an image with pan support via mouse drag and optional crosshair."""
 
     # Class-level crosshair settings (shared across all instances)
-    _crosshair_color = QColor(255, 0, 0, 180)  # Semi-transparent red
-    _crosshair_thickness = 1
+    # These will be initialized from settings on first use
+    _crosshair_color = None
+    _crosshair_thickness = None
+    _settings_loaded = False
+
+    @classmethod
+    def _ensure_settings_loaded(cls):
+        """Load crosshair settings from user settings if not already loaded."""
+        if not cls._settings_loaded:
+            cls._crosshair_color, cls._crosshair_thickness = _load_crosshair_settings()
+            cls._settings_loaded = True
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        # Ensure crosshair settings are loaded from user settings
+        PannableImageLabel._ensure_settings_loaded()
         self.setAlignment(Qt.AlignCenter)
         self.setMouseTracking(True)
         self._drag_start_global = None  # Use global/screen coordinates
@@ -171,13 +193,25 @@ class PannableImageLabel(QLabel):
                 if color.isValid():
                     color.setAlpha(180)
                     PannableImageLabel._crosshair_color = color
+                    self._save_crosshair_settings()
                     self.update()
             elif action.parent() == color_menu:
                 PannableImageLabel._crosshair_color = action.data()
+                self._save_crosshair_settings()
                 self.update()
             elif action.parent() == thickness_menu:
                 PannableImageLabel._crosshair_thickness = action.data()
+                self._save_crosshair_settings()
                 self.update()
+
+    def _save_crosshair_settings(self):
+        """Save crosshair settings to user settings."""
+        settings = get_settings()
+        color = PannableImageLabel._crosshair_color
+        # Save as hex (without alpha)
+        settings.ui.crosshair_color = color.name()  # Returns #rrggbb
+        settings.ui.crosshair_thickness = PannableImageLabel._crosshair_thickness
+        settings.save()
 
 
 class ScrollableImageViewer(QWidget):

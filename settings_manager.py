@@ -45,6 +45,12 @@ class UISettings:
     theme: str = "system"  # system, light, dark
     font_size: int = 10  # Base font size in points (default 10)
     default_fancy_color: str = "#2e7d32"  # Default green for fancy bills (user-customizable)
+    # View toggles
+    show_serial_region: bool = True
+    show_bill_details: bool = True
+    # Crosshair settings
+    crosshair_color: str = "#ff0000"  # Red default
+    crosshair_thickness: int = 1
 
 
 @dataclass
@@ -144,6 +150,10 @@ class SettingsManager:
             self.ui.theme = ui.get('theme', 'system')
             self.ui.font_size = ui.get('font_size', 10)
             self.ui.default_fancy_color = ui.get('default_fancy_color', '#2e7d32')
+            self.ui.show_serial_region = ui.get('show_serial_region', True)
+            self.ui.show_bill_details = ui.get('show_bill_details', True)
+            self.ui.crosshair_color = ui.get('crosshair_color', '#ff0000')
+            self.ui.crosshair_thickness = ui.get('crosshair_thickness', 1)
 
         # Load export settings
         if 'export' in data:
@@ -214,6 +224,10 @@ class SettingsManager:
                 'theme': self.ui.theme,
                 'font_size': self.ui.font_size,
                 'default_fancy_color': self.ui.default_fancy_color,
+                'show_serial_region': self.ui.show_serial_region,
+                'show_bill_details': self.ui.show_bill_details,
+                'crosshair_color': self.ui.crosshair_color,
+                'crosshair_thickness': self.ui.crosshair_thickness,
             },
             'export': {
                 'default_format': self.export.default_format,
