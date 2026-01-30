@@ -1138,30 +1138,47 @@ class ProductionProcessor:
 
         return best_serial, best_conf
 
-    def _detect_serials_single_pass(self, img: np.ndarray, conf: float) -> list:
+    def _detect_serials_single_pass(self, img: np.ndarray, conf: float, detect_stars: bool = False) -> tuple:
         """Run YOLO detection with given confidence threshold.
 
         Filters for serial_number class (7) if using multi-class model,
         or returns all detections for backward compatibility with single-class model.
+
+        Args:
+            img: Image to process
+            conf: Confidence threshold
+            detect_stars: If True, also check for star symbols in same pass
+
+        Returns:
+            tuple: (serial_boxes, star_detected) if detect_stars=True
+                   (serial_boxes, False) if detect_stars=False
         """
         get_timing().add_yolo_call()
         results = self.yolo_model(img, verbose=False, conf=conf)
         boxes = []
+        star_detected = False
 
         # Check if model has class info (multi-class model)
         serial_class_id = self.YOLO_CLASSES.get('serial_number', None)
 
         for result in results:
             for box in result.boxes:
-                # Filter by class if multi-class model
-                if serial_class_id is not None and hasattr(box, 'cls') and box.cls is not None:
+                if hasattr(box, 'cls') and box.cls is not None:
                     cls_id = int(box.cls[0])
-                    if cls_id != serial_class_id:
+                    box_conf = float(box.conf[0])
+
+                    # Check for star symbol (if enabled and model supports it)
+                    if detect_stars and self.star_class_id is not None:
+                        if cls_id == self.star_class_id and box_conf >= 0.2:
+                            star_detected = True
+
+                    # Filter for serial_number class
+                    if serial_class_id is not None and cls_id != serial_class_id:
                         continue
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 boxes.append((x1, y1, x2, y2, float(box.conf[0])))
-        return boxes
+        return boxes, star_detected
 
     def _detect_star_symbol(self, img: np.ndarray, conf: float = 0.1) -> bool:
         """Detect if a star symbol is present in the image.
@@ -1372,12 +1389,10 @@ class ProductionProcessor:
         # Track best baseline_variance across all passes
         best_baseline_variance = 0.0
 
-        # Check for star symbol (definitive star note detection)
-        timing.start('detect')
-        star_detected = self._detect_star_symbol(aligned_img)
-
         # First pass: standard detection (fastest path for most bills)
-        boxes = self._detect_serials_single_pass(aligned_img, conf=0.1)
+        # Also detect star symbols in the same YOLO call
+        timing.start('detect')
+        boxes, star_detected = self._detect_serials_single_pass(aligned_img, conf=0.1, detect_stars=True)
         if boxes:
             serials = self._extract_serial_from_boxes(aligned_img, boxes)
             if serials:
@@ -1414,8 +1429,8 @@ class ProductionProcessor:
             if preprocess:
                 img = self._preprocess_image(img, preprocess)
 
-            # Run detection
-            boxes = self._detect_serials_single_pass(img, conf)
+            # Run detection (star already detected in first pass, no need to check again)
+            boxes, _ = self._detect_serials_single_pass(img, conf)
 
             if boxes:
                 serials = self._extract_serial_from_boxes(img, boxes)
