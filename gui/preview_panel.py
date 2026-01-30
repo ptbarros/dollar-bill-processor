@@ -5,6 +5,8 @@ Preview Panel - Bill image preview and details with zoom/pan support.
 import sys
 from pathlib import Path
 from typing import Optional
+import cv2
+import numpy as np
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
@@ -696,6 +698,14 @@ class ImageLabel(QLabel):
         self.original_pixmap = pixmap
         self._update_display()
 
+    def set_pixmap(self, pixmap: QPixmap):
+        """Set a pixmap directly."""
+        if pixmap is None or pixmap.isNull():
+            self.clear()
+            return
+        self.original_pixmap = pixmap
+        self._update_display()
+
     def _update_display(self):
         """Update the displayed image scaled to fit."""
         if self.original_pixmap is None:
@@ -837,18 +847,26 @@ class PreviewPanel(QWidget):
 
         preview_layout.addWidget(self.view_stack, 1)
 
-        # Serial region image (toggleable via View menu)
+        # Serial region images (toggleable via View menu)
+        # Shows both serial number regions side by side with bounding boxes
         self.serial_frame = QFrame()
         serial_layout = QHBoxLayout(self.serial_frame)
         serial_layout.setContentsMargins(0, 0, 0, 0)
+        serial_layout.setSpacing(8)
 
-        serial_label = QLabel("Serial Region:")
+        serial_label = QLabel("Serials:")
         serial_layout.addWidget(serial_label)
 
-        self.serial_image = ImageLabel()
-        self.serial_image.setMinimumSize(300, 60)
-        self.serial_image.setMaximumHeight(80)
-        serial_layout.addWidget(self.serial_image, 1)
+        # Two serial region images
+        self.serial_image_1 = ImageLabel()
+        self.serial_image_1.setMinimumSize(250, 50)
+        self.serial_image_1.setMaximumHeight(70)
+        serial_layout.addWidget(self.serial_image_1, 1)
+
+        self.serial_image_2 = ImageLabel()
+        self.serial_image_2.setMinimumSize(250, 50)
+        self.serial_image_2.setMaximumHeight(70)
+        serial_layout.addWidget(self.serial_image_2, 1)
 
         preview_layout.addWidget(self.serial_frame)
 
@@ -998,6 +1016,98 @@ class PreviewPanel(QWidget):
         else:
             self.combined_viewer.set_pixmap(None)
 
+    def _generate_serial_region_crops(self, image_path: str) -> list:
+        """Generate cropped serial region images with bounding boxes drawn.
+
+        Uses YOLO to detect serial_number boxes and returns cropped images
+        with green bounding boxes drawn around the detected regions.
+
+        Args:
+            image_path: Path to the front bill image
+
+        Returns:
+            List of QPixmap objects for each detected serial region (usually 2)
+        """
+        if not image_path or not Path(image_path).exists():
+            return []
+
+        try:
+            # Import processor lazily to avoid circular imports
+            from process_production import ProductionProcessor
+
+            # Use cached processor if available, otherwise create one
+            if not hasattr(self, '_processor'):
+                self._processor = None
+
+            if self._processor is None:
+                # Find best.pt model
+                model_path = Path(__file__).parent.parent / 'best.pt'
+                if model_path.exists():
+                    self._processor = ProductionProcessor(str(model_path))
+                else:
+                    return []
+
+            # Read the image
+            img = cv2.imread(image_path)
+            if img is None:
+                return []
+
+            # Run YOLO to find serial_number boxes
+            results = self._processor.yolo_model(img, verbose=False, conf=0.3)
+
+            serial_boxes = []
+            serial_class_id = self._processor.YOLO_CLASSES.get('serial_number', 7)
+
+            for r in results:
+                for box in r.boxes:
+                    if hasattr(box, 'cls') and box.cls is not None:
+                        cls_id = int(box.cls[0])
+                        if cls_id == serial_class_id:
+                            x1, y1, x2, y2 = map(int, box.xyxy[0])
+                            conf = float(box.conf[0])
+                            serial_boxes.append((x1, y1, x2, y2, conf))
+
+            if not serial_boxes:
+                return []
+
+            # Sort by x position (left to right) then y (top to bottom)
+            serial_boxes.sort(key=lambda b: (b[1], b[0]))
+
+            pixmaps = []
+            h, w = img.shape[:2]
+
+            for x1, y1, x2, y2, conf in serial_boxes[:2]:  # Max 2 regions
+                # Add padding around the box
+                padding = 20
+                crop_x1 = max(0, x1 - padding)
+                crop_y1 = max(0, y1 - padding)
+                crop_x2 = min(w, x2 + padding)
+                crop_y2 = min(h, y2 + padding)
+
+                # Crop the region
+                crop = img[crop_y1:crop_y2, crop_x1:crop_x2].copy()
+
+                # Draw bounding box (green) relative to crop coordinates
+                box_x1 = x1 - crop_x1
+                box_y1 = y1 - crop_y1
+                box_x2 = x2 - crop_x1
+                box_y2 = y2 - crop_y1
+                cv2.rectangle(crop, (box_x1, box_y1), (box_x2, box_y2), (0, 255, 0), 2)
+
+                # Convert to QPixmap
+                rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                h_crop, w_crop, ch = rgb.shape
+                bytes_per_line = ch * w_crop
+                qimg = QImage(rgb.data, w_crop, h_crop, bytes_per_line, QImage.Format_RGB888)
+                pixmap = QPixmap.fromImage(qimg.copy())  # copy() to own the data
+                pixmaps.append(pixmap)
+
+            return pixmaps
+
+        except Exception as e:
+            print(f"Error generating serial crops: {e}")
+            return []
+
     def _save_zoom_pan_state(self):
         """Save the current zoom and pan state from the active viewer."""
         viewer = self._get_active_viewer()
@@ -1087,7 +1197,8 @@ class PreviewPanel(QWidget):
         self.combined_viewer.set_pixmap(None)
         self.split_v_viewer.set_images("", "")
         self.split_h_viewer.set_images("", "")
-        self.serial_image.clear()
+        self.serial_image_1.clear()
+        self.serial_image_2.clear()
 
         # Reset labels
         self.serial_label.setText("-")
@@ -1148,9 +1259,22 @@ class PreviewPanel(QWidget):
             back_btn.setText("Back (none)")
             back_btn.setEnabled(False)
 
-        # Serial region image if available
-        serial_region = result.get('serial_region_path', '')
-        self.serial_image.set_image(serial_region)
+        # Generate serial region crops on-demand (both serial boxes with bounding boxes)
+        serial_crops = self._generate_serial_region_crops(self._current_front_file)
+        if len(serial_crops) >= 1:
+            self.serial_image_1.set_pixmap(serial_crops[0])
+        else:
+            self.serial_image_1.clear()
+            self.serial_image_1.setText("No serial")
+
+        if len(serial_crops) >= 2:
+            self.serial_image_2.set_pixmap(serial_crops[1])
+        else:
+            self.serial_image_2.clear()
+            if len(serial_crops) == 0:
+                self.serial_image_2.setText("detected")
+            else:
+                self.serial_image_2.setText("")
 
         # Update details
         serial = result.get('serial', '')
