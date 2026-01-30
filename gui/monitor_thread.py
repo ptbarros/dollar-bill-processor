@@ -14,6 +14,7 @@ from PySide6.QtCore import QThread, Signal, Slot
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from process_production import get_timing
 
 
 class MonitorThread(QThread):
@@ -212,6 +213,9 @@ class MonitorThread(QThread):
         """Process a front/back pair."""
         from process_production import BillPair
 
+        timing = get_timing()
+        timing.start_bill()
+
         self.pair_count += 1
         position = self.pair_count
 
@@ -225,7 +229,7 @@ class MonitorThread(QThread):
 
         try:
             # Extract serial
-            serial, confidence, is_upside_down, baseline_variance, star_detected = \
+            serial, confidence, is_upside_down, baseline_variance, star_detected, align_info = \
                 self.processor.extract_serial(pair.front_path)
 
             pair.serial = serial
@@ -233,6 +237,9 @@ class MonitorThread(QThread):
             pair.is_upside_down = is_upside_down
             pair.baseline_variance = baseline_variance
             pair.star_detected = star_detected
+            # Cache alignment info for reuse in generate_crops()
+            pair.front_align_angle = align_info.get('angle', 0.0)
+            pair.front_align_flipped = align_info.get('flipped', False)
 
             # Validate
             is_valid, validation_error = self.processor.validate_serial(serial)
@@ -326,6 +333,10 @@ class MonitorThread(QThread):
             self.result_ready.emit(result)
             self.pair_complete.emit(result)
 
+            # Print timing summary
+            bill_id = f"#{position} {serial or 'NO_SERIAL'}"
+            print(timing.get_summary(bill_id))
+
             status = f"#{position}: {serial or 'N/A'}"
             if pair.is_fancy:
                 status += f" [{', '.join(pair.fancy_types)}]"
@@ -346,6 +357,7 @@ class MonitorThread(QThread):
                 'error': str(e)
             }
             self.result_ready.emit(result)
+            print(timing.get_summary(f"#{position} ERROR"))
             self.error_occurred.emit(f"Error processing pair #{position}: {str(e)}")
 
     def get_processed_files(self) -> Set[Path]:

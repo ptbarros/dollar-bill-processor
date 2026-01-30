@@ -39,6 +39,81 @@ from pattern_engine_v2 import PatternEngine
 
 
 # =============================================================================
+# TIMING INSTRUMENTATION
+# =============================================================================
+
+class TimingStats:
+    """Simple timing tracker for performance analysis."""
+
+    def __init__(self, enabled: bool = True):
+        self.enabled = enabled
+        self.reset()
+
+    def reset(self):
+        """Reset all timing stats for a new bill."""
+        self.bill_start = None
+        self.times = {}
+        self.yolo_calls = 0
+        self.ocr_calls = 0
+
+    def start_bill(self):
+        """Start timing a new bill."""
+        self.reset()
+        self.bill_start = time.time()
+
+    def start(self, label: str):
+        """Start timing a section."""
+        if self.enabled:
+            self.times[f"{label}_start"] = time.time()
+
+    def stop(self, label: str):
+        """Stop timing a section."""
+        if self.enabled and f"{label}_start" in self.times:
+            elapsed = time.time() - self.times[f"{label}_start"]
+            # Accumulate time for repeated calls
+            if label in self.times:
+                self.times[label] += elapsed
+            else:
+                self.times[label] = elapsed
+
+    def add_yolo_call(self):
+        """Increment YOLO call counter."""
+        self.yolo_calls += 1
+
+    def add_ocr_call(self):
+        """Increment OCR call counter."""
+        self.ocr_calls += 1
+
+    def get_summary(self, bill_id: str = "") -> str:
+        """Get timing summary string."""
+        if not self.enabled or self.bill_start is None:
+            return ""
+
+        total = time.time() - self.bill_start
+        parts = [f"[TIMING] {bill_id}:"]
+
+        # Add individual timings
+        for key in ['align', 'detect', 'ocr', 'crops']:
+            if key in self.times:
+                parts.append(f"{key}={self.times[key]:.2f}s")
+
+        parts.append(f"yolo_calls={self.yolo_calls}")
+        parts.append(f"ocr_calls={self.ocr_calls}")
+        parts.append(f"total={total:.2f}s")
+
+        return " | ".join(parts)
+
+
+# Global timing instance (can be enabled/disabled)
+_timing = TimingStats(enabled=True)
+
+
+def get_timing() -> TimingStats:
+    """Get the global timing tracker."""
+    return _timing
+
+
+# =============================================================================
 # CONFIGURATION LOADER
 # =============================================================================
 
@@ -136,6 +211,9 @@ class BillPair:
     is_upside_down: bool = False  # True if bill was scanned upside-down
     baseline_variance: float = 0.0  # Normalized vertical misalignment for gas pump detection
     star_detected: bool = False  # True if star symbol visually detected by YOLO
+    # Cached alignment info to avoid redundant YOLO calls in generate_crops()
+    front_align_angle: float = 0.0  # Rotation angle from YOLO alignment
+    front_align_flipped: bool = False  # Whether front was flipped 180°
 
 
 @dataclass
@@ -301,6 +379,7 @@ class YOLOBillAligner:
         info = {'angle': 0.0, 'flipped': False, 'bill_detected': False}
 
         # Run YOLO detection
+        get_timing().add_yolo_call()
         results = self.yolo_model(img, verbose=False, conf=0.3)
 
         bill_box = None
@@ -373,6 +452,42 @@ class YOLOBillAligner:
                 info['flipped'] = True
 
         return img, info
+
+    def apply_cached_alignment(self, image_path: Path, angle: float, flipped: bool) -> Optional[np.ndarray]:
+        """
+        Apply previously computed alignment without running YOLO.
+
+        This reuses alignment info from extract_serial() to avoid redundant YOLO calls
+        in generate_crops().
+
+        Args:
+            image_path: Path to the image file
+            angle: Rotation angle from previous alignment
+            flipped: Whether to flip 180 degrees
+
+        Returns:
+            Aligned image, or None if loading failed
+        """
+        img = cv2.imread(str(image_path))
+        if img is None:
+            return None
+
+        h, w = img.shape[:2]
+
+        # Apply rotation if needed
+        if abs(angle) >= 0.2:
+            center = (w // 2, h // 2)
+            M = cv2.getRotationMatrix2D(center, angle, 1.0)
+            img = cv2.warpAffine(img, M, (w, h),
+                                 flags=cv2.INTER_CUBIC,
+                                 borderMode=cv2.BORDER_CONSTANT,
+                                 borderValue=(255, 255, 255))
+
+        # Apply 180 flip if needed
+        if flipped:
+            img = cv2.rotate(img, cv2.ROTATE_180)
+
+        return img
 
 
 # =============================================================================
@@ -538,6 +653,18 @@ class ProductionProcessor:
 
         print(f"Loading YOLOv8 model: {yolo_model_path}")
         self.yolo_model = YOLO(str(yolo_model_path))
+
+        # Print model class names and find star class dynamically
+        self.star_class_id = None
+        if hasattr(self.yolo_model, 'names'):
+            print(f"  Model classes: {self.yolo_model.names}")
+            for cls_id, name in self.yolo_model.names.items():
+                if 'star' in name.lower():
+                    self.star_class_id = cls_id
+                    print(f"  Star class found: '{name}' (id={cls_id})")
+                    break
+        if self.star_class_id is None:
+            print(f"  Warning: No star class found in model")
 
         print(f"Loading border-based aligner...")
         self.aligner = BillAligner()  # No reference needed - uses border detection
@@ -734,6 +861,7 @@ class ProductionProcessor:
         pattern = r'[A-L]\d{8}[A-Y*]'
 
         # Try OCR on original image first
+        get_timing().add_ocr_call()
         results = self.ocr_reader.readtext(
             crop_image,
             allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
@@ -773,6 +901,7 @@ class ProductionProcessor:
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(gray)
 
+        get_timing().add_ocr_call()
         results = self.ocr_reader.readtext(
             cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR),
             allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
@@ -910,6 +1039,7 @@ class ProductionProcessor:
         Filters for serial_number class (7) if using multi-class model,
         or returns all detections for backward compatibility with single-class model.
         """
+        get_timing().add_yolo_call()
         results = self.yolo_model(img, verbose=False, conf=conf)
         boxes = []
 
@@ -928,24 +1058,26 @@ class ProductionProcessor:
                 boxes.append((x1, y1, x2, y2, float(box.conf[0])))
         return boxes
 
-    def _detect_star_symbol(self, img: np.ndarray, conf: float = 0.3) -> bool:
+    def _detect_star_symbol(self, img: np.ndarray, conf: float = 0.1) -> bool:
         """Detect if a star symbol is present in the image.
 
-        Uses YOLO star_symbol class (9) for definitive star note detection.
+        Uses YOLO star class for definitive star note detection.
         Returns True if star symbol detected, False otherwise.
         """
-        results = self.yolo_model(img, verbose=False, conf=conf)
-        star_class_id = self.YOLO_CLASSES.get('star_symbol', None)
-
-        if star_class_id is None:
+        if self.star_class_id is None:
             return False  # Model doesn't support star detection
+
+        get_timing().add_yolo_call()
+        results = self.yolo_model(img, verbose=False, conf=conf)
 
         for result in results:
             for box in result.boxes:
                 if hasattr(box, 'cls') and box.cls is not None:
                     cls_id = int(box.cls[0])
-                    if cls_id == star_class_id:
-                        return True
+                    if cls_id == self.star_class_id:
+                        box_conf = float(box.conf[0])
+                        if box_conf >= 0.2:  # Accept stars with 0.2+ confidence
+                            return True
         return False
 
     def _detect_objects_by_class(self, img: np.ndarray, class_name: str, conf: float = 0.3) -> list:
@@ -1076,6 +1208,11 @@ class ProductionProcessor:
         h, w = img.shape[:2]
 
         for x1, y1, x2, y2, det_conf in boxes:
+            # Early exit: if we already have a high-confidence serial, skip remaining boxes
+            # This avoids redundant OCR calls on multiple detected regions
+            if serials_found and max(conf for _, conf, _, _ in serials_found) >= 0.7:
+                break
+
             # Expand bounding box (40% to catch edge letters)
             box_width = x2 - x1
             box_height = y2 - y1
@@ -1099,24 +1236,30 @@ class ProductionProcessor:
 
         return serials_found
 
-    def extract_serial(self, image_path: Path) -> tuple[Optional[str], float, bool, float, bool]:
+    def extract_serial(self, image_path: Path) -> tuple[Optional[str], float, bool, float, bool, dict]:
         """
         Extract serial number using multi-pass detection pipeline.
 
         Returns:
-            tuple: (serial, confidence, is_upside_down, baseline_variance, star_detected)
+            tuple: (serial, confidence, is_upside_down, baseline_variance, star_detected, align_info)
             - baseline_variance: normalized vertical misalignment of digits (gas pump detection)
             - star_detected: True if star symbol visually detected (definitive star note)
+            - align_info: dict with 'angle' and 'flipped' for reuse in generate_crops()
         """
+        timing = get_timing()
+
         # Use YOLO-based alignment for more accurate straightening
         # This improves baseline variance accuracy for gas pump detection
+        timing.start('align')
         aligned_img, align_info = self.yolo_aligner.align_image(image_path)
         if aligned_img is None:
             # Fallback to contour-based alignment if YOLO fails
             aligned_img = self.aligner.align_image(image_path)
             if aligned_img is None:
-                return None, 0, False, 0.0, False
-            align_info = {'flipped': False}
+                timing.stop('align')
+                return None, 0, False, 0.0, False, {'angle': 0.0, 'flipped': False}
+            align_info = {'angle': 0.0, 'flipped': False}
+        timing.stop('align')
 
         # Track if YOLO detected the bill was flipped
         yolo_detected_flip = align_info.get('flipped', False)
@@ -1125,6 +1268,7 @@ class ProductionProcessor:
         best_baseline_variance = 0.0
 
         # Check for star symbol (definitive star note detection)
+        timing.start('detect')
         star_detected = self._detect_star_symbol(aligned_img)
 
         # First pass: standard detection (fastest path for most bills)
@@ -1137,9 +1281,18 @@ class ProductionProcessor:
                 result = self._consensus_vote([(s, oc, dc, 'standard') for s, oc, dc, hr in serials])
                 # Track height ratio from best detection
                 best_baseline_variance = max(hr for s, oc, dc, hr in serials)
-                # If confidence is good, return immediately
-                if result[1] >= 0.5:
-                    return result[0], result[1], yolo_detected_flip, best_baseline_variance, star_detected
+
+                # Check for star in OCR result (fallback if YOLO missed it)
+                if not star_detected and result[0] and result[0].endswith('*'):
+                    star_detected = True
+
+                # Early exit conditions:
+                # 1. Good confidence (>= 0.5) - normal case
+                # 2. Star detected (YOLO or OCR) + any serial found - star notes are rare,
+                #    if we found a star and got a serial, trust it and skip fallbacks
+                if result[1] >= 0.5 or (star_detected and result[0]):
+                    timing.stop('detect')
+                    return result[0], result[1], yolo_detected_flip, best_baseline_variance, star_detected, align_info
 
         # Only run additional passes if first pass failed or had low confidence
         all_serials = []
@@ -1165,19 +1318,29 @@ class ProductionProcessor:
                     for s, ocr_conf, det_conf, baseline_variance in serials:
                         all_serials.append((s, ocr_conf, det_conf, pass_name))
                         all_baseline_variances.append(baseline_variance)
+                        # Check for star in OCR result (fallback if YOLO missed it)
+                        if not star_detected and s and s.endswith('*'):
+                            star_detected = True
 
                     # Track if best result came from rotated pass
                     if preprocess == 'rotate180':
                         found_via_rotation = True
 
                     # If we got good results, stop early
-                    if serials and max(oc for s, oc, dc, hr in serials) >= 0.6:
+                    # Also exit early for star notes - they often have lower confidence
+                    # but if we detected a star and found a serial, that's good enough
+                    best_conf = max(oc for s, oc, dc, hr in serials)
+                    if best_conf >= 0.6 or (star_detected and best_conf >= 0.3):
                         break
 
         if not all_serials:
             # Last resort: try whole-image OCR scan for serial patterns
             serial, conf = self._fallback_ocr_scan(aligned_img)
-            return serial, conf, False, 0.0, star_detected
+            # Check for star in fallback result
+            if not star_detected and serial and serial.endswith('*'):
+                star_detected = True
+            timing.stop('detect')
+            return serial, conf, False, 0.0, star_detected, align_info
 
         result = self._consensus_vote(all_serials)
 
@@ -1196,13 +1359,15 @@ class ProductionProcessor:
         # Bill was upside down if YOLO detected flip OR serial found via rotation
         is_upside_down = yolo_detected_flip or found_via_rotation
 
-        return result[0], result[1], is_upside_down, best_baseline_variance, star_detected
+        timing.stop('detect')
+        return result[0], result[1], is_upside_down, best_baseline_variance, star_detected, align_info
 
     def _fallback_ocr_scan(self, img: np.ndarray) -> tuple[Optional[str], float]:
         """Fallback: scan entire image for serial patterns."""
         pattern = r'[A-L]\d{8}[A-Y*]'
 
         # Try OCR on full image
+        get_timing().add_ocr_call()
         ocr_results = self.ocr_reader.readtext(
             img,
             allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
@@ -1304,11 +1469,23 @@ class ProductionProcessor:
 
     def generate_crops(self, pair: BillPair, output_dir: Path) -> list[Path]:
         """Generate crops for a fancy bill pair based on config."""
+        timing = get_timing()
+        timing.start('crops')
         crop_paths = []
 
-        # Use YOLO-based alignment for better accuracy
-        # This handles both rotation correction and flip detection
-        front_img, front_info = self.yolo_aligner.align_image(pair.front_path)
+        # Use cached alignment for front if available (saves 1 YOLO call)
+        # This reuses alignment computed during extract_serial()
+        # We know alignment was cached if serial extraction succeeded (pair.serial is set)
+        if pair.serial is not None:
+            # We have cached alignment info - apply it without YOLO
+            front_img = self.yolo_aligner.apply_cached_alignment(
+                pair.front_path, pair.front_align_angle, pair.front_align_flipped
+            )
+            front_flipped = pair.front_align_flipped
+        else:
+            # No cached info (serial extraction failed) - use YOLO
+            front_img, front_info = self.yolo_aligner.align_image(pair.front_path)
+            front_flipped = front_info.get('flipped', False)
 
         # For back, use YOLO alignment but don't check flip (no seals on back)
         # Instead, flip the back if the front was flipped (same physical orientation)
@@ -1316,11 +1493,11 @@ class ProductionProcessor:
         if pair.back_path:
             back_img, _ = self.yolo_aligner.align_image(pair.back_path, check_flip=False)
             # If front was flipped, back should be too (same physical bill)
-            if front_info.get('flipped', False) and back_img is not None:
+            if front_flipped and back_img is not None:
                 back_img = cv2.rotate(back_img, cv2.ROTATE_180)
 
         # Also handle the is_upside_down flag from serial detection (legacy support)
-        if pair.is_upside_down and not front_info.get('flipped', False):
+        if pair.is_upside_down and not front_flipped:
             if front_img is not None:
                 front_img = cv2.rotate(front_img, cv2.ROTATE_180)
             if back_img is not None:
@@ -1344,6 +1521,7 @@ class ProductionProcessor:
             cv2.imwrite(str(crop_path), crop, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
             crop_paths.append(crop_path)
 
+        timing.stop('crops')
         return crop_paths
 
     def process_directory(
@@ -1391,6 +1569,9 @@ class ProductionProcessor:
         non_fancy_files = []
 
         for pair in pairs:
+            timing = get_timing()
+            timing.start_bill()
+
             if pair.error:
                 all_results.append({
                     'position': pair.stack_position,
@@ -1406,14 +1587,18 @@ class ProductionProcessor:
                     'error': pair.error
                 })
                 self._add_to_review_queue(pair, pair.error, output_dir)
+                print(timing.get_summary(f"#{pair.stack_position} ERROR"))
                 continue
 
             # Extract serial using multi-pass detection
-            serial, confidence, is_upside_down, baseline_variance, star_detected = self.extract_serial(pair.front_path)
+            serial, confidence, is_upside_down, baseline_variance, star_detected, align_info = self.extract_serial(pair.front_path)
             pair.confidence = confidence
             pair.is_upside_down = is_upside_down
             pair.baseline_variance = baseline_variance
             pair.star_detected = star_detected
+            # Cache alignment info for reuse in generate_crops()
+            pair.front_align_angle = align_info.get('angle', 0.0)
+            pair.front_align_flipped = align_info.get('flipped', False)
 
             # If star symbol visually detected but OCR missed it, append '*' to serial
             if serial and star_detected and not serial.endswith('*'):
@@ -1477,6 +1662,10 @@ class ProductionProcessor:
                 'needs_review': pair.needs_review,
                 'error': pair.error or ''
             })
+
+            # Print timing summary for this bill
+            bill_id = f"#{pair.stack_position} {serial or 'NO_SERIAL'}"
+            print(timing.get_summary(bill_id))
 
         # Calculate stats
         total_time = time.time() - start_time

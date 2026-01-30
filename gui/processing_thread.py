@@ -10,6 +10,7 @@ from PySide6.QtCore import QThread, Signal
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from process_production import get_timing
 
 
 class ProcessingThread(QThread):
@@ -99,6 +100,9 @@ class ProcessingThread(QThread):
                 if self._stop_requested:
                     break
 
+                timing = get_timing()
+                timing.start_bill()
+
                 self.progress_updated.emit(i + 1, total, f"Processing {pair.front_path.name}...")
 
                 # Handle existing errors
@@ -116,16 +120,20 @@ class ProcessingThread(QThread):
                         'error': pair.error
                     }
                     review_count += 1
+                    print(timing.get_summary(f"#{pair.stack_position} ERROR"))
                     self.result_ready.emit(result)
                     continue
 
                 # Extract serial
-                serial, confidence, is_upside_down, baseline_variance, star_detected = self.processor.extract_serial(pair.front_path)
+                serial, confidence, is_upside_down, baseline_variance, star_detected, align_info = self.processor.extract_serial(pair.front_path)
                 pair.serial = serial
                 pair.confidence = confidence
                 pair.is_upside_down = is_upside_down
                 pair.baseline_variance = baseline_variance
                 pair.star_detected = star_detected
+                # Cache alignment info for reuse in generate_crops()
+                pair.front_align_angle = align_info.get('angle', 0.0)
+                pair.front_align_flipped = align_info.get('flipped', False)
 
                 # Validate
                 is_valid, validation_error = self.processor.validate_serial(serial)
@@ -209,6 +217,10 @@ class ProcessingThread(QThread):
                         'serial_region_path': serial_region_path,
                         'error': 'No serial detected'
                     }
+
+                # Print timing summary
+                bill_id = f"#{pair.stack_position} {result.get('serial') or 'NO_SERIAL'}"
+                print(timing.get_summary(bill_id))
 
                 self.result_ready.emit(result)
 

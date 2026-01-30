@@ -383,10 +383,11 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_stop_requested(self):
         """Handle stop request."""
+        if self.processing_thread and self.processing_thread.isRunning():
+            self.processing_thread.request_stop()
         self.is_processing = False
-        self.status_label.setText("Processing stopped")
+        self.status_label.setText("Stopping...")
         self.processing_panel.set_processing(False)
-        # TODO: Signal the processing thread to stop
 
     @Slot(dict)
     def _on_result_selected(self, result: dict):
