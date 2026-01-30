@@ -835,21 +835,63 @@ class ProductionProcessor:
         return self.yolo_aligner.align_image(Path(image_path))
 
     def count_serial_detections(self, image_path: Path) -> int:
-        """Count how many serial numbers YOLO detects in an image."""
+        """Count how many serial_number class detections YOLO finds in an image.
+
+        Front of bill typically has 2 serial numbers detected.
+        Back of bill typically has 0.
+        """
         img = cv2.imread(str(image_path))
         if img is None:
             return 0
 
-        # Use lower confidence threshold to handle scans with colored backgrounds
-        results = self.yolo_model(img, verbose=False, conf=0.1)
+        serial_class_id = self.YOLO_CLASSES.get('serial_number', 7)
+
+        results = self.yolo_model(img, verbose=False, conf=0.3)
         count = 0
         for result in results:
-            count += len(result.boxes)
+            for box in result.boxes:
+                if hasattr(box, 'cls') and box.cls is not None:
+                    if int(box.cls[0]) == serial_class_id:
+                        count += 1
         return count
 
     def is_front_image(self, image_path: Path) -> bool:
-        """Determine if an image is a front (has serial numbers)."""
-        return self.count_serial_detections(image_path) >= 1
+        """Determine if an image is a front (has serial numbers).
+
+        Uses both serial_number count and bill_front/bill_back detection.
+        """
+        img = cv2.imread(str(image_path))
+        if img is None:
+            return False
+
+        results = self.yolo_model(img, verbose=False, conf=0.3)
+
+        serial_count = 0
+        front_conf = 0.0
+        back_conf = 0.0
+
+        serial_class_id = self.YOLO_CLASSES.get('serial_number', 7)
+        front_class_id = self.YOLO_CLASSES.get('bill_front', 2)
+        back_class_id = self.YOLO_CLASSES.get('bill_back', 1)
+
+        for result in results:
+            for box in result.boxes:
+                if hasattr(box, 'cls') and box.cls is not None:
+                    cls_id = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    if cls_id == serial_class_id:
+                        serial_count += 1
+                    elif cls_id == front_class_id:
+                        front_conf = max(front_conf, conf)
+                    elif cls_id == back_class_id:
+                        back_conf = max(back_conf, conf)
+
+        # Front if: has serial numbers OR bill_front confidence > bill_back confidence
+        if serial_count >= 1:
+            return True
+        if front_conf > back_conf and front_conf > 0.3:
+            return True
+        return False
 
     def verify_and_swap_pairs(self, pairs: list[BillPair]) -> list[BillPair]:
         """
