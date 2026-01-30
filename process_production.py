@@ -1066,12 +1066,11 @@ class ProductionProcessor:
                     if re.match(pattern, corrected):
                         return corrected
 
-        # 9 chars starting with Fed letter - potential star note with missed star
+        # 9 chars starting with Fed letter - DON'T auto-add star
+        # The suffix letter might be detected separately by OCR
+        # Only the 9-digit case (where first char is misread) should try star
         if re.match(r'^[A-L]\d{8}$', text):
-            # Try adding star - OCR often misses the star symbol
-            corrected = text + '*'
-            if re.match(pattern, corrected):
-                return corrected
+            pass  # Let other OCR results provide the suffix
 
         # 9 digits - first might be misread letter, star might be missed
         # Common case: "613382145" should be "G13382145*"
