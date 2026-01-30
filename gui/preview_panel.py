@@ -857,15 +857,15 @@ class PreviewPanel(QWidget):
         serial_label = QLabel("Serials:")
         serial_layout.addWidget(serial_label)
 
-        # Two serial region images
+        # Two serial region images (2x zoomed)
         self.serial_image_1 = ImageLabel()
-        self.serial_image_1.setMinimumSize(250, 50)
-        self.serial_image_1.setMaximumHeight(70)
+        self.serial_image_1.setMinimumSize(300, 80)
+        self.serial_image_1.setMaximumHeight(120)
         serial_layout.addWidget(self.serial_image_1, 1)
 
         self.serial_image_2 = ImageLabel()
-        self.serial_image_2.setMinimumSize(250, 50)
-        self.serial_image_2.setMaximumHeight(70)
+        self.serial_image_2.setMinimumSize(300, 80)
+        self.serial_image_2.setMaximumHeight(120)
         serial_layout.addWidget(self.serial_image_2, 1)
 
         preview_layout.addWidget(self.serial_frame)
@@ -1016,14 +1016,15 @@ class PreviewPanel(QWidget):
         else:
             self.combined_viewer.set_pixmap(None)
 
-    def _generate_serial_region_crops(self, image_path: str) -> list:
+    def _generate_serial_region_crops(self, image_path: str, zoom: float = 2.0) -> list:
         """Generate cropped serial region images with bounding boxes drawn.
 
         Uses YOLO to detect serial_number boxes and returns cropped images
-        with green bounding boxes drawn around the detected regions.
+        with bounding boxes drawn around the detected regions.
 
         Args:
             image_path: Path to the front bill image
+            zoom: Zoom factor for the crops (default 2.0 for 2x zoom)
 
         Returns:
             List of QPixmap objects for each detected serial region (usually 2)
@@ -1046,6 +1047,12 @@ class PreviewPanel(QWidget):
                     self._processor = ProductionProcessor(str(model_path))
                 else:
                     return []
+
+            # Get bounding box color from settings
+            settings = get_settings()
+            bbox_color_hex = settings.ui.serial_bbox_color
+            # Convert hex to BGR for OpenCV
+            bbox_color = tuple(int(bbox_color_hex.lstrip('#')[i:i+2], 16) for i in (4, 2, 0))
 
             # Read the image
             img = cv2.imread(image_path)
@@ -1070,7 +1077,7 @@ class PreviewPanel(QWidget):
             if not serial_boxes:
                 return []
 
-            # Sort by x position (left to right) then y (top to bottom)
+            # Sort by y position (top to bottom) then x (left to right)
             serial_boxes.sort(key=lambda b: (b[1], b[0]))
 
             pixmaps = []
@@ -1078,7 +1085,7 @@ class PreviewPanel(QWidget):
 
             for x1, y1, x2, y2, conf in serial_boxes[:2]:  # Max 2 regions
                 # Add padding around the box
-                padding = 20
+                padding = 15
                 crop_x1 = max(0, x1 - padding)
                 crop_y1 = max(0, y1 - padding)
                 crop_x2 = min(w, x2 + padding)
@@ -1087,12 +1094,16 @@ class PreviewPanel(QWidget):
                 # Crop the region
                 crop = img[crop_y1:crop_y2, crop_x1:crop_x2].copy()
 
-                # Draw bounding box (green) relative to crop coordinates
-                box_x1 = x1 - crop_x1
-                box_y1 = y1 - crop_y1
-                box_x2 = x2 - crop_x1
-                box_y2 = y2 - crop_y1
-                cv2.rectangle(crop, (box_x1, box_y1), (box_x2, box_y2), (0, 255, 0), 2)
+                # Apply zoom before drawing (for sharper bounding box)
+                if zoom != 1.0:
+                    crop = cv2.resize(crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
+
+                # Draw bounding box relative to crop coordinates (scaled)
+                box_x1 = int((x1 - crop_x1) * zoom)
+                box_y1 = int((y1 - crop_y1) * zoom)
+                box_x2 = int((x2 - crop_x1) * zoom)
+                box_y2 = int((y2 - crop_y1) * zoom)
+                cv2.rectangle(crop, (box_x1, box_y1), (box_x2, box_y2), bbox_color, 2)
 
                 # Convert to QPixmap
                 rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)

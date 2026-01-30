@@ -52,6 +52,8 @@ class UISettings:
     # Crosshair settings
     crosshair_color: str = "#ff0000"  # Red default
     crosshair_thickness: int = 1
+    # Serial region bounding box
+    serial_bbox_color: str = "#00ff00"  # Green default
 
 
 @dataclass
@@ -156,6 +158,7 @@ class SettingsManager:
             self.ui.show_bill_details = ui.get('show_bill_details', True)
             self.ui.crosshair_color = ui.get('crosshair_color', '#ff0000')
             self.ui.crosshair_thickness = ui.get('crosshair_thickness', 1)
+            self.ui.serial_bbox_color = ui.get('serial_bbox_color', '#00ff00')
 
         # Load export settings
         if 'export' in data:
@@ -231,6 +234,7 @@ class SettingsManager:
                 'show_bill_details': self.ui.show_bill_details,
                 'crosshair_color': self.ui.crosshair_color,
                 'crosshair_thickness': self.ui.crosshair_thickness,
+                'serial_bbox_color': self.ui.serial_bbox_color,
             },
             'export': {
                 'default_format': self.export.default_format,
