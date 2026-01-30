@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-Train YOLOv8 model for dollar bill serial number detection.
+Train YOLOv8 model for dollar bill detection (Dollar Detective).
 
 This script trains a YOLOv8 Nano model on your labeled dataset.
+Detects 10 classes: serial_number, bill_front, bill_back, front_plate,
+back_plate, seal_f, seal_t, denomination, series_year, star_symbol.
+
 Training typically takes 5-15 minutes on CPU, <2 minutes on GPU.
 
 Output:
@@ -14,6 +17,9 @@ Output:
 from ultralytics import YOLO
 from pathlib import Path
 import sys
+
+# Dataset location - update this path when switching datasets
+DATASET_PATH = Path("/home/pbarros/projects/dataset1/data_local.yaml")
 
 
 def train_model(data_yaml, epochs=100, imgsz=640, model_size='n', use_gpu=False):
@@ -38,7 +44,7 @@ def train_model(data_yaml, epochs=100, imgsz=640, model_size='n', use_gpu=False)
     model_file, description = model_info.get(model_size, model_info['n'])
 
     print("="*70)
-    print("YOLOv8 Training for Dollar Bill Serial Numbers")
+    print("YOLOv8 Training for Dollar Detective (Multi-Label)")
     print("="*70)
     print(f"Model: {model_file} ({description})")
     print(f"Dataset: {data_yaml}")
@@ -93,8 +99,8 @@ def train_model(data_yaml, epochs=100, imgsz=640, model_size='n', use_gpu=False)
 def main():
     """Main entry point."""
 
-    # Default configuration
-    data_yaml = Path(__file__).parent / "yolov8" / "data_local.yaml"
+    # Default configuration - uses DATASET_PATH constant defined at top of file
+    data_yaml = DATASET_PATH
 
     # Check if data.yaml exists
     if not data_yaml.exists():

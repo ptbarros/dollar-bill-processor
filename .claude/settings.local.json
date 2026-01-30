@@ -28,7 +28,18 @@
       "WebSearch",
       "WebFetch(domain:www.mycurrencycollection.com)",
       "WebFetch(domain:www.pmgnotes.com)",
-      "WebFetch(domain:banknoteserialchecker.com)"
+      "WebFetch(domain:banknoteserialchecker.com)",
+      "WebFetch(domain:www.coolserialnumbers.com)",
+      "Bash(git restore:*)",
+      "Bash(source:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(venv/bin/python3:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(echo 'No archive directory created' echo echo '=== Image files remaining? ===' ls monitored/*.jpg)",
+      "Bash(echo 'No archive directory' echo --- ls /home/pbarros/projects/dollar-bill-processor/monitored/*.jpg)",
+      "Bash(git pull:*)"
     ]
   }
 }

@@ -1,7 +1,25 @@
-custom_patterns: {}
+custom_patterns:
+  '1959':
+    description: year
+    tier: 10
+    enabled: true
+    rules:
+      contains: '3095'
+  '1985':
+    description: best year
+    tier: 10
+    enabled: true
+    rules:
+      contains: '1985'
+  '2065':
+    description: future
+    tier: 10
+    enabled: true
+    rules:
+      contains: '2065'
 disabled_patterns: []
 enabled_patterns:
 - GAS_PUMP
 pattern_overrides:
   GAS_PUMP:
-    baseline_variance_min: 0.20
+    baseline_variance_min: 0.2
