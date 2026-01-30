@@ -1253,6 +1253,71 @@ class ProductionProcessor:
                         boxes.append((x1, y1, x2, y2, float(box.conf[0])))
         return boxes
 
+    def _extract_fed_letter_from_seal(self, img: np.ndarray, yolo_results=None) -> Optional[str]:
+        """Extract Federal Reserve letter from the seal (seal_f).
+
+        The Federal Reserve seal contains a large letter (A-L) in the center
+        that matches the first character of the serial number. This can be
+        used to verify/correct OCR misreadings of the serial's first char.
+
+        Args:
+            img: Aligned image of the bill
+            yolo_results: Optional pre-computed YOLO results to avoid extra inference
+
+        Returns:
+            Single letter A-L if detected, None otherwise
+        """
+        seal_class_id = self.YOLO_CLASSES.get('seal_f', 5)
+
+        # Find seal_f boxes
+        if yolo_results is None:
+            results = self.yolo_model(img, verbose=False, conf=0.3)
+        else:
+            results = yolo_results
+
+        seal_box = None
+        best_conf = 0.0
+
+        for result in results:
+            for box in result.boxes:
+                if hasattr(box, 'cls') and box.cls is not None:
+                    cls_id = int(box.cls[0])
+                    if cls_id == seal_class_id:
+                        conf = float(box.conf[0])
+                        if conf > best_conf:
+                            best_conf = conf
+                            seal_box = box.xyxy[0]
+
+        if seal_box is None:
+            return None
+
+        # Crop the seal
+        x1, y1, x2, y2 = map(int, seal_box)
+        seal_crop = img[y1:y2, x1:x2]
+
+        # Crop to center 40% of seal where the letter is (avoid circular text)
+        h, w = seal_crop.shape[:2]
+        margin_x = int(w * 0.30)
+        margin_y = int(h * 0.30)
+        center_crop = seal_crop[margin_y:h-margin_y, margin_x:w-margin_x]
+
+        # OCR the center - should just be the Fed letter
+        get_timing().add_ocr_call()
+        results = self.ocr_reader.readtext(
+            center_crop,
+            allowlist='ABCDEFGHIJKL',
+            detail=1
+        )
+
+        # Find the highest confidence single letter result
+        for bbox, text, conf in results:
+            text_clean = text.strip().upper()
+            if len(text_clean) == 1 and text_clean in self.VALID_FED_CODES:
+                if conf >= 0.5:  # Require decent confidence
+                    return text_clean
+
+        return None
+
     def _calculate_baseline_variance(self, serial_crop: np.ndarray) -> float:
         """Calculate baseline variance of characters in a serial number crop.
 
@@ -1426,6 +1491,18 @@ class ProductionProcessor:
         star_detected = star_conf >= 0.2
         high_conf_star = star_conf >= 0.8  # High confidence star = trust any serial found
 
+        # Extract Fed letter from seal for verification (reuses YOLO results internally)
+        seal_letter = self._extract_fed_letter_from_seal(aligned_img)
+
+        def verify_serial_with_seal(serial: str) -> str:
+            """Verify/correct serial's first character using seal letter."""
+            if not serial or not seal_letter:
+                return serial
+            if serial[0] != seal_letter and serial[0] in '0123456789' + ''.join(self.VALID_FED_CODES):
+                # First char doesn't match seal - correct it
+                return seal_letter + serial[1:]
+            return serial
+
         if boxes:
             # For high-confidence star notes, only process first box to minimize OCR calls
             # Also pass star_confirmed to allow accepting 9-char serials
@@ -1449,7 +1526,8 @@ class ProductionProcessor:
                 # 3. High confidence star (0.8+) + any serial = definitely trust it
                 if result[1] >= 0.5 or (star_detected and result[0]) or (high_conf_star and result[0]):
                     timing.stop('detect')
-                    return result[0], result[1], yolo_detected_flip, best_baseline_variance, star_detected, align_info
+                    verified_serial = verify_serial_with_seal(result[0])
+                    return verified_serial, result[1], yolo_detected_flip, best_baseline_variance, star_detected, align_info
 
         # Only run additional passes if first pass failed or had low confidence
         all_serials = []
@@ -1497,7 +1575,8 @@ class ProductionProcessor:
             if not star_detected and serial and serial.endswith('*'):
                 star_detected = True
             timing.stop('detect')
-            return serial, conf, False, 0.0, star_detected, align_info
+            verified_serial = verify_serial_with_seal(serial)
+            return verified_serial, conf, False, 0.0, star_detected, align_info
 
         result = self._consensus_vote(all_serials)
 
@@ -1517,7 +1596,8 @@ class ProductionProcessor:
         is_upside_down = yolo_detected_flip or found_via_rotation
 
         timing.stop('detect')
-        return result[0], result[1], is_upside_down, best_baseline_variance, star_detected, align_info
+        verified_serial = verify_serial_with_seal(result[0])
+        return verified_serial, result[1], is_upside_down, best_baseline_variance, star_detected, align_info
 
     def _fallback_ocr_scan(self, img: np.ndarray) -> tuple[Optional[str], float]:
         """Fallback: scan entire image for serial patterns."""
