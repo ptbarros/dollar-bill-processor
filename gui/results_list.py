@@ -108,7 +108,7 @@ class ResultsList(QWidget):
 
         # Results tree
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "BL Var", "Est. Price"])
+        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Px Dev", "Est. Price"])
         self.tree.setAlternatingRowColors(True)
         self.tree.setRootIsDecorated(False)
         self.tree.setSortingEnabled(True)
@@ -124,14 +124,14 @@ class ResultsList(QWidget):
         header.setSectionResizeMode(1, QHeaderView.Interactive)  # Serial
         header.setSectionResizeMode(2, QHeaderView.Stretch)      # Patterns (takes remaining space)
         header.setSectionResizeMode(3, QHeaderView.Interactive)  # Conf
-        header.setSectionResizeMode(4, QHeaderView.Interactive)  # BL Var
+        header.setSectionResizeMode(4, QHeaderView.Interactive)  # Px Dev
         header.setSectionResizeMode(5, QHeaderView.Interactive)  # Est. Price
 
         # Set minimum and default widths
         self.tree.setColumnWidth(0, 35)   # # column
         self.tree.setColumnWidth(1, 130)  # Serial - enough for full serial at font 14
         self.tree.setColumnWidth(3, 50)   # Conf
-        self.tree.setColumnWidth(4, 60)   # BL Var
+        self.tree.setColumnWidth(4, 55)   # Px Dev
         self.tree.setColumnWidth(5, 100)  # Est. Price
         header.setMinimumSectionSize(30)  # Minimum for any column
 
@@ -272,9 +272,13 @@ class ResultsList(QWidget):
             conf = result.get('confidence', '0.00')
             item.setText(3, str(conf))
 
-            # Baseline Variance (for gas pump detection)
-            baseline_variance = result.get('baseline_variance', '0.0000')
-            item.setText(4, str(baseline_variance))
+            # Pixel Deviation (for gas pump detection)
+            baseline_variance = result.get('baseline_variance', '0.0')
+            try:
+                px_dev = float(baseline_variance)
+                item.setText(4, f"{px_dev:.1f}")
+            except (ValueError, TypeError):
+                item.setText(4, str(baseline_variance))
 
             # Est. Price - get from first matched pattern
             price_text = ""
@@ -297,7 +301,7 @@ class ResultsList(QWidget):
                         odds = info.get('odds', 'unknown')
                         tooltip_lines.append(f"  {name}: {odds}")
             tooltip_lines.append(f"Confidence: {conf}")
-            tooltip_lines.append(f"Baseline Var: {baseline_variance}")
+            tooltip_lines.append(f"Pixel Dev: {baseline_variance} px (gas pump threshold)")
             if price_text:
                 tooltip_lines.append(f"Est. Price: {price_text}")
             # Add filename
@@ -763,6 +767,24 @@ class ResultsList(QWidget):
     def get_current_batch_path(self) -> Optional[Path]:
         """Get the path of the currently selected batch, or None for current session."""
         return self._current_batch_path
+
+    def update_px_dev(self, position: int, px_dev: float):
+        """Update the Px Dev column for a specific result by position.
+
+        Called when viewing a bill to show the fresh calculated deviation
+        instead of the value from processing time.
+        """
+        # Find the tree item with this position
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            if item and item.text(0) == str(position):
+                item.setText(4, f"{px_dev:.1f}")
+                # Also update the underlying result data
+                for result in self._all_results:
+                    if result.get('position') == position:
+                        result['baseline_variance'] = f"{px_dev:.1f}"
+                        break
+                break
 
     def select_current_session(self):
         """Switch back to current session view."""

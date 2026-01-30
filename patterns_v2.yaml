@@ -1301,13 +1301,13 @@ patterns:
   GAS_PUMP:
     description: "Digit vertically shifted (misaligned like old gas pump display)"
     tier: 5
-    enabled: false  # Enable after testing on your scans
+    enabled: true
     rules:
-      baseline_variance_min: 0.20  # Normal is <0.12, definite gas pump >0.20
+      baseline_variance_min: 3.5  # Max deviation in pixels. Normal: 0.5-2.5px, gas pump: 3.5+
     examples: []
     odds: "Rare - printing error"
     price_range: "$10-$100+"
-    notes: "Detected by analyzing vertical alignment of digits. Normal variance: 0-0.12. Values >0.20 indicate gas pump effect."
+    notes: "Detected by analyzing vertical alignment of digits using projection method. Normal: 0.5-2.5px deviation. Gas pump: 3.5px+ deviation."
 
 # =============================================================================
 # CUSTOM USER PATTERNS

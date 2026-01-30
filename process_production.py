@@ -1319,18 +1319,24 @@ class ProductionProcessor:
         return None
 
     def _calculate_baseline_variance(self, serial_crop: np.ndarray) -> float:
-        """Calculate baseline variance of characters in a serial number crop.
+        """Detect gas pump serial numbers by analyzing digit vertical alignment.
 
-        This detects 'gas pump' printing errors where digits are vertically
-        misaligned like an old gas pump display.
+        Gas pump serials have digits that are vertically misaligned (shifted up or down)
+        due to mechanical counter rollover during printing. This resembles old gas pump
+        digit displays when changing numbers.
 
-        The algorithm fits a line to the character centers to account for image tilt,
-        then measures the standard deviation of deviations from that line. This
-        distinguishes between tilted-but-aligned serials and true gas pump effect.
+        Algorithm:
+        1. Convert to binary using Otsu's threshold
+        2. Use vertical projection to find character column boundaries
+        3. For each character, find the vertical center (midpoint of ink pixels)
+        4. Skip first and last characters (they're letters with different heights)
+        5. Calculate median center of all numeric digits as baseline
+        6. Return maximum deviation from median
 
         Returns:
-            float: Normalized baseline variance (0.0 = perfect alignment, higher = more misaligned)
-                   Values > 0.10 typically indicate gas pump effect
+            float: Maximum deviation in pixels from median baseline.
+                   Values >= 3.5 typically indicate gas pump effect.
+                   Normal bills usually show 0.5 - 2.5 pixel deviation.
         """
         if serial_crop is None or serial_crop.size == 0:
             return 0.0
@@ -1345,68 +1351,176 @@ class ProductionProcessor:
         else:
             gray = serial_crop
 
-        # Adaptive threshold to find text pixels
-        binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                        cv2.THRESH_BINARY_INV, 11, 2)
+        # Binary threshold using Otsu's method (inverted so digits are white)
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-        # Find contours of individual characters
-        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Find character columns using vertical projection
+        v_proj = np.sum(binary, axis=0)
+        proj_thresh = np.max(v_proj) * 0.1 if np.max(v_proj) > 0 else 0
 
-        # Filter contours by size (should be character-sized)
-        char_contours = []
-        for cnt in contours:
-            x, y, cw, ch = cv2.boundingRect(cnt)
-            area = cv2.contourArea(cnt)
-            # Filter: reasonable character size
-            if ch > crop_h * 0.3 and ch < crop_h * 0.95 and cw > 5 and area > 50:
-                char_contours.append((x, y, cw, ch))
+        in_char = False
+        char_bounds = []
+        start = 0
 
-        if len(char_contours) < 5:
+        for x in range(crop_w):
+            if v_proj[x] > proj_thresh and not in_char:
+                start = x
+                in_char = True
+            elif v_proj[x] <= proj_thresh and in_char:
+                if x - start > 5:  # Minimum character width
+                    char_bounds.append((start, x))
+                in_char = False
+        if in_char and crop_w - start > 5:
+            char_bounds.append((start, crop_w - 1))
+
+        # Get vertical center of each character
+        chars = []
+        for cx1, cx2 in char_bounds:
+            col_strip = binary[:, cx1:cx2]
+            h_proj = np.sum(col_strip, axis=1)
+            ink_rows = np.where(h_proj > 0)[0]
+            if len(ink_rows) > 0:
+                chars.append({
+                    'x1': cx1, 'x2': cx2,
+                    'top': int(ink_rows[0]),
+                    'bottom': int(ink_rows[-1]),
+                    'center': (ink_rows[0] + ink_rows[-1]) / 2
+                })
+
+        # Need at least 8 characters (letter + 6+ digits + letter)
+        if len(chars) < 8:
             return 0.0
 
-        # Sort by x position (left to right)
-        char_contours.sort(key=lambda c: c[0])
+        # Focus on digits only (skip first and last characters - they're letters)
+        # Letters have different heights than digits and would skew the analysis
+        digits = chars[1:-1]
+        centers = [d['center'] for d in digits]
 
-        # Calculate center X and Y positions for each character
-        centers_x = np.array([x + cw / 2 for x, y, cw, ch in char_contours])
-        centers_y = np.array([(y + ch / 2) for x, y, cw, ch in char_contours])
-        heights = [ch for x, y, cw, ch in char_contours]
-        avg_height = np.mean(heights)
-
-        if avg_height <= 0:
+        if len(centers) < 2:
             return 0.0
 
-        # Fit a line to the character centers to account for image tilt
-        # y = mx + b (linear regression)
-        n = len(centers_x)
-        sum_x = np.sum(centers_x)
-        sum_y = np.sum(centers_y)
-        sum_xy = np.sum(centers_x * centers_y)
-        sum_x2 = np.sum(centers_x ** 2)
+        # Calculate median center (baseline) - robust to outliers
+        median_center = np.median(centers)
 
-        # Calculate slope (m) and intercept (b)
-        denom = n * sum_x2 - sum_x ** 2
-        if abs(denom) < 1e-10:
-            # Vertical line or single point - use simple range
-            return (max(centers_y) - min(centers_y)) / avg_height
+        # Find maximum deviation from baseline
+        deviations = [abs(c - median_center) for c in centers]
+        max_deviation = max(deviations)
 
-        m = (n * sum_xy - sum_x * sum_y) / denom
-        b = (sum_y - m * sum_x) / n
+        return float(max_deviation)
 
-        # Calculate predicted Y for each character along the fitted line
-        predicted_y = m * centers_x + b
+    def analyze_gas_pump_digits(self, serial_crop: np.ndarray, offset_x: int = 0, offset_y: int = 0) -> dict:
+        """Analyze gas pump serial and return digit boxes with deviation info.
 
-        # Calculate deviations from the fitted line
-        deviations = centers_y - predicted_y
+        This is used for visualization - drawing colored boxes around each digit
+        to show which ones are shifted (gas pump effect).
 
-        # Use standard deviation of deviations (not range) for robustness
-        # This measures how much characters deviate from the expected baseline
-        std_dev = np.std(deviations)
+        Args:
+            serial_crop: Cropped serial number region (BGR or grayscale)
+            offset_x: X offset to add to box coordinates (for image-relative coords)
+            offset_y: Y offset to add to box coordinates (for image-relative coords)
 
-        # Normalize by average character height
-        normalized_variance = std_dev / avg_height
+        Returns:
+            dict with:
+                - is_gas_pump: bool
+                - max_deviation: float (pixels)
+                - digit_boxes: list of dicts with x1, y1, x2, y2, is_letter, deviation, is_shifted
+        """
+        result = {
+            'is_gas_pump': False,
+            'max_deviation': 0.0,
+            'digit_boxes': []
+        }
 
-        return normalized_variance
+        if serial_crop is None or serial_crop.size == 0:
+            return result
+
+        crop_h, crop_w = serial_crop.shape[:2]
+        if crop_h < 10 or crop_w < 20:
+            return result
+
+        # Convert to grayscale
+        if len(serial_crop.shape) == 3:
+            gray = cv2.cvtColor(serial_crop, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = serial_crop
+
+        # Binary threshold using Otsu's method (inverted so digits are white)
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+        # Find character columns using vertical projection
+        v_proj = np.sum(binary, axis=0)
+        proj_thresh = np.max(v_proj) * 0.1 if np.max(v_proj) > 0 else 0
+
+        in_char = False
+        char_bounds = []
+        start = 0
+
+        for x in range(crop_w):
+            if v_proj[x] > proj_thresh and not in_char:
+                start = x
+                in_char = True
+            elif v_proj[x] <= proj_thresh and in_char:
+                if x - start > 5:  # Minimum character width
+                    char_bounds.append((start, x))
+                in_char = False
+        if in_char and crop_w - start > 5:
+            char_bounds.append((start, crop_w - 1))
+
+        # Get vertical bounds of each character
+        chars = []
+        for cx1, cx2 in char_bounds:
+            col_strip = binary[:, cx1:cx2]
+            h_proj = np.sum(col_strip, axis=1)
+            ink_rows = np.where(h_proj > 0)[0]
+            if len(ink_rows) > 0:
+                chars.append({
+                    'x1': cx1,
+                    'x2': cx2,
+                    'top': int(ink_rows[0]),
+                    'bottom': int(ink_rows[-1]),
+                    'center': (ink_rows[0] + ink_rows[-1]) / 2
+                })
+
+        if len(chars) < 3:
+            return result
+
+        # Mark first and last as letters, rest as digits
+        for i, char in enumerate(chars):
+            char['is_letter'] = (i == 0 or i == len(chars) - 1)
+
+        # Calculate median center from digits only (not letters)
+        digits = [c for c in chars if not c['is_letter']]
+        if len(digits) < 2:
+            return result
+
+        centers = [d['center'] for d in digits]
+        median_center = np.median(centers)
+
+        # Calculate deviation for each character and build digit_boxes
+        GAS_PUMP_THRESHOLD = 3.5
+        max_deviation = 0.0
+
+        for char in chars:
+            if char['is_letter']:
+                deviation = 0.0  # Don't calculate deviation for letters
+            else:
+                deviation = abs(char['center'] - median_center)
+                max_deviation = max(max_deviation, deviation)
+
+            result['digit_boxes'].append({
+                'x1': char['x1'] + offset_x,
+                'y1': char['top'] + offset_y,
+                'x2': char['x2'] + offset_x,
+                'y2': char['bottom'] + offset_y,
+                'is_letter': char['is_letter'],
+                'deviation': deviation,
+                'is_shifted': deviation >= GAS_PUMP_THRESHOLD
+            })
+
+        result['max_deviation'] = max_deviation
+        result['is_gas_pump'] = max_deviation >= GAS_PUMP_THRESHOLD
+
+        return result
 
     def _extract_serial_from_boxes(self, img: np.ndarray, boxes: list, star_confirmed: bool = False) -> list:
         """Extract serial numbers from detected bounding boxes.

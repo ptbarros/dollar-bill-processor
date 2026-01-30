@@ -89,6 +89,7 @@ class MainWindow(QMainWindow):
         self.preview_panel.prev_requested.connect(self._prev_bill)
         self.preview_panel.next_requested.connect(self._next_bill)
         self.preview_panel.align_requested.connect(self._on_align_image)
+        self.preview_panel.px_dev_updated.connect(self.results_list.update_px_dev)
         # Apply saved visibility settings
         self.preview_panel.set_serial_region_visible(self.settings.ui.show_serial_region)
         self.preview_panel.set_details_visible(self.settings.ui.show_bill_details)
@@ -367,6 +368,7 @@ class MainWindow(QMainWindow):
         self.is_processing = True
         self.status_label.setText(f"Processing: {input_dir}")
         self.processing_panel.set_processing(True)
+        self.preview_panel.set_batch_processing_active(True)
 
         # Clear previous results when starting a new batch
         self.current_results = []
@@ -388,6 +390,7 @@ class MainWindow(QMainWindow):
         self.is_processing = False
         self.status_label.setText("Stopping...")
         self.processing_panel.set_processing(False)
+        self.preview_panel.set_batch_processing_active(False)
 
     @Slot(dict)
     def _on_result_selected(self, result: dict):
@@ -694,6 +697,7 @@ class MainWindow(QMainWindow):
         """Handle processing completion."""
         self.is_processing = False
         self.processing_panel.set_processing(False)
+        self.preview_panel.set_batch_processing_active(False)
 
         # Grab the processor from the thread for alignment feature
         if hasattr(self, 'processing_thread') and self.processing_thread:
@@ -717,6 +721,7 @@ class MainWindow(QMainWindow):
         """Handle processing error."""
         self.is_processing = False
         self.processing_panel.set_processing(False)
+        self.preview_panel.set_batch_processing_active(False)
         QMessageBox.critical(self, "Processing Error", error)
         self.status_label.setText(f"Error: {error}")
 

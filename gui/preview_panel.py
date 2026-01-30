@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
     QPushButton, QLineEdit, QFrame, QGroupBox, QGridLayout,
     QSizePolicy, QTabWidget, QSlider, QApplication, QStackedWidget,
-    QComboBox, QSplitter, QMenu, QColorDialog
+    QComboBox, QSplitter, QMenu, QColorDialog, QCheckBox
 )
 from PySide6.QtCore import Qt, Signal, Slot, QPoint, QSize
 from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QPainter, QPen, QColor, QAction
@@ -732,6 +732,7 @@ class PreviewPanel(QWidget):
     prev_requested = Signal()  # Request to navigate to previous bill
     next_requested = Signal()  # Request to navigate to next bill
     align_requested = Signal(str)  # Request alignment for image path
+    px_dev_updated = Signal(int, float)  # (position, fresh_px_dev) - emitted when viewing a bill
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -745,6 +746,7 @@ class PreviewPanel(QWidget):
         self._preserved_scroll_v: Optional[float] = None  # as fraction 0-1
         self._aligned_pixmap: Optional[QPixmap] = None  # Cache for aligned image
         self._is_showing_aligned = False
+        self._batch_processing_active = False  # Skip heavy ops during batch processing
         self._setup_ui()
 
     def _setup_ui(self):
@@ -849,24 +851,86 @@ class PreviewPanel(QWidget):
 
         # Serial region images (toggleable via View menu)
         # Shows both serial number regions side by side with bounding boxes
+        # Plus a control bar below for color, overlay toggle, and threshold
         self.serial_frame = QFrame()
-        serial_layout = QHBoxLayout(self.serial_frame)
-        serial_layout.setContentsMargins(0, 0, 0, 0)
-        serial_layout.setSpacing(8)
+        serial_main_layout = QVBoxLayout(self.serial_frame)
+        serial_main_layout.setContentsMargins(0, 0, 0, 0)
+        serial_main_layout.setSpacing(4)
+
+        # Top row: label and two serial images
+        serial_images_layout = QHBoxLayout()
+        serial_images_layout.setSpacing(8)
 
         serial_label = QLabel("Serials:")
-        serial_layout.addWidget(serial_label)
+        serial_images_layout.addWidget(serial_label)
 
         # Two serial region images (2x zoomed)
         self.serial_image_1 = ImageLabel()
         self.serial_image_1.setMinimumSize(300, 80)
         self.serial_image_1.setMaximumHeight(120)
-        serial_layout.addWidget(self.serial_image_1, 1)
+        serial_images_layout.addWidget(self.serial_image_1, 1)
 
         self.serial_image_2 = ImageLabel()
         self.serial_image_2.setMinimumSize(300, 80)
         self.serial_image_2.setMaximumHeight(120)
-        serial_layout.addWidget(self.serial_image_2, 1)
+        serial_images_layout.addWidget(self.serial_image_2, 1)
+
+        serial_main_layout.addLayout(serial_images_layout)
+
+        # Bottom row: control bar
+        control_bar = QHBoxLayout()
+        control_bar.setSpacing(12)
+
+        # Color picker button with label
+        color_label = QLabel("Box Color:")
+        control_bar.addWidget(color_label)
+
+        self.bbox_color_btn = QPushButton()
+        self.bbox_color_btn.setFixedSize(24, 24)
+        self.bbox_color_btn.setToolTip("Click to change bounding box color")
+        self.bbox_color_btn.clicked.connect(self._on_bbox_color_clicked)
+        self._update_bbox_color_button()
+        control_bar.addWidget(self.bbox_color_btn)
+
+        control_bar.addSpacing(20)
+
+        # Gas pump overlay checkbox - load saved state from settings
+        settings = get_settings()
+        self.gas_pump_overlay_checkbox = QCheckBox("Gas Pump Overlay")
+        self.gas_pump_overlay_checkbox.setToolTip("Show colored boxes around each digit (green=normal, red=shifted)")
+        self.gas_pump_overlay_checkbox.setChecked(settings.ui.gas_pump_overlay_enabled)
+        self.gas_pump_overlay_checkbox.toggled.connect(self._on_gas_pump_overlay_toggled)
+        control_bar.addWidget(self.gas_pump_overlay_checkbox)
+
+        control_bar.addSpacing(20)
+
+        # Threshold slider with label and value display
+        threshold_label = QLabel("Threshold:")
+        control_bar.addWidget(threshold_label)
+
+        # Read initial value from pattern config
+        initial_threshold = self.pattern_engine.get_gas_pump_threshold()
+        self._gas_pump_threshold = initial_threshold
+
+        self.gp_threshold_slider = QSlider(Qt.Horizontal)
+        self.gp_threshold_slider.setMinimum(5)   # 0.5 px
+        self.gp_threshold_slider.setMaximum(100)  # 10.0 px
+        self.gp_threshold_slider.setValue(int(initial_threshold * 10))
+        self.gp_threshold_slider.setSingleStep(1)  # Arrow keys: 0.1 px
+        self.gp_threshold_slider.setPageStep(2)    # Click on track: 0.2 px
+        self.gp_threshold_slider.setMinimumWidth(150)
+        self.gp_threshold_slider.setToolTip("Adjust threshold for gas pump detection")
+        self.gp_threshold_slider.valueChanged.connect(self._on_gp_threshold_changed)
+        control_bar.addWidget(self.gp_threshold_slider)
+
+        self.gp_threshold_value_label = QLabel(f"{initial_threshold:.1f} px")
+        self.gp_threshold_value_label.setMinimumWidth(45)
+        control_bar.addWidget(self.gp_threshold_value_label)
+
+        control_bar.addStretch()
+
+        self._gas_pump_overlay_enabled = settings.ui.gas_pump_overlay_enabled
+        serial_main_layout.addLayout(control_bar)
 
         preview_layout.addWidget(self.serial_frame)
 
@@ -1016,21 +1080,38 @@ class PreviewPanel(QWidget):
         else:
             self.combined_viewer.set_pixmap(None)
 
-    def _generate_serial_region_crops(self, image_path: str, zoom: float = 2.0) -> list:
+    def set_batch_processing_active(self, active: bool):
+        """Set whether batch processing is active. Skips heavy YOLO ops when True."""
+        self._batch_processing_active = active
+        # Clear cache when processing ends so next view gets fresh data
+        if not active and hasattr(self, '_serial_crop_cache'):
+            self._serial_crop_cache.clear()
+
+    def _generate_serial_region_crops(self, image_path: str, zoom: float = 2.0) -> tuple:
         """Generate cropped serial region images with bounding boxes drawn.
 
-        Uses YOLO to detect serial_number boxes and returns cropped images
-        with bounding boxes drawn around the detected regions.
+        Uses YOLO to detect serial_number boxes on the ALIGNED image and returns
+        cropped images with bounding boxes drawn around the detected regions.
+
+        Uses caching to avoid re-running YOLO alignment when just changing colors
+        or toggling overlays on the same bill.
+
+        Skips generation during batch processing to keep GUI responsive.
 
         Args:
             image_path: Path to the front bill image
             zoom: Zoom factor for the crops (default 2.0 for 2x zoom)
 
         Returns:
-            List of QPixmap objects for each detected serial region (usually 2)
+            tuple: (list of QPixmap, max_deviation float)
+                   max_deviation is the fresh pixel deviation for gas pump detection
         """
         if not image_path or not Path(image_path).exists():
-            return []
+            return [], 0.0
+
+        # Skip heavy YOLO operations during batch processing to keep GUI responsive
+        if self._batch_processing_active:
+            return [], 0.0
 
         try:
             # Import processor lazily to avoid circular imports
@@ -1054,33 +1135,57 @@ class PreviewPanel(QWidget):
             # Convert hex to BGR for OpenCV
             bbox_color = tuple(int(bbox_color_hex.lstrip('#')[i:i+2], 16) for i in (4, 2, 0))
 
-            # Read the image
-            img = cv2.imread(image_path)
-            if img is None:
-                return []
+            # Check cache - reuse aligned image and serial boxes if same file
+            cache_key = image_path
+            if not hasattr(self, '_serial_crop_cache'):
+                self._serial_crop_cache = {}
 
-            # Run YOLO to find serial_number boxes
-            results = self._processor.yolo_model(img, verbose=False, conf=0.3)
+            if cache_key in self._serial_crop_cache:
+                # Use cached data
+                cached = self._serial_crop_cache[cache_key]
+                img = cached['aligned_img']
+                serial_boxes = cached['serial_boxes']
+            else:
+                # Align the image first so serial crops are properly oriented
+                aligned_img, info = self._processor.align_for_preview(Path(image_path))
+                if aligned_img is None:
+                    # Fall back to original if alignment fails
+                    img = cv2.imread(image_path)
+                    if img is None:
+                        return []
+                else:
+                    img = aligned_img
 
-            serial_boxes = []
-            serial_class_id = self._processor.YOLO_CLASSES.get('serial_number', 7)
+                # Run YOLO on the aligned image to find serial_number boxes
+                results = self._processor.yolo_model(img, verbose=False, conf=0.3)
 
-            for r in results:
-                for box in r.boxes:
-                    if hasattr(box, 'cls') and box.cls is not None:
-                        cls_id = int(box.cls[0])
-                        if cls_id == serial_class_id:
-                            x1, y1, x2, y2 = map(int, box.xyxy[0])
-                            conf = float(box.conf[0])
-                            serial_boxes.append((x1, y1, x2, y2, conf))
+                serial_boxes = []
+                serial_class_id = self._processor.YOLO_CLASSES.get('serial_number', 7)
+
+                for r in results:
+                    for box in r.boxes:
+                        if hasattr(box, 'cls') and box.cls is not None:
+                            cls_id = int(box.cls[0])
+                            if cls_id == serial_class_id:
+                                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                                conf = float(box.conf[0])
+                                serial_boxes.append((x1, y1, x2, y2, conf))
+
+                # Sort by y descending (bottom first) so bottom-left serial shows on left
+                serial_boxes.sort(key=lambda b: (-b[1], b[0]))
+
+                # Cache the result (only keep one entry to avoid memory bloat)
+                self._serial_crop_cache.clear()
+                self._serial_crop_cache[cache_key] = {
+                    'aligned_img': img,
+                    'serial_boxes': serial_boxes
+                }
 
             if not serial_boxes:
-                return []
-
-            # Sort by y position (top to bottom) then x (left to right)
-            serial_boxes.sort(key=lambda b: (b[1], b[0]))
+                return [], 0.0
 
             pixmaps = []
+            max_deviation = 0.0
             h, w = img.shape[:2]
 
             for x1, y1, x2, y2, conf in serial_boxes[:2]:  # Max 2 regions
@@ -1091,19 +1196,48 @@ class PreviewPanel(QWidget):
                 crop_x2 = min(w, x2 + padding)
                 crop_y2 = min(h, y2 + padding)
 
-                # Crop the region
+                # Crop the region (before zoom, for gas pump analysis)
                 crop = img[crop_y1:crop_y2, crop_x1:crop_x2].copy()
+
+                # Get the tight serial crop (without padding) for gas pump analysis
+                tight_crop = img[y1:y2, x1:x2]
+
+                # Always analyze for gas pump to get fresh max_deviation
+                gp_result = self._processor.analyze_gas_pump_digits(tight_crop)
+                max_deviation = max(max_deviation, gp_result.get('max_deviation', 0.0))
 
                 # Apply zoom before drawing (for sharper bounding box)
                 if zoom != 1.0:
                     crop = cv2.resize(crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
 
-                # Draw bounding box relative to crop coordinates (scaled)
+                # Draw serial bounding box relative to crop coordinates (scaled)
                 box_x1 = int((x1 - crop_x1) * zoom)
                 box_y1 = int((y1 - crop_y1) * zoom)
                 box_x2 = int((x2 - crop_x1) * zoom)
                 box_y2 = int((y2 - crop_y1) * zoom)
                 cv2.rectangle(crop, (box_x1, box_y1), (box_x2, box_y2), bbox_color, 2)
+
+                # Draw gas pump digit overlay if enabled
+                if self._gas_pump_overlay_enabled:
+                    # Draw colored boxes for each digit
+                    for digit_box in gp_result['digit_boxes']:
+                        # Convert digit coordinates to crop-relative, then apply zoom
+                        # digit_box coords are relative to tight_crop, need to offset by (x1-crop_x1, y1-crop_y1)
+                        dx1 = int((digit_box['x1'] + (x1 - crop_x1)) * zoom)
+                        dy1 = int((digit_box['y1'] + (y1 - crop_y1)) * zoom)
+                        dx2 = int((digit_box['x2'] + (x1 - crop_x1)) * zoom)
+                        dy2 = int((digit_box['y2'] + (y1 - crop_y1)) * zoom)
+
+                        # Color: gray for letters, green for normal digits, red for shifted
+                        # Use slider threshold instead of hardcoded value
+                        if digit_box['is_letter']:
+                            color = (128, 128, 128)  # Gray
+                        elif digit_box['deviation'] >= self._gas_pump_threshold:
+                            color = (0, 0, 255)  # Red (BGR) - shifted
+                        else:
+                            color = (0, 255, 0)  # Green (BGR) - normal
+
+                        cv2.rectangle(crop, (dx1, dy1), (dx2, dy2), color, 2)
 
                 # Convert to QPixmap
                 rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
@@ -1113,11 +1247,11 @@ class PreviewPanel(QWidget):
                 pixmap = QPixmap.fromImage(qimg.copy())  # copy() to own the data
                 pixmaps.append(pixmap)
 
-            return pixmaps
+            return pixmaps, max_deviation
 
         except Exception as e:
             print(f"Error generating serial crops: {e}")
-            return []
+            return [], 0.0
 
     def _save_zoom_pan_state(self):
         """Save the current zoom and pan state from the active viewer."""
@@ -1202,6 +1336,10 @@ class PreviewPanel(QWidget):
         self._aligned_pixmap = None
         self._is_showing_aligned = False
 
+        # Clear serial crop cache
+        if hasattr(self, '_serial_crop_cache'):
+            self._serial_crop_cache.clear()
+
         # Clear all image viewers
         self.front_viewer.set_image("")
         self.back_viewer.set_image("")
@@ -1270,22 +1408,27 @@ class PreviewPanel(QWidget):
             back_btn.setText("Back (none)")
             back_btn.setEnabled(False)
 
-        # Generate serial region crops on-demand (both serial boxes with bounding boxes)
-        serial_crops = self._generate_serial_region_crops(self._current_front_file)
-        if len(serial_crops) >= 1:
-            self.serial_image_1.set_pixmap(serial_crops[0])
-        else:
-            self.serial_image_1.clear()
-            self.serial_image_1.setText("No serial")
-
-        if len(serial_crops) >= 2:
-            self.serial_image_2.set_pixmap(serial_crops[1])
-        else:
-            self.serial_image_2.clear()
-            if len(serial_crops) == 0:
-                self.serial_image_2.setText("detected")
+        # Generate serial region crops on-demand (only if serial view is visible)
+        if self.serial_frame.isVisible():
+            serial_crops, fresh_px_dev = self._generate_serial_region_crops(self._current_front_file)
+            if len(serial_crops) >= 1:
+                self.serial_image_1.set_pixmap(serial_crops[0])
             else:
-                self.serial_image_2.setText("")
+                self.serial_image_1.clear()
+                self.serial_image_1.setText("No serial")
+
+            if len(serial_crops) >= 2:
+                self.serial_image_2.set_pixmap(serial_crops[1])
+            else:
+                self.serial_image_2.clear()
+                if len(serial_crops) == 0:
+                    self.serial_image_2.setText("detected")
+                else:
+                    self.serial_image_2.setText("")
+
+            # Emit fresh Px Dev value to update the results list
+            position = result.get('position', 0)
+            self.px_dev_updated.emit(position, fresh_px_dev)
 
         # Update details
         serial = result.get('serial', '')
@@ -1335,6 +1478,29 @@ class PreviewPanel(QWidget):
     def set_serial_region_visible(self, visible: bool):
         """Show or hide the serial region panel."""
         self.serial_frame.setVisible(visible)
+
+        # Generate crops when enabling the view (if we have a bill displayed)
+        if visible and self._current_front_file:
+            serial_crops, fresh_px_dev = self._generate_serial_region_crops(self._current_front_file)
+            if len(serial_crops) >= 1:
+                self.serial_image_1.set_pixmap(serial_crops[0])
+            else:
+                self.serial_image_1.clear()
+                self.serial_image_1.setText("No serial")
+
+            if len(serial_crops) >= 2:
+                self.serial_image_2.set_pixmap(serial_crops[1])
+            else:
+                self.serial_image_2.clear()
+                if len(serial_crops) == 0:
+                    self.serial_image_2.setText("detected")
+                else:
+                    self.serial_image_2.setText("")
+
+            # Emit fresh Px Dev value
+            if self.current_result:
+                position = self.current_result.get('position', 0)
+                self.px_dev_updated.emit(position, fresh_px_dev)
 
     def set_details_visible(self, visible: bool):
         """Show or hide the bill details panel."""
@@ -1452,3 +1618,72 @@ class PreviewPanel(QWidget):
         # Reload original image
         if self.current_result:
             self.show_bill(self.current_result)
+
+    def _update_bbox_color_button(self):
+        """Update the bounding box color button to show the current color."""
+        settings = get_settings()
+        color_hex = settings.ui.serial_bbox_color
+        self.bbox_color_btn.setStyleSheet(
+            f"background-color: {color_hex}; border: 1px solid #555; border-radius: 3px;"
+        )
+
+    def _on_bbox_color_clicked(self):
+        """Handle bounding box color button click - open color picker."""
+        settings = get_settings()
+        current_color = QColor(settings.ui.serial_bbox_color)
+
+        color = QColorDialog.getColor(
+            current_color,
+            self,
+            "Select Bounding Box Color"
+        )
+
+        if color.isValid():
+            # Save the new color
+            settings.ui.serial_bbox_color = color.name()
+            settings.save()
+
+            # Update the button appearance
+            self._update_bbox_color_button()
+
+            # Refresh the serial crops to show the new color
+            if self._current_front_file:
+                serial_crops, _ = self._generate_serial_region_crops(self._current_front_file)
+                if len(serial_crops) >= 1:
+                    self.serial_image_1.set_pixmap(serial_crops[0])
+                if len(serial_crops) >= 2:
+                    self.serial_image_2.set_pixmap(serial_crops[1])
+
+    def _on_gas_pump_overlay_toggled(self, checked: bool):
+        """Handle gas pump overlay toggle - show/hide digit boxes."""
+        self._gas_pump_overlay_enabled = checked
+
+        # Save to settings for persistence
+        settings = get_settings()
+        settings.ui.gas_pump_overlay_enabled = checked
+        settings.save()
+
+        # Refresh the serial crops to show/hide the overlay
+        if self._current_front_file and self.serial_frame.isVisible():
+            serial_crops, _ = self._generate_serial_region_crops(self._current_front_file)
+            if len(serial_crops) >= 1:
+                self.serial_image_1.set_pixmap(serial_crops[0])
+            if len(serial_crops) >= 2:
+                self.serial_image_2.set_pixmap(serial_crops[1])
+
+    def _on_gp_threshold_changed(self, value: int):
+        """Handle gas pump threshold slider change."""
+        # Convert slider value (5-100) to pixels (0.5-10.0)
+        self._gas_pump_threshold = value / 10.0
+        self.gp_threshold_value_label.setText(f"{self._gas_pump_threshold:.1f} px")
+
+        # Save to pattern config so processing uses the same threshold
+        self.pattern_engine.set_gas_pump_threshold(self._gas_pump_threshold)
+
+        # Only refresh if overlay is enabled and we have a bill displayed
+        if self._gas_pump_overlay_enabled and self._current_front_file and self.serial_frame.isVisible():
+            serial_crops, _ = self._generate_serial_region_crops(self._current_front_file)
+            if len(serial_crops) >= 1:
+                self.serial_image_1.set_pixmap(serial_crops[0])
+            if len(serial_crops) >= 2:
+                self.serial_image_2.set_pixmap(serial_crops[1])

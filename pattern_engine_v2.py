@@ -607,6 +607,42 @@ class PatternEngine:
         """Get all custom patterns from user config."""
         return self.user_config.get('custom_patterns', {}).copy()
 
+    def get_gas_pump_threshold(self) -> float:
+        """Get the GAS_PUMP baseline_variance_min threshold.
+
+        Checks user overrides first, then main config, then defaults to 3.5.
+        """
+        # Check user overrides first
+        overrides = self.user_config.get('pattern_overrides', {})
+        if 'GAS_PUMP' in overrides and 'baseline_variance_min' in overrides['GAS_PUMP']:
+            return float(overrides['GAS_PUMP']['baseline_variance_min'])
+
+        # Check main config
+        patterns = self.config.get('patterns', {})
+        if 'GAS_PUMP' in patterns:
+            rules = patterns['GAS_PUMP'].get('rules', {})
+            if 'baseline_variance_min' in rules:
+                return float(rules['baseline_variance_min'])
+
+        # Default
+        return 3.5
+
+    def set_gas_pump_threshold(self, threshold: float):
+        """Set the GAS_PUMP baseline_variance_min threshold and save.
+
+        Updates the user config overrides and saves to file.
+        """
+        if 'pattern_overrides' not in self.user_config:
+            self.user_config['pattern_overrides'] = {}
+        if 'GAS_PUMP' not in self.user_config['pattern_overrides']:
+            self.user_config['pattern_overrides']['GAS_PUMP'] = {}
+
+        self.user_config['pattern_overrides']['GAS_PUMP']['baseline_variance_min'] = threshold
+        self.save_config()
+
+        # Rebuild patterns to pick up the new threshold
+        self.patterns = self._build_patterns()
+
     def save_config(self):
         """Save user config to file (preserves main patterns file)."""
         with open(self.user_config_path, 'w') as f:
