@@ -932,49 +932,88 @@ class ProductionProcessor:
         pattern = r'[A-L]\d{8}[A-Y*]'
         star_note_pattern = r'^[A-L]\d{8}$'  # 9 chars for star notes missing the star
 
-        # Try OCR on original image first
+        if len(crop_image.shape) == 3:
+            gray = cv2.cvtColor(crop_image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = crop_image
+
+        valid_serials = []
+
+        def process_ocr_results(results, source_conf_mult=1.0):
+            """Process OCR results and add valid serials to the list."""
+            for (bbox, text, conf) in results:
+                text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
+
+                # O at suffix position is almost always a misread Q
+                if len(text_clean) == 10 and text_clean[-1] == 'O':
+                    text_clean = text_clean[:-1] + 'Q'
+
+                adjusted_conf = conf * source_conf_mult
+
+                # Direct match - prefer serials starting with letters (valid Fed codes)
+                match = re.search(pattern, text_clean)
+                if match:
+                    serial = match.group(0)
+                    # Boost confidence for letter-prefixed serials (correct format)
+                    if serial[0] in self.VALID_FED_CODES:
+                        adjusted_conf *= 1.1
+                    valid_serials.append((serial, min(adjusted_conf, 1.0)))
+                    continue
+
+                # If YOLO confirmed star and OCR found 9-char serial, add the star
+                if star_confirmed and re.match(star_note_pattern, text_clean):
+                    serial = text_clean + '*'
+                    if serial[0] in self.VALID_FED_CODES:
+                        adjusted_conf *= 1.1
+                    valid_serials.append((serial, min(adjusted_conf, 1.0)))
+                    continue
+
+                # Apply confusion corrections
+                corrected = self._apply_confusion_corrections(text_clean, pattern)
+                if corrected:
+                    valid_serials.append((corrected, adjusted_conf * 0.95))
+
+        # Strategy 1: Raw image (fastest, works for clean scans)
         get_timing().add_ocr_call()
         results = self.ocr_reader.readtext(
             crop_image,
             allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
             detail=1
         )
+        process_ocr_results(results)
 
-        valid_serials = []
-        for (bbox, text, conf) in results:
-            text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
+        # Check if we have a high-confidence letter-prefixed result
+        letter_prefixed = [s for s in valid_serials if s[0][0] in self.VALID_FED_CODES]
+        if letter_prefixed:
+            best = max(letter_prefixed, key=lambda x: x[1])
+            if best[1] >= 0.7:
+                return best
 
-            # O at suffix position is almost always a misread Q
-            if len(text_clean) == 10 and text_clean[-1] == 'O':
-                text_clean = text_clean[:-1] + 'Q'
+        # Strategy 2: Binarization with threshold=120 (best for G/C distinction)
+        # Always try this if we don't have a confident letter-prefixed result
+        _, binary = cv2.threshold(gray, 120, 255, cv2.THRESH_BINARY)
+        get_timing().add_ocr_call()
+        results = self.ocr_reader.readtext(
+            cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR),
+            allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
+            detail=1
+        )
+        process_ocr_results(results, source_conf_mult=0.95)
 
-            # Direct match
-            match = re.search(pattern, text_clean)
-            if match:
-                valid_serials.append((match.group(0), conf))
-                continue
+        # Check again for letter-prefixed results
+        letter_prefixed = [s for s in valid_serials if s[0][0] in self.VALID_FED_CODES]
+        if letter_prefixed:
+            best = max(letter_prefixed, key=lambda x: x[1])
+            if best[1] >= 0.5:
+                return best
 
-            # If YOLO confirmed star and OCR found 9-char serial, add the star
-            if star_confirmed and re.match(star_note_pattern, text_clean):
-                valid_serials.append((text_clean + '*', conf))
-                continue
-
-            # Apply confusion corrections
-            corrected = self._apply_confusion_corrections(text_clean, pattern)
-            if corrected:
-                valid_serials.append((corrected, conf * 0.95))
-
-        # If we got a good result, return it immediately
+        # If we have any valid result, return the best one
         if valid_serials:
             best = max(valid_serials, key=lambda x: x[1])
             if best[1] >= 0.5:
                 return best
 
-        # Only try enhanced image if original didn't work well
-        if len(crop_image.shape) == 3:
-            gray = cv2.cvtColor(crop_image, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = crop_image
+        # Strategy 3: CLAHE enhancement (helps with low contrast)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(gray)
 
@@ -984,23 +1023,9 @@ class ProductionProcessor:
             allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
             detail=1
         )
+        process_ocr_results(results, source_conf_mult=0.9)
 
-        for (bbox, text, conf) in results:
-            text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
-
-            # O at suffix position is almost always a misread Q
-            if len(text_clean) == 10 and text_clean[-1] == 'O':
-                text_clean = text_clean[:-1] + 'Q'
-
-            match = re.search(pattern, text_clean)
-            if match:
-                valid_serials.append((match.group(0), conf))
-            else:
-                corrected = self._apply_confusion_corrections(text_clean, pattern)
-                if corrected:
-                    valid_serials.append((corrected, conf * 0.95))
-
-        # Try binarization as last resort (helps with faded/low contrast serials)
+        # Strategy 4: Otsu binarization as fallback
         if not valid_serials:
             _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             get_timing().add_ocr_call()
@@ -1009,20 +1034,7 @@ class ProductionProcessor:
                 allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
                 detail=1
             )
-
-            for (bbox, text, conf) in results:
-                text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
-
-                if len(text_clean) == 10 and text_clean[-1] == 'O':
-                    text_clean = text_clean[:-1] + 'Q'
-
-                match = re.search(pattern, text_clean)
-                if match:
-                    valid_serials.append((match.group(0), conf))
-                else:
-                    corrected = self._apply_confusion_corrections(text_clean, pattern)
-                    if corrected:
-                        valid_serials.append((corrected, conf * 0.95))
+            process_ocr_results(results, source_conf_mult=0.85)
 
         if not valid_serials:
             return None, 0
@@ -1356,7 +1368,7 @@ class ProductionProcessor:
             # Expand bounding box (40% to catch edge letters)
             box_width = x2 - x1
             box_height = y2 - y1
-            padding_x = int(box_width * 0.40)
+            padding_x = int(box_width * 0.15)  # Tighter crops improve letter recognition
             padding_y = int(box_height * 0.15)
 
             x1_exp = max(0, x1 - padding_x)
