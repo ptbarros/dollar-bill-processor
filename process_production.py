@@ -517,7 +517,10 @@ class ScannerFormatDetector:
         """
         Find front/back pairs using suffix naming (e.g., 0001.jpg + 0001_b.jpg)
         """
-        files = sorted(image_folder.glob("*.jpg")) + sorted(image_folder.glob("*.jpeg"))
+        files = sorted(
+            list(image_folder.glob("*.jpg")) + list(image_folder.glob("*.jpeg")),
+            key=ScannerFormatDetector._natural_sort_key
+        )
         pairs = []
         seen_bases = set()
 
@@ -549,6 +552,18 @@ class ScannerFormatDetector:
         return pairs
 
     @staticmethod
+    def _natural_sort_key(path: Path) -> list:
+        """Extract numbers from filename for natural sorting.
+
+        'Dollar_01.jpg' -> ['Dollar_', 1, '.jpg']
+        'Dollar_100.jpg' -> ['Dollar_', 100, '.jpg']
+        This ensures Dollar_2 comes before Dollar_10.
+        """
+        import re
+        parts = re.split(r'(\d+)', path.name)
+        return [int(p) if p.isdigit() else p.lower() for p in parts]
+
+    @staticmethod
     def find_pairs_sequential(image_folder: Path) -> list[BillPair]:
         """
         Find front/back pairs using sequential numbering.
@@ -557,7 +572,7 @@ class ScannerFormatDetector:
         """
         files = sorted(
             list(image_folder.glob("*.jpg")) + list(image_folder.glob("*.jpeg")),
-            key=lambda x: x.name
+            key=ScannerFormatDetector._natural_sort_key
         )
 
         pairs = []
