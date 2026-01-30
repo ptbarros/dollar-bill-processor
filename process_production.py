@@ -819,6 +819,14 @@ class ProductionProcessor:
         elif method == 'sharpen':
             kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
             return cv2.filter2D(img, -1, kernel)
+        elif method == 'binarize':
+            # Otsu binarization - helps with low contrast/faded serials
+            if len(img.shape) == 3:
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            else:
+                gray = img
+            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            return cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
         return img
 
     def align_for_preview(self, image_path: Path) -> tuple[Optional[np.ndarray], dict]:
@@ -980,6 +988,30 @@ class ProductionProcessor:
                 if corrected:
                     valid_serials.append((corrected, conf * 0.95))
 
+        # Try binarization as last resort (helps with faded/low contrast serials)
+        if not valid_serials:
+            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            get_timing().add_ocr_call()
+            results = self.ocr_reader.readtext(
+                cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR),
+                allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
+                detail=1
+            )
+
+            for (bbox, text, conf) in results:
+                text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
+
+                if len(text_clean) == 10 and text_clean[-1] == 'O':
+                    text_clean = text_clean[:-1] + 'Q'
+
+                match = re.search(pattern, text_clean)
+                if match:
+                    valid_serials.append((match.group(0), conf))
+                else:
+                    corrected = self._apply_confusion_corrections(text_clean, pattern)
+                    if corrected:
+                        valid_serials.append((corrected, conf * 0.95))
+
         if not valid_serials:
             return None, 0
 
@@ -1034,11 +1066,28 @@ class ProductionProcessor:
                     if re.match(pattern, corrected):
                         return corrected
 
-        # 9 chars starting with Fed letter - potential star note
+        # 9 chars starting with Fed letter - potential star note with missed star
         if re.match(r'^[A-L]\d{8}$', text):
-            # Only add * if confident this is a star note
-            # Leave as None to avoid false star notes
-            pass
+            # Try adding star - OCR often misses the star symbol
+            corrected = text + '*'
+            if re.match(pattern, corrected):
+                return corrected
+
+        # 9 digits - first might be misread letter, star might be missed
+        # Common case: "613382145" should be "G13382145*"
+        if re.match(r'^\d{9}$', text):
+            first = text[0]
+            for letter in self.CHAR_CONFUSIONS.get(first, []):
+                if letter in self.VALID_FED_CODES:
+                    # Try as star note (add * at end)
+                    corrected = letter + text[1:] + '*'
+                    if re.match(pattern, corrected):
+                        return corrected
+                    # Also try as regular note (might need suffix letter)
+                    for suffix in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']:
+                        corrected = letter + text[1:] + suffix
+                        if re.match(pattern, corrected):
+                            return corrected
 
         return None
 
