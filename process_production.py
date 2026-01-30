@@ -921,9 +921,16 @@ class ProductionProcessor:
             verified.append(pair)
         return verified
 
-    def extract_serial_from_crop(self, crop_image) -> tuple[Optional[str], float]:
-        """Extract serial number from a cropped region using OCR with expanded confusion matrix."""
+    def extract_serial_from_crop(self, crop_image, star_confirmed: bool = False) -> tuple[Optional[str], float]:
+        r"""Extract serial number from a cropped region using OCR with expanded confusion matrix.
+
+        Args:
+            crop_image: Cropped image of serial number region
+            star_confirmed: If True, YOLO detected a star symbol, so accept 9-char serials
+                           matching [A-L]\d{8} and add the star.
+        """
         pattern = r'[A-L]\d{8}[A-Y*]'
+        star_note_pattern = r'^[A-L]\d{8}$'  # 9 chars for star notes missing the star
 
         # Try OCR on original image first
         get_timing().add_ocr_call()
@@ -945,6 +952,11 @@ class ProductionProcessor:
             match = re.search(pattern, text_clean)
             if match:
                 valid_serials.append((match.group(0), conf))
+                continue
+
+            # If YOLO confirmed star and OCR found 9-char serial, add the star
+            if star_confirmed and re.match(star_note_pattern, text_clean):
+                valid_serials.append((text_clean + '*', conf))
                 continue
 
             # Apply confusion corrections
@@ -1150,13 +1162,13 @@ class ProductionProcessor:
             detect_stars: If True, also check for star symbols in same pass
 
         Returns:
-            tuple: (serial_boxes, star_detected) if detect_stars=True
-                   (serial_boxes, False) if detect_stars=False
+            tuple: (serial_boxes, star_confidence)
+                   star_confidence is max star detection confidence (0 if no star)
         """
         get_timing().add_yolo_call()
         results = self.yolo_model(img, verbose=False, conf=conf)
         boxes = []
-        star_detected = False
+        star_conf = 0.0
 
         # Check if model has class info (multi-class model)
         serial_class_id = self.YOLO_CLASSES.get('serial_number', None)
@@ -1170,7 +1182,7 @@ class ProductionProcessor:
                     # Check for star symbol (if enabled and model supports it)
                     if detect_stars and self.star_class_id is not None:
                         if cls_id == self.star_class_id and box_conf >= 0.2:
-                            star_detected = True
+                            star_conf = max(star_conf, box_conf)
 
                     # Filter for serial_number class
                     if serial_class_id is not None and cls_id != serial_class_id:
@@ -1178,7 +1190,7 @@ class ProductionProcessor:
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 boxes.append((x1, y1, x2, y2, float(box.conf[0])))
-        return boxes, star_detected
+        return boxes, star_conf
 
     def _detect_star_symbol(self, img: np.ndarray, conf: float = 0.1) -> bool:
         """Detect if a star symbol is present in the image.
@@ -1319,8 +1331,14 @@ class ProductionProcessor:
 
         return normalized_variance
 
-    def _extract_serial_from_boxes(self, img: np.ndarray, boxes: list) -> list:
+    def _extract_serial_from_boxes(self, img: np.ndarray, boxes: list, star_confirmed: bool = False) -> list:
         """Extract serial numbers from detected bounding boxes.
+
+        Args:
+            img: Image to process
+            boxes: List of (x1, y1, x2, y2, det_conf) bounding boxes
+            star_confirmed: If True, YOLO confidently detected a star symbol.
+                           This allows accepting 9-char serials and adding the star.
 
         Returns:
             list of tuples: (serial, ocr_conf, det_conf, baseline_variance)
@@ -1347,7 +1365,7 @@ class ProductionProcessor:
             y2_exp = min(h, y2 + padding_y)
 
             crop = img[y1_exp:y2_exp, x1_exp:x2_exp]
-            serial, conf = self.extract_serial_from_crop(crop)
+            serial, conf = self.extract_serial_from_crop(crop, star_confirmed=star_confirmed)
 
             if serial:
                 # Calculate baseline variance for gas pump detection
@@ -1392,9 +1410,15 @@ class ProductionProcessor:
         # First pass: standard detection (fastest path for most bills)
         # Also detect star symbols in the same YOLO call
         timing.start('detect')
-        boxes, star_detected = self._detect_serials_single_pass(aligned_img, conf=0.1, detect_stars=True)
+        boxes, star_conf = self._detect_serials_single_pass(aligned_img, conf=0.1, detect_stars=True)
+        star_detected = star_conf >= 0.2
+        high_conf_star = star_conf >= 0.8  # High confidence star = trust any serial found
+
         if boxes:
-            serials = self._extract_serial_from_boxes(aligned_img, boxes)
+            # For high-confidence star notes, only process first box to minimize OCR calls
+            # Also pass star_confirmed to allow accepting 9-char serials
+            boxes_to_process = boxes[:1] if high_conf_star else boxes
+            serials = self._extract_serial_from_boxes(aligned_img, boxes_to_process, star_confirmed=high_conf_star)
             if serials:
                 # Got results on first pass - use them
                 # serials now includes baseline_variance as 4th element
@@ -1410,7 +1434,8 @@ class ProductionProcessor:
                 # 1. Good confidence (>= 0.5) - normal case
                 # 2. Star detected (YOLO or OCR) + any serial found - star notes are rare,
                 #    if we found a star and got a serial, trust it and skip fallbacks
-                if result[1] >= 0.5 or (star_detected and result[0]):
+                # 3. High confidence star (0.8+) + any serial = definitely trust it
+                if result[1] >= 0.5 or (star_detected and result[0]) or (high_conf_star and result[0]):
                     timing.stop('detect')
                     return result[0], result[1], yolo_detected_flip, best_baseline_variance, star_detected, align_info
 
