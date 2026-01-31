@@ -325,7 +325,9 @@ class BillAligner:
         angle = self.detect_rotation_angle(img_gray)
 
         # Skip rotation if angle is negligible
-        if abs(angle) < 0.2:
+        # Use 1.5° threshold - small print variations and scan noise can cause
+        # 0.5-1.0° false readings. Higher threshold avoids over-correction.
+        if abs(angle) < 1.5:
             return img_color
 
         # Rotate the image to straighten it
@@ -426,8 +428,8 @@ class YOLOBillAligner:
             angle = self.contour_aligner.detect_rotation_angle(gray)
             info['angle'] = angle
 
-        # Apply rotation if needed
-        if abs(angle) >= 0.2:
+        # Apply rotation if needed (1.5° threshold to avoid over-correction)
+        if abs(angle) >= 1.5:
             center = (w // 2, h // 2)
             M = cv2.getRotationMatrix2D(center, angle, 1.0)
             img = cv2.warpAffine(img, M, (w, h),
@@ -475,8 +477,8 @@ class YOLOBillAligner:
 
         h, w = img.shape[:2]
 
-        # Apply rotation if needed
-        if abs(angle) >= 0.2:
+        # Apply rotation if needed (1.5° threshold to avoid over-correction)
+        if abs(angle) >= 1.5:
             center = (w // 2, h // 2)
             M = cv2.getRotationMatrix2D(center, angle, 1.0)
             img = cv2.warpAffine(img, M, (w, h),

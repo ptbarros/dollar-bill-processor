@@ -812,6 +812,11 @@ class ResultsList(QWidget):
         Called when viewing a bill to show the fresh calculated deviation
         instead of the value from processing time.
         """
+        # Temporarily disable sorting to prevent the item from jumping
+        # when the value changes while sorted by this column
+        sorting_enabled = self.tree.isSortingEnabled()
+        self.tree.setSortingEnabled(False)
+
         # Find the tree item with this position
         for i in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(i)
@@ -823,6 +828,9 @@ class ResultsList(QWidget):
                         result['baseline_variance'] = f"{px_dev:.1f}"
                         break
                 break
+
+        # Re-enable sorting (but don't trigger a re-sort)
+        self.tree.setSortingEnabled(sorting_enabled)
 
     def update_result_paths(self, path_mapping: dict):
         """Update file paths in results after archiving.

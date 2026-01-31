@@ -33,6 +33,57 @@ def _load_crosshair_settings():
     return color, settings.ui.crosshair_thickness
 
 
+class ZoomScrollArea(QScrollArea):
+    """QScrollArea that doesn't intercept middle mouse button, allowing child to handle zoom."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._child_widget = None
+        self._middle_dragging = False
+        self._zoom_start_y = 0
+
+    def setWidget(self, widget):
+        """Override to track the child widget."""
+        super().setWidget(widget)
+        self._child_widget = widget
+
+    def mousePressEvent(self, event):
+        """Intercept middle mouse for zoom instead of pan."""
+        if event.button() == Qt.MiddleButton and self._child_widget:
+            self._middle_dragging = True
+            self._zoom_start_y = event.globalPosition().y()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        """Handle middle mouse drag for zoom."""
+        if self._middle_dragging and self._child_widget:
+            current_y = event.globalPosition().y()
+            delta_y = current_y - self._zoom_start_y
+
+            # Zoom based on vertical movement
+            if abs(delta_y) > 5:
+                viewer = getattr(self._child_widget, '_viewer', None)
+                if viewer:
+                    if delta_y < 0:
+                        viewer.zoom_in()
+                    else:
+                        viewer.zoom_out()
+                self._zoom_start_y = current_y
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        """End middle mouse zoom drag."""
+        if event.button() == Qt.MiddleButton:
+            self._middle_dragging = False
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+
 class PannableImageLabel(QLabel):
     """Label that displays an image with pan support via mouse drag and optional crosshair."""
 
@@ -60,6 +111,8 @@ class PannableImageLabel(QLabel):
         self._viewer = None  # Reference to parent viewer
         self._crosshair_enabled = False
         self._mouse_pos = None  # Track mouse position for crosshair
+        self._zoom_start_global = None  # For middle-mouse zoom drag
+        self._is_zoom_dragging = False
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_crosshair_menu)
 
@@ -81,22 +134,47 @@ class PannableImageLabel(QLabel):
         self.update()
 
     def mousePressEvent(self, event: QMouseEvent):
-        """Start panning on mouse press."""
+        """Start panning on mouse press, or zooming on middle mouse."""
         if event.button() == Qt.LeftButton and not self._crosshair_enabled:
             # Use global position to avoid jitter from widget movement
             self._drag_start_global = event.globalPosition().toPoint()
             self.setCursor(QCursor(Qt.ClosedHandCursor))
             if self._viewer:
                 self._viewer._is_panning = True
-        super().mousePressEvent(event)
+            super().mousePressEvent(event)
+        elif event.button() == Qt.MiddleButton:
+            # Middle mouse button for zoom (ThinkPad trackpoint style)
+            # Accept event to prevent scroll area from using it for panning
+            self._zoom_start_global = event.globalPosition().toPoint()
+            self._is_zoom_dragging = True
+            event.accept()
+        else:
+            super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent):
-        """Pan the image while dragging, or update crosshair position."""
+        """Pan the image while dragging, zoom with middle mouse, or update crosshair."""
         # Update mouse position for crosshair
         self._mouse_pos = event.position().toPoint()
 
         if self._crosshair_enabled:
             self.update()  # Trigger repaint to update crosshair
+            super().mouseMoveEvent(event)
+        elif self._is_zoom_dragging and self._zoom_start_global and self._viewer:
+            # Middle mouse drag for zoom (TrackPoint style)
+            current_global = event.globalPosition().toPoint()
+            delta_y = current_global.y() - self._zoom_start_global.y()
+
+            # Zoom based on vertical movement: up = zoom in, down = zoom out
+            # Use small increments for smooth zooming
+            if abs(delta_y) > 5:  # Threshold to avoid tiny movements
+                if delta_y < 0:
+                    self._viewer.zoom_in()
+                else:
+                    self._viewer.zoom_out()
+                # Reset start position for continuous zooming
+                self._zoom_start_global = current_global
+            # Accept event to prevent scroll area from panning
+            event.accept()
         elif self._drag_start_global and self._scroll_area:
             # Calculate delta using global coordinates (stable during scroll)
             current_global = event.globalPosition().toPoint()
@@ -109,16 +187,24 @@ class PannableImageLabel(QLabel):
 
             # Update start position for next move
             self._drag_start_global = current_global
-        super().mouseMoveEvent(event)
+            super().mouseMoveEvent(event)
+        else:
+            super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
-        """End panning on mouse release."""
+        """End panning or zooming on mouse release."""
         if event.button() == Qt.LeftButton and not self._crosshair_enabled:
             self._drag_start_global = None
             self.setCursor(QCursor(Qt.OpenHandCursor))
             if self._viewer:
                 self._viewer._is_panning = False
-        super().mouseReleaseEvent(event)
+            super().mouseReleaseEvent(event)
+        elif event.button() == Qt.MiddleButton:
+            self._zoom_start_global = None
+            self._is_zoom_dragging = False
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
 
     def leaveEvent(self, event):
         """Clear crosshair when mouse leaves."""
@@ -235,7 +321,7 @@ class ScrollableImageViewer(QWidget):
         layout.setSpacing(4)
 
         # Scroll area for panning
-        self.scroll_area = QScrollArea()
+        self.scroll_area = ZoomScrollArea()
         self.scroll_area.setWidgetResizable(False)
         self.scroll_area.setAlignment(Qt.AlignCenter)
         self.scroll_area.setStyleSheet("QScrollArea { background-color: #2d2d2d; }")
@@ -375,13 +461,24 @@ class ScrollableImageViewer(QWidget):
         self._update_display()
 
     def wheelEvent(self, event: QWheelEvent):
-        """Handle mouse wheel for zooming."""
-        if event.modifiers() == Qt.ControlModifier:
+        """Handle mouse wheel for zooming (Ctrl+wheel or middle button+trackpoint)."""
+        # Zoom with Ctrl+wheel or middle mouse button (ThinkPad trackpoint)
+        if event.modifiers() == Qt.ControlModifier or event.buttons() & Qt.MiddleButton:
             delta = event.angleDelta().y()
-            if delta > 0:
-                self._zoom_in()
+            # Use smaller zoom steps for smoother trackpoint zooming
+            if event.buttons() & Qt.MiddleButton:
+                # Trackpoint generates many small events, use gentler zoom
+                if delta > 0:
+                    self.zoom_factor = min(4.0, self.zoom_factor * 1.05)
+                elif delta < 0:
+                    self.zoom_factor = max(0.1, self.zoom_factor / 1.05)
+                self._update_display()
             else:
-                self._zoom_out()
+                # Regular Ctrl+wheel zoom
+                if delta > 0:
+                    self._zoom_in()
+                else:
+                    self._zoom_out()
             event.accept()
         else:
             super().wheelEvent(event)
@@ -418,7 +515,7 @@ class ImagePane(QWidget):
         layout.setSpacing(0)
 
         # Scroll area for panning (no scrollbars - use drag panning only)
-        self.scroll_area = QScrollArea()
+        self.scroll_area = ZoomScrollArea()
         self.scroll_area.setWidgetResizable(False)
         self.scroll_area.setAlignment(Qt.AlignCenter)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -516,8 +613,8 @@ class ImagePane(QWidget):
         return self.zoom_factor
 
     def wheelEvent(self, event: QWheelEvent):
-        """Forward Ctrl+wheel to parent for zoom."""
-        if event.modifiers() == Qt.ControlModifier:
+        """Forward Ctrl+wheel or middle button+wheel to parent for zoom."""
+        if event.modifiers() == Qt.ControlModifier or event.buttons() & Qt.MiddleButton:
             # Let parent handle zoom
             event.ignore()
         else:
@@ -656,13 +753,21 @@ class SyncedSplitViewer(QWidget):
         self._update_zoom()
 
     def wheelEvent(self, event: QWheelEvent):
-        """Handle Ctrl+wheel for zoom."""
-        if event.modifiers() == Qt.ControlModifier:
+        """Handle Ctrl+wheel or middle button+wheel for zoom."""
+        if event.modifiers() == Qt.ControlModifier or event.buttons() & Qt.MiddleButton:
             delta = event.angleDelta().y()
-            if delta > 0:
-                self._zoom_in()
+            # Use smaller zoom steps for trackpoint
+            if event.buttons() & Qt.MiddleButton:
+                if delta > 0:
+                    self.zoom_factor = min(4.0, self.zoom_factor * 1.05)
+                elif delta < 0:
+                    self.zoom_factor = max(0.1, self.zoom_factor / 1.05)
+                self._update_zoom()
             else:
-                self._zoom_out()
+                if delta > 0:
+                    self._zoom_in()
+                else:
+                    self._zoom_out()
             event.accept()
         else:
             super().wheelEvent(event)
@@ -803,6 +908,16 @@ class PreviewPanel(QWidget):
         self.align_btn.setToolTip("Toggle auto-alignment using YOLO bill detection")
         self.align_btn.setCheckable(True)
         self.align_btn.setChecked(self._auto_align_enabled)
+        self.align_btn.setStyleSheet("""
+            QPushButton {
+                padding: 4px 8px;
+            }
+            QPushButton:checked {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+            }
+        """)
         self.align_btn.clicked.connect(self._on_align_toggled)
         header_layout.addWidget(self.align_btn)
 
@@ -1020,7 +1135,10 @@ class PreviewPanel(QWidget):
         self.view_stack.setCurrentIndex(index)
 
         # Refresh views when switching modes
-        if mode == "stitched":
+        # Use aligned images if we're currently showing aligned view
+        if self._is_showing_aligned and self._aligned_front_pixmap:
+            self._refresh_aligned_views()
+        elif mode == "stitched":
             self._update_combined_view()
         elif mode in ("split_v", "split_h"):
             self._update_split_views()
@@ -1450,9 +1568,8 @@ class PreviewPanel(QWidget):
                 else:
                     self.serial_image_2.setText("")
 
-            # Emit fresh Px Dev value to update the results list
-            position = result.get('position', 0)
-            self.px_dev_updated.emit(position, fresh_px_dev)
+            # Note: We no longer emit px_dev_updated here to avoid sorting jumps
+            # The processing-time value is kept in the results list
 
         # Update details
         serial = result.get('serial', '')
@@ -1588,10 +1705,8 @@ class PreviewPanel(QWidget):
                 else:
                     self.serial_image_2.setText("")
 
-            # Emit fresh Px Dev value
-            if self.current_result:
-                position = self.current_result.get('position', 0)
-                self.px_dev_updated.emit(position, fresh_px_dev)
+            # Note: We no longer emit px_dev_updated to avoid sorting jumps
+            # The processing-time value is kept in the results list
 
     def set_details_visible(self, visible: bool):
         """Show or hide the bill details panel."""
@@ -1684,6 +1799,37 @@ class PreviewPanel(QWidget):
     def show_aligned_image(self, pixmap: QPixmap):
         """Display an aligned image in the current viewer (legacy single-image method)."""
         self.show_aligned_images(pixmap, None)
+
+    def _refresh_aligned_views(self):
+        """Refresh views using cached aligned images (called when switching view modes)."""
+        if not self._aligned_front_pixmap:
+            return
+
+        # Use the existing show_aligned_images logic to update all views
+        front = self._aligned_front_pixmap
+        back = self._aligned_back_pixmap
+
+        # Update the current view mode with aligned images
+        mode = self._current_view_mode
+        if mode == "front" and front:
+            self.front_viewer.set_pixmap(front, preserve_zoom=True)
+        elif mode == "back" and back:
+            self.back_viewer.set_pixmap(back, preserve_zoom=True)
+        elif mode == "stitched":
+            combined = self._create_combined_pixmap_from_pixmaps(front, back)
+            if combined:
+                self.combined_viewer.set_pixmap(combined, preserve_zoom=True)
+        elif mode in ("split_v", "split_h"):
+            if front:
+                self.split_v_viewer.front_pane.original_pixmap = front
+                self.split_v_viewer.front_pane._update_display()
+                self.split_h_viewer.front_pane.original_pixmap = front
+                self.split_h_viewer.front_pane._update_display()
+            if back:
+                self.split_v_viewer.back_pane.original_pixmap = back
+                self.split_v_viewer.back_pane._update_display()
+                self.split_h_viewer.back_pane.original_pixmap = back
+                self.split_h_viewer.back_pane._update_display()
 
     def show_aligned_images(self, front_pixmap: QPixmap, back_pixmap: QPixmap):
         """Display aligned images in all viewers."""
