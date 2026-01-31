@@ -210,6 +210,24 @@ class SettingsDialog(QDialog):
         )
         output_layout.addRow(crop_all_container)
 
+        self.auto_crop_check, auto_crop_container = self._create_checkbox_with_info(
+            "Auto-crop during processing",
+            "Automatically generate crops for fancy bills during processing.\n\n"
+            "• Checked: Crops generated automatically (default behavior)\n"
+            "• Unchecked: No auto-cropping; use manual Crop button/menu\n\n"
+            "Disable this to review bills first, then crop selected ones."
+        )
+        output_layout.addRow(auto_crop_container)
+
+        self.auto_archive_check, auto_archive_container = self._create_checkbox_with_info(
+            "Archive after processing",
+            "Move processed files to a timestamped archive folder.\n\n"
+            "• Checked: Files moved to archive/batch_YYYYMMDD_HHMMSS/\n"
+            "• Unchecked: Files stay in original location\n\n"
+            "Uses the archive directory from Monitor settings."
+        )
+        output_layout.addRow(auto_archive_container)
+
         layout.addWidget(output_group)
 
         layout.addStretch()
@@ -511,6 +529,8 @@ class SettingsDialog(QDialog):
         self.verify_pairs_check.setChecked(self.settings.processing.verify_pairs)
         self.jpeg_quality_spin.setValue(self.settings.processing.jpeg_quality)
         self.crop_all_check.setChecked(self.settings.processing.crop_all)
+        self.auto_crop_check.setChecked(self.settings.processing.auto_crop)
+        self.auto_archive_check.setChecked(self.settings.processing.auto_archive)
 
         # UI
         idx = self.theme_combo.findData(self.settings.ui.theme)
@@ -561,6 +581,8 @@ class SettingsDialog(QDialog):
         self.settings.processing.verify_pairs = self.verify_pairs_check.isChecked()
         self.settings.processing.jpeg_quality = self.jpeg_quality_spin.value()
         self.settings.processing.crop_all = self.crop_all_check.isChecked()
+        self.settings.processing.auto_crop = self.auto_crop_check.isChecked()
+        self.settings.processing.auto_archive = self.auto_archive_check.isChecked()
 
         # UI
         self.settings.ui.theme = self.theme_combo.currentData()

@@ -44,6 +44,7 @@ class ResultsList(QWidget):
     item_selected = Signal(dict)  # Emits the selected result
     correction_applied = Signal(str, str, str)  # filename, original, corrected
     batch_changed = Signal(str)  # Emits batch path when changed (empty for current session)
+    crop_requested = Signal(list)  # Emits list of results to crop
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -112,7 +113,7 @@ class ResultsList(QWidget):
         self.tree.setAlternatingRowColors(True)
         self.tree.setRootIsDecorated(False)
         self.tree.setSortingEnabled(True)
-        self.tree.setSelectionMode(QTreeWidget.SingleSelection)
+        self.tree.setSelectionMode(QTreeWidget.ExtendedSelection)
         self.tree.itemSelectionChanged.connect(self._on_selection_changed)
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
@@ -404,106 +405,130 @@ class ResultsList(QWidget):
         if not item:
             return
 
-        # Select the item when right-clicking (ensures consistency)
-        self.tree.setCurrentItem(item)
+        # If right-clicked item is not in current selection, select only it
+        # Otherwise, keep the multi-selection intact
+        if not item.isSelected():
+            self.tree.setCurrentItem(item)
 
+        # Get all selected items
+        selected_items = self.tree.selectedItems()
+        selected_results = [i.data(0, Qt.UserRole) for i in selected_items if i.data(0, Qt.UserRole)]
+        is_multi_select = len(selected_results) > 1
+
+        # For single-item actions, use the right-clicked item
         result = item.data(0, Qt.UserRole)
         serial = result.get('serial', '')
         menu = QMenu(self)
 
-        # Correct serial action - opens dialog
-        correct_action = QAction("Correct Serial...", self)
-        correct_action.triggered.connect(lambda: self._open_correction_dialog(result))
-        menu.addAction(correct_action)
+        # === Single-item actions (only show for single selection) ===
+        if not is_multi_select:
+            # Correct serial action - opens dialog
+            correct_action = QAction("Correct Serial...", self)
+            correct_action.triggered.connect(lambda: self._open_correction_dialog(result))
+            menu.addAction(correct_action)
 
-        # Quick fixes submenu - position-aware for bill serial format
-        # Format: [A-L] + 8 digits + [A-Y or *]
-        if serial and len(serial) == 10:
-            quick_menu = menu.addMenu("Quick Fixes")
-            fixes_added = False
+            # Quick fixes submenu - position-aware for bill serial format
+            # Format: [A-L] + 8 digits + [A-Y or *]
+            if serial and len(serial) == 10:
+                quick_menu = menu.addMenu("Quick Fixes")
+                fixes_added = False
 
-            # Position 0: First letter (must be A-L)
-            first_char = serial[0]
-            # If digit misread as letter, or letter confusion
-            first_pos_fixes = [
-                ("6 → G", "6", "G"),  # 6 misread as G
-                ("8 → B", "8", "B"),  # 8 misread as B
-                ("C → G", "C", "G"),  # C/G confusion
-                ("G → C", "G", "C"),
-            ]
-            for label, from_char, to_char in first_pos_fixes:
-                if first_char == from_char:
-                    action = QAction(f"Pos 1: {label}", self)
-                    action.triggered.connect(
-                        lambda checked, r=result, pos=0, t=to_char: self._apply_positional_fix(r, pos, t)
-                    )
-                    quick_menu.addAction(action)
-                    fixes_added = True
-
-            # Positions 1-8: Middle digits (must be 0-9)
-            # Only offer letter→digit fixes (letters shouldn't be here)
-            middle_fixes = [
-                ("O → 0", "O", "0"),
-                ("I → 1", "I", "1"),
-                ("L → 1", "L", "1"),
-                ("S → 5", "S", "5"),
-                ("B → 8", "B", "8"),
-                ("G → 6", "G", "6"),
-                ("Z → 2", "Z", "2"),
-            ]
-            for idx in range(1, 9):
-                char = serial[idx]
-                for label, from_char, to_char in middle_fixes:
-                    if char == from_char:
-                        action = QAction(f"Pos {idx+1}: {label}", self)
+                # Position 0: First letter (must be A-L)
+                first_char = serial[0]
+                # If digit misread as letter, or letter confusion
+                first_pos_fixes = [
+                    ("6 → G", "6", "G"),  # 6 misread as G
+                    ("8 → B", "8", "B"),  # 8 misread as B
+                    ("C → G", "C", "G"),  # C/G confusion
+                    ("G → C", "G", "C"),
+                ]
+                for label, from_char, to_char in first_pos_fixes:
+                    if first_char == from_char:
+                        action = QAction(f"Pos 1: {label}", self)
                         action.triggered.connect(
-                            lambda checked, r=result, p=idx, t=to_char: self._apply_positional_fix(r, p, t)
+                            lambda checked, r=result, pos=0, t=to_char: self._apply_positional_fix(r, pos, t)
                         )
                         quick_menu.addAction(action)
                         fixes_added = True
 
-            # Position 9: Last letter (must be A-Y or *)
-            last_char = serial[9]
-            # Digit→letter fixes and letter confusions
-            last_pos_fixes = [
-                ("0 → O", "0", "O"),
-                ("0 → Q", "0", "Q"),
-                ("1 → I", "1", "I"),
-                ("1 → L", "1", "L"),
-                ("8 → B", "8", "B"),
-                ("5 → S", "5", "S"),
-                ("2 → Z", "2", "Z"),
-                ("O → Q", "O", "Q"),  # O/Q confusion (both valid)
-                ("Q → O", "Q", "O"),
-                ("C → G", "C", "G"),  # C/G confusion (both valid)
-                ("G → C", "G", "C"),
-            ]
-            for label, from_char, to_char in last_pos_fixes:
-                if last_char == from_char:
-                    action = QAction(f"Pos 10: {label}", self)
-                    action.triggered.connect(
-                        lambda checked, r=result, pos=9, t=to_char: self._apply_positional_fix(r, pos, t)
-                    )
-                    quick_menu.addAction(action)
-                    fixes_added = True
+                # Positions 1-8: Middle digits (must be 0-9)
+                # Only offer letter→digit fixes (letters shouldn't be here)
+                middle_fixes = [
+                    ("O → 0", "O", "0"),
+                    ("I → 1", "I", "1"),
+                    ("L → 1", "L", "1"),
+                    ("S → 5", "S", "5"),
+                    ("B → 8", "B", "8"),
+                    ("G → 6", "G", "6"),
+                    ("Z → 2", "Z", "2"),
+                ]
+                for idx in range(1, 9):
+                    char = serial[idx]
+                    for label, from_char, to_char in middle_fixes:
+                        if char == from_char:
+                            action = QAction(f"Pos {idx+1}: {label}", self)
+                            action.triggered.connect(
+                                lambda checked, r=result, p=idx, t=to_char: self._apply_positional_fix(r, p, t)
+                            )
+                            quick_menu.addAction(action)
+                            fixes_added = True
 
-            if not fixes_added:
-                quick_menu.addAction("(no applicable fixes)").setEnabled(False)
+                # Position 9: Last letter (must be A-Y or *)
+                last_char = serial[9]
+                # Digit→letter fixes and letter confusions
+                last_pos_fixes = [
+                    ("0 → O", "0", "O"),
+                    ("0 → Q", "0", "Q"),
+                    ("1 → I", "1", "I"),
+                    ("1 → L", "1", "L"),
+                    ("8 → B", "8", "B"),
+                    ("5 → S", "5", "S"),
+                    ("2 → Z", "2", "Z"),
+                    ("O → Q", "O", "Q"),  # O/Q confusion (both valid)
+                    ("Q → O", "Q", "O"),
+                    ("C → G", "C", "G"),  # C/G confusion (both valid)
+                    ("G → C", "G", "C"),
+                ]
+                for label, from_char, to_char in last_pos_fixes:
+                    if last_char == from_char:
+                        action = QAction(f"Pos 10: {label}", self)
+                        action.triggered.connect(
+                            lambda checked, r=result, pos=9, t=to_char: self._apply_positional_fix(r, pos, t)
+                        )
+                        quick_menu.addAction(action)
+                        fixes_added = True
+
+                if not fixes_added:
+                    quick_menu.addAction("(no applicable fixes)").setEnabled(False)
+
+            menu.addSeparator()
+
+        # === Multi-item actions (always show) ===
+        # Generate crops - works on all selected items
+        if is_multi_select:
+            crop_label = f"Generate Crops ({len(selected_results)} bills)"
+        else:
+            crop_label = "Generate Crops"
+        crop_action = QAction(crop_label, self)
+        crop_action.triggered.connect(lambda: self.crop_requested.emit(selected_results))
+        menu.addAction(crop_action)
 
         menu.addSeparator()
 
-        # Save for review
-        review_action = QAction("Save for Review...", self)
-        review_action.triggered.connect(lambda: self._save_for_review(result))
-        menu.addAction(review_action)
+        # === Single-item actions ===
+        if not is_multi_select:
+            # Save for review
+            review_action = QAction("Save for Review...", self)
+            review_action.triggered.connect(lambda: self._save_for_review(result))
+            menu.addAction(review_action)
 
-        # Mark as reviewed
-        if result.get('needs_review'):
-            mark_reviewed = QAction("Mark as Reviewed", self)
-            mark_reviewed.triggered.connect(lambda: self._mark_reviewed(result))
-            menu.addAction(mark_reviewed)
+            # Mark as reviewed
+            if result.get('needs_review'):
+                mark_reviewed = QAction("Mark as Reviewed", self)
+                mark_reviewed.triggered.connect(lambda: self._mark_reviewed(result))
+                menu.addAction(mark_reviewed)
 
-        menu.addSeparator()
+            menu.addSeparator()
 
         # Copy serial
         copy_action = QAction("Copy Serial", self)

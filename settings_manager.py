@@ -27,6 +27,8 @@ class ProcessingSettings:
     multi_pass_detection: bool = True
     max_detection_passes: int = 5
     crop_all: bool = False  # Crop all bills, not just fancy ones
+    auto_crop: bool = True  # Auto-crop fancy bills during processing
+    auto_archive: bool = False  # Archive files after manual processing
 
 
 @dataclass
@@ -138,6 +140,8 @@ class SettingsManager:
             self.processing.multi_pass_detection = proc.get('multi_pass_detection', True)
             self.processing.max_detection_passes = proc.get('max_detection_passes', 5)
             self.processing.crop_all = proc.get('crop_all', False)
+            self.processing.auto_crop = proc.get('auto_crop', True)
+            self.processing.auto_archive = proc.get('auto_archive', False)
 
         # Load UI settings
         if 'ui' in data:
@@ -217,6 +221,8 @@ class SettingsManager:
                 'multi_pass_detection': self.processing.multi_pass_detection,
                 'max_detection_passes': self.processing.max_detection_passes,
                 'crop_all': self.processing.crop_all,
+                'auto_crop': self.processing.auto_crop,
+                'auto_archive': self.processing.auto_archive,
             },
             'ui': {
                 'default_working_dir': self.ui.default_working_dir,

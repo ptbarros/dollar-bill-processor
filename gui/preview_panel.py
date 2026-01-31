@@ -733,6 +733,7 @@ class PreviewPanel(QWidget):
     next_requested = Signal()  # Request to navigate to next bill
     align_requested = Signal(str)  # Request alignment for image path
     px_dev_updated = Signal(int, float)  # (position, fresh_px_dev) - emitted when viewing a bill
+    crop_requested = Signal()  # Request to crop the current bill
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -812,6 +813,11 @@ class PreviewPanel(QWidget):
         header_layout.addWidget(self.crosshair_btn)
 
         self._crosshair_active = False
+
+        self.crop_btn = QPushButton("Crop (C)")
+        self.crop_btn.setToolTip("Generate crops for current bill (C)")
+        self.crop_btn.clicked.connect(self.crop_requested.emit)
+        header_layout.addWidget(self.crop_btn)
 
         header_layout.addStretch()
 

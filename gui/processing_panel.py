@@ -24,6 +24,7 @@ class ProcessingPanel(QWidget):
     stop_requested = Signal()
     monitor_requested = Signal()  # Start monitoring
     monitor_stop_requested = Signal()  # Stop monitoring
+    archive_requested = Signal()  # Archive the current batch
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -156,6 +157,29 @@ class ProcessingPanel(QWidget):
         self.stop_btn.clicked.connect(self._on_stop)
         layout.addWidget(self.stop_btn)
 
+        # Archive button - for manual archiving after processing
+        self.archive_btn = QPushButton("Archive")
+        self.archive_btn.setMinimumWidth(60)
+        self.archive_btn.setEnabled(False)
+        self.archive_btn.setToolTip("Move processed files to archive folder")
+        self.archive_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-weight: bold;
+                padding: 8px 16px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
+        """)
+        self.archive_btn.clicked.connect(self.archive_requested.emit)
+        layout.addWidget(self.archive_btn)
+
         # Progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setMinimumWidth(150)
@@ -280,6 +304,30 @@ class ProcessingPanel(QWidget):
 
         if not is_processing:
             self.progress_bar.setValue(0)
+
+        # Disable archive button during processing
+        if is_processing:
+            self.archive_btn.setEnabled(False)
+
+    def set_archive_available(self, available: bool, auto_archive_enabled: bool):
+        """Update archive button state after processing completes.
+
+        Args:
+            available: Whether there are results to archive
+            auto_archive_enabled: Whether auto-archive is enabled in settings
+        """
+        if auto_archive_enabled:
+            # Auto-archive is on, so hide/disable the manual button
+            self.archive_btn.setEnabled(False)
+            self.archive_btn.setToolTip("Auto-archive is enabled in settings")
+        else:
+            # Manual archive available
+            self.archive_btn.setEnabled(available)
+            self.archive_btn.setToolTip("Move processed files to archive folder")
+
+    def reset_archive_button(self):
+        """Reset archive button to disabled state (e.g., after archiving)."""
+        self.archive_btn.setEnabled(False)
 
     def set_monitoring(self, is_monitoring: bool):
         """Update UI for monitoring state."""

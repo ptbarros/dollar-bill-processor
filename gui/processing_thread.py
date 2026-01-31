@@ -36,6 +36,7 @@ class ProcessingThread(QThread):
         use_gpu: bool = False,
         verify_pairs: bool = True,
         crop_all: bool = False,
+        auto_crop: bool = True,
         parent=None
     ):
         super().__init__(parent)
@@ -44,6 +45,7 @@ class ProcessingThread(QThread):
         self.use_gpu = use_gpu
         self.verify_pairs = verify_pairs
         self.crop_all = crop_all
+        self.auto_crop = auto_crop
         self._stop_requested = False
         self.processor = None  # Will be set during run()
 
@@ -165,7 +167,8 @@ class ProcessingThread(QThread):
 
                     if pair.is_fancy:
                         fancy_count += 1
-                        self.processor.generate_crops(pair, self.output_dir)
+                        if self.auto_crop:
+                            self.processor.generate_crops(pair, self.output_dir)
 
                     serial_region_path = ''
                     if needs_review:
