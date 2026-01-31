@@ -219,7 +219,7 @@ class SettingsDialog(QDialog):
         )
         output_layout.addRow(auto_crop_container)
 
-        self.auto_archive_check, auto_archive_container = self._create_checkbox_with_info(
+        self.proc_auto_archive_check, auto_archive_container = self._create_checkbox_with_info(
             "Archive after processing",
             "Move processed files to a timestamped archive folder.\n\n"
             "• Checked: Files moved to archive/batch_YYYYMMDD_HHMMSS/\n"
@@ -489,9 +489,9 @@ class SettingsDialog(QDialog):
         options_group = QGroupBox("Monitor Options")
         options_layout = QFormLayout(options_group)
 
-        self.auto_archive_check = QCheckBox("Auto-archive on stop")
-        self.auto_archive_check.setToolTip("Move processed files to timestamped directory when monitoring stops")
-        options_layout.addRow(self.auto_archive_check)
+        self.mon_auto_archive_check = QCheckBox("Auto-archive on stop")
+        self.mon_auto_archive_check.setToolTip("Move processed files to timestamped directory when monitoring stops")
+        options_layout.addRow(self.mon_auto_archive_check)
 
         self.poll_interval_spin = QDoubleSpinBox()
         self.poll_interval_spin.setRange(0.1, 10.0)
@@ -530,7 +530,7 @@ class SettingsDialog(QDialog):
         self.jpeg_quality_spin.setValue(self.settings.processing.jpeg_quality)
         self.crop_all_check.setChecked(self.settings.processing.crop_all)
         self.auto_crop_check.setChecked(self.settings.processing.auto_crop)
-        self.auto_archive_check.setChecked(self.settings.processing.auto_archive)
+        self.proc_auto_archive_check.setChecked(self.settings.processing.auto_archive)
 
         # UI
         idx = self.theme_combo.findData(self.settings.ui.theme)
@@ -567,7 +567,7 @@ class SettingsDialog(QDialog):
         self.watch_dir_edit.setText(self.settings.monitor.watch_directory)
         self.monitor_output_edit.setText(self.settings.monitor.output_directory)
         self.archive_dir_edit.setText(self.settings.monitor.archive_directory)
-        self.auto_archive_check.setChecked(self.settings.monitor.auto_archive)
+        self.mon_auto_archive_check.setChecked(self.settings.monitor.auto_archive)
         self.poll_interval_spin.setValue(self.settings.monitor.poll_interval)
         self.settle_time_spin.setValue(self.settings.monitor.file_settle_time)
 
@@ -582,7 +582,7 @@ class SettingsDialog(QDialog):
         self.settings.processing.jpeg_quality = self.jpeg_quality_spin.value()
         self.settings.processing.crop_all = self.crop_all_check.isChecked()
         self.settings.processing.auto_crop = self.auto_crop_check.isChecked()
-        self.settings.processing.auto_archive = self.auto_archive_check.isChecked()
+        self.settings.processing.auto_archive = self.proc_auto_archive_check.isChecked()
 
         # UI
         self.settings.ui.theme = self.theme_combo.currentData()
@@ -614,7 +614,7 @@ class SettingsDialog(QDialog):
         self.settings.monitor.watch_directory = self.watch_dir_edit.text()
         self.settings.monitor.output_directory = self.monitor_output_edit.text()
         self.settings.monitor.archive_directory = self.archive_dir_edit.text()
-        self.settings.monitor.auto_archive = self.auto_archive_check.isChecked()
+        self.settings.monitor.auto_archive = self.mon_auto_archive_check.isChecked()
         self.settings.monitor.poll_interval = self.poll_interval_spin.value()
         self.settings.monitor.file_settle_time = self.settle_time_spin.value()
 
