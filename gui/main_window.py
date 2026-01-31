@@ -1078,12 +1078,14 @@ class MainWindow(QMainWindow):
         all_files = self.monitor_thread.get_all_session_files()
         print(f"[MainWindow] Archiving {len(all_files)} files to {batch_dir}")
         moved_count = 0
+        path_mapping = {}  # old_path -> new_path
 
         for file_path in all_files:
             if file_path.exists():
                 try:
                     dest = batch_dir / file_path.name
                     shutil.move(str(file_path), str(dest))
+                    path_mapping[str(file_path)] = str(dest)
                     moved_count += 1
                 except Exception as e:
                     print(f"[MainWindow] Error moving {file_path.name}: {e}")
@@ -1113,7 +1115,19 @@ class MainWindow(QMainWindow):
 
                 print(f"[MainWindow] Moved {fancy_moved} items (files/folders) to {batch_fancy_dir}")
 
-        # Export batch CSV
+        # Update result paths to point to new archive locations
+        for result in self.current_results:
+            front_file = result.get('front_file', '')
+            back_file = result.get('back_file', '')
+            if front_file and front_file in path_mapping:
+                result['front_file'] = path_mapping[front_file]
+            if back_file and back_file in path_mapping:
+                result['back_file'] = path_mapping[back_file]
+
+        # Update the results list with new paths
+        self.results_list.update_result_paths(path_mapping)
+
+        # Export batch CSV (with updated paths)
         if self.current_results:
             csv_path = batch_dir / "results.csv"
             self._export_batch_csv(csv_path)
@@ -1158,13 +1172,15 @@ class MainWindow(QMainWindow):
             if back_file:
                 files_to_move.add(Path(back_file))
 
-        # Move all source files
+        # Move all source files and track old->new path mapping
         moved_count = 0
+        path_mapping = {}  # old_path -> new_path
         for file_path in files_to_move:
             if file_path.exists():
                 try:
                     dest = batch_dir / file_path.name
                     shutil.move(str(file_path), str(dest))
+                    path_mapping[str(file_path)] = str(dest)
                     moved_count += 1
                 except Exception as e:
                     print(f"[MainWindow] Error moving {file_path.name}: {e}")
@@ -1186,7 +1202,19 @@ class MainWindow(QMainWindow):
                     except Exception as e:
                         print(f"[MainWindow] Error moving {item_path.name}: {e}")
 
-        # Export batch CSV
+        # Update result paths to point to new archive locations
+        for result in self.current_results:
+            front_file = result.get('front_file', '')
+            back_file = result.get('back_file', '')
+            if front_file and front_file in path_mapping:
+                result['front_file'] = path_mapping[front_file]
+            if back_file and back_file in path_mapping:
+                result['back_file'] = path_mapping[back_file]
+
+        # Update the results list with new paths
+        self.results_list.update_result_paths(path_mapping)
+
+        # Export batch CSV (with updated paths)
         if self.current_results:
             csv_path = batch_dir / "results.csv"
             self._export_batch_csv(csv_path)

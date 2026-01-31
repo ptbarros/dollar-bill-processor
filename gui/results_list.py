@@ -824,6 +824,35 @@ class ResultsList(QWidget):
                         break
                 break
 
+    def update_result_paths(self, path_mapping: dict):
+        """Update file paths in results after archiving.
+
+        Args:
+            path_mapping: Dict mapping old paths to new paths
+        """
+        # Update paths in internal results list
+        for result in self.results:
+            front_file = result.get('front_file', '')
+            back_file = result.get('back_file', '')
+            if front_file and front_file in path_mapping:
+                result['front_file'] = path_mapping[front_file]
+            if back_file and back_file in path_mapping:
+                result['back_file'] = path_mapping[back_file]
+
+        # Update paths in tree items' UserRole data
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            if item:
+                result = item.data(0, Qt.UserRole)
+                if result:
+                    front_file = result.get('front_file', '')
+                    back_file = result.get('back_file', '')
+                    if front_file and front_file in path_mapping:
+                        result['front_file'] = path_mapping[front_file]
+                    if back_file and back_file in path_mapping:
+                        result['back_file'] = path_mapping[back_file]
+                    item.setData(0, Qt.UserRole, result)
+
     def select_current_session(self):
         """Switch back to current session view."""
         self.batch_combo.setCurrentIndex(0)
