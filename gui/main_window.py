@@ -252,34 +252,54 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            # Align the image using YOLO
-            aligned_img, info = processor.align_for_preview(Path(image_path))
+            # Align both front and back images
+            front_path = self.preview_panel._current_front_file
+            back_path = self.preview_panel._current_back_file
 
-            if aligned_img is None:
-                QMessageBox.warning(self, "Alignment Failed", "Could not align the image.")
+            front_pixmap = None
+            back_pixmap = None
+            status_msg = ""
+            front_angle = 0.0
+            front_flipped = False
+
+            # Align front using YOLO detection
+            if front_path:
+                aligned_img, info = processor.align_for_preview(Path(front_path))
+                if aligned_img is not None:
+                    front_pixmap = self._cv2_to_pixmap(aligned_img)
+                    front_angle = info.get('angle', 0)
+                    front_flipped = info.get('flipped', False)
+                    status_msg = f"Aligned: {front_angle:.1f}° rotation"
+                    if front_flipped:
+                        status_msg += ", flipped 180°"
+
+            # Align back using the SAME transformation as the front
+            # (front and back are from the same scan, so they have the same orientation)
+            if back_path and Path(back_path).exists():
+                aligned_back = processor.apply_alignment(Path(back_path), front_angle, front_flipped)
+                if aligned_back is not None:
+                    back_pixmap = self._cv2_to_pixmap(aligned_back)
+
+            if front_pixmap is None and back_pixmap is None:
+                QMessageBox.warning(self, "Alignment Failed", "Could not align the images.")
                 return
 
-            # Convert OpenCV BGR image to QPixmap
-            h, w, ch = aligned_img.shape
-            bytes_per_line = ch * w
-            # Convert BGR to RGB for Qt
-            rgb_img = aligned_img[:, :, ::-1].copy()
-            q_img = QImage(rgb_img.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(q_img)
-
-            # Show status info
-            angle = info.get('angle', 0)
-            flipped = info.get('flipped', False)
-            status_msg = f"Aligned: {angle:.1f}° rotation"
-            if flipped:
-                status_msg += ", flipped 180°"
             self.statusBar().showMessage(status_msg, 5000)
 
-            # Display the aligned image
-            self.preview_panel.show_aligned_image(pixmap)
+            # Display the aligned images in all views
+            self.preview_panel.show_aligned_images(front_pixmap, back_pixmap)
 
         except Exception as e:
             QMessageBox.warning(self, "Alignment Error", f"Error during alignment: {str(e)}")
+
+    def _cv2_to_pixmap(self, cv2_img) -> QPixmap:
+        """Convert OpenCV BGR image to QPixmap."""
+        h, w, ch = cv2_img.shape
+        bytes_per_line = ch * w
+        # Convert BGR to RGB for Qt
+        rgb_img = cv2_img[:, :, ::-1].copy()
+        q_img = QImage(rgb_img.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        return QPixmap.fromImage(q_img)
 
     def _zoom_in(self):
         """Zoom in on preview."""
@@ -699,9 +719,11 @@ class MainWindow(QMainWindow):
         self.processing_panel.set_processing(False)
         self.preview_panel.set_batch_processing_active(False)
 
-        # Grab the processor from the thread for alignment feature
+        # Grab the processor from the thread for alignment feature and preview panel
         if hasattr(self, 'processing_thread') and self.processing_thread:
             self.processor = self.processing_thread.processor
+            # Share processor with preview panel to avoid re-loading YOLO
+            self.preview_panel.set_processor(self.processor)
 
         total = summary.get('total', 0)
         fancy = summary.get('fancy_count', 0)

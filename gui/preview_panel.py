@@ -744,9 +744,11 @@ class PreviewPanel(QWidget):
         self._preserved_zoom: Optional[float] = None
         self._preserved_scroll_h: Optional[float] = None  # as fraction 0-1
         self._preserved_scroll_v: Optional[float] = None  # as fraction 0-1
-        self._aligned_pixmap: Optional[QPixmap] = None  # Cache for aligned image
+        self._aligned_front_pixmap: Optional[QPixmap] = None  # Cache for aligned front image
+        self._aligned_back_pixmap: Optional[QPixmap] = None  # Cache for aligned back image
         self._is_showing_aligned = False
         self._batch_processing_active = False  # Skip heavy ops during batch processing
+        self._auto_align_enabled = True  # Auto-align images when selected
         self._setup_ui()
 
     def _setup_ui(self):
@@ -796,9 +798,11 @@ class PreviewPanel(QWidget):
         header_layout.addSpacing(15)
 
         # Tool buttons
-        self.align_btn = QPushButton("Align")
-        self.align_btn.setToolTip("Auto-align image using YOLO bill detection")
-        self.align_btn.clicked.connect(self._on_align_clicked)
+        self.align_btn = QPushButton("Auto-Align")
+        self.align_btn.setToolTip("Toggle auto-alignment using YOLO bill detection")
+        self.align_btn.setCheckable(True)
+        self.align_btn.setChecked(self._auto_align_enabled)
+        self.align_btn.clicked.connect(self._on_align_toggled)
         header_layout.addWidget(self.align_btn)
 
         self.crosshair_btn = QPushButton("Crosshair")
@@ -1082,10 +1086,22 @@ class PreviewPanel(QWidget):
 
     def set_batch_processing_active(self, active: bool):
         """Set whether batch processing is active. Skips heavy YOLO ops when True."""
+        was_active = self._batch_processing_active
         self._batch_processing_active = active
         # Clear cache when processing ends so next view gets fresh data
         if not active and hasattr(self, '_serial_crop_cache'):
             self._serial_crop_cache.clear()
+        # When processing ends, refresh the current result to load images
+        if was_active and not active and self.current_result:
+            self.show_bill(self.current_result)
+
+    def set_processor(self, processor):
+        """Set an existing processor to avoid re-loading YOLO model.
+
+        Call this after processing completes to reuse the already-loaded
+        processor for preview operations instead of loading it again.
+        """
+        self._processor = processor
 
     def _generate_serial_region_crops(self, image_path: str, zoom: float = 2.0) -> tuple:
         """Generate cropped serial region images with bounding boxes drawn.
@@ -1333,7 +1349,8 @@ class PreviewPanel(QWidget):
         self.current_result = None
         self._current_front_file = ""
         self._current_back_file = ""
-        self._aligned_pixmap = None
+        self._aligned_front_pixmap = None
+        self._aligned_back_pixmap = None
         self._is_showing_aligned = False
 
         # Clear serial crop cache
@@ -1355,10 +1372,6 @@ class PreviewPanel(QWidget):
         self.odds_label.setText("-")
         self.price_label.setText("-")
 
-        # Reset align button
-        self.align_btn.setText("Align")
-        self.align_btn.setToolTip("Auto-align image using YOLO bill detection")
-
         # Clear preserved zoom/pan state
         self.clear_preserved_state()
 
@@ -1370,10 +1383,9 @@ class PreviewPanel(QWidget):
             self._save_zoom_pan_state()
 
         # Reset aligned state when switching bills
-        self._aligned_pixmap = None
+        self._aligned_front_pixmap = None
+        self._aligned_back_pixmap = None
         self._is_showing_aligned = False
-        self.align_btn.setText("Align")
-        self.align_btn.setToolTip("Auto-align image using YOLO bill detection")
 
         self.current_result = result
 
@@ -1381,6 +1393,12 @@ class PreviewPanel(QWidget):
         self._current_front_file = result.get('front_file', '')
         self._current_back_file = result.get('back_file', '')
         has_back = self._current_back_file and Path(self._current_back_file).exists()
+
+        # Skip expensive image loading during batch processing to avoid slowing down processing
+        if self._batch_processing_active:
+            # Just update text labels, skip image loading
+            self._update_details_only(result, has_back)
+            return
 
         # Determine if we should preserve zoom (only when navigating, not first load)
         preserve = has_previous and self._preserved_zoom is not None
@@ -1474,6 +1492,73 @@ class PreviewPanel(QWidget):
         self.status_label.setText(', '.join(status_parts) if status_parts else "OK")
 
         self.file_label.setText(self._current_front_file or "-")
+
+        # Auto-align if enabled and we have a processor ready
+        if self._auto_align_enabled and self._current_front_file:
+            # Use a short delay to let the UI update first
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(50, lambda: self.align_requested.emit(self._current_front_file))
+
+    def _update_details_only(self, result: dict, has_back: bool):
+        """Update only the text details, skip image loading. Used during batch processing."""
+        # Update Back button to indicate if back exists
+        back_btn = self.view_buttons[1][0]
+        if has_back:
+            back_btn.setText("Back")
+            back_btn.setEnabled(True)
+        else:
+            back_btn.setText("Back (none)")
+            back_btn.setEnabled(False)
+
+        # Update details text
+        serial = result.get('serial', '')
+        if result.get('corrected'):
+            serial += " (corrected)"
+        self.serial_label.setText(serial or "-")
+
+        patterns = result.get('fancy_types', '')
+        self.patterns_label.setText(patterns or "None")
+
+        # Look up odds and price for matched patterns
+        odds_parts = []
+        price_parts = []
+        if patterns:
+            pattern_names = [p.strip() for p in patterns.split(',')]
+            for name in pattern_names:
+                info = self.pattern_engine.get_pattern_info(name)
+                if info:
+                    if 'odds' in info:
+                        odds_parts.append(f"{name}: {info['odds']}")
+                    if 'price_range' in info:
+                        price_parts.append(f"{name}: {info['price_range']}")
+        if odds_parts:
+            self.odds_label.setText('\n'.join(odds_parts))
+        else:
+            self.odds_label.setText("-")
+        if price_parts:
+            self.price_label.setText('\n'.join(price_parts))
+        else:
+            self.price_label.setText("-")
+
+        conf = result.get('confidence', 0)
+        self.confidence_label.setText(f"{conf}" if conf else "-")
+
+        # Status
+        status_parts = []
+        if result.get('is_fancy'):
+            status_parts.append("Fancy")
+        if result.get('needs_review'):
+            status_parts.append("Needs Review")
+        if result.get('error'):
+            status_parts.append(f"Error: {result['error']}")
+        self.status_label.setText(', '.join(status_parts) if status_parts else "OK")
+
+        self.file_label.setText(self._current_front_file or "-")
+
+        # Show placeholder in image viewers
+        self.front_viewer.image_label.setText("Processing... click after completion to view")
+        self.serial_image_1.setText("Processing...")
+        self.serial_image_2.setText("")
 
     def set_serial_region_visible(self, visible: bool):
         """Show or hide the serial region panel."""
@@ -1579,45 +1664,99 @@ class PreviewPanel(QWidget):
             if hasattr(viewer, 'set_crosshair_enabled'):
                 viewer.set_crosshair_enabled(checked)
 
-    def _on_align_clicked(self):
-        """Handle align button click."""
-        # Determine which image to align based on current view
-        if self._current_view_mode in ("front", "stitched", "split_v", "split_h"):
-            image_path = self._current_front_file
-        else:  # back
-            image_path = self._current_back_file
+    def _on_align_toggled(self, checked: bool):
+        """Handle auto-align button toggle."""
+        self._auto_align_enabled = checked
 
-        if image_path:
-            self.align_requested.emit(image_path)
+        if checked and self._current_front_file:
+            # Immediately align the current image when enabling
+            self.align_requested.emit(self._current_front_file)
+        elif not checked and self._is_showing_aligned:
+            # Reset to original when disabling
+            self.reset_aligned_image()
 
     def show_aligned_image(self, pixmap: QPixmap):
-        """Display an aligned image in the current viewer."""
-        if pixmap is None or pixmap.isNull():
-            return
+        """Display an aligned image in the current viewer (legacy single-image method)."""
+        self.show_aligned_images(pixmap, None)
 
-        self._aligned_pixmap = pixmap
+    def show_aligned_images(self, front_pixmap: QPixmap, back_pixmap: QPixmap):
+        """Display aligned images in all viewers."""
         self._is_showing_aligned = True
+        self._aligned_front_pixmap = front_pixmap
+        self._aligned_back_pixmap = back_pixmap
 
-        # Update the button to indicate aligned state
-        self.align_btn.setText("Reset")
-        self.align_btn.setToolTip("Reset to original image")
+        # Update front viewer
+        if front_pixmap and not front_pixmap.isNull():
+            self.front_viewer.set_pixmap(front_pixmap, preserve_zoom=True)
 
-        # Show in current viewer
-        viewer = self._get_active_viewer()
-        if viewer and hasattr(viewer, 'set_pixmap'):
-            viewer.set_pixmap(pixmap, preserve_zoom=True)
+        # Update back viewer
+        if back_pixmap and not back_pixmap.isNull():
+            self.back_viewer.set_pixmap(back_pixmap, preserve_zoom=True)
+
+        # Update stitched view with aligned images
+        if front_pixmap or back_pixmap:
+            combined = self._create_combined_pixmap_from_pixmaps(front_pixmap, back_pixmap)
+            if combined:
+                self.combined_viewer.set_pixmap(combined, preserve_zoom=True)
+
+        # Update split views
+        if front_pixmap and back_pixmap:
+            self.split_v_viewer.front_pane.original_pixmap = front_pixmap
+            self.split_v_viewer.front_pane._update_display()
+            self.split_v_viewer.back_pane.original_pixmap = back_pixmap
+            self.split_v_viewer.back_pane._update_display()
+
+            self.split_h_viewer.front_pane.original_pixmap = front_pixmap
+            self.split_h_viewer.front_pane._update_display()
+            self.split_h_viewer.back_pane.original_pixmap = back_pixmap
+            self.split_h_viewer.back_pane._update_display()
+
+    def _create_combined_pixmap_from_pixmaps(self, front_pixmap: QPixmap, back_pixmap: QPixmap) -> Optional[QPixmap]:
+        """Create a combined pixmap from two pixmaps (for aligned images)."""
+        if front_pixmap is None and back_pixmap is None:
+            return None
+        if front_pixmap is None or front_pixmap.isNull():
+            return back_pixmap
+        if back_pixmap is None or back_pixmap.isNull():
+            return front_pixmap
+
+        # Scale back to match front width
+        if back_pixmap.width() != front_pixmap.width():
+            back_pixmap = back_pixmap.scaledToWidth(
+                front_pixmap.width(),
+                Qt.SmoothTransformation
+            )
+
+        # Create combined image
+        combined_height = front_pixmap.height() + back_pixmap.height()
+        combined_width = front_pixmap.width()
+
+        combined = QPixmap(combined_width, combined_height)
+        combined.fill(Qt.transparent)
+
+        painter = QPainter(combined)
+        painter.drawPixmap(0, 0, front_pixmap)
+        painter.drawPixmap(0, front_pixmap.height(), back_pixmap)
+        painter.end()
+
+        return combined
 
     def reset_aligned_image(self):
         """Reset to original (non-aligned) image."""
-        self._aligned_pixmap = None
+        self._aligned_front_pixmap = None
+        self._aligned_back_pixmap = None
         self._is_showing_aligned = False
 
-        self.align_btn.setText("Align")
-        self.align_btn.setToolTip("Auto-align image using YOLO bill detection")
+        # Temporarily disable auto-align to prevent re-alignment when reloading
+        saved_auto_align = self._auto_align_enabled
+        self._auto_align_enabled = False
 
         # Reload original image
         if self.current_result:
             self.show_bill(self.current_result)
+
+        # Restore auto-align state
+        self._auto_align_enabled = saved_auto_align
 
     def _update_bbox_color_button(self):
         """Update the bounding box color button to show the current color."""

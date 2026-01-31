@@ -843,6 +843,23 @@ class ProductionProcessor:
         """
         return self.yolo_aligner.align_image(Path(image_path))
 
+    def apply_alignment(self, image_path: Path, angle: float, flipped: bool) -> Optional[np.ndarray]:
+        """
+        Apply alignment transformation to an image using known parameters.
+
+        Use this to align a back image using the same transformation
+        detected from the front image.
+
+        Args:
+            image_path: Path to the image to align
+            angle: Rotation angle in degrees
+            flipped: Whether to flip 180 degrees
+
+        Returns:
+            Aligned BGR image, or None if loading failed
+        """
+        return self.yolo_aligner.apply_cached_alignment(Path(image_path), angle, flipped)
+
     def count_serial_detections(self, image_path: Path) -> int:
         """Count how many serial_number class detections YOLO finds in an image.
 

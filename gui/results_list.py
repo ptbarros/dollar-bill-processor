@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
     QLabel, QLineEdit, QComboBox, QPushButton, QMenu, QHeaderView
 )
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Qt, Signal, Slot, QSettings
 from PySide6.QtGui import QColor, QBrush, QAction
 
 # Add parent for imports
@@ -122,24 +122,37 @@ class ResultsList(QWidget):
         header.setStretchLastSection(True)
         header.setSectionResizeMode(0, QHeaderView.Interactive)  # # column
         header.setSectionResizeMode(1, QHeaderView.Interactive)  # Serial
-        header.setSectionResizeMode(2, QHeaderView.Stretch)      # Patterns (takes remaining space)
+        header.setSectionResizeMode(2, QHeaderView.Interactive)  # Patterns
         header.setSectionResizeMode(3, QHeaderView.Interactive)  # Conf
         header.setSectionResizeMode(4, QHeaderView.Interactive)  # Px Dev
         header.setSectionResizeMode(5, QHeaderView.Interactive)  # Est. Price
-
-        # Set minimum and default widths
-        self.tree.setColumnWidth(0, 35)   # # column
-        self.tree.setColumnWidth(1, 130)  # Serial - enough for full serial at font 14
-        self.tree.setColumnWidth(3, 50)   # Conf
-        self.tree.setColumnWidth(4, 55)   # Px Dev
-        self.tree.setColumnWidth(5, 100)  # Est. Price
         header.setMinimumSectionSize(30)  # Minimum for any column
+
+        # Load saved column widths or use defaults
+        self._load_column_widths()
+
+        # Save column widths when user resizes them
+        header.sectionResized.connect(self._save_column_widths)
 
         layout.addWidget(self.tree)
 
         # Summary bar
         self.summary_label = QLabel("0 bills")
         layout.addWidget(self.summary_label)
+
+    def _load_column_widths(self):
+        """Load saved column widths from QSettings, or use defaults."""
+        settings = QSettings("DollarBillProcessor", "ResultsList")
+        defaults = [35, 130, 150, 50, 55, 100]  # Default widths for each column
+
+        for i in range(6):
+            width = settings.value(f"column_{i}_width", defaults[i], type=int)
+            self.tree.setColumnWidth(i, width)
+
+    def _save_column_widths(self, logical_index: int, old_size: int, new_size: int):
+        """Save column widths when user resizes them."""
+        settings = QSettings("DollarBillProcessor", "ResultsList")
+        settings.setValue(f"column_{logical_index}_width", new_size)
 
     def add_result(self, result: dict):
         """Add a single result to the list."""
@@ -780,7 +793,7 @@ class ResultsList(QWidget):
             if item and item.text(0) == str(position):
                 item.setText(4, f"{px_dev:.1f}")
                 # Also update the underlying result data
-                for result in self._all_results:
+                for result in self.results:
                     if result.get('position') == position:
                         result['baseline_variance'] = f"{px_dev:.1f}"
                         break
