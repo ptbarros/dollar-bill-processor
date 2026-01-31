@@ -89,8 +89,9 @@ class ProcessingThread(QThread):
 
             # Verify pairs if requested
             if self.verify_pairs:
-                self.progress_updated.emit(0, total, "Verifying front/back...")
-                pairs = self.processor.verify_and_swap_pairs(pairs)
+                def verify_progress(current, verify_total):
+                    self.progress_updated.emit(current, verify_total, f"Verifying pairs: {current}/{verify_total}")
+                pairs = self.processor.verify_and_swap_pairs(pairs, progress_callback=verify_progress)
 
             # Process each pair
             fancy_count = 0
@@ -126,6 +127,16 @@ class ProcessingThread(QThread):
 
                 # Extract serial
                 serial, confidence, is_upside_down, baseline_variance, star_detected, align_info = self.processor.extract_serial(pair.front_path)
+
+                # Lazy detection: if no serial found and we have a back image, swap and retry
+                # This only runs when verify_pairs is disabled (otherwise pairs are pre-verified)
+                if not serial and pair.back_path and not self.verify_pairs:
+                    # Swap front and back
+                    pair.front_path, pair.back_path = pair.back_path, pair.front_path
+                    pair.swapped = True
+                    # Retry serial extraction on the swapped front
+                    serial, confidence, is_upside_down, baseline_variance, star_detected, align_info = self.processor.extract_serial(pair.front_path)
+
                 pair.serial = serial
                 pair.confidence = confidence
                 pair.is_upside_down = is_upside_down

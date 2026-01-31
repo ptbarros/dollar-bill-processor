@@ -214,6 +214,7 @@ class BillPair:
     # Cached alignment info to avoid redundant YOLO calls in generate_crops()
     front_align_angle: float = 0.0  # Rotation angle from YOLO alignment
     front_align_flipped: bool = False  # Whether front was flipped 180°
+    swapped: bool = False  # True if front/back were swapped during lazy detection
 
 
 @dataclass
@@ -725,7 +726,7 @@ class ProductionProcessor:
                 # Extract serial region if we have detections
                 aligned = self.aligner.align_image(pair.front_path)
                 if aligned is not None:
-                    boxes = self._detect_serials_single_pass(aligned, 0.05)
+                    boxes, _ = self._detect_serials_single_pass(aligned, 0.05)
                     if boxes:
                         # Get the first detected region
                         x1, y1, x2, y2, _ = boxes[0]
@@ -901,13 +902,21 @@ class ProductionProcessor:
             return True
         return False
 
-    def verify_and_swap_pairs(self, pairs: list[BillPair]) -> list[BillPair]:
+    def verify_and_swap_pairs(self, pairs: list[BillPair], progress_callback=None) -> list[BillPair]:
         """
         Verify front/back assignments and swap if needed.
         Front images have serial numbers, backs don't.
+
+        Args:
+            pairs: List of BillPair objects to verify
+            progress_callback: Optional callback(current, total) for progress updates
         """
         verified = []
-        for pair in pairs:
+        total = len(pairs)
+        for i, pair in enumerate(pairs):
+            if progress_callback:
+                progress_callback(i + 1, total)
+
             front_is_front = self.is_front_image(pair.front_path)
             back_is_front = pair.back_path and self.is_front_image(pair.back_path)
 
@@ -1367,11 +1376,21 @@ class ProductionProcessor:
                 start = x
                 in_char = True
             elif v_proj[x] <= proj_thresh and in_char:
-                if x - start > 5:  # Minimum character width
-                    char_bounds.append((start, x))
+                char_bounds.append((start, x))
                 in_char = False
-        if in_char and crop_w - start > 5:
+        if in_char:
             char_bounds.append((start, crop_w - 1))
+
+        # Merge nearby character bounds (handles split "4" and serif fragments)
+        # If gap between two bounds is < 4 pixels, merge them
+        merged_bounds = []
+        for bound in char_bounds:
+            if merged_bounds and bound[0] - merged_bounds[-1][1] < 4:
+                # Merge with previous
+                merged_bounds[-1] = (merged_bounds[-1][0], bound[1])
+            else:
+                merged_bounds.append(bound)
+        char_bounds = merged_bounds
 
         # Get vertical center of each character
         chars = []
@@ -1382,10 +1401,20 @@ class ProductionProcessor:
             if len(ink_rows) > 0:
                 chars.append({
                     'x1': cx1, 'x2': cx2,
+                    'width': cx2 - cx1,
+                    'height': int(ink_rows[-1]) - int(ink_rows[0]),
                     'top': int(ink_rows[0]),
                     'bottom': int(ink_rows[-1]),
                     'center': (ink_rows[0] + ink_rows[-1]) / 2
                 })
+
+        # Filter out fragments: too narrow (< 5px) or too short (< 50% median height)
+        if chars:
+            chars = [c for c in chars if c['width'] >= 5]
+        if chars:
+            heights = [c['height'] for c in chars]
+            median_height = np.median(heights)
+            chars = [c for c in chars if c['height'] >= median_height * 0.5]
 
         # Need at least 8 characters (letter + 6+ digits + letter)
         if len(chars) < 8:
@@ -1460,11 +1489,21 @@ class ProductionProcessor:
                 start = x
                 in_char = True
             elif v_proj[x] <= proj_thresh and in_char:
-                if x - start > 5:  # Minimum character width
-                    char_bounds.append((start, x))
+                char_bounds.append((start, x))
                 in_char = False
-        if in_char and crop_w - start > 5:
+        if in_char:
             char_bounds.append((start, crop_w - 1))
+
+        # Merge nearby character bounds (handles split "4" and serif fragments)
+        # If gap between two bounds is < 4 pixels, merge them
+        merged_bounds = []
+        for bound in char_bounds:
+            if merged_bounds and bound[0] - merged_bounds[-1][1] < 4:
+                # Merge with previous
+                merged_bounds[-1] = (merged_bounds[-1][0], bound[1])
+            else:
+                merged_bounds.append(bound)
+        char_bounds = merged_bounds
 
         # Get vertical bounds of each character
         chars = []
@@ -1476,10 +1515,20 @@ class ProductionProcessor:
                 chars.append({
                     'x1': cx1,
                     'x2': cx2,
+                    'width': cx2 - cx1,
+                    'height': int(ink_rows[-1]) - int(ink_rows[0]),
                     'top': int(ink_rows[0]),
                     'bottom': int(ink_rows[-1]),
                     'center': (ink_rows[0] + ink_rows[-1]) / 2
                 })
+
+        # Filter out fragments: too narrow (< 5px) or too short (< 50% median height)
+        if chars:
+            chars = [c for c in chars if c['width'] >= 5]
+        if chars:
+            heights = [c['height'] for c in chars]
+            median_height = np.median(heights)
+            chars = [c for c in chars if c['height'] >= median_height * 0.5]
 
         if len(chars) < 3:
             return result

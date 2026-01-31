@@ -14,6 +14,16 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
 
+
+class ClickableInfoLabel(QLabel):
+    """Info label that shows tooltip on hover."""
+
+    def __init__(self, text: str, tooltip: str, parent=None):
+        super().__init__(text, parent)
+        self.setToolTip(tooltip)
+        self.setStyleSheet("color: #888; font-size: 14px;")
+        self.setCursor(Qt.WhatsThisCursor)
+
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from settings_manager import SettingsManager
@@ -31,6 +41,44 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(500)
         self._setup_ui()
         self._load_settings()
+
+    def _create_checkbox_with_info(self, label: str, tooltip: str) -> tuple[QCheckBox, QWidget]:
+        """Create a checkbox with an info icon that shows a tooltip.
+
+        Returns:
+            Tuple of (checkbox, container_widget) - use container for layout, checkbox for state
+        """
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        checkbox = QCheckBox(label)
+        layout.addWidget(checkbox)
+
+        info_label = ClickableInfoLabel("ⓘ", tooltip)
+        layout.addWidget(info_label)
+
+        layout.addStretch()
+
+        return checkbox, container
+
+    def _create_widget_with_info(self, widget: QWidget, tooltip: str) -> QWidget:
+        """Wrap any widget with an info icon next to it.
+
+        Returns:
+            Container widget with original widget + info icon
+        """
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        layout.addWidget(widget)
+        layout.addWidget(ClickableInfoLabel("ⓘ", tooltip))
+        layout.addStretch()
+
+        return container
 
     def _setup_ui(self):
         """Setup the dialog UI."""
@@ -87,14 +135,35 @@ class SettingsDialog(QDialog):
         self.confidence_spin.setRange(0.0, 1.0)
         self.confidence_spin.setSingleStep(0.05)
         self.confidence_spin.setDecimals(2)
-        detection_layout.addRow("Confidence threshold:", self.confidence_spin)
+        confidence_container = self._create_widget_with_info(
+            self.confidence_spin,
+            "Minimum confidence level for OCR results.\n\n"
+            "• Higher (0.7-0.9): More accurate, but may miss some serials\n"
+            "• Lower (0.3-0.5): Catches more serials, but more errors\n\n"
+            "Bills below this threshold go to the review queue.\n"
+            "Default: 0.5 (balanced)"
+        )
+        detection_layout.addRow("Confidence threshold:", confidence_container)
 
-        self.multipass_check = QCheckBox("Enable multi-pass detection")
-        detection_layout.addRow(self.multipass_check)
+        self.multipass_check, multipass_container = self._create_checkbox_with_info(
+            "Enable multi-pass detection",
+            "Try multiple detection strategies if the first pass fails.\n\n"
+            "• Checked: Retries with different settings (slower but thorough)\n"
+            "• Unchecked: Single pass only (faster)\n\n"
+            "Useful for poor quality scans or unusual bill orientations."
+        )
+        detection_layout.addRow(multipass_container)
 
         self.max_passes_spin = QSpinBox()
         self.max_passes_spin.setRange(1, 10)
-        detection_layout.addRow("Maximum passes:", self.max_passes_spin)
+        max_passes_container = self._create_widget_with_info(
+            self.max_passes_spin,
+            "Maximum detection attempts when multi-pass is enabled.\n\n"
+            "• 2-3: Quick retry for minor issues\n"
+            "• 5-7: Thorough for difficult scans\n\n"
+            "Higher values = slower but may recover more serials."
+        )
+        detection_layout.addRow("Maximum passes:", max_passes_container)
 
         layout.addWidget(detection_group)
 
@@ -102,11 +171,25 @@ class SettingsDialog(QDialog):
         hardware_group = QGroupBox("Hardware")
         hardware_layout = QFormLayout(hardware_group)
 
-        self.gpu_check = QCheckBox("Use GPU acceleration (if available)")
-        hardware_layout.addRow(self.gpu_check)
+        self.gpu_check, gpu_container = self._create_checkbox_with_info(
+            "Use GPU acceleration (if available)",
+            "Enable CUDA/GPU processing for faster YOLO detection.\n\n"
+            "• Checked: Uses GPU if available (2-3x faster)\n"
+            "• Unchecked: Uses CPU only (slower but compatible)"
+        )
+        hardware_layout.addRow(gpu_container)
 
-        self.verify_pairs_check = QCheckBox("Verify front/back pairs")
-        hardware_layout.addRow(self.verify_pairs_check)
+        self.verify_pairs_check, verify_container = self._create_checkbox_with_info(
+            "Verify front/back pairs",
+            "How to detect which image is the front (serial side) of each bill.\n\n"
+            "• Checked: Verify all pairs upfront before processing.\n"
+            "  Slower startup, but consistent processing speed.\n"
+            "  Best for: Unsorted piles with random orientations.\n\n"
+            "• Unchecked: Lazy detection during processing.\n"
+            "  Fast startup, swaps on-demand if no serial found.\n"
+            "  Best for: Scanner output where pairs are usually correct."
+        )
+        hardware_layout.addRow(verify_container)
 
         layout.addWidget(hardware_group)
 
@@ -118,8 +201,14 @@ class SettingsDialog(QDialog):
         self.jpeg_quality_spin.setRange(50, 100)
         output_layout.addRow("JPEG quality:", self.jpeg_quality_spin)
 
-        self.crop_all_check = QCheckBox("Crop all bills (not just fancy)")
-        output_layout.addRow(self.crop_all_check)
+        self.crop_all_check, crop_all_container = self._create_checkbox_with_info(
+            "Crop all bills (not just fancy)",
+            "Generate cropped images for every bill, not just fancy ones.\n\n"
+            "• Checked: Save crops for ALL bills (uses more disk space)\n"
+            "• Unchecked: Only save crops for bills with fancy patterns\n\n"
+            "Useful if you want to archive or manually review all serials."
+        )
+        output_layout.addRow(crop_all_container)
 
         layout.addWidget(output_group)
 
