@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QComboBox, QSplitter, QMenu, QColorDialog, QCheckBox
 )
 from PySide6.QtCore import Qt, Signal, Slot, QPoint, QSize
-from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QPainter, QPen, QColor, QAction
+from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QPainter, QPen, QColor, QAction, QTransform
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -779,13 +779,16 @@ class SyncedSplitViewer(QWidget):
 
 
 class ImageLabel(QLabel):
-    """Simple label for small images like serial region."""
+    """Simple label for small images like serial region. Click to rotate 180°."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
         self.setMinimumSize(200, 60)
         self.original_pixmap = None
+        self.is_rotated = False
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip("Click to flip 180° (verify flipper patterns)")
 
     def set_image(self, path: str):
         """Load and display an image."""
@@ -801,6 +804,7 @@ class ImageLabel(QLabel):
             return
 
         self.original_pixmap = pixmap
+        self.is_rotated = False  # Reset rotation when new image loaded
         self._update_display()
 
     def set_pixmap(self, pixmap: QPixmap):
@@ -809,6 +813,7 @@ class ImageLabel(QLabel):
             self.clear()
             return
         self.original_pixmap = pixmap
+        self.is_rotated = False  # Reset rotation when new image loaded
         self._update_display()
 
     def _update_display(self):
@@ -816,12 +821,27 @@ class ImageLabel(QLabel):
         if self.original_pixmap is None:
             return
 
-        scaled = self.original_pixmap.scaled(
+        pixmap = self.original_pixmap
+
+        # Apply 180° rotation if toggled
+        if self.is_rotated:
+            transform = QTransform()
+            transform.rotate(180)
+            pixmap = pixmap.transformed(transform, Qt.SmoothTransformation)
+
+        scaled = pixmap.scaled(
             self.size(),
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation
         )
         self.setPixmap(scaled)
+
+    def mousePressEvent(self, event):
+        """Handle click to toggle 180° rotation."""
+        if event.button() == Qt.LeftButton and self.original_pixmap:
+            self.is_rotated = not self.is_rotated
+            self._update_display()
+        super().mousePressEvent(event)
 
     def resizeEvent(self, event):
         """Handle resize to update image scaling."""
