@@ -212,3 +212,22 @@ options:
 
   # Include star notes as fancy (even without other patterns)
   star_notes_always_fancy: true
+
+
+# =============================================================================
+# YOLO-BASED DYNAMIC CROPS
+# =============================================================================
+# Settings for YOLO-based dynamic cropping that adapts to actual element positions
+# instead of fixed percentage-based regions.
+
+yolo_crops:
+  padding:
+    # Horizontal padding for seal crops (fraction of bbox width)
+    seal_h: 0.03
+    # Vertical padding for seal crops (fraction of bbox height)
+    seal_v: 0.08
+    # Overlap between thirds crops (fraction of image width)
+    thirds_overlap: 0.03
+
+  # Use percentage-based fallback crops when YOLO detections are missing
+  fallback_on_missing: true

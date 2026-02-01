@@ -352,6 +352,9 @@ class MainWindow(QMainWindow):
                     serial=result.get('serial', ''),
                     confidence=float(result.get('confidence', 0)),
                 )
+                # Set alignment info for crop generation
+                pair.front_align_angle = result.get('front_align_angle', 0.0)
+                pair.front_align_flipped = result.get('front_align_flipped', False)
 
                 # Generate crops
                 processor.generate_crops(pair, output_dir)

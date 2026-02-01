@@ -467,7 +467,7 @@ class YOLOBillAligner:
                     if seal_f_box is None or conf > seal_f_box[4]:
                         seal_f_box = (x1, y1, x2, y2, conf)
 
-        # Calculate rotation angle using bill region
+        # Calculate rotation angle using bill region (or full image if no bill detected)
         angle = 0.0
         if bill_box:
             x1, y1, x2, y2, _ = bill_box
@@ -483,7 +483,12 @@ class YOLOBillAligner:
 
             # Use contour detection within the bill region
             angle = self.contour_aligner.detect_rotation_angle(gray)
-            info['angle'] = angle
+        else:
+            # No bill detected - use full image for rotation detection
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            angle = self.contour_aligner.detect_rotation_angle(gray)
+
+        info['angle'] = angle
 
         # Apply rotation if needed (0.8° threshold with MAD outlier rejection)
         if abs(angle) >= 0.8:
@@ -1954,6 +1959,7 @@ class ProductionProcessor:
         # We know alignment was cached if serial extraction succeeded (pair.serial is set)
         if pair.serial is not None:
             # We have cached alignment info - apply it without YOLO
+            print(f"  [DEBUG] generate_crops using cached angle={pair.front_align_angle:.3f}°")
             front_img = self.yolo_aligner.apply_cached_alignment(
                 pair.front_path, pair.front_align_angle, pair.front_align_flipped
             )
@@ -2075,6 +2081,7 @@ class ProductionProcessor:
             # Cache alignment info for reuse in generate_crops()
             pair.front_align_angle = align_info.get('angle', 0.0)
             pair.front_align_flipped = align_info.get('flipped', False)
+            print(f"  [DEBUG] Cached alignment: angle={pair.front_align_angle:.3f}°, flipped={pair.front_align_flipped}")
 
             # If star symbol visually detected but OCR missed it, append '*' to serial
             if serial and star_detected and not serial.endswith('*'):
