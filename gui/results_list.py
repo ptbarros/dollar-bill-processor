@@ -777,6 +777,13 @@ class ResultsList(QWidget):
                     except ValueError:
                         result['position'] = 0
 
+                    # Convert rotation values (for alignment without reprocessing)
+                    try:
+                        result['front_align_angle'] = float(result.get('front_align_angle', 0.0))
+                    except (ValueError, TypeError):
+                        result['front_align_angle'] = 0.0
+                    result['front_align_flipped'] = result.get('front_align_flipped', '').lower() == 'true'
+
                     # Update file paths to point to archive location
                     front_file = result.get('front_file', '')
                     if front_file:

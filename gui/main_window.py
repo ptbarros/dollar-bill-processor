@@ -7,6 +7,9 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+import cv2
+import numpy as np
+
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QStatusBar, QMenuBar, QMenu, QFileDialog, QMessageBox,
@@ -254,8 +257,17 @@ class MainWindow(QMainWindow):
         if not processor and hasattr(self, 'monitor_thread') and self.monitor_thread:
             processor = self.monitor_thread.processor
 
-        if not processor:
-            QMessageBox.warning(self, "No Processor", "Please process a folder first to enable alignment.")
+        # Check for cached alignment values from archived batch
+        current_result = self.preview_panel.current_result
+        cached_angle = current_result.get('front_align_angle', 0.0) if current_result else 0.0
+        cached_flipped = current_result.get('front_align_flipped', False) if current_result else False
+        has_cached_alignment = (abs(cached_angle) >= 0.8 or cached_flipped)
+
+        if not processor and not has_cached_alignment:
+            QMessageBox.warning(self, "No Alignment Data",
+                "No alignment data available.\n\n"
+                "For archived batches processed before this update, "
+                "rotation values weren't saved. Reprocess the folder to enable alignment.")
             return
 
         if not image_path:
@@ -272,21 +284,32 @@ class MainWindow(QMainWindow):
             front_angle = 0.0
             front_flipped = False
 
-            # Align front using YOLO detection
+            # Try cached alignment first, fall back to YOLO detection
             if front_path:
-                aligned_img, info = processor.align_for_preview(Path(front_path))
+                if has_cached_alignment:
+                    # Use cached values from archived batch (no YOLO needed)
+                    aligned_img = self._apply_cached_alignment(Path(front_path), cached_angle, cached_flipped)
+                    front_angle = cached_angle
+                    front_flipped = cached_flipped
+                    status_msg = f"Aligned (cached): {front_angle:.1f}° rotation"
+                elif processor:
+                    # Use YOLO detection
+                    aligned_img, info = processor.align_for_preview(Path(front_path))
+                    front_angle = info.get('angle', 0) if info else 0
+                    front_flipped = info.get('flipped', False) if info else False
+                    status_msg = f"Aligned: {front_angle:.1f}° rotation"
+                else:
+                    aligned_img = None
+
                 if aligned_img is not None:
                     front_pixmap = self._cv2_to_pixmap(aligned_img)
-                    front_angle = info.get('angle', 0)
-                    front_flipped = info.get('flipped', False)
-                    status_msg = f"Aligned: {front_angle:.1f}° rotation"
                     if front_flipped:
                         status_msg += ", flipped 180°"
 
             # Align back using the SAME transformation as the front
             # (front and back are from the same scan, so they have the same orientation)
             if back_path and Path(back_path).exists():
-                aligned_back = processor.apply_alignment(Path(back_path), front_angle, front_flipped)
+                aligned_back = self._apply_cached_alignment(Path(back_path), front_angle, front_flipped)
                 if aligned_back is not None:
                     back_pixmap = self._cv2_to_pixmap(aligned_back)
 
@@ -310,6 +333,32 @@ class MainWindow(QMainWindow):
         rgb_img = cv2_img[:, :, ::-1].copy()
         q_img = QImage(rgb_img.data, w, h, bytes_per_line, QImage.Format_RGB888)
         return QPixmap.fromImage(q_img)
+
+    def _apply_cached_alignment(self, image_path: Path, angle: float, flipped: bool) -> Optional[np.ndarray]:
+        """Apply alignment using cached rotation values (no YOLO needed).
+
+        This enables alignment on archived batches without reprocessing.
+        """
+        img = cv2.imread(str(image_path))
+        if img is None:
+            return None
+
+        h, w = img.shape[:2]
+
+        # Apply rotation if needed (0.8° threshold)
+        if abs(angle) >= 0.8:
+            center = (w // 2, h // 2)
+            M = cv2.getRotationMatrix2D(center, angle, 1.0)
+            img = cv2.warpAffine(img, M, (w, h),
+                                 flags=cv2.INTER_CUBIC,
+                                 borderMode=cv2.BORDER_CONSTANT,
+                                 borderValue=(255, 255, 255))
+
+        # Apply 180° flip if needed
+        if flipped:
+            img = cv2.rotate(img, cv2.ROTATE_180)
+
+        return img
 
     def _on_crop_current(self):
         """Generate crops for the currently displayed bill."""
@@ -669,7 +718,8 @@ class MainWindow(QMainWindow):
         with open(path, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=[
                 'position', 'front_file', 'back_file', 'serial', 'fancy_types',
-                'confidence', 'baseline_variance', 'is_fancy', 'needs_review', 'serial_region_path', 'error'
+                'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
+                'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped'
             ])
             writer.writeheader()
             writer.writerows(self.current_results)
@@ -862,6 +912,12 @@ class MainWindow(QMainWindow):
 
         # Refresh batch list from archive directory
         self.results_list.refresh_batch_list()
+
+        # Update archive button state based on new settings
+        self.processing_panel.set_archive_available(
+            available=bool(self.current_results),
+            auto_archive_enabled=self.settings.processing.auto_archive
+        )
 
     def _apply_font_size(self, size: int):
         """Apply font size to the application."""
@@ -1059,10 +1115,14 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_batch_changed(self, batch_path: str):
         """Handle batch selection change in results list."""
+        print(f"[MainWindow] _on_batch_changed: batch_path='{batch_path}'")
         if batch_path:
-            # Viewing archived batch
+            # Viewing archived batch - set input directory to allow reprocessing
             self.preview_panel.clear()
             self.status_label.setText(f"Viewing archived batch: {Path(batch_path).name}")
+            # Set input directory to archived batch path for reprocessing
+            print(f"[MainWindow] Setting input_dir to: {batch_path}")
+            self.processing_panel.set_input_dir(batch_path)
         else:
             # Back to current session
             self.preview_panel.clear()
@@ -1277,7 +1337,7 @@ class MainWindow(QMainWindow):
             writer = csv.DictWriter(f, fieldnames=[
                 'position', 'front_file', 'back_file', 'serial', 'fancy_types',
                 'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
-                'serial_region_path', 'error'
+                'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped'
             ])
             writer.writeheader()
             writer.writerows(self.current_results)

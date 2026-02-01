@@ -255,22 +255,28 @@ class ProcessingPanel(QWidget):
 
     def _on_process(self):
         """Handle process button click."""
+        print(f"[ProcessingPanel] _on_process called, monitor_mode={self._monitor_mode}, is_monitoring={self._is_monitoring}")
         if self._monitor_mode:
             if self._is_monitoring:
                 # Already monitoring - this shouldn't happen as button should be disabled
+                print("[ProcessingPanel] Already monitoring, returning")
                 return
+            print("[ProcessingPanel] Emitting monitor_requested")
             self.monitor_requested.emit()
         else:
             input_dir = self.input_edit.text().strip()
             output_dir = self.output_edit.text().strip()
+            print(f"[ProcessingPanel] input_dir='{input_dir}', output_dir='{output_dir}'")
 
             if not input_dir:
+                print("[ProcessingPanel] No input_dir, returning")
                 return
 
             if not output_dir:
                 output_dir = str(Path(input_dir) / "fancy_bills")
                 self.output_edit.setText(output_dir)
 
+            print(f"[ProcessingPanel] Emitting process_requested({input_dir}, {output_dir})")
             self.process_requested.emit(input_dir, output_dir)
 
     def _on_stop(self):
@@ -316,6 +322,7 @@ class ProcessingPanel(QWidget):
             available: Whether there are results to archive
             auto_archive_enabled: Whether auto-archive is enabled in settings
         """
+        print(f"[ProcessingPanel] set_archive_available(available={available}, auto_archive_enabled={auto_archive_enabled})")
         if auto_archive_enabled:
             # Auto-archive is on, so hide/disable the manual button
             self.archive_btn.setEnabled(False)

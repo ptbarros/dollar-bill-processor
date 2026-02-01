@@ -279,7 +279,9 @@ class MonitorThread(QThread):
                     'is_fancy': pair.is_fancy,
                     'needs_review': needs_review,
                     'serial_region_path': serial_region_path,
-                    'error': ''
+                    'error': '',
+                    'front_align_angle': pair.front_align_angle,
+                    'front_align_flipped': pair.front_align_flipped,
                 }
 
             elif serial and not is_valid:
@@ -300,7 +302,9 @@ class MonitorThread(QThread):
                     'is_fancy': False,
                     'needs_review': True,
                     'serial_region_path': serial_region_path,
-                    'error': validation_error
+                    'error': validation_error,
+                    'front_align_angle': pair.front_align_angle,
+                    'front_align_flipped': pair.front_align_flipped,
                 }
 
             else:
@@ -321,7 +325,9 @@ class MonitorThread(QThread):
                     'is_fancy': False,
                     'needs_review': True,
                     'serial_region_path': serial_region_path,
-                    'error': 'No serial detected'
+                    'error': 'No serial detected',
+                    'front_align_angle': pair.front_align_angle,
+                    'front_align_flipped': pair.front_align_flipped,
                 }
 
             # Mark files as processed
