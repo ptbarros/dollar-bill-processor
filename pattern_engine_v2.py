@@ -679,11 +679,14 @@ class PatternEngine:
         with open(self.user_config_path, 'w') as f:
             yaml.dump(self.user_config, f, default_flow_style=False, sort_keys=False)
 
-    def get_digit_highlights(self, serial: str, matched_patterns: List[str]) -> List[dict]:
-        """Get highlight info for each digit based on matched patterns.
+    def get_digit_highlights(self, serial: str, matched_patterns: List[str]) -> dict:
+        """Get highlight and visualization info for pattern overlay.
 
-        Returns a list of highlight specs, one per digit position (0-7 for 8-digit serials).
-        Each spec has: {position, digit, highlights: [{pattern, color, reason}]}
+        Returns a dict with:
+        - 'highlights': list of highlight specs per digit position (0-7)
+          Each: {position, digit, highlights: [{pattern, color, reason}]}
+        - 'connectors': list of connector lines to draw between digit pairs
+          Each: {positions: [i, j], color, pattern}
 
         Colors are CSS-style for easy UI use:
         - 'purple': flipper-related digits (0,1,6,8,9)
@@ -697,7 +700,7 @@ class PatternEngine:
         # Extract just digits (no prefix/suffix letters)
         digits = ''.join(c for c in serial if c.isdigit())
         if len(digits) != 8:
-            return []
+            return {'highlights': [], 'connectors': []}
 
         # Initialize highlight info for each position
         highlights = []
@@ -707,6 +710,9 @@ class PatternEngine:
                 'digit': d,
                 'highlights': []
             })
+
+        # Connectors for relational patterns (radar pairs, etc.)
+        connectors = []
 
         # Define flipper-valid digits
         FLIPPER_DIGITS = {'0', '1', '6', '8', '9'}
@@ -745,20 +751,72 @@ class PatternEngine:
                         'reason': f'one of {len(unique_digits)} unique digits'
                     })
 
-            # Radar (palindrome): highlight matching pairs
+            # Radar (palindrome): highlight matching pairs and add connectors
             elif pattern_upper == 'RADAR':
+                # Colors for each pair (to distinguish them visually)
+                pair_colors = ['orange', 'coral', 'gold', 'salmon']
                 for i in range(4):
                     j = 7 - i  # mirror position
                     if digits[i] == digits[j]:
+                        pair_color = pair_colors[i]
                         highlights[i]['highlights'].append({
                             'pattern': pattern,
-                            'color': 'orange',
+                            'color': pair_color,
                             'reason': f'palindrome pair with pos {j+1}'
                         })
                         highlights[j]['highlights'].append({
                             'pattern': pattern,
-                            'color': 'orange',
+                            'color': pair_color,
                             'reason': f'palindrome pair with pos {i+1}'
+                        })
+                        # Add connector line between the pair
+                        connectors.append({
+                            'positions': [i, j],
+                            'color': pair_color,
+                            'pattern': pattern
+                        })
+
+            # Broken Radar: one pair doesn't match
+            elif pattern_upper == 'BROKEN_RADAR':
+                pair_colors = ['orange', 'coral', 'gold', 'salmon']
+                for i in range(4):
+                    j = 7 - i  # mirror position
+                    if digits[i] == digits[j]:
+                        # Matching pair - show with connector
+                        pair_color = pair_colors[i]
+                        highlights[i]['highlights'].append({
+                            'pattern': pattern,
+                            'color': pair_color,
+                            'reason': f'matching pair with pos {j+1}'
+                        })
+                        highlights[j]['highlights'].append({
+                            'pattern': pattern,
+                            'color': pair_color,
+                            'reason': f'matching pair with pos {i+1}'
+                        })
+                        connectors.append({
+                            'positions': [i, j],
+                            'color': pair_color,
+                            'pattern': pattern
+                        })
+                    else:
+                        # Broken pair - highlight in red
+                        highlights[i]['highlights'].append({
+                            'pattern': pattern,
+                            'color': 'red',
+                            'reason': f'broken pair (should match pos {j+1})'
+                        })
+                        highlights[j]['highlights'].append({
+                            'pattern': pattern,
+                            'color': 'red',
+                            'reason': f'broken pair (should match pos {i+1})'
+                        })
+                        # Add dashed-style connector for broken pair
+                        connectors.append({
+                            'positions': [i, j],
+                            'color': 'red',
+                            'pattern': pattern,
+                            'style': 'broken'  # Signal to draw differently
                         })
 
             # Repeater (ABCDABCD): highlight the repeat
@@ -841,7 +899,7 @@ class PatternEngine:
                     else:
                         i += 1
 
-        return highlights
+        return {'highlights': highlights, 'connectors': connectors}
 
 
 # =============================================================================

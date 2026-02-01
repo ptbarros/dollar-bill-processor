@@ -1519,10 +1519,13 @@ class PreviewPanel(QWidget):
 
                     # Get pattern-based digit highlights for specific pattern mode
                     pattern_highlights = []
+                    pattern_connectors = []
                     if is_pattern_mode and serial:
                         patterns_for_highlights = [overlay_filter] if overlay_filter in matched_patterns else []
                         if patterns_for_highlights:
-                            pattern_highlights = self.pattern_engine.get_digit_highlights(serial, patterns_for_highlights)
+                            viz_data = self.pattern_engine.get_digit_highlights(serial, patterns_for_highlights)
+                            pattern_highlights = viz_data.get('highlights', [])
+                            pattern_connectors = viz_data.get('connectors', [])
 
                     # Color map for pattern highlights (CSS name -> BGR)
                     PATTERN_COLORS = {
@@ -1530,15 +1533,23 @@ class PreviewPanel(QWidget):
                         'blue': (255, 0, 0),        # Binary
                         'cyan': (255, 255, 0),      # Trinary
                         'orange': (0, 165, 255),    # Radar pairs
+                        'coral': (80, 127, 255),    # Radar pair 2
+                        'gold': (0, 215, 255),      # Radar pair 3 / Quads
+                        'salmon': (114, 128, 250),  # Radar pair 4
                         'magenta': (255, 0, 255),   # Repeater
                         'yellow': (0, 255, 255),    # Solid/near-solid
                         'lime': (0, 255, 0),        # Ladder
-                        'gold': (0, 215, 255),      # Quads/runs
                         'teal': (128, 128, 0),      # Pairs
+                        'red': (0, 0, 255),         # Broken/invalid
                     }
 
+                    # Store digit box centers for drawing connectors
+                    digit_centers = {}  # digit_idx -> (center_x, center_y)
+
                     # Draw colored boxes for each digit
-                    digit_boxes = gp_result['digit_boxes']
+                    # Sort digit boxes left-to-right to ensure position indices match pattern positions
+                    digit_boxes = sorted(gp_result['digit_boxes'], key=lambda db: db['x1'])
+
                     for idx, digit_box in enumerate(digit_boxes):
                         # Convert digit coordinates to crop-relative, then apply zoom
                         dx1 = int((digit_box['x1'] + (x1 - crop_x1)) * zoom)
@@ -1548,6 +1559,10 @@ class PreviewPanel(QWidget):
 
                         # Map digit_box index to pattern highlight index (skip letters)
                         digit_idx = sum(1 for db in digit_boxes[:idx] if not db['is_letter'])
+
+                        # Store center for connectors
+                        if not digit_box['is_letter']:
+                            digit_centers[digit_idx] = ((dx1 + dx2) // 2, (dy1 + dy2) // 2)
 
                         if is_gas_pump_mode:
                             # Gas pump mode: show all boxes with deviation coloring
@@ -1569,6 +1584,41 @@ class PreviewPanel(QWidget):
                                     pattern_color = first_highlight.get('color', 'lime')
                                     color = PATTERN_COLORS.get(pattern_color, (0, 255, 0))
                                     cv2.rectangle(crop, (dx1, dy1), (dx2, dy2), color, 2)
+
+                    # Draw connector lines for relational patterns (e.g., RADAR pairs)
+                    if is_pattern_mode and pattern_connectors:
+                        for conn in pattern_connectors:
+                            pos1, pos2 = conn['positions']
+                            if pos1 in digit_centers and pos2 in digit_centers:
+                                pt1 = digit_centers[pos1]
+                                pt2 = digit_centers[pos2]
+                                conn_color = PATTERN_COLORS.get(conn.get('color', 'orange'), (0, 165, 255))
+                                conn_style = conn.get('style', 'normal')
+
+                                # Calculate arc - height proportional to distance, but capped
+                                mid_x = (pt1[0] + pt2[0]) // 2
+                                distance = abs(pt2[0] - pt1[0])
+                                # Scale gently and cap at 35px to stay in viewable area
+                                arc_height = min(35, max(15, distance // 8))
+                                mid_y = min(pt1[1], pt2[1]) - arc_height
+
+                                if conn_style == 'broken':
+                                    # Broken pair: just X marks near each digit (no connecting line)
+                                    x_size = 5
+                                    # Draw small X near the left digit
+                                    x1_pos = pt1[0] + 15  # Offset right from digit center
+                                    x1_y = pt1[1] - 10    # Slightly above
+                                    cv2.line(crop, (x1_pos - x_size, x1_y - x_size), (x1_pos + x_size, x1_y + x_size), conn_color, 2, cv2.LINE_AA)
+                                    cv2.line(crop, (x1_pos - x_size, x1_y + x_size), (x1_pos + x_size, x1_y - x_size), conn_color, 2, cv2.LINE_AA)
+                                    # Draw small X near the right digit
+                                    x2_pos = pt2[0] - 15  # Offset left from digit center
+                                    x2_y = pt2[1] - 10    # Slightly above
+                                    cv2.line(crop, (x2_pos - x_size, x2_y - x_size), (x2_pos + x_size, x2_y + x_size), conn_color, 2, cv2.LINE_AA)
+                                    cv2.line(crop, (x2_pos - x_size, x2_y + x_size), (x2_pos + x_size, x2_y - x_size), conn_color, 2, cv2.LINE_AA)
+                                else:
+                                    # Normal connector: solid arc line above digits
+                                    pts = np.array([pt1, (mid_x, mid_y), pt2], np.int32)
+                                    cv2.polylines(crop, [pts], False, conn_color, 2, cv2.LINE_AA)
 
                 # Convert to QPixmap
                 rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
