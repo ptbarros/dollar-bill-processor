@@ -779,7 +779,17 @@ class SyncedSplitViewer(QWidget):
 
 
 class ImageLabel(QLabel):
-    """Simple label for small images like serial region. Click to rotate 180°."""
+    """Simple label for small images like serial region.
+    Left-click: rotate 180°
+    Right-click: cycle through pattern overlays
+    Right-click hold: show menu
+    """
+
+    # Signal emitted when user selects/cycles a pattern
+    pattern_selected = Signal(str)  # pattern name or "__all__" or "__gas_pump__" or "__none__"
+
+    # Long press threshold in milliseconds
+    LONG_PRESS_MS = 400
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -788,7 +798,77 @@ class ImageLabel(QLabel):
         self.original_pixmap = None
         self.is_rotated = False
         self.setCursor(Qt.PointingHandCursor)
-        self.setToolTip("Click to flip 180° (verify flipper patterns)")
+        self.setToolTip("Left-click: flip 180° | Right-click: cycle overlays | Hold right-click: menu")
+        self._matched_patterns = []  # Patterns that match current serial
+        self._current_pattern_index = 0  # For cycling: 0=gas_pump, 1+=patterns, last=none
+
+        # For long-press detection
+        self._right_press_time = None
+        self._right_press_pos = None
+        from PySide6.QtCore import QTimer
+        self._long_press_timer = QTimer(self)
+        self._long_press_timer.setSingleShot(True)
+        self._long_press_timer.timeout.connect(self._on_long_press)
+
+    def set_matched_patterns(self, patterns: list):
+        """Set the list of matched patterns for context menu."""
+        self._matched_patterns = patterns or []
+        self._current_pattern_index = 0  # Reset to gas pump when patterns change
+
+    def _get_cycle_options(self):
+        """Get the list of options to cycle through."""
+        # Order: Gas Pump -> each pattern -> No Overlay -> (back to Gas Pump)
+        options = ["__gas_pump__"]
+        options.extend(self._matched_patterns)
+        options.append("__none__")
+        return options
+
+    def _cycle_next(self):
+        """Cycle to the next pattern overlay option."""
+        options = self._get_cycle_options()
+        self._current_pattern_index = (self._current_pattern_index + 1) % len(options)
+        selected = options[self._current_pattern_index]
+        self.pattern_selected.emit(selected)
+
+    def _on_long_press(self):
+        """Show context menu on long press."""
+        if self._right_press_pos is not None:
+            self._show_context_menu(self._right_press_pos)
+            self._right_press_pos = None  # Prevent cycle on release
+
+    def _show_context_menu(self, pos):
+        """Show context menu for pattern overlay selection."""
+        from PySide6.QtWidgets import QMenu
+        menu = QMenu(self)
+
+        # Add "Gas Pump (deviation)" option
+        gas_pump_action = menu.addAction("Gas Pump (deviation)")
+        gas_pump_action.setData("__gas_pump__")
+
+        # Add separator if we have matched patterns
+        if self._matched_patterns:
+            menu.addSeparator()
+
+            # Add each matched pattern
+            for pattern in self._matched_patterns:
+                action = menu.addAction(f"{pattern}")
+                action.setData(pattern)
+
+        menu.addSeparator()
+
+        # Add "No Overlay" option
+        none_action = menu.addAction("No Overlay")
+        none_action.setData("__none__")
+
+        # Show menu and handle selection
+        action = menu.exec(self.mapToGlobal(pos))
+        if action:
+            # Update current index to match selection
+            options = self._get_cycle_options()
+            selected = action.data()
+            if selected in options:
+                self._current_pattern_index = options.index(selected)
+            self.pattern_selected.emit(selected)
 
     def set_image(self, path: str):
         """Load and display an image."""
@@ -837,11 +917,25 @@ class ImageLabel(QLabel):
         self.setPixmap(scaled)
 
     def mousePressEvent(self, event):
-        """Handle click to toggle 180° rotation."""
+        """Handle click to toggle 180° rotation or start right-click detection."""
         if event.button() == Qt.LeftButton and self.original_pixmap:
             self.is_rotated = not self.is_rotated
             self._update_display()
+        elif event.button() == Qt.RightButton:
+            # Start long press detection
+            self._right_press_pos = event.pos()
+            self._long_press_timer.start(self.LONG_PRESS_MS)
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        """Handle right-click release - cycle if it was a quick click."""
+        if event.button() == Qt.RightButton:
+            self._long_press_timer.stop()
+            # If pos is still set, it was a quick click (not long press)
+            if self._right_press_pos is not None:
+                self._cycle_next()
+                self._right_press_pos = None
+        super().mouseReleaseEvent(event)
 
     def resizeEvent(self, event):
         """Handle resize to update image scaling."""
@@ -1009,16 +1103,37 @@ class PreviewPanel(QWidget):
         serial_label = QLabel("Serials:")
         serial_images_layout.addWidget(serial_label)
 
-        # Two serial region images (2x zoomed)
+        # Two serial region images (2x zoomed) with pattern mode label between
         self.serial_image_1 = ImageLabel()
         self.serial_image_1.setMinimumSize(300, 80)
         self.serial_image_1.setMaximumHeight(120)
+        self.serial_image_1.pattern_selected.connect(self._on_pattern_overlay_selected)
         serial_images_layout.addWidget(self.serial_image_1, 1)
+
+        # Pattern mode label (between the two serial images)
+        self.pattern_mode_label = QLabel("Gas Pump")
+        self.pattern_mode_label.setAlignment(Qt.AlignCenter)
+        self.pattern_mode_label.setStyleSheet("""
+            QLabel {
+                color: #888;
+                font-size: 9pt;
+                padding: 2px 4px;
+                background: #f0f0f0;
+                border-radius: 3px;
+            }
+        """)
+        self.pattern_mode_label.setMinimumWidth(80)
+        self.pattern_mode_label.setMaximumWidth(120)
+        serial_images_layout.addWidget(self.pattern_mode_label)
 
         self.serial_image_2 = ImageLabel()
         self.serial_image_2.setMinimumSize(300, 80)
         self.serial_image_2.setMaximumHeight(120)
+        self.serial_image_2.pattern_selected.connect(self._on_pattern_overlay_selected)
         serial_images_layout.addWidget(self.serial_image_2, 1)
+
+        # Pattern overlay filter: "__gas_pump__", specific pattern, or "__none__"
+        self._pattern_overlay_filter = "__gas_pump__"
 
         serial_main_layout.addLayout(serial_images_layout)
 
@@ -1039,13 +1154,20 @@ class PreviewPanel(QWidget):
 
         control_bar.addSpacing(20)
 
-        # Gas pump overlay checkbox - load saved state from settings
+        # Pattern overlay checkbox - load saved state from settings
         settings = get_settings()
-        self.gas_pump_overlay_checkbox = QCheckBox("Gas Pump Overlay")
-        self.gas_pump_overlay_checkbox.setToolTip("Show colored boxes around each digit (green=normal, red=shifted)")
-        self.gas_pump_overlay_checkbox.setChecked(settings.ui.gas_pump_overlay_enabled)
-        self.gas_pump_overlay_checkbox.toggled.connect(self._on_gas_pump_overlay_toggled)
-        control_bar.addWidget(self.gas_pump_overlay_checkbox)
+        self.pattern_overlay_checkbox = QCheckBox("Pattern Overlay")
+        self.pattern_overlay_checkbox.setToolTip(
+            "Show colored boxes around digits:\n"
+            "• Gas pump: green=normal, red=shifted\n"
+            "• Flipper: purple outline\n"
+            "• Binary: blue outline\n"
+            "• Radar: orange pairs\n"
+            "• And more..."
+        )
+        self.pattern_overlay_checkbox.setChecked(settings.ui.gas_pump_overlay_enabled)
+        self.pattern_overlay_checkbox.toggled.connect(self._on_pattern_overlay_toggled)
+        control_bar.addWidget(self.pattern_overlay_checkbox)
 
         control_bar.addSpacing(20)
 
@@ -1074,7 +1196,7 @@ class PreviewPanel(QWidget):
 
         control_bar.addStretch()
 
-        self._gas_pump_overlay_enabled = settings.ui.gas_pump_overlay_enabled
+        self._pattern_overlay_enabled = settings.ui.gas_pump_overlay_enabled
         serial_main_layout.addLayout(control_bar)
 
         preview_layout.addWidget(self.serial_frame)
@@ -1370,34 +1492,83 @@ class PreviewPanel(QWidget):
                 if zoom != 1.0:
                     crop = cv2.resize(crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
 
-                # Draw serial bounding box relative to crop coordinates (scaled)
-                box_x1 = int((x1 - crop_x1) * zoom)
-                box_y1 = int((y1 - crop_y1) * zoom)
-                box_x2 = int((x2 - crop_x1) * zoom)
-                box_y2 = int((y2 - crop_y1) * zoom)
-                cv2.rectangle(crop, (box_x1, box_y1), (box_x2, box_y2), bbox_color, 2)
+                # Get overlay filter mode
+                overlay_filter = getattr(self, '_pattern_overlay_filter', '__gas_pump__')
+                is_gas_pump_mode = (overlay_filter == "__gas_pump__")
+                is_pattern_mode = (overlay_filter not in ("__gas_pump__", "__none__"))
 
-                # Draw gas pump digit overlay if enabled
-                if self._gas_pump_overlay_enabled:
+                # Draw serial bounding box only in gas pump mode
+                if is_gas_pump_mode and self._pattern_overlay_enabled:
+                    box_x1 = int((x1 - crop_x1) * zoom)
+                    box_y1 = int((y1 - crop_y1) * zoom)
+                    box_x2 = int((x2 - crop_x1) * zoom)
+                    box_y2 = int((y2 - crop_y1) * zoom)
+                    cv2.rectangle(crop, (box_x1, box_y1), (box_x2, box_y2), bbox_color, 2)
+
+                # Draw pattern overlay if enabled
+                if self._pattern_overlay_enabled:
+                    # Get matched patterns from current result for pattern-based highlighting
+                    matched_patterns = []
+                    if self.current_result:
+                        fancy_types_str = self.current_result.get('fancy_types', '')
+                        if fancy_types_str:
+                            matched_patterns = [p.strip() for p in fancy_types_str.split(',')]
+
+                    # Get serial for pattern highlights
+                    serial = self.current_result.get('serial', '') if self.current_result else ''
+
+                    # Get pattern-based digit highlights for specific pattern mode
+                    pattern_highlights = []
+                    if is_pattern_mode and serial:
+                        patterns_for_highlights = [overlay_filter] if overlay_filter in matched_patterns else []
+                        if patterns_for_highlights:
+                            pattern_highlights = self.pattern_engine.get_digit_highlights(serial, patterns_for_highlights)
+
+                    # Color map for pattern highlights (CSS name -> BGR)
+                    PATTERN_COLORS = {
+                        'purple': (128, 0, 128),    # Flipper digits
+                        'blue': (255, 0, 0),        # Binary
+                        'cyan': (255, 255, 0),      # Trinary
+                        'orange': (0, 165, 255),    # Radar pairs
+                        'magenta': (255, 0, 255),   # Repeater
+                        'yellow': (0, 255, 255),    # Solid/near-solid
+                        'lime': (0, 255, 0),        # Ladder
+                        'gold': (0, 215, 255),      # Quads/runs
+                        'teal': (128, 128, 0),      # Pairs
+                    }
+
                     # Draw colored boxes for each digit
-                    for digit_box in gp_result['digit_boxes']:
+                    digit_boxes = gp_result['digit_boxes']
+                    for idx, digit_box in enumerate(digit_boxes):
                         # Convert digit coordinates to crop-relative, then apply zoom
-                        # digit_box coords are relative to tight_crop, need to offset by (x1-crop_x1, y1-crop_y1)
                         dx1 = int((digit_box['x1'] + (x1 - crop_x1)) * zoom)
                         dy1 = int((digit_box['y1'] + (y1 - crop_y1)) * zoom)
                         dx2 = int((digit_box['x2'] + (x1 - crop_x1)) * zoom)
                         dy2 = int((digit_box['y2'] + (y1 - crop_y1)) * zoom)
 
-                        # Color: gray for letters, green for normal digits, red for shifted
-                        # Use slider threshold instead of hardcoded value
-                        if digit_box['is_letter']:
-                            color = (128, 128, 128)  # Gray
-                        elif digit_box['deviation'] >= self._gas_pump_threshold:
-                            color = (0, 0, 255)  # Red (BGR) - shifted
-                        else:
-                            color = (0, 255, 0)  # Green (BGR) - normal
+                        # Map digit_box index to pattern highlight index (skip letters)
+                        digit_idx = sum(1 for db in digit_boxes[:idx] if not db['is_letter'])
 
-                        cv2.rectangle(crop, (dx1, dy1), (dx2, dy2), color, 2)
+                        if is_gas_pump_mode:
+                            # Gas pump mode: show all boxes with deviation coloring
+                            if digit_box['is_letter']:
+                                color = (128, 128, 128)  # Gray
+                            elif digit_box['deviation'] >= self._gas_pump_threshold:
+                                color = (0, 0, 255)  # Red (BGR) - shifted
+                            else:
+                                color = (0, 255, 0)  # Green (BGR) - normal
+                            cv2.rectangle(crop, (dx1, dy1), (dx2, dy2), color, 2)
+
+                        elif is_pattern_mode:
+                            # Pattern mode: only show boxes for digits that match the pattern
+                            if not digit_box['is_letter'] and digit_idx < len(pattern_highlights):
+                                ph = pattern_highlights[digit_idx]
+                                if ph['highlights']:
+                                    # This digit matches the pattern - show it
+                                    first_highlight = ph['highlights'][0]
+                                    pattern_color = first_highlight.get('color', 'lime')
+                                    color = PATTERN_COLORS.get(pattern_color, (0, 255, 0))
+                                    cv2.rectangle(crop, (dx1, dy1), (dx2, dy2), color, 2)
 
                 # Convert to QPixmap
                 rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
@@ -1572,6 +1743,12 @@ class PreviewPanel(QWidget):
 
         # Generate serial region crops on-demand (only if serial view is visible)
         if self.serial_frame.isVisible():
+            # Update matched patterns for context menu
+            fancy_types_str = result.get('fancy_types', '')
+            matched_patterns = [p.strip() for p in fancy_types_str.split(',')] if fancy_types_str else []
+            self.serial_image_1.set_matched_patterns(matched_patterns)
+            self.serial_image_2.set_matched_patterns(matched_patterns)
+
             serial_crops, fresh_px_dev = self._generate_serial_region_crops(self._current_front_file)
             if len(serial_crops) >= 1:
                 self.serial_image_1.set_pixmap(serial_crops[0])
@@ -1965,16 +2142,61 @@ class PreviewPanel(QWidget):
                 if len(serial_crops) >= 2:
                     self.serial_image_2.set_pixmap(serial_crops[1])
 
-    def _on_gas_pump_overlay_toggled(self, checked: bool):
-        """Handle gas pump overlay toggle - show/hide digit boxes."""
-        self._gas_pump_overlay_enabled = checked
+    def _on_pattern_overlay_toggled(self, checked: bool):
+        """Handle pattern overlay toggle - show/hide digit boxes."""
+        self._pattern_overlay_enabled = checked
 
         # Save to settings for persistence
         settings = get_settings()
-        settings.ui.gas_pump_overlay_enabled = checked
+        settings.ui.gas_pump_overlay_enabled = checked  # Reuse same setting key
         settings.save()
 
         # Refresh the serial crops to show/hide the overlay
+        if self._current_front_file and self.serial_frame.isVisible():
+            serial_crops, _ = self._generate_serial_region_crops(self._current_front_file)
+            if len(serial_crops) >= 1:
+                self.serial_image_1.set_pixmap(serial_crops[0])
+            if len(serial_crops) >= 2:
+                self.serial_image_2.set_pixmap(serial_crops[1])
+
+    def _on_pattern_overlay_selected(self, pattern_filter: str):
+        """Handle pattern selection from cycling or context menu."""
+        self._pattern_overlay_filter = pattern_filter
+
+        # Update the pattern mode label
+        if pattern_filter == "__gas_pump__":
+            self.pattern_mode_label.setText("Gas Pump")
+            self.pattern_mode_label.setStyleSheet("""
+                QLabel { color: #888; font-size: 9pt; padding: 2px 4px; background: #f0f0f0; border-radius: 3px; }
+            """)
+        elif pattern_filter == "__none__":
+            self.pattern_mode_label.setText("No Overlay")
+            self.pattern_mode_label.setStyleSheet("""
+                QLabel { color: #aaa; font-size: 9pt; padding: 2px 4px; background: #e8e8e8; border-radius: 3px; }
+            """)
+        else:
+            # Specific pattern - show name with highlight
+            self.pattern_mode_label.setText(pattern_filter)
+            self.pattern_mode_label.setStyleSheet("""
+                QLabel { color: #2a6; font-size: 9pt; font-weight: bold; padding: 2px 4px; background: #e8f5e9; border-radius: 3px; }
+            """)
+
+        # Sync the cycle index between both serial images
+        options = self.serial_image_1._get_cycle_options()
+        if pattern_filter in options:
+            idx = options.index(pattern_filter)
+            self.serial_image_1._current_pattern_index = idx
+            self.serial_image_2._current_pattern_index = idx
+
+        # Enable overlay if it was disabled and user selected something other than none
+        if pattern_filter != "__none__" and not self._pattern_overlay_enabled:
+            self._pattern_overlay_enabled = True
+            self.pattern_overlay_checkbox.setChecked(True)
+        elif pattern_filter == "__none__":
+            self._pattern_overlay_enabled = False
+            self.pattern_overlay_checkbox.setChecked(False)
+
+        # Refresh the serial crops to show the selected pattern
         if self._current_front_file and self.serial_frame.isVisible():
             serial_crops, _ = self._generate_serial_region_crops(self._current_front_file)
             if len(serial_crops) >= 1:
@@ -1992,7 +2214,7 @@ class PreviewPanel(QWidget):
         self.pattern_engine.set_gas_pump_threshold(self._gas_pump_threshold)
 
         # Only refresh if overlay is enabled and we have a bill displayed
-        if self._gas_pump_overlay_enabled and self._current_front_file and self.serial_frame.isVisible():
+        if self._pattern_overlay_enabled and self._current_front_file and self.serial_frame.isVisible():
             serial_crops, _ = self._generate_serial_region_crops(self._current_front_file)
             if len(serial_crops) >= 1:
                 self.serial_image_1.set_pixmap(serial_crops[0])

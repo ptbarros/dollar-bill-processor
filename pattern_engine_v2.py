@@ -679,6 +679,170 @@ class PatternEngine:
         with open(self.user_config_path, 'w') as f:
             yaml.dump(self.user_config, f, default_flow_style=False, sort_keys=False)
 
+    def get_digit_highlights(self, serial: str, matched_patterns: List[str]) -> List[dict]:
+        """Get highlight info for each digit based on matched patterns.
+
+        Returns a list of highlight specs, one per digit position (0-7 for 8-digit serials).
+        Each spec has: {position, digit, highlights: [{pattern, color, reason}]}
+
+        Colors are CSS-style for easy UI use:
+        - 'purple': flipper-related digits (0,1,6,8,9)
+        - 'blue': binary digits (0,1)
+        - 'cyan': trinary digits
+        - 'orange': radar matching pairs
+        - 'magenta': repeater pattern digits
+        - 'yellow': solid/near-solid dominant digit
+        - 'lime': ladder sequence digits
+        """
+        # Extract just digits (no prefix/suffix letters)
+        digits = ''.join(c for c in serial if c.isdigit())
+        if len(digits) != 8:
+            return []
+
+        # Initialize highlight info for each position
+        highlights = []
+        for i, d in enumerate(digits):
+            highlights.append({
+                'position': i,
+                'digit': d,
+                'highlights': []
+            })
+
+        # Define flipper-valid digits
+        FLIPPER_DIGITS = {'0', '1', '6', '8', '9'}
+        BINARY_DIGITS = {'0', '1'}
+
+        for pattern in matched_patterns:
+            pattern_upper = pattern.upper()
+
+            # Flipper-related patterns: highlight flip-valid digits
+            if pattern_upper in ('FLIPPER', 'TRUE_FLIPPER', 'NEAR_FLIPPER', 'GAS_PUMP_FLIPPER'):
+                for i, d in enumerate(digits):
+                    if d in FLIPPER_DIGITS:
+                        highlights[i]['highlights'].append({
+                            'pattern': pattern,
+                            'color': 'purple',
+                            'reason': 'flip-valid digit'
+                        })
+
+            # Binary: highlight 0s and 1s
+            elif pattern_upper == 'BINARY':
+                for i, d in enumerate(digits):
+                    if d in BINARY_DIGITS:
+                        highlights[i]['highlights'].append({
+                            'pattern': pattern,
+                            'color': 'blue',
+                            'reason': 'binary digit'
+                        })
+
+            # Trinary: highlight all digits (they're all part of the 3 unique values)
+            elif pattern_upper == 'TRINARY':
+                unique_digits = set(digits)
+                for i, d in enumerate(digits):
+                    highlights[i]['highlights'].append({
+                        'pattern': pattern,
+                        'color': 'cyan',
+                        'reason': f'one of {len(unique_digits)} unique digits'
+                    })
+
+            # Radar (palindrome): highlight matching pairs
+            elif pattern_upper == 'RADAR':
+                for i in range(4):
+                    j = 7 - i  # mirror position
+                    if digits[i] == digits[j]:
+                        highlights[i]['highlights'].append({
+                            'pattern': pattern,
+                            'color': 'orange',
+                            'reason': f'palindrome pair with pos {j+1}'
+                        })
+                        highlights[j]['highlights'].append({
+                            'pattern': pattern,
+                            'color': 'orange',
+                            'reason': f'palindrome pair with pos {i+1}'
+                        })
+
+            # Repeater (ABCDABCD): highlight the repeat
+            elif pattern_upper == 'REPEATER':
+                if digits[:4] == digits[4:]:
+                    for i in range(8):
+                        highlights[i]['highlights'].append({
+                            'pattern': pattern,
+                            'color': 'magenta',
+                            'reason': 'repeating group'
+                        })
+
+            # Solid: highlight all (same digit)
+            elif pattern_upper == 'SOLID':
+                for i in range(8):
+                    highlights[i]['highlights'].append({
+                        'pattern': pattern,
+                        'color': 'yellow',
+                        'reason': 'solid digit'
+                    })
+
+            # Near solid: highlight the dominant digit
+            elif pattern_upper == 'NEAR_SOLID':
+                counter = Counter(digits)
+                dominant = counter.most_common(1)[0][0]
+                for i, d in enumerate(digits):
+                    if d == dominant:
+                        highlights[i]['highlights'].append({
+                            'pattern': pattern,
+                            'color': 'yellow',
+                            'reason': 'dominant digit'
+                        })
+
+            # Ladder patterns: highlight all digits in sequence
+            elif 'LADDER' in pattern_upper:
+                for i in range(8):
+                    highlights[i]['highlights'].append({
+                        'pattern': pattern,
+                        'color': 'lime',
+                        'reason': 'ladder sequence'
+                    })
+
+            # Quads/Trips/etc: highlight runs of same digit
+            elif pattern_upper in ('QUADS', 'QUINTS', 'SIXES', 'SEVENS', 'TRIPS', 'DOUBLE_QUADS'):
+                # Find runs of same digit
+                i = 0
+                while i < len(digits):
+                    run_digit = digits[i]
+                    run_start = i
+                    run_len = 1
+                    while i + run_len < len(digits) and digits[i + run_len] == run_digit:
+                        run_len += 1
+                    # Highlight runs of 3+
+                    if run_len >= 3:
+                        for j in range(run_start, run_start + run_len):
+                            highlights[j]['highlights'].append({
+                                'pattern': pattern,
+                                'color': 'gold',
+                                'reason': f'run of {run_len}'
+                            })
+                    i += run_len
+
+            # Pairs patterns: highlight pairs
+            elif 'PAIR' in pattern_upper or pattern_upper in ('FOUR_PAIRS', 'THREE_PAIRS'):
+                # Find consecutive pairs
+                i = 0
+                while i < len(digits) - 1:
+                    if digits[i] == digits[i + 1]:
+                        highlights[i]['highlights'].append({
+                            'pattern': pattern,
+                            'color': 'teal',
+                            'reason': 'pair'
+                        })
+                        highlights[i + 1]['highlights'].append({
+                            'pattern': pattern,
+                            'color': 'teal',
+                            'reason': 'pair'
+                        })
+                        i += 2
+                    else:
+                        i += 1
+
+        return highlights
+
 
 # =============================================================================
 # TEST
