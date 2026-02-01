@@ -1,110 +1,59 @@
-# Dollar Bill Processor Configuration
-# ====================================
-
-# =============================================================================
-# FANCY NUMBER PATTERNS
-# =============================================================================
-# Built-in patterns can be enabled/disabled
-# Custom patterns use the 8-digit portion of the serial (without letters)
-
 patterns:
-  # Built-in patterns (set to false to disable)
   builtin:
-    # --- Original core patterns ---
-    solid: true        # All same digit: 11111111
-    repeater: true     # First 4 = last 4: 12341234
-    radar: true        # Palindrome: 12344321
-    ladder: true       # Sequential: 12345678, 87654321
-    low_serial: true   # Value <= 100: 00000001
-    binary: true       # Only 0s and 1s: 01010101
-    star_note: true    # Ends with *: F12345678*
-
-    # --- Digit count patterns ---
-    trinary: true           # Uses only 3 different digits
-    true_trinary: true      # Uses exactly 3 digits (each appears at least once)
-    quadrinary: false       # Uses only 4 different digits (too common)
-    true_quadrinary: true   # Uses exactly 4 digits (each appears at least once)
-    quinary: false          # Uses only 5 different digits (too common)
-
-    # --- Even/odd patterns ---
-    all_evens: true         # All digits are even: 02468024
-    all_odds: true          # All digits are odd: 13579135
-
-    # --- Special patterns ---
-    binary_radar: true      # Binary AND radar: 01011010
-    alternator: true        # Alternating digits: 12121212
-
-    # --- Partial ladder patterns ---
-    ladder_7: true          # 7-digit ladder anywhere
-    ladder_6: true          # 6-digit ladder anywhere
-    ladder_5: true          # 5-digit ladder anywhere
-    ladder_4: true          # 4-digit ladder anywhere
-
-    # --- Structural patterns ---
-    full_house: true        # 5 of one digit, 3 of another: 11111222
-    two_pair_triple: true   # Triple + two pairs: 11122334
-    triple_double_double: true  # Triple + double + double: 11122233
-    consecutive_triples: true   # Two triples back-to-back: 111222xx
-    double_quads_sequential: true  # Two sequential quads: 11112222
-
-    # --- Ladder variants ---
-    pyramid_ladder: true    # Up then down: 12321
-    counting_ladder: true   # Count pattern: 12123123
-    step_ladder: false      # Steps of 2: 02468xxx (too common)
-    chunky_ladder: true     # Paired ladder: 11223344
-    super_ladder: true      # Double-digit ladder: 01020304
-
-    # --- Counting ladders (step patterns) ---
-    counting_2s: true       # Step of 2: 02040608, 10121416
-    counting_3s: true       # Step of 3: 03060912, 12151821
-    counting_4s: true       # Step of 4: 04081216, 20242832
-    counting_5s: true       # Step of 5: 05101520, 10152025
-    counting_6s: true       # Step of 6: 06121824, 12182430
-    counting_7s: true       # Step of 7: 07142128, 14212835
-    counting_8s: true       # Step of 8: 08162432, 16243240
-    counting_9s: true       # Step of 9: 09182736, 18273645
-
-    # --- Sum patterns ---
-    # Digits summing to extreme values (1-11 or 61-72) are flagged automatically
-    magic_sum: true         # Digits sum to special values (9, 36, 72)
-
-    # --- Flipper patterns (upside-down readable) ---
-    flipper: true           # Contains only 0,1,6,8,9 (flippable digits)
-    true_flipper: true      # Flippable AND reads same upside down
-    near_flipper: false     # One digit away from true flipper
-
-    # --- Special structural patterns ---
-    broken_radar: true      # One digit off from radar
-    sequential_trinary: true    # Trinary with sequential digits: 121212 vs 131313
-    double_bookend: true    # First 2 = last 2: 12xxxx12
-    radar_repeater: true    # Both radar AND repeater: 12211221
-    birthday: false         # Date patterns (too common): 01151990
-
-    # --- Additional patterns ---
-    four_pairs: true        # Four pairs: 11223344
-    three_pairs: true       # Three pairs anywhere: 112233xx
-    ultra_low_serial: true  # First 5+ digits are zeros
-    super_radar: true       # Triple-symmetric radar: 12122121
-    binary_repeater: true   # Binary AND repeater: 01010101
-    doubles_ladder: true    # Pairs in sequence: 11223344
-    ladder_and_quad: true   # Contains both ladder and quad
-
-  # Custom patterns are now in patterns.txt (simpler format, easier to edit)
-  # See patterns.txt for examples
-
-
-# =============================================================================
-# CROP REGIONS
-# =============================================================================
-# All coordinates are percentages (0.0 to 1.0) of image dimensions
-# Format: x (left edge), y (top edge), w (width), h (height)
-#
-# To find coordinates:
-#   1. Open a bill image in an editor
-#   2. Note the pixel coordinates of the region you want
-#   3. Divide by image dimensions to get percentages
-#   Example: 470px on 1850px wide image = 470/1850 = 0.254
-
+    solid: true
+    repeater: true
+    radar: true
+    ladder: true
+    low_serial: true
+    binary: true
+    star_note: true
+    trinary: true
+    true_trinary: true
+    quadrinary: false
+    true_quadrinary: true
+    quinary: false
+    all_evens: true
+    all_odds: true
+    binary_radar: true
+    alternator: true
+    ladder_7: true
+    ladder_6: true
+    ladder_5: true
+    ladder_4: true
+    full_house: true
+    two_pair_triple: true
+    triple_double_double: true
+    consecutive_triples: true
+    double_quads_sequential: true
+    pyramid_ladder: true
+    counting_ladder: true
+    step_ladder: false
+    chunky_ladder: true
+    super_ladder: true
+    counting_2s: true
+    counting_3s: true
+    counting_4s: true
+    counting_5s: true
+    counting_6s: true
+    counting_7s: true
+    counting_8s: true
+    counting_9s: true
+    magic_sum: true
+    flipper: true
+    true_flipper: true
+    near_flipper: false
+    broken_radar: true
+    sequential_trinary: true
+    double_bookend: true
+    radar_repeater: true
+    birthday: false
+    four_pairs: true
+    three_pairs: true
+    ultra_low_serial: true
+    super_radar: true
+    binary_repeater: true
+    doubles_ladder: true
+    ladder_and_quad: true
 crops:
   front:
     seal:
@@ -112,122 +61,100 @@ crops:
       y: 0.233
       w: 0.254
       h: 0.537
-      description: "Treasury seal (green circle)"
-
+      description: Treasury seal (green circle)
     full:
       x: 0.0
       y: 0.0
       w: 1.0
       h: 1.0
-      description: "Full front image"
-
+      description: Full front image
     left:
       x: 0.0
       y: 0.0
       w: 0.384
       h: 1.0
-      description: "Left third of bill"
-
+      description: Left third of bill
     center:
       x: 0.354
       y: 0.0
       w: 0.322
       h: 1.0
-      description: "Center third of bill"
-
+      description: Center third of bill
     right:
       x: 0.627
       y: 0.0
       w: 0.373
       h: 1.0
-      description: "Right third of bill"
-
+      description: Right third of bill
   back:
     seal:
       x: 0.635
       y: 0.221
       w: 0.261
       h: 0.557
-      description: "Back seal/emblem area"
-
+      description: Back seal/emblem area
     full:
       x: 0.0
       y: 0.0
       w: 1.0
       h: 1.0
-      description: "Full back image"
-
+      description: Full back image
     left:
       x: 0.0
       y: 0.0
       w: 0.384
       h: 1.0
-      description: "Left third of bill"
-
+      description: Left third of bill
     center:
       x: 0.354
       y: 0.0
       w: 0.322
       h: 1.0
-      description: "Center third of bill"
-
+      description: Center third of bill
     right:
       x: 0.627
       y: 0.0
       w: 0.373
       h: 1.0
-      description: "Right third of bill"
-
-
-# =============================================================================
-# CROP OUTPUT ORDER
-# =============================================================================
-# Defines which crops are generated and in what order
-# Each entry is [side, region_name] matching the crops defined above
-# Output files will be SERIAL_01.jpg, SERIAL_02.jpg, etc.
-
+      description: Right third of bill
 crop_order:
-  - [front, seal]     # 01
-  - [front, full]     # 02
-  - [front, left]     # 03
-  - [front, center]   # 04
-  - [front, right]    # 05
-  - [back, seal]      # 06
-  - [back, full]      # 07
-  - [back, left]      # 08
-  - [back, center]    # 09
-  - [back, right]     # 10
-
-
-# =============================================================================
-# PROCESSING OPTIONS
-# =============================================================================
-
+- - front
+  - seal
+- - front
+  - full
+- - back
+  - full
+- - front
+  - left
+- - front
+  - center
+- - front
+  - right
+- - back
+  - left
+- - back
+  - center
+- - back
+  - right
+- - back
+  - seal
 options:
-  # JPEG quality for crop output (1-100)
   jpeg_quality: 95
-
-  # Minimum confidence threshold for OCR (0.0-1.0)
   min_confidence: 0.0
-
-  # Include star notes as fancy (even without other patterns)
   star_notes_always_fancy: true
-
-
-# =============================================================================
-# YOLO-BASED DYNAMIC CROPS
-# =============================================================================
-# Settings for YOLO-based dynamic cropping that adapts to actual element positions
-# instead of fixed percentage-based regions.
-
 yolo_crops:
   padding:
-    # Horizontal padding for seal crops (fraction of bbox width)
     seal_h: 0.03
-    # Vertical padding for seal crops (fraction of bbox height)
     seal_v: 0.08
-    # Overlap between thirds crops (fraction of image width)
     thirds_overlap: 0.03
-
-  # Use percentage-based fallback crops when YOLO detections are missing
+  front_seal:
+    min_width: 500
+    min_height: 500
+    offset_x: 0
+    offset_y: 0
+  back_seal:
+    width: 500
+    height: 500
+    offset_x: -25
+    offset_y: -50
   fallback_on_missing: true

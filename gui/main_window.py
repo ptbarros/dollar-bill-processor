@@ -154,6 +154,10 @@ class MainWindow(QMainWindow):
         patterns_action.triggered.connect(self._on_pattern_manager)
         edit_menu.addAction(patterns_action)
 
+        crops_action = QAction("eBay &Crop Manager...", self)
+        crops_action.triggered.connect(self._on_crop_manager)
+        edit_menu.addAction(crops_action)
+
         # View menu
         view_menu = menubar.addMenu("&View")
 
@@ -337,6 +341,9 @@ class MainWindow(QMainWindow):
             if not output_dir:
                 return
             output_dir = Path(output_dir)
+
+        # Reload config to pick up any changes from eBay Crop Manager
+        processor.cfg.reload()
 
         # Generate crops for each result
         from process_production import BillPair
@@ -522,6 +529,30 @@ class MainWindow(QMainWindow):
         from .pattern_dialog import PatternDialog
         dialog = PatternDialog(self)
         dialog.exec()
+
+    def _on_crop_manager(self):
+        """Open eBay crop manager dialog."""
+        import yaml
+        from .crop_dialog import EbayCropDialog
+
+        # Load current config
+        config_path = Path(__file__).parent.parent / "config.yaml"
+        if config_path.exists():
+            with open(config_path) as f:
+                config = yaml.safe_load(f)
+        else:
+            config = {}
+
+        dialog = EbayCropDialog(config, self)
+        if dialog.exec():
+            # Save updated config
+            updated_config = dialog.get_config()
+            with open(config_path, 'w') as f:
+                yaml.dump(updated_config, f, default_flow_style=False, sort_keys=False)
+            QMessageBox.information(
+                self, "Settings Saved",
+                "Crop settings have been saved.\nChanges will apply to future processing."
+            )
 
     def _toggle_review_filter(self, checked: bool):
         """Toggle showing only review items."""

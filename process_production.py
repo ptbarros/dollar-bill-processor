@@ -158,6 +158,13 @@ class Config:
         else:
             print("Using default configuration")
 
+    def reload(self):
+        """Reload configuration from disk."""
+        if self.config_path and self.config_path.exists():
+            with open(self.config_path, 'r') as f:
+                self.data = yaml.safe_load(f) or {}
+            print(f"Reloaded config: {self.config_path}")
+
     @property
     def crop_regions(self) -> dict:
         """Get crop regions from config or defaults."""
@@ -1343,6 +1350,346 @@ class ProductionProcessor:
                         boxes.append((x1, y1, x2, y2, float(box.conf[0])))
         return boxes
 
+    # =========================================================================
+    # YOLO-BASED DYNAMIC CROP HELPERS
+    # =========================================================================
+
+    def _detect_all_objects(self, img: np.ndarray, conf: float = 0.3) -> dict:
+        """Single YOLO pass returning all detections grouped by class name.
+
+        Args:
+            img: Image to process
+            conf: Confidence threshold
+
+        Returns:
+            Dictionary mapping class names to lists of (x1, y1, x2, y2, confidence) tuples
+        """
+        get_timing().add_yolo_call()
+        results = self.yolo_model(img, verbose=False, conf=conf)
+        detections = {}
+
+        # Initialize empty lists for all known classes
+        for class_name in self.YOLO_CLASSES.keys():
+            detections[class_name] = []
+
+        for result in results:
+            for box in result.boxes:
+                if hasattr(box, 'cls') and box.cls is not None:
+                    cls_id = int(box.cls[0])
+                    box_conf = float(box.conf[0])
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+                    # Find class name for this ID
+                    for class_name, class_id in self.YOLO_CLASSES.items():
+                        if cls_id == class_id:
+                            detections[class_name].append((x1, y1, x2, y2, box_conf))
+                            break
+
+        return detections
+
+    def _union_bbox(self, boxes: list) -> tuple:
+        """Compute bounding box encompassing all given boxes.
+
+        Args:
+            boxes: List of (x1, y1, x2, y2, ...) tuples (extra elements ignored)
+
+        Returns:
+            (x1, y1, x2, y2) tuple, or None if boxes is empty
+        """
+        if not boxes:
+            return None
+
+        x1 = min(b[0] for b in boxes)
+        y1 = min(b[1] for b in boxes)
+        x2 = max(b[2] for b in boxes)
+        y2 = max(b[3] for b in boxes)
+
+        return (x1, y1, x2, y2)
+
+    def _apply_padding(self, bbox: tuple, img_shape: tuple, pad_h: float = 0.02, pad_v: float = 0.05) -> tuple:
+        """Apply padding to a bounding box, clamped to image bounds.
+
+        Args:
+            bbox: (x1, y1, x2, y2) tuple
+            img_shape: Image shape (height, width, ...)
+            pad_h: Horizontal padding as fraction of bbox width
+            pad_v: Vertical padding as fraction of bbox height
+
+        Returns:
+            Padded (x1, y1, x2, y2) tuple
+        """
+        x1, y1, x2, y2 = bbox
+        h, w = img_shape[:2]
+
+        box_w = x2 - x1
+        box_h = y2 - y1
+
+        pad_x = int(box_w * pad_h)
+        pad_y = int(box_h * pad_v)
+
+        return (
+            max(0, x1 - pad_x),
+            max(0, y1 - pad_y),
+            min(w, x2 + pad_x),
+            min(h, y2 + pad_y)
+        )
+
+    def _get_yolo_crop_config(self) -> dict:
+        """Get YOLO crop configuration from config or defaults."""
+        defaults = {
+            'padding': {
+                'seal_h': 0.03,  # 3% horizontal padding for seal crops
+                'seal_v': 0.08,  # 8% vertical padding for seal crops
+                'thirds_overlap': 0.03,  # 3% overlap between thirds
+            },
+            'front_seal': {
+                'min_width': 0,   # Minimum width in pixels (0 = use detected size)
+                'min_height': 0,  # Minimum height in pixels (0 = use detected size)
+                'offset_x': 0,    # X offset from detected position (positive = right)
+                'offset_y': 0,    # Y offset from detected position (positive = down)
+            },
+            'back_seal': {
+                'width': 500,     # Crop width in pixels
+                'height': 500,    # Crop height in pixels
+                'offset_x': 0,    # X offset from anchor (positive = right)
+                'offset_y': 0,    # Y offset from anchor (positive = down)
+            },
+            'fallback_on_missing': True,
+        }
+        if hasattr(self.cfg, 'data') and 'yolo_crops' in self.cfg.data:
+            config = self.cfg.data['yolo_crops']
+            # Merge with defaults
+            result = defaults.copy()
+            if 'padding' in config:
+                result['padding'].update(config['padding'])
+            if 'front_seal' in config:
+                result['front_seal'].update(config['front_seal'])
+            if 'back_seal' in config:
+                result['back_seal'].update(config['back_seal'])
+            if 'fallback_on_missing' in config:
+                result['fallback_on_missing'] = config['fallback_on_missing']
+            return result
+        return defaults
+
+    def _generate_front_seal_crop(self, img: np.ndarray, detections: dict) -> Optional[np.ndarray]:
+        """Generate front seal crop containing seal_t, series_year, RIGHT serial_number, and front_plate.
+
+        Uses YOLO detections to find actual positions of required elements.
+        Only includes the right serial number (near the treasury seal), not the left one.
+        Falls back to percentage-based crop if detections are missing.
+
+        Args:
+            img: Aligned front image
+            detections: Dict of detections from _detect_all_objects()
+
+        Returns:
+            Cropped image, or None if crop cannot be generated
+        """
+        config = self._get_yolo_crop_config()
+        h, w = img.shape[:2]
+
+        # Collect boxes for seal_t, series_year, and front_plate
+        all_boxes = []
+        for class_name in ['series_year', 'seal_t', 'front_plate']:
+            if class_name in detections:
+                all_boxes.extend(detections[class_name])
+
+        # Add only the RIGHT serial_number (highest x coordinate, near treasury seal)
+        serials = detections.get('serial_number', [])
+        if serials:
+            right_serial = max(serials, key=lambda b: b[0])  # Sort by x1, take rightmost
+            all_boxes.append(right_serial)
+
+        # Compute union bounding box
+        if all_boxes:
+            union = self._union_bbox(all_boxes)
+            ux1, uy1, ux2, uy2 = union
+
+            # Get front seal config
+            front_seal_cfg = config['front_seal']
+            min_width = front_seal_cfg['min_width']
+            min_height = front_seal_cfg['min_height']
+            offset_x = front_seal_cfg['offset_x']
+            offset_y = front_seal_cfg['offset_y']
+
+            # Apply asymmetric padding: more on left side for better framing
+            pad_h = config['padding']['seal_h']
+            pad_v = config['padding']['seal_v']
+            box_w = ux2 - ux1
+            box_h = uy2 - uy1
+
+            # Left padding: 15% of box width for extra space
+            # Right padding: standard 3%
+            pad_left = int(box_w * 0.15)
+            pad_right = int(box_w * pad_h)
+            pad_y = int(box_h * pad_v)
+
+            x1 = max(0, ux1 - pad_left)
+            y1 = max(0, uy1 - pad_y)
+            x2 = min(w, ux2 + pad_right)
+            y2 = min(h, uy2 + pad_y)
+
+            # Apply offsets (positive x = shift right, positive y = shift up)
+            x1 = max(0, x1 + offset_x)
+            x2 = min(w, x2 + offset_x)
+            y1 = max(0, y1 - offset_y)  # Negate so positive = up
+            y2 = min(h, y2 - offset_y)
+
+            # Ensure minimum dimensions by expanding symmetrically
+            current_w = x2 - x1
+            current_h = y2 - y1
+
+            if min_width > 0 and current_w < min_width:
+                expand = (min_width - current_w) // 2
+                x1 = max(0, x1 - expand)
+                x2 = min(w, x2 + expand)
+                # If we hit a boundary, expand more on the other side
+                if x2 - x1 < min_width:
+                    if x1 == 0:
+                        x2 = min(w, x1 + min_width)
+                    else:
+                        x1 = max(0, x2 - min_width)
+
+            if min_height > 0 and current_h < min_height:
+                expand = (min_height - current_h) // 2
+                y1 = max(0, y1 - expand)
+                y2 = min(h, y2 + expand)
+                # If we hit a boundary, expand more on the other side
+                if y2 - y1 < min_height:
+                    if y1 == 0:
+                        y2 = min(h, y1 + min_height)
+                    else:
+                        y1 = max(0, y2 - min_height)
+
+            return img[y1:y2, x1:x2]
+
+        # Fallback to percentage-based crop if no detections
+        if config['fallback_on_missing']:
+            return self.create_crop(img, 'front', 'seal')
+
+        return None
+
+    def _generate_back_seal_crop(self, img: np.ndarray, detections: dict) -> Optional[np.ndarray]:
+        """Generate back seal crop using back_plate as anchor point.
+
+        Uses back_plate position as anchor, applies configured width/height
+        and offset values to position the crop area.
+
+        Args:
+            img: Aligned back image
+            detections: Dict of detections from _detect_all_objects()
+
+        Returns:
+            Cropped image, or None if crop cannot be generated
+        """
+        config = self._get_yolo_crop_config()
+        h, w = img.shape[:2]
+
+        # Get back seal config
+        back_seal_cfg = config['back_seal']
+        crop_width = back_seal_cfg['width']
+        crop_height = back_seal_cfg['height']
+        offset_x = back_seal_cfg['offset_x']
+        offset_y = back_seal_cfg['offset_y']
+
+        # Get back_plate bbox as anchor
+        back_plates = detections.get('back_plate', [])
+        if back_plates:
+            # Use highest confidence detection
+            back_plate = max(back_plates, key=lambda b: b[4])
+            bp_x1, bp_y1, bp_x2, bp_y2 = back_plate[:4]
+
+            # Use back_plate as anchor point
+            # Anchor is at back_plate's left edge, extends right and up
+            # Apply offsets (positive x = shift right, positive y = shift UP)
+            # Note: we negate offset_y so positive = up (more intuitive than image coords)
+            anchor_x = bp_x1 + offset_x
+            anchor_y = bp_y2 - offset_y  # Bottom of back_plate as y anchor
+
+            # Crop extends right from anchor and up from anchor
+            x1 = max(0, anchor_x)
+            y1 = max(0, anchor_y - crop_height)
+            x2 = min(w, anchor_x + crop_width)
+            y2 = min(h, anchor_y)
+
+            return img[y1:y2, x1:x2]
+
+        # Fallback to percentage-based crop if no detection
+        if config['fallback_on_missing']:
+            return self.create_crop(img, 'back', 'seal')
+
+        return None
+
+    def _generate_thirds_crops(self, img: np.ndarray, detections: dict, side: str) -> tuple:
+        """Generate left/center/right crops ensuring serial numbers are fully visible.
+
+        On front side, uses serial_number detections to extend crops to include full serials.
+        On back side (no serials), uses standard thirds with overlap.
+
+        Args:
+            img: Aligned image
+            detections: Dict of detections from _detect_all_objects()
+            side: 'front' or 'back'
+
+        Returns:
+            Tuple of (left_crop, center_crop, right_crop)
+        """
+        config = self._get_yolo_crop_config()
+        h, w = img.shape[:2]
+        overlap = config['padding']['thirds_overlap']
+
+        # Default thirds boundaries (same as percentage config defaults)
+        # left: 0-38.4%, center: 35.4-67.6%, right: 62.7-100%
+        left_end = int(w * 0.384)
+        center_start = int(w * 0.354)
+        center_end = int(w * 0.676)
+        right_start = int(w * 0.627)
+
+        if side == 'front':
+            # Get serial_number boxes (typically 2 on front)
+            serials = detections.get('serial_number', [])
+
+            if len(serials) >= 2:
+                # Sort by x position to identify left and right serials
+                serials_sorted = sorted(serials, key=lambda b: b[0])
+                left_serial = serials_sorted[0]
+                right_serial = serials_sorted[-1]
+
+                # Extend left crop to fully include left serial
+                # Left serial's right edge (x2) should be within left crop
+                left_serial_x2 = left_serial[2]
+                if left_serial_x2 > left_end:
+                    left_end = min(int(left_serial_x2 + w * overlap), w)
+
+                # Extend right crop to fully include right serial
+                # Right serial's left edge (x1) should be within right crop
+                right_serial_x1 = right_serial[0]
+                if right_serial_x1 < right_start:
+                    right_start = max(int(right_serial_x1 - w * overlap), 0)
+
+                # Adjust center to fill gap with overlap
+                center_start = max(0, left_end - int(w * overlap))
+                center_end = min(w, right_start + int(w * overlap))
+
+            elif len(serials) == 1:
+                # Only one serial detected - try to include it in appropriate third
+                serial = serials[0]
+                serial_center_x = (serial[0] + serial[2]) / 2
+
+                if serial_center_x < w / 3:
+                    # Serial is on left side
+                    left_end = max(left_end, int(serial[2] + w * overlap))
+                elif serial_center_x > w * 2 / 3:
+                    # Serial is on right side
+                    right_start = min(right_start, int(serial[0] - w * overlap))
+
+        # Generate crops
+        left_crop = img[0:h, 0:left_end]
+        center_crop = img[0:h, center_start:center_end]
+        right_crop = img[0:h, right_start:w]
+
+        return (left_crop, center_crop, right_crop)
+
     def _extract_fed_letter_from_seal(self, img: np.ndarray, yolo_results=None) -> Optional[str]:
         """Extract Federal Reserve letter from the seal (seal_f).
 
@@ -1949,7 +2296,12 @@ class ProductionProcessor:
         return image[y1:y2, x1:x2]
 
     def generate_crops(self, pair: BillPair, output_dir: Path) -> list[Path]:
-        """Generate crops for a fancy bill pair based on config."""
+        """Generate crops for a fancy bill pair using YOLO-based dynamic cropping.
+
+        Uses YOLO detections to dynamically position crops based on actual element
+        locations, ensuring serial numbers, seals, and other features are fully
+        captured regardless of scan border spacing.
+        """
         timing = get_timing()
         timing.start('crops')
         crop_paths = []
@@ -1959,7 +2311,6 @@ class ProductionProcessor:
         # We know alignment was cached if serial extraction succeeded (pair.serial is set)
         if pair.serial is not None:
             # We have cached alignment info - apply it without YOLO
-            print(f"  [DEBUG] generate_crops using cached angle={pair.front_align_angle:.3f}°")
             front_img = self.yolo_aligner.apply_cached_alignment(
                 pair.front_path, pair.front_align_angle, pair.front_align_flipped
             )
@@ -1985,18 +2336,56 @@ class ProductionProcessor:
             if back_img is not None:
                 back_img = cv2.rotate(back_img, cv2.ROTATE_180)
 
+        # Run single YOLO detection per aligned image for dynamic cropping
+        front_detections = None
+        back_detections = None
+        if front_img is not None:
+            front_detections = self._detect_all_objects(front_img)
+        if back_img is not None:
+            back_detections = self._detect_all_objects(back_img)
+
+        # Pre-compute thirds crops (generated once, used for left/center/right)
+        front_thirds = None
+        back_thirds = None
+        if front_img is not None and front_detections is not None:
+            front_thirds = self._generate_thirds_crops(front_img, front_detections, 'front')
+        if back_img is not None and back_detections is not None:
+            back_thirds = self._generate_thirds_crops(back_img, back_detections, 'back')
+
         crop_order = self.cfg.crop_order
         jpeg_quality = self.cfg.jpeg_quality
 
         for i, (side, region) in enumerate(crop_order, 1):
             if side == 'front':
                 img = front_img
+                detections = front_detections
+                thirds = front_thirds
             else:
                 img = back_img
+                detections = back_detections
+                thirds = back_thirds
                 if img is None:
                     continue
 
-            crop = self.create_crop(img, side, region)
+            # Route to appropriate dynamic crop method
+            if region == 'seal':
+                if side == 'front':
+                    crop = self._generate_front_seal_crop(img, detections)
+                else:
+                    crop = self._generate_back_seal_crop(img, detections)
+            elif region in ('left', 'center', 'right'):
+                if thirds is not None:
+                    crop = {'left': thirds[0], 'center': thirds[1], 'right': thirds[2]}[region]
+                else:
+                    # Fallback to percentage-based crop
+                    crop = self.create_crop(img, side, region)
+            else:  # 'full' or any other region
+                crop = self.create_crop(img, side, region)
+
+            # Handle case where dynamic crop failed
+            if crop is None:
+                crop = self.create_crop(img, side, region)
+
             filename = f"{pair.serial}_{i:02d}.jpg"
             crop_path = output_dir / filename
 
@@ -2081,7 +2470,6 @@ class ProductionProcessor:
             # Cache alignment info for reuse in generate_crops()
             pair.front_align_angle = align_info.get('angle', 0.0)
             pair.front_align_flipped = align_info.get('flipped', False)
-            print(f"  [DEBUG] Cached alignment: angle={pair.front_align_angle:.3f}°, flipped={pair.front_align_flipped}")
 
             # If star symbol visually detected but OCR missed it, append '*' to serial
             if serial and star_detected and not serial.endswith('*'):
