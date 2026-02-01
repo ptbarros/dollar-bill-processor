@@ -270,8 +270,20 @@ class BillAligner:
         pass
 
     def detect_rotation_angle(self, img_gray: np.ndarray) -> float:
-        """Detect rotation angle by finding the bill's rectangular contour."""
+        """Detect rotation angle using multiple sources with MAD outlier rejection.
+
+        Uses:
+        1. Largest contour's minAreaRect angle (weighted heavily)
+        2. Top N large contours for additional angle estimates
+        3. Hough lines for edge-based angle estimates (excluding near-zero)
+
+        Applies Median Absolute Deviation (MAD) to filter outliers, then returns
+        the median of remaining angles. This is more robust than single-contour
+        detection which can be fooled by print variations or scan artifacts.
+        """
         h, w = img_gray.shape[:2]
+        contour_angles = []  # Weighted more heavily
+        line_angles = []
 
         # Apply Gaussian blur to reduce noise
         blurred = cv2.GaussianBlur(img_gray, (5, 5), 0)
@@ -287,31 +299,77 @@ class BillAligner:
         # Find contours
         contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        if not contours:
+        if contours:
+            # Sort contours by area (largest first)
+            sorted_contours = sorted(contours, key=cv2.contourArea, reverse=True)
+
+            # Get angles from top contours (up to 5)
+            min_area = h * w * 0.01  # At least 1% of image area
+            for i, contour in enumerate(sorted_contours[:5]):
+                if cv2.contourArea(contour) < min_area:
+                    break
+
+                rect = cv2.minAreaRect(contour)
+                angle = rect[2]
+                rect_w, rect_h = rect[1]
+
+                # Normalize angle based on rectangle orientation
+                if rect_w < rect_h:
+                    angle = angle + 90
+                if angle > 45:
+                    angle = angle - 90
+                elif angle < -45:
+                    angle = angle + 90
+
+                # Weight larger contours more heavily (add multiple times)
+                # Largest contour gets 3x weight, second gets 2x, rest get 1x
+                weight = 3 if i == 0 else (2 if i == 1 else 1)
+                contour_angles.extend([angle] * weight)
+
+        # Add Hough line angle estimates (but filter out near-zero angles)
+        # Near-zero angles likely represent true horizontal bill features, not skew
+        edges = cv2.Canny(blurred, 50, 150, apertureSize=3)
+        lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100,
+                                minLineLength=w//4, maxLineGap=10)
+
+        if lines is not None:
+            for line in lines[:20]:  # Limit to 20 lines
+                x1, y1, x2, y2 = line[0]
+                if x2 != x1:  # Avoid division by zero
+                    line_angle = np.degrees(np.arctan2(y2 - y1, x2 - x1))
+                    # Normalize to [-45, 45] (we expect mostly horizontal/vertical lines)
+                    if abs(line_angle) > 45:
+                        line_angle = line_angle - 90 if line_angle > 0 else line_angle + 90
+                    # Skip near-zero angles - these are true horizontal features
+                    if abs(line_angle) >= 0.3:
+                        line_angles.append(line_angle)
+
+        # Combine angles: contour angles are already weighted
+        angles = contour_angles + line_angles
+
+        if not angles:
             return 0.0
 
-        # Find the largest contour (should be the bill)
-        largest_contour = max(contours, key=cv2.contourArea)
+        if len(angles) == 1:
+            return angles[0]
 
-        # Get minimum area rectangle
-        rect = cv2.minAreaRect(largest_contour)
-        angle = rect[2]  # Angle in degrees
+        # Apply MAD (Median Absolute Deviation) outlier rejection
+        angles = np.array(angles)
+        median = np.median(angles)
+        mad = np.median(np.abs(angles - median))
 
-        # minAreaRect returns angles in range [-90, 0)
-        # We need to normalize based on the rectangle dimensions
-        rect_w, rect_h = rect[1]
+        # MAD threshold: 2.5 * MAD is typical for outlier detection
+        # Use at least 0.5° as minimum threshold to avoid rejecting everything
+        mad_threshold = max(2.5 * mad, 0.5)
 
-        # If width < height, the rectangle is more vertical, adjust angle
-        if rect_w < rect_h:
-            angle = angle + 90
+        # Keep only angles within MAD threshold of median
+        filtered = angles[np.abs(angles - median) <= mad_threshold]
 
-        # Normalize to [-45, 45] range
-        if angle > 45:
-            angle = angle - 90
-        elif angle < -45:
-            angle = angle + 90
+        if len(filtered) == 0:
+            # If all angles were filtered, fall back to median of original
+            return float(median)
 
-        return angle
+        return float(np.median(filtered))
 
     def align_image(self, image_path) -> Optional[np.ndarray]:
         """Straighten a bill image by detecting its rectangular contour. Returns color image."""
@@ -325,9 +383,8 @@ class BillAligner:
         angle = self.detect_rotation_angle(img_gray)
 
         # Skip rotation if angle is negligible
-        # Use 1.5° threshold - small print variations and scan noise can cause
-        # 0.5-1.0° false readings. Higher threshold avoids over-correction.
-        if abs(angle) < 1.5:
+        # Use 0.8° threshold with MAD outlier rejection for robustness
+        if abs(angle) < 0.8:
             return img_color
 
         # Rotate the image to straighten it
@@ -428,8 +485,8 @@ class YOLOBillAligner:
             angle = self.contour_aligner.detect_rotation_angle(gray)
             info['angle'] = angle
 
-        # Apply rotation if needed (1.5° threshold to avoid over-correction)
-        if abs(angle) >= 1.5:
+        # Apply rotation if needed (0.8° threshold with MAD outlier rejection)
+        if abs(angle) >= 0.8:
             center = (w // 2, h // 2)
             M = cv2.getRotationMatrix2D(center, angle, 1.0)
             img = cv2.warpAffine(img, M, (w, h),
@@ -477,8 +534,8 @@ class YOLOBillAligner:
 
         h, w = img.shape[:2]
 
-        # Apply rotation if needed (1.5° threshold to avoid over-correction)
-        if abs(angle) >= 1.5:
+        # Apply rotation if needed (0.8° threshold with MAD outlier rejection)
+        if abs(angle) >= 0.8:
             center = (w // 2, h // 2)
             M = cv2.getRotationMatrix2D(center, angle, 1.0)
             img = cv2.warpAffine(img, M, (w, h),
