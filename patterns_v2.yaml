@@ -630,13 +630,13 @@ patterns:
     price_range: "$5-$25"
 
   NEAR_FLIPPER:
-    description: "One digit from true flipper"
+    description: "Readable when flipped upside down (only 0,1,6,8,9)"
     tier: 4
     enabled: true
     rules:
       check: near_flipper
-    examples: ["68889806", "69009860"]
-    odds: "1 in 1,465"
+    examples: ["18980908", "90898986", "60908818"]
+    odds: "1 in 256"
     price_range: "$5-$15"
 
   DOUBLES_BOOKEND:

@@ -182,18 +182,45 @@ class PatternEngine:
         return any(c >= 7 for c in counts.values())
 
     def _check_two_pair_triple(self, digits: str) -> bool:
-        """Triple + two pairs."""
+        """Triple + two pairs with CONSECUTIVE runs.
+
+        Must have digits grouped in a row, e.g., 11133224 (111+33+22+4).
+        """
         if len(digits) != 8:
             return False
-        counts = sorted(Counter(digits).values(), reverse=True)
-        return counts in [[3, 2, 2, 1], [3, 2, 2]]
+        # Get consecutive run lengths
+        runs = []
+        i = 0
+        while i < len(digits):
+            run_len = 1
+            while i + run_len < len(digits) and digits[i + run_len] == digits[i]:
+                run_len += 1
+            runs.append(run_len)
+            i += run_len
+        # Sort runs to check pattern
+        sorted_runs = sorted(runs, reverse=True)
+        return sorted_runs in [[3, 2, 2, 1], [3, 2, 2]]
 
     def _check_triple_double_double(self, digits: str) -> bool:
-        """Triple + double + double + single."""
+        """Triple + double + double pattern with CONSECUTIVE runs.
+
+        Must have digits grouped in a row, e.g., 11122334 (111+22+33+4).
+        Scattered digits like 49956594 don't count.
+        """
         if len(digits) != 8:
             return False
-        counts = sorted(Counter(digits).values(), reverse=True)
-        return counts == [3, 2, 2, 1]
+        # Get consecutive run lengths
+        runs = []
+        i = 0
+        while i < len(digits):
+            run_len = 1
+            while i + run_len < len(digits) and digits[i + run_len] == digits[i]:
+                run_len += 1
+            runs.append(run_len)
+            i += run_len
+        # Sort runs to check pattern: need exactly one 3, two 2s, and one 1
+        sorted_runs = sorted(runs, reverse=True)
+        return sorted_runs == [3, 2, 2, 1]
 
     def _check_consecutive_triples(self, digits: str) -> bool:
         """Two triples back-to-back."""
@@ -235,11 +262,15 @@ class PatternEngine:
         return digits == flipped
 
     def _check_near_flipper(self, digits: str) -> bool:
-        """One digit from true flipper."""
+        """All digits readable when flipped upside down (0,1,6,8,9 only).
+
+        Unlike true_flipper which must read the SAME when flipped,
+        near_flipper just needs to be READABLE when flipped.
+        Rate: ~1 in 256 (0.4%)
+        """
         if len(digits) != 8:
             return False
-        flip_map = {'0', '1', '6', '8', '9'}
-        return sum(1 for d in digits if d not in flip_map) == 1
+        return set(digits).issubset({'0', '1', '6', '8', '9'})
 
     def _check_broken_radar(self, digits: str) -> bool:
         """One digit from radar."""
