@@ -96,10 +96,30 @@ if exist "%SOURCE_DIR%\gui" (
     xcopy /y /e /q "%SOURCE_DIR%\gui\*" "gui\" >nul 2>&1
 )
 
+:: Copy patterns folder (core Lua patterns and helpers)
+if exist "%SOURCE_DIR%\patterns" (
+    echo Updating pattern files...
+    if not exist "patterns" mkdir "patterns"
+    if not exist "patterns\core" mkdir "patterns\core"
+    if not exist "patterns\lib" mkdir "patterns\lib"
+    if not exist "patterns\user" mkdir "patterns\user"
+    :: Copy core patterns and lib (but not user patterns)
+    xcopy /y /e /q "%SOURCE_DIR%\patterns\core\*" "patterns\core\" >nul 2>&1
+    xcopy /y /e /q "%SOURCE_DIR%\patterns\lib\*" "patterns\lib\" >nul 2>&1
+)
+
 :: Clean up temp files
 echo Cleaning up...
 del /f "%TEMP_ZIP%" 2>nul
 rmdir /s /q "%TEMP_DIR%" 2>nul
+
+:: Install any new dependencies
+if exist "venv\Scripts\activate.bat" (
+    echo.
+    echo Checking for new dependencies...
+    call venv\Scripts\activate.bat
+    pip install -q -r requirements.txt
+)
 
 echo.
 echo ============================================
