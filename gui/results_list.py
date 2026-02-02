@@ -117,6 +117,13 @@ class ResultsList(QWidget):
         self.reclassify_all_btn.clicked.connect(self._reclassify_all)
         filter_layout.addWidget(self.reclassify_all_btn)
 
+        # Save CSV button (for saving changes to archived batches)
+        self.save_csv_btn = QPushButton("Save CSV")
+        self.save_csv_btn.setToolTip("Save current results back to the archive's CSV file")
+        self.save_csv_btn.clicked.connect(self._save_csv)
+        self.save_csv_btn.setEnabled(False)  # Disabled until an archived batch is selected
+        filter_layout.addWidget(self.save_csv_btn)
+
         layout.addLayout(filter_layout)
 
         # Results tree
@@ -770,11 +777,13 @@ class ResultsList(QWidget):
         if not batch_path:
             # Current session selected
             self._current_batch_path = None
+            self.save_csv_btn.setEnabled(False)
             self.batch_changed.emit("")
         else:
             # Archived batch selected
             self._current_batch_path = Path(batch_path)
             self._load_batch(self._current_batch_path)
+            self.save_csv_btn.setEnabled(True)
             self.batch_changed.emit(batch_path)
 
     def _load_batch(self, batch_dir: Path):
@@ -800,6 +809,8 @@ class ResultsList(QWidget):
                         result['position'] = 0
 
                     # Convert rotation values (for alignment without reprocessing)
+                    # Track whether alignment data was present in CSV (vs old archives without it)
+                    result['_has_alignment_data'] = 'front_align_angle' in row and row['front_align_angle'] != ''
                     try:
                         result['front_align_angle'] = float(result.get('front_align_angle', 0.0))
                     except (ValueError, TypeError):
@@ -834,6 +845,42 @@ class ResultsList(QWidget):
     def get_current_batch_path(self) -> Optional[Path]:
         """Get the path of the currently selected batch, or None for current session."""
         return self._current_batch_path
+
+    def _save_csv(self):
+        """Save current results back to the archive's CSV file."""
+        if not self._current_batch_path:
+            return
+
+        csv_path = self._current_batch_path / "results.csv"
+        try:
+            with open(csv_path, 'w', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=[
+                    'position', 'front_file', 'back_file', 'serial', 'fancy_types',
+                    'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
+                    'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped'
+                ])
+                writer.writeheader()
+
+                for result in self.results:
+                    # Create a clean copy for CSV output (exclude internal fields like _has_alignment_data)
+                    row = {k: v for k, v in result.items() if not k.startswith('_')}
+                    # Convert paths back to just filenames for portability
+                    if 'front_file' in row and row['front_file']:
+                        row['front_file'] = Path(row['front_file']).name
+                    if 'back_file' in row and row['back_file']:
+                        row['back_file'] = Path(row['back_file']).name
+                    if 'serial_region_path' in row and row['serial_region_path']:
+                        row['serial_region_path'] = Path(row['serial_region_path']).name
+                    writer.writerow(row)
+
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "CSV Saved",
+                f"Results saved to:\n{csv_path}")
+
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Save Error",
+                f"Failed to save CSV:\n{e}")
 
     def update_px_dev(self, position: int, px_dev: float):
         """Update the Px Dev column for a specific result by position.

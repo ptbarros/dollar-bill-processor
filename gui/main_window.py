@@ -49,6 +49,9 @@ class MainWindow(QMainWindow):
         self.file_watcher = None
         self.monitor_thread = None
 
+        # Debounce for alignment warnings (prevent spam during batch load)
+        self._last_align_warning_time = 0
+
         # Setup UI
         self._setup_ui()
         self._setup_menus()
@@ -261,13 +264,21 @@ class MainWindow(QMainWindow):
         current_result = self.preview_panel.current_result
         cached_angle = current_result.get('front_align_angle', 0.0) if current_result else 0.0
         cached_flipped = current_result.get('front_align_flipped', False) if current_result else False
-        has_cached_alignment = (abs(cached_angle) >= 0.8 or cached_flipped)
+        # Check if alignment data was present in CSV (set during _load_batch)
+        # This properly handles archives where angle was 0.0 (no rotation needed)
+        has_cached_alignment = current_result.get('_has_alignment_data', False) if current_result else False
 
         if not processor and not has_cached_alignment:
-            QMessageBox.warning(self, "No Alignment Data",
-                "No alignment data available.\n\n"
-                "For archived batches processed before this update, "
-                "rotation values weren't saved. Reprocess the folder to enable alignment.")
+            # Debounce: only show warning if 2+ seconds since last warning
+            # (prevents spam when auto-align fires for multiple items during batch load)
+            import time
+            current_time = time.time()
+            if current_time - self._last_align_warning_time >= 2.0:
+                self._last_align_warning_time = current_time
+                QMessageBox.warning(self, "No Alignment Data",
+                    "No alignment data available.\n\n"
+                    "For archived batches processed before this update, "
+                    "rotation values weren't saved. Reprocess the folder to enable alignment.")
             return
 
         if not image_path:
