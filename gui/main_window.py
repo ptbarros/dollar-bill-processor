@@ -1160,7 +1160,7 @@ class MainWindow(QMainWindow):
             self._auto_export(summary)
 
     def _archive_batch(self):
-        """Move processed files to a timestamped archive directory."""
+        """Move (or copy) processed files to a timestamped archive directory."""
         import shutil
         from datetime import datetime
 
@@ -1179,9 +1179,14 @@ class MainWindow(QMainWindow):
         batch_dir = archive_path / f"batch_{timestamp}"
         batch_dir.mkdir(parents=True, exist_ok=True)
 
-        # Move all session files (processed + unpaired)
+        # Use copy or move based on settings
+        copy_mode = self.settings.processing.archive_copy_mode
+        file_op = shutil.copy2 if copy_mode else shutil.move
+        op_name = "copying" if copy_mode else "moving"
+
+        # Move/copy all session files (processed + unpaired)
         all_files = self.monitor_thread.get_all_session_files()
-        print(f"[MainWindow] Archiving {len(all_files)} files to {batch_dir}")
+        print(f"[MainWindow] Archiving ({op_name}) {len(all_files)} files to {batch_dir}")
         moved_count = 0
         path_mapping = {}  # old_path -> new_path
 
@@ -1189,16 +1194,16 @@ class MainWindow(QMainWindow):
             if file_path.exists():
                 try:
                     dest = batch_dir / file_path.name
-                    shutil.move(str(file_path), str(dest))
+                    file_op(str(file_path), str(dest))
                     path_mapping[str(file_path)] = str(dest)
                     moved_count += 1
                 except Exception as e:
-                    print(f"[MainWindow] Error moving {file_path.name}: {e}")
-                    self.status_label.setText(f"Error moving {file_path.name}: {e}")
+                    print(f"[MainWindow] Error {op_name} {file_path.name}: {e}")
+                    self.status_label.setText(f"Error {op_name} {file_path.name}: {e}")
             else:
                 print(f"[MainWindow] File no longer exists: {file_path}")
 
-        # Move fancy_bills output to batch archive
+        # Move/copy fancy_bills output to batch archive
         output_dir = Path(self.settings.monitor.output_directory or
                          (Path(self.settings.monitor.watch_directory) / "fancy_bills")).expanduser().resolve()
 
@@ -1213,12 +1218,18 @@ class MainWindow(QMainWindow):
                 for item_path in fancy_items:
                     try:
                         dest = batch_fancy_dir / item_path.name
-                        shutil.move(str(item_path), str(dest))
+                        if item_path.is_dir():
+                            if copy_mode:
+                                shutil.copytree(str(item_path), str(dest))
+                            else:
+                                shutil.move(str(item_path), str(dest))
+                        else:
+                            file_op(str(item_path), str(dest))
                         fancy_moved += 1
                     except Exception as e:
-                        print(f"[MainWindow] Error moving {item_path.name}: {e}")
+                        print(f"[MainWindow] Error {op_name} {item_path.name}: {e}")
 
-                print(f"[MainWindow] Moved {fancy_moved} items (files/folders) to {batch_fancy_dir}")
+                print(f"[MainWindow] Archived ({op_name}) {fancy_moved} items (files/folders) to {batch_fancy_dir}")
 
         # Update result paths to point to new archive locations
         for result in self.current_results:
@@ -1237,14 +1248,15 @@ class MainWindow(QMainWindow):
             csv_path = batch_dir / "results.csv"
             self._export_batch_csv(csv_path)
 
+        action = "Copied" if copy_mode else "Archived"
         self.status_label.setText(
-            f"Archived {moved_count} files + {fancy_moved} fancy crops to {batch_dir.name}"
+            f"{action} {moved_count} files + {fancy_moved} fancy crops to {batch_dir.name}"
         )
 
         return batch_dir
 
     def _archive_manual_batch(self):
-        """Move processed files to a timestamped archive directory (for manual processing)."""
+        """Move (or copy) processed files to a timestamped archive directory (for manual processing)."""
         import shutil
         from datetime import datetime
 
@@ -1267,30 +1279,35 @@ class MainWindow(QMainWindow):
         batch_dir = archive_path / f"batch_{timestamp}"
         batch_dir.mkdir(parents=True, exist_ok=True)
 
+        # Use copy or move based on settings
+        copy_mode = self.settings.processing.archive_copy_mode
+        file_op = shutil.copy2 if copy_mode else shutil.move
+        op_name = "copying" if copy_mode else "moving"
+
         # Get list of processed files from results
-        files_to_move = set()
+        files_to_archive = set()
         for result in self.current_results:
             front_file = result.get('front_file', '')
             back_file = result.get('back_file', '')
             if front_file:
-                files_to_move.add(Path(front_file))
+                files_to_archive.add(Path(front_file))
             if back_file:
-                files_to_move.add(Path(back_file))
+                files_to_archive.add(Path(back_file))
 
-        # Move all source files and track old->new path mapping
+        # Move/copy all source files and track old->new path mapping
         moved_count = 0
         path_mapping = {}  # old_path -> new_path
-        for file_path in files_to_move:
+        for file_path in files_to_archive:
             if file_path.exists():
                 try:
                     dest = batch_dir / file_path.name
-                    shutil.move(str(file_path), str(dest))
+                    file_op(str(file_path), str(dest))
                     path_mapping[str(file_path)] = str(dest)
                     moved_count += 1
                 except Exception as e:
-                    print(f"[MainWindow] Error moving {file_path.name}: {e}")
+                    print(f"[MainWindow] Error {op_name} {file_path.name}: {e}")
 
-        # Move fancy_bills output to batch archive
+        # Move/copy fancy_bills output to batch archive
         fancy_moved = 0
         if output_dir.exists():
             fancy_items = list(output_dir.glob("*"))
@@ -1302,10 +1319,16 @@ class MainWindow(QMainWindow):
                 for item_path in fancy_items:
                     try:
                         dest = batch_fancy_dir / item_path.name
-                        shutil.move(str(item_path), str(dest))
+                        if item_path.is_dir():
+                            if copy_mode:
+                                shutil.copytree(str(item_path), str(dest))
+                            else:
+                                shutil.move(str(item_path), str(dest))
+                        else:
+                            file_op(str(item_path), str(dest))
                         fancy_moved += 1
                     except Exception as e:
-                        print(f"[MainWindow] Error moving {item_path.name}: {e}")
+                        print(f"[MainWindow] Error {op_name} {item_path.name}: {e}")
 
         # Update result paths to point to new archive locations
         for result in self.current_results:
@@ -1324,8 +1347,9 @@ class MainWindow(QMainWindow):
             csv_path = batch_dir / "results.csv"
             self._export_batch_csv(csv_path)
 
+        action = "Copied" if copy_mode else "Archived"
         self.status_label.setText(
-            f"Archived {moved_count} files + {fancy_moved} fancy crops to {batch_dir.name}"
+            f"{action} {moved_count} files + {fancy_moved} fancy crops to {batch_dir.name}"
         )
 
         # Refresh batch list to show newly archived batch

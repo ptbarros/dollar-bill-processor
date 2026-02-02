@@ -29,6 +29,7 @@ class ProcessingSettings:
     crop_all: bool = False  # Crop all bills, not just fancy ones
     auto_crop: bool = True  # Auto-crop fancy bills during processing
     auto_archive: bool = False  # Archive files after manual processing
+    archive_copy_mode: bool = False  # Copy instead of move when archiving (for testing)
 
 
 @dataclass
@@ -142,6 +143,7 @@ class SettingsManager:
             self.processing.crop_all = proc.get('crop_all', False)
             self.processing.auto_crop = proc.get('auto_crop', True)
             self.processing.auto_archive = proc.get('auto_archive', False)
+            self.processing.archive_copy_mode = proc.get('archive_copy_mode', False)
 
         # Load UI settings
         if 'ui' in data:
@@ -223,6 +225,7 @@ class SettingsManager:
                 'crop_all': self.processing.crop_all,
                 'auto_crop': self.processing.auto_crop,
                 'auto_archive': self.processing.auto_archive,
+                'archive_copy_mode': self.processing.archive_copy_mode,
             },
             'ui': {
                 'default_working_dir': self.ui.default_working_dir,

@@ -228,6 +228,15 @@ class SettingsDialog(QDialog):
         )
         output_layout.addRow(auto_archive_container)
 
+        self.archive_copy_mode_check, copy_mode_container = self._create_checkbox_with_info(
+            "Copy instead of move (testing mode)",
+            "Copy files to archive instead of moving them.\n\n"
+            "• Checked: Original files remain in place (for testing)\n"
+            "• Unchecked: Files are moved to archive (normal behavior)\n\n"
+            "Useful when testing to avoid manually copying files back."
+        )
+        output_layout.addRow(copy_mode_container)
+
         layout.addWidget(output_group)
 
         layout.addStretch()
@@ -531,6 +540,7 @@ class SettingsDialog(QDialog):
         self.crop_all_check.setChecked(self.settings.processing.crop_all)
         self.auto_crop_check.setChecked(self.settings.processing.auto_crop)
         self.proc_auto_archive_check.setChecked(self.settings.processing.auto_archive)
+        self.archive_copy_mode_check.setChecked(self.settings.processing.archive_copy_mode)
 
         # UI
         idx = self.theme_combo.findData(self.settings.ui.theme)
@@ -583,6 +593,7 @@ class SettingsDialog(QDialog):
         self.settings.processing.crop_all = self.crop_all_check.isChecked()
         self.settings.processing.auto_crop = self.auto_crop_check.isChecked()
         self.settings.processing.auto_archive = self.proc_auto_archive_check.isChecked()
+        self.settings.processing.archive_copy_mode = self.archive_copy_mode_check.isChecked()
 
         # UI
         self.settings.ui.theme = self.theme_combo.currentData()
