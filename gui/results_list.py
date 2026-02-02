@@ -128,7 +128,7 @@ class ResultsList(QWidget):
 
         # Results tree
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Px Dev", "Est. Price"])
+        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Px Dev", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule?"])
         self.tree.setAlternatingRowColors(True)
         self.tree.setRootIsDecorated(False)
         self.tree.setSortingEnabled(True)
@@ -146,6 +146,10 @@ class ResultsList(QWidget):
         header.setSectionResizeMode(3, QHeaderView.Interactive)  # Conf
         header.setSectionResizeMode(4, QHeaderView.Interactive)  # Px Dev
         header.setSectionResizeMode(5, QHeaderView.Interactive)  # Est. Price
+        header.setSectionResizeMode(6, QHeaderView.Interactive)  # Series
+        header.setSectionResizeMode(7, QHeaderView.Interactive)  # Front Plate
+        header.setSectionResizeMode(8, QHeaderView.Interactive)  # Back Plate
+        header.setSectionResizeMode(9, QHeaderView.Interactive)  # Mule?
         header.setMinimumSectionSize(30)  # Minimum for any column
 
         # Load saved column widths or use defaults
@@ -163,9 +167,10 @@ class ResultsList(QWidget):
     def _load_column_widths(self):
         """Load saved column widths from QSettings, or use defaults."""
         settings = QSettings("DollarBillProcessor", "ResultsList")
-        defaults = [35, 130, 150, 50, 55, 100]  # Default widths for each column
+        # Default widths: #, Serial, Patterns, Conf, Px Dev, Est. Price, Series, Front Plate, Back Plate, Mule?
+        defaults = [35, 130, 150, 50, 55, 100, 60, 70, 60, 45]
 
-        for i in range(6):
+        for i in range(10):
             width = settings.value(f"column_{i}_width", defaults[i], type=int)
             self.tree.setColumnWidth(i, width)
 
@@ -323,6 +328,18 @@ class ResultsList(QWidget):
                         break  # Use first pattern's price
             item.setText(5, price_text)
 
+            # Series Year, Front Plate, Back Plate columns
+            item.setText(6, result.get('series_year', ''))
+            item.setText(7, result.get('front_plate', ''))
+            item.setText(8, result.get('back_plate', ''))
+
+            # Mule detection column
+            potential_mule = result.get('potential_mule', False)
+            if potential_mule:
+                item.setText(9, "Yes")
+            else:
+                item.setText(9, "")
+
             # Build comprehensive row tooltip with all bill details
             tooltip_lines = [f"Serial: {serial}"]
             if patterns:
@@ -343,7 +360,7 @@ class ResultsList(QWidget):
                 tooltip_lines.append(f"File: {Path(front_file).name}")
 
             row_tooltip = '\n'.join(tooltip_lines)
-            for col in range(6):
+            for col in range(10):
                 item.setToolTip(col, row_tooltip)
 
             # Color coding with explicit text color for contrast
@@ -364,18 +381,18 @@ class ResultsList(QWidget):
                     default_color = self.settings.ui.default_fancy_color
                     bg_color = QColor(default_color) if default_color else QColor(46, 125, 50)
 
-                for i in range(5):
+                for i in range(10):
                     item.setBackground(i, QBrush(bg_color))
                     # Use white or black text based on brightness
                     brightness = (bg_color.red() * 299 + bg_color.green() * 587 + bg_color.blue() * 114) / 1000
                     text_color = QColor(0, 0, 0) if brightness > 128 else QColor(255, 255, 255)
                     item.setForeground(i, QBrush(text_color))
             elif result.get('needs_review'):
-                for i in range(5):
+                for i in range(10):
                     item.setBackground(i, QBrush(QColor(245, 124, 0)))    # Orange background
                     item.setForeground(i, QBrush(QColor(255, 255, 255)))  # White text
             elif result.get('error'):
-                for i in range(5):
+                for i in range(10):
                     item.setBackground(i, QBrush(QColor(211, 47, 47)))    # Red background
                     item.setForeground(i, QBrush(QColor(255, 255, 255)))  # White text
 
@@ -817,6 +834,12 @@ class ResultsList(QWidget):
                         result['front_align_angle'] = 0.0
                     result['front_align_flipped'] = result.get('front_align_flipped', '').lower() == 'true'
 
+                    # Ensure plate info fields exist (backward compatibility with older CSVs)
+                    result['series_year'] = result.get('series_year', '')
+                    result['front_plate'] = result.get('front_plate', '')
+                    result['back_plate'] = result.get('back_plate', '')
+                    result['potential_mule'] = result.get('potential_mule', '').lower() == 'true'
+
                     # Update file paths to point to archive location
                     front_file = result.get('front_file', '')
                     if front_file:
@@ -857,7 +880,8 @@ class ResultsList(QWidget):
                 writer = csv.DictWriter(f, fieldnames=[
                     'position', 'front_file', 'back_file', 'serial', 'fancy_types',
                     'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
-                    'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped'
+                    'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped',
+                    'series_year', 'front_plate', 'back_plate', 'potential_mule'
                 ])
                 writer.writeheader()
 

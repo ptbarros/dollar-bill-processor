@@ -237,6 +237,15 @@ class SettingsDialog(QDialog):
         )
         output_layout.addRow(copy_mode_container)
 
+        self.extract_plate_info_check, plate_info_container = self._create_checkbox_with_info(
+            "Extract plate and series info",
+            "Extract additional info from bills: series year, front plate, back plate.\n\n"
+            "• Checked: Runs additional OCR on detected regions (slower)\n"
+            "• Unchecked: Only extracts serial number (faster)\n\n"
+            "Useful for detailed record keeping or research."
+        )
+        output_layout.addRow(plate_info_container)
+
         layout.addWidget(output_group)
 
         layout.addStretch()
@@ -541,6 +550,7 @@ class SettingsDialog(QDialog):
         self.auto_crop_check.setChecked(self.settings.processing.auto_crop)
         self.proc_auto_archive_check.setChecked(self.settings.processing.auto_archive)
         self.archive_copy_mode_check.setChecked(self.settings.processing.archive_copy_mode)
+        self.extract_plate_info_check.setChecked(self.settings.processing.extract_plate_info)
 
         # UI
         idx = self.theme_combo.findData(self.settings.ui.theme)
@@ -594,6 +604,7 @@ class SettingsDialog(QDialog):
         self.settings.processing.auto_crop = self.auto_crop_check.isChecked()
         self.settings.processing.auto_archive = self.proc_auto_archive_check.isChecked()
         self.settings.processing.archive_copy_mode = self.archive_copy_mode_check.isChecked()
+        self.settings.processing.extract_plate_info = self.extract_plate_info_check.isChecked()
 
         # UI
         self.settings.ui.theme = self.theme_combo.currentData()

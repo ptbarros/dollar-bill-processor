@@ -47,6 +47,7 @@ class MonitorThread(QThread):
         use_gpu: bool = False,
         verify_pairs: bool = True,
         crop_all: bool = False,
+        extract_plate_info: bool = False,
         parent=None
     ):
         super().__init__(parent)
@@ -55,6 +56,7 @@ class MonitorThread(QThread):
         self.use_gpu = use_gpu
         self.verify_pairs = verify_pairs
         self.crop_all = crop_all
+        self.extract_plate_info = extract_plate_info
 
         self._stop_requested = False
         self.processor = None
@@ -241,6 +243,21 @@ class MonitorThread(QThread):
             pair.front_align_angle = align_info.get('angle', 0.0)
             pair.front_align_flipped = align_info.get('flipped', False)
 
+            # Extract plate info if setting enabled
+            plate_info = {'series_year': '', 'front_plate': '', 'back_plate': '', 'potential_mule': False}
+            if self.extract_plate_info and serial:
+                # Load and align front image
+                front_aligned, _ = self.processor.yolo_aligner.align_image(pair.front_path)
+                # Load and align back image (for back_plate)
+                back_aligned = None
+                if pair.back_path:
+                    back_aligned, _ = self.processor.yolo_aligner.align_image(pair.back_path)
+                plate_info = self.processor._extract_plate_info(front_aligned, back_aligned)
+            pair.series_year = plate_info['series_year']
+            pair.front_plate = plate_info['front_plate']
+            pair.back_plate = plate_info['back_plate']
+            pair.potential_mule = plate_info.get('potential_mule', False)
+
             # Validate
             is_valid, validation_error = self.processor.validate_serial(serial)
 
@@ -282,6 +299,10 @@ class MonitorThread(QThread):
                     'error': '',
                     'front_align_angle': pair.front_align_angle,
                     'front_align_flipped': pair.front_align_flipped,
+                    'series_year': pair.series_year,
+                    'front_plate': pair.front_plate,
+                    'back_plate': pair.back_plate,
+                    'potential_mule': pair.potential_mule,
                 }
 
             elif serial and not is_valid:
@@ -305,6 +326,10 @@ class MonitorThread(QThread):
                     'error': validation_error,
                     'front_align_angle': pair.front_align_angle,
                     'front_align_flipped': pair.front_align_flipped,
+                    'series_year': pair.series_year,
+                    'front_plate': pair.front_plate,
+                    'back_plate': pair.back_plate,
+                    'potential_mule': pair.potential_mule,
                 }
 
             else:
@@ -328,6 +353,10 @@ class MonitorThread(QThread):
                     'error': 'No serial detected',
                     'front_align_angle': pair.front_align_angle,
                     'front_align_flipped': pair.front_align_flipped,
+                    'series_year': pair.series_year,
+                    'front_plate': pair.front_plate,
+                    'back_plate': pair.back_plate,
+                    'potential_mule': pair.potential_mule,
                 }
 
             # Mark files as processed
@@ -360,7 +389,13 @@ class MonitorThread(QThread):
                 'is_fancy': False,
                 'needs_review': True,
                 'serial_region_path': '',
-                'error': str(e)
+                'error': str(e),
+                'front_align_angle': 0.0,
+                'front_align_flipped': False,
+                'series_year': '',
+                'front_plate': '',
+                'back_plate': '',
+                'potential_mule': False,
             }
             self.result_ready.emit(result)
             print(timing.get_summary(f"#{position} ERROR"))

@@ -179,3 +179,54 @@ python tests/verify_lua_patterns.py
 ### Bookend Patterns (BOOKENDS, TRIPLE_BOOKENDS, DOUBLES_BOOKEND, TRIPLES_BOOKEND)
 - Use `group_boxes` to wrap each bookend group in a single box
 - Use one arc connecting the groups (not multiple arcs per digit)
+
+## Plate Info Extraction & Mule Detection (Added Feb 2025)
+
+### Overview
+Optional feature to extract additional bill metadata and detect potential mule notes.
+
+### Settings
+- **Settings → Processing → "Extract plate and series info"**: Enable/disable (default: off)
+- When enabled, extracts series_year, front_plate, and back_plate using YOLO + OCR
+- Adds processing time due to additional OCR calls on detected regions
+
+### Extracted Fields
+| Field | YOLO Class | Location | Example |
+|-------|------------|----------|---------|
+| series_year | 8 | Front | "2013", "2017A" |
+| front_plate | 4 | Front | "FW I 30", "G144" |
+| back_plate | 0 | Back | "108", "523" |
+
+### Mule Note Detection
+A **mule note** is a bill with mismatched front/back plates from different printing eras:
+- **Pre-1988**: Back plates had small font numbers
+- **1988+**: Back plates transitioned to large font numbers
+- **Mule**: A 1988+ series bill with an old-style small font back plate
+
+**Detection logic:**
+1. Check if series year is 1988 or later (large font era)
+2. Check if YOLO detected back_plate region but OCR failed (small font indicator)
+3. If both true = potential mule (era mismatch)
+
+**Why OCR failure works:** EasyOCR reliably reads the larger modern font but fails on the smaller old-style font. This failure becomes a useful signal.
+
+### New CSV/GUI Columns
+- **Series**: Series year (e.g., "2013")
+- **Front Plate**: Front plate number (e.g., "FW I 30")
+- **Back Plate**: Back plate number (empty if small font/OCR failed)
+- **Mule?**: "Yes" if potential mule detected
+
+### Files Modified
+- `settings_manager.py`: Added `extract_plate_info` setting
+- `gui/settings_dialog.py`: Added checkbox in Processing tab
+- `process_production.py`: Added `_extract_plate_info()` method, updated BillPair dataclass
+- `gui/processing_thread.py`: Plate extraction during processing
+- `gui/monitor_thread.py`: Plate extraction during monitor mode
+- `gui/results_list.py`: New columns, CSV fieldnames, backward compatibility
+- `gui/main_window.py`: Pass setting to threads, updated CSV export
+
+### Mule-Hunting Series
+Prime series for finding mules (transition period):
+- Series 1988A
+- Series 1993
+- Series 1995

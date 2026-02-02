@@ -30,6 +30,7 @@ class ProcessingSettings:
     auto_crop: bool = True  # Auto-crop fancy bills during processing
     auto_archive: bool = False  # Archive files after manual processing
     archive_copy_mode: bool = False  # Copy instead of move when archiving (for testing)
+    extract_plate_info: bool = False  # Extract series year, front plate, back plate (slower)
 
 
 @dataclass
@@ -144,6 +145,7 @@ class SettingsManager:
             self.processing.auto_crop = proc.get('auto_crop', True)
             self.processing.auto_archive = proc.get('auto_archive', False)
             self.processing.archive_copy_mode = proc.get('archive_copy_mode', False)
+            self.processing.extract_plate_info = proc.get('extract_plate_info', False)
 
         # Load UI settings
         if 'ui' in data:
@@ -226,6 +228,7 @@ class SettingsManager:
                 'auto_crop': self.processing.auto_crop,
                 'auto_archive': self.processing.auto_archive,
                 'archive_copy_mode': self.processing.archive_copy_mode,
+                'extract_plate_info': self.processing.extract_plate_info,
             },
             'ui': {
                 'default_working_dir': self.ui.default_working_dir,

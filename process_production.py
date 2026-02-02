@@ -225,6 +225,11 @@ class BillPair:
     front_align_angle: float = 0.0  # Rotation angle from YOLO alignment
     front_align_flipped: bool = False  # Whether front was flipped 180°
     swapped: bool = False  # True if front/back were swapped during lazy detection
+    # Optional plate info (extracted when setting enabled)
+    series_year: str = ''
+    front_plate: str = ''
+    back_plate: str = ''
+    potential_mule: bool = False  # True if likely a mule note (small font back plate)
 
 
 @dataclass
@@ -1390,6 +1395,155 @@ class ProductionProcessor:
 
         return detections
 
+    def _extract_plate_info(self, front_img: np.ndarray, back_img: np.ndarray = None) -> dict:
+        """Extract series year, front plate, and back plate info from bill images.
+
+        Uses YOLO to detect the regions and OCR to read the text.
+        Series year and front plate are on the front; back plate is on the back.
+
+        Also detects potential mule notes by checking if back_plate region is detected
+        but OCR fails (indicating small font) or if the bounding box is small.
+
+        Args:
+            front_img: Aligned front image of the bill
+            back_img: Aligned back image of the bill (optional, for back_plate)
+
+        Returns:
+            dict with keys:
+                'series_year', 'front_plate', 'back_plate': extracted text (empty if not detected)
+                'back_plate_detected': True if YOLO found a back_plate region
+                'back_plate_box_height': height in pixels of detected region (0 if not detected)
+                'potential_mule': True if likely a mule note (small font back plate)
+        """
+        result = {
+            'series_year': '',
+            'front_plate': '',
+            'back_plate': '',
+            'back_plate_detected': False,
+            'back_plate_box_height': 0,
+            'potential_mule': False,
+        }
+
+        # Helper function to extract text from a region using OCR
+        def ocr_region(img: np.ndarray, boxes: list, allowlist: str, clean_func=None) -> str:
+            if not boxes or img is None or img.size == 0:
+                return ''
+            h, w = img.shape[:2]
+            # Use highest confidence detection
+            best_box = max(boxes, key=lambda b: b[4])
+            x1, y1, x2, y2, conf = best_box
+
+            # Add small padding
+            pad = 5
+            x1 = max(0, x1 - pad)
+            y1 = max(0, y1 - pad)
+            x2 = min(w, x2 + pad)
+            y2 = min(h, y2 + pad)
+
+            # Extract crop
+            crop = img[y1:y2, x1:x2]
+            if crop.size == 0:
+                return ''
+
+            # Run OCR
+            get_timing().add_ocr_call()
+            try:
+                ocr_results = self.ocr_reader.readtext(
+                    crop,
+                    allowlist=allowlist,
+                    detail=1
+                )
+                if ocr_results:
+                    # Combine all text results
+                    text = ' '.join(r[1] for r in ocr_results).strip()
+                    if clean_func:
+                        text = clean_func(text)
+                    return text
+            except Exception:
+                pass
+            return ''
+
+        # Clean functions
+        def clean_series(text: str) -> str:
+            # Remove "SERIES" prefix if present
+            text = text.upper().replace('SERIES', '').strip()
+            # Extract year pattern like "2017" or "2017A"
+            match = re.search(r'(\d{4}[A-Z]?)', text)
+            return match.group(1) if match else text
+
+        def clean_front_plate(text: str) -> str:
+            # Keep alphanumeric and spaces
+            return re.sub(r'[^A-Z0-9 ]', '', text.upper()).strip()
+
+        def clean_back_plate(text: str) -> str:
+            # Keep only digits
+            return re.sub(r'[^0-9]', '', text)
+
+        # Extract from front image (series year, front plate)
+        if front_img is not None and front_img.size > 0:
+            front_detections = self._detect_all_objects(front_img, conf=0.3)
+
+            # Extract series year (class 8)
+            series_boxes = front_detections.get('series_year', [])
+            if series_boxes:
+                result['series_year'] = ocr_region(
+                    front_img, series_boxes,
+                    'SERIES0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ ',
+                    clean_series
+                )
+
+            # Extract front plate (class 4)
+            front_plate_boxes = front_detections.get('front_plate', [])
+            if front_plate_boxes:
+                result['front_plate'] = ocr_region(
+                    front_img, front_plate_boxes,
+                    'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
+                    clean_front_plate
+                )
+
+        # Extract from back image (back plate + mule detection)
+        if back_img is not None and back_img.size > 0:
+            back_detections = self._detect_all_objects(back_img, conf=0.3)
+
+            # Extract back plate (class 0)
+            back_plate_boxes = back_detections.get('back_plate', [])
+            if back_plate_boxes:
+                result['back_plate_detected'] = True
+                # Get the best detection box dimensions
+                best_box = max(back_plate_boxes, key=lambda b: b[4])
+                x1, y1, x2, y2, conf = best_box
+                box_height = y2 - y1
+                result['back_plate_box_height'] = box_height
+
+                # Try OCR
+                result['back_plate'] = ocr_region(
+                    back_img, back_plate_boxes,
+                    '0123456789',
+                    clean_back_plate
+                )
+
+                # Mule detection: A mule is a MISMATCH between front/back plate eras
+                # - Pre-1988: back plates had small font (normal)
+                # - 1988+: back plates transitioned to large font
+                # - Mule = 1988+ series with old-style small font back plate
+
+                # Check if this is a "large font era" bill (1988+)
+                is_large_font_era = False
+                series = result.get('series_year', '')
+                if series:
+                    year_match = re.search(r'(\d{4})', series)
+                    if year_match:
+                        year = int(year_match.group(1))
+                        is_large_font_era = year >= 1988
+
+                # Small font detected = OCR failed on detected region
+                small_font_back = result['back_plate_detected'] and not result['back_plate']
+
+                # Mule = large font era bill with small font back plate (mismatch)
+                result['potential_mule'] = is_large_font_era and small_font_back
+
+        return result
+
     def _union_bbox(self, boxes: list) -> tuple:
         """Compute bounding box encompassing all given boxes.
 
@@ -2458,7 +2612,11 @@ class ProductionProcessor:
                     'star_detected': False,
                     'is_fancy': False,
                     'needs_review': True,
-                    'error': pair.error
+                    'error': pair.error,
+                    'series_year': '',
+                    'front_plate': '',
+                    'back_plate': '',
+                    'potential_mule': False,
                 })
                 self._add_to_review_queue(pair, pair.error, output_dir)
                 print(timing.get_summary(f"#{pair.stack_position} ERROR"))
@@ -2534,7 +2692,11 @@ class ProductionProcessor:
                 'star_detected': pair.star_detected,
                 'is_fancy': pair.is_fancy,
                 'needs_review': pair.needs_review,
-                'error': pair.error or ''
+                'error': pair.error or '',
+                'series_year': pair.series_year,
+                'front_plate': pair.front_plate,
+                'back_plate': pair.back_plate,
+                'potential_mule': pair.potential_mule,
             })
 
             # Print timing summary for this bill
@@ -2593,7 +2755,8 @@ class ProductionProcessor:
             writer = csv.DictWriter(f, fieldnames=[
                 'position', 'front_file', 'back_file', 'serial',
                 'fancy_types', 'confidence', 'baseline_variance', 'star_detected',
-                'is_fancy', 'needs_review', 'error'
+                'is_fancy', 'needs_review', 'error',
+                'series_year', 'front_plate', 'back_plate', 'potential_mule'
             ])
             writer.writeheader()
             writer.writerows(all_results)

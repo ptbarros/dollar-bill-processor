@@ -730,7 +730,8 @@ class MainWindow(QMainWindow):
             writer = csv.DictWriter(f, fieldnames=[
                 'position', 'front_file', 'back_file', 'serial', 'fancy_types',
                 'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
-                'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped'
+                'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped',
+                'series_year', 'front_plate', 'back_plate', 'potential_mule'
             ])
             writer.writeheader()
             writer.writerows(self.current_results)
@@ -847,7 +848,8 @@ class MainWindow(QMainWindow):
             use_gpu=self.settings.processing.use_gpu,
             verify_pairs=self.settings.processing.verify_pairs,
             crop_all=self.settings.processing.crop_all,
-            auto_crop=self.settings.processing.auto_crop
+            auto_crop=self.settings.processing.auto_crop,
+            extract_plate_info=self.settings.processing.extract_plate_info
         )
         self.processing_thread.progress_updated.connect(self._on_progress_updated)
         self.processing_thread.result_ready.connect(self._on_result_ready)
@@ -1050,7 +1052,8 @@ class MainWindow(QMainWindow):
             output_dir=Path(output_dir),
             use_gpu=self.settings.processing.use_gpu,
             verify_pairs=self.settings.processing.verify_pairs,
-            crop_all=self.settings.processing.crop_all
+            crop_all=self.settings.processing.crop_all,
+            extract_plate_info=self.settings.processing.extract_plate_info
         )
 
         # Connect signals
@@ -1372,7 +1375,8 @@ class MainWindow(QMainWindow):
             writer = csv.DictWriter(f, fieldnames=[
                 'position', 'front_file', 'back_file', 'serial', 'fancy_types',
                 'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
-                'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped'
+                'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped',
+                'series_year', 'front_plate', 'back_plate', 'potential_mule'
             ])
             writer.writeheader()
             writer.writerows(self.current_results)
