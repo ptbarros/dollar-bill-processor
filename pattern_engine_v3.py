@@ -217,9 +217,6 @@ class PatternEngineV3:
         if len(digits) != 8:
             return []
 
-        # Track matched pattern names (Lua can override YAML)
-        lua_matched = set()
-
         # Run Lua patterns first (they take precedence)
         ctx = create_context(serial, metadata)
         for name, info in self.lua_patterns.items():
@@ -229,7 +226,6 @@ class PatternEngineV3:
             try:
                 result = self.sandbox.execute(info.script, ctx)
                 if result.success and result.matched:
-                    lua_matched.add(name)
                     matches.append(PatternMatchV3(
                         name=name,
                         description=info.description,
@@ -244,10 +240,12 @@ class PatternEngineV3:
                 # Log but don't fail on individual pattern errors
                 pass
 
-        # Run YAML patterns (skip if Lua already matched same name)
+        # Run YAML patterns (skip if Lua file exists for that pattern name)
         yaml_matches = self.yaml_engine.classify(serial, metadata)
         for m in yaml_matches:
-            if m.name not in lua_matched:
+            # Skip YAML pattern if a Lua file exists for this pattern name
+            # This prevents loose YAML patterns from overriding stricter Lua logic
+            if m.name not in self.lua_patterns:
                 # Get visualization from YAML engine
                 highlights_data = self.yaml_engine.get_digit_highlights(serial, [m.name])
 
