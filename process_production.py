@@ -34,8 +34,11 @@ import argparse
 import shutil
 import yaml
 
-# Import v2 pattern engine
-from pattern_engine_v2 import PatternEngine
+# Import pattern engine (v3 with Lua support, falls back to v2)
+try:
+    from pattern_engine_v3 import PatternEngineV3 as PatternEngine
+except ImportError:
+    from pattern_engine_v2 import PatternEngine
 
 
 # =============================================================================

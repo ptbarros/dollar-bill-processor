@@ -19,7 +19,13 @@ from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QP
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from pattern_engine_v2 import PatternEngine
+
+# Try to import v3 engine (Lua support), fall back to v2
+try:
+    from pattern_engine_v3 import PatternEngineV3 as PatternEngine
+except ImportError:
+    from pattern_engine_v2 import PatternEngine
+
 from settings_manager import get_settings
 
 
@@ -1220,11 +1226,22 @@ class PreviewPanel(QWidget):
         self.serial_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         details_layout.addWidget(self.serial_label, 0, 1)
 
-        # Patterns
+        # Patterns with Re-classify button
         details_layout.addWidget(QLabel("Patterns:"), 1, 0)
+        patterns_layout = QHBoxLayout()
+        patterns_layout.setContentsMargins(0, 0, 0, 0)
+        patterns_layout.setSpacing(8)
         self.patterns_label = QLabel("-")
         self.patterns_label.setWordWrap(True)
-        details_layout.addWidget(self.patterns_label, 1, 1)
+        patterns_layout.addWidget(self.patterns_label, 1)
+        self.reclassify_btn = QPushButton("Re-classify")
+        self.reclassify_btn.setToolTip("Re-run pattern matching with current patterns (useful after adding new patterns)")
+        self.reclassify_btn.setMaximumWidth(80)
+        self.reclassify_btn.clicked.connect(self._on_reclassify)
+        patterns_layout.addWidget(self.reclassify_btn)
+        patterns_widget = QWidget()
+        patterns_widget.setLayout(patterns_layout)
+        details_layout.addWidget(patterns_widget, 1, 1)
 
         # Rarity/Odds
         details_layout.addWidget(QLabel("Rarity:"), 2, 0)
@@ -1521,12 +1538,14 @@ class PreviewPanel(QWidget):
                     # Get pattern-based digit highlights for specific pattern mode
                     pattern_highlights = []
                     pattern_connectors = []
+                    pattern_group_boxes = []
                     if is_pattern_mode and serial:
                         patterns_for_highlights = [overlay_filter] if overlay_filter in matched_patterns else []
                         if patterns_for_highlights:
                             viz_data = self.pattern_engine.get_digit_highlights(serial, patterns_for_highlights)
                             pattern_highlights = viz_data.get('highlights', [])
                             pattern_connectors = viz_data.get('connectors', [])
+                            pattern_group_boxes = viz_data.get('group_boxes', [])
 
                     # Color map for pattern highlights (CSS name -> BGR)
                     PATTERN_COLORS = {
@@ -1542,10 +1561,12 @@ class PreviewPanel(QWidget):
                         'lime': (0, 255, 0),        # Ladder
                         'teal': (128, 128, 0),      # Pairs
                         'red': (0, 0, 255),         # Broken/invalid
+                        'gray': (128, 128, 128),    # Muted/prefix
                     }
 
-                    # Store digit box centers for drawing connectors
+                    # Store digit box info for drawing connectors and group boxes
                     digit_centers = {}  # digit_idx -> (center_x, center_y)
+                    digit_rects = {}    # digit_idx -> (x1, y1, x2, y2)
 
                     # Draw colored boxes for each digit
                     # Sort digit boxes left-to-right to ensure position indices match pattern positions
@@ -1561,9 +1582,10 @@ class PreviewPanel(QWidget):
                         # Map digit_box index to pattern highlight index (skip letters)
                         digit_idx = sum(1 for db in digit_boxes[:idx] if not db['is_letter'])
 
-                        # Store center for connectors
+                        # Store center and rect for connectors and group boxes
                         if not digit_box['is_letter']:
                             digit_centers[digit_idx] = ((dx1 + dx2) // 2, (dy1 + dy2) // 2)
+                            digit_rects[digit_idx] = (dx1, dy1, dx2, dy2)
 
                         if is_gas_pump_mode:
                             # Gas pump mode: show all boxes with deviation coloring
@@ -1589,12 +1611,18 @@ class PreviewPanel(QWidget):
                     # Draw connector lines for relational patterns (e.g., RADAR pairs)
                     if is_pattern_mode and pattern_connectors:
                         for conn in pattern_connectors:
-                            pos1, pos2 = conn['positions']
+                            # Support both formats: {positions: [a, b]} and {from: a, to: b}
+                            if 'positions' in conn:
+                                pos1, pos2 = conn['positions']
+                            else:
+                                pos1 = conn.get('from', 0)
+                                pos2 = conn.get('to', 0)
+
                             if pos1 in digit_centers and pos2 in digit_centers:
                                 pt1 = digit_centers[pos1]
                                 pt2 = digit_centers[pos2]
                                 conn_color = PATTERN_COLORS.get(conn.get('color', 'orange'), (0, 165, 255))
-                                conn_style = conn.get('style', 'normal')
+                                conn_style = conn.get('style', 'arc')
 
                                 # Calculate arc - height proportional to distance, but capped
                                 mid_x = (pt1[0] + pt2[0]) // 2
@@ -1603,8 +1631,8 @@ class PreviewPanel(QWidget):
                                 arc_height = min(35, max(15, distance // 8))
                                 mid_y = min(pt1[1], pt2[1]) - arc_height
 
-                                if conn_style == 'broken':
-                                    # Broken pair: just X marks near each digit (no connecting line)
+                                if conn_style in ('broken', 'dashed'):
+                                    # Broken/dashed pair: X marks near each digit (no connecting line)
                                     x_size = 5
                                     # Draw small X near the left digit
                                     x1_pos = pt1[0] + 15  # Offset right from digit center
@@ -1616,10 +1644,46 @@ class PreviewPanel(QWidget):
                                     x2_y = pt2[1] - 10    # Slightly above
                                     cv2.line(crop, (x2_pos - x_size, x2_y - x_size), (x2_pos + x_size, x2_y + x_size), conn_color, 2, cv2.LINE_AA)
                                     cv2.line(crop, (x2_pos - x_size, x2_y + x_size), (x2_pos + x_size, x2_y - x_size), conn_color, 2, cv2.LINE_AA)
+                                elif conn_style == 'line':
+                                    # Straight line between digit centers
+                                    cv2.line(crop, pt1, pt2, conn_color, 2, cv2.LINE_AA)
+                                elif conn_style == 'bracket':
+                                    # Bracket connector below digits
+                                    bracket_y = max(pt1[1], pt2[1]) + 10
+                                    cv2.line(crop, (pt1[0], pt1[1] + 5), (pt1[0], bracket_y), conn_color, 2, cv2.LINE_AA)
+                                    cv2.line(crop, (pt1[0], bracket_y), (pt2[0], bracket_y), conn_color, 2, cv2.LINE_AA)
+                                    cv2.line(crop, (pt2[0], bracket_y), (pt2[0], pt2[1] + 5), conn_color, 2, cv2.LINE_AA)
+                                elif conn_style == 'arrow':
+                                    # Arrow from left to right
+                                    cv2.arrowedLine(crop, pt1, pt2, conn_color, 2, cv2.LINE_AA, tipLength=0.15)
                                 else:
-                                    # Normal connector: solid arc line above digits
+                                    # Default arc connector: curved line above digits
                                     pts = np.array([pt1, (mid_x, mid_y), pt2], np.int32)
                                     cv2.polylines(crop, [pts], False, conn_color, 2, cv2.LINE_AA)
+
+                    # Draw group boxes (boxes spanning multiple digits)
+                    if is_pattern_mode and pattern_group_boxes:
+                        for gb in pattern_group_boxes:
+                            # Get start and end positions
+                            from_pos = gb.get('from', 0)
+                            to_pos = gb.get('to', 0)
+                            gb_color = PATTERN_COLORS.get(gb.get('color', 'magenta'), (255, 0, 255))
+                            thickness = gb.get('thickness', 3)
+
+                            # Get the bounding rect spanning from first to last digit
+                            if from_pos in digit_rects and to_pos in digit_rects:
+                                r1 = digit_rects[from_pos]
+                                r2 = digit_rects[to_pos]
+
+                                # Combine rects: min x1/y1, max x2/y2 with padding
+                                padding = 4
+                                gx1 = min(r1[0], r2[0]) - padding
+                                gy1 = min(r1[1], r2[1]) - padding
+                                gx2 = max(r1[2], r2[2]) + padding
+                                gy2 = max(r1[3], r2[3]) + padding
+
+                                # Draw the group box
+                                cv2.rectangle(crop, (gx1, gy1), (gx2, gy2), gb_color, thickness)
 
                 # Convert to QPixmap
                 rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
@@ -1869,6 +1933,59 @@ class PreviewPanel(QWidget):
             # Use a short delay to let the UI update first
             from PySide6.QtCore import QTimer
             QTimer.singleShot(50, lambda: self.align_requested.emit(self._current_front_file))
+
+    def _on_reclassify(self):
+        """Re-run pattern classification on the current bill with current patterns."""
+        if not self.current_result:
+            return
+
+        serial = self.current_result.get('serial', '')
+        if not serial:
+            return
+
+        # Re-classify using the pattern engine
+        matches = self.pattern_engine.classify_simple(serial)
+
+        # Update the result
+        new_fancy_types = ', '.join(matches) if matches else ''
+        self.current_result['fancy_types'] = new_fancy_types
+        self.current_result['is_fancy'] = len(matches) > 0
+
+        # Update the patterns label
+        self.patterns_label.setText(new_fancy_types or "None")
+
+        # Update odds and price
+        odds_parts = []
+        price_parts = []
+        for name in matches:
+            info = self.pattern_engine.get_pattern_info(name)
+            if info:
+                if info.get('odds'):
+                    odds_parts.append(f"{name}: {info['odds']}")
+                if info.get('price_range'):
+                    price_parts.append(f"{name}: {info['price_range']}")
+        self.odds_label.setText('\n'.join(odds_parts) if odds_parts else "-")
+        self.price_label.setText('\n'.join(price_parts) if price_parts else "-")
+
+        # Update status
+        status_parts = []
+        if self.current_result.get('is_fancy'):
+            status_parts.append("Fancy")
+        if self.current_result.get('needs_review'):
+            status_parts.append("Needs Review")
+        self.status_label.setText(', '.join(status_parts) if status_parts else "OK")
+
+        # Update matched patterns for overlay cycling
+        self.serial_image_1.set_matched_patterns(matches)
+        self.serial_image_2.set_matched_patterns(matches)
+
+        # Refresh serial region crops to show updated overlays
+        if self.serial_frame.isVisible() and self._current_front_file:
+            serial_crops, _ = self._generate_serial_region_crops(self._current_front_file)
+            if len(serial_crops) >= 1:
+                self.serial_image_1.set_pixmap(serial_crops[0])
+            if len(serial_crops) >= 2:
+                self.serial_image_2.set_pixmap(serial_crops[1])
 
     def _update_details_only(self, result: dict, has_back: bool):
         """Update only the text details, skip image loading. Used during batch processing."""

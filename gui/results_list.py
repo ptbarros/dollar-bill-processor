@@ -18,7 +18,13 @@ from PySide6.QtGui import QColor, QBrush, QAction
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from pattern_engine_v2 import PatternEngine
+
+# Import pattern engine (v3 with Lua support, falls back to v2)
+try:
+    from pattern_engine_v3 import PatternEngineV3 as PatternEngine
+except ImportError:
+    from pattern_engine_v2 import PatternEngine
+
 from settings_manager import get_settings
 from gui.correction_dialog import CorrectionDialog, ReviewNoteDialog
 
@@ -104,6 +110,12 @@ class ResultsList(QWidget):
         self.status_filter.addItem("Errors", "error")
         self.status_filter.currentIndexChanged.connect(self._apply_filters)
         filter_layout.addWidget(self.status_filter)
+
+        # Re-classify All button
+        self.reclassify_all_btn = QPushButton("Re-classify All")
+        self.reclassify_all_btn.setToolTip("Re-run pattern matching on all results (useful after adding new patterns)")
+        self.reclassify_all_btn.clicked.connect(self._reclassify_all)
+        filter_layout.addWidget(self.reclassify_all_btn)
 
         layout.addLayout(filter_layout)
 
@@ -504,6 +516,16 @@ class ResultsList(QWidget):
             menu.addSeparator()
 
         # === Multi-item actions (always show) ===
+        # Re-classify selected - re-run pattern matching
+        if is_multi_select:
+            reclassify_label = f"Re-classify Selected ({len(selected_results)} bills)"
+        else:
+            reclassify_label = "Re-classify"
+        reclassify_action = QAction(reclassify_label, self)
+        reclassify_action.setToolTip("Re-run pattern matching (useful after adding new patterns)")
+        reclassify_action.triggered.connect(lambda: self._reclassify_selected(selected_results))
+        menu.addAction(reclassify_action)
+
         # Generate crops - works on all selected items
         if is_multi_select:
             crop_label = f"Generate Crops ({len(selected_results)} bills)"
@@ -871,3 +893,73 @@ class ResultsList(QWidget):
     def select_current_session(self):
         """Switch back to current session view."""
         self.batch_combo.setCurrentIndex(0)
+
+    # =========================================================================
+    # Re-classification
+    # =========================================================================
+
+    def _reclassify_selected(self, results: list):
+        """Re-run pattern matching on selected results."""
+        if not results:
+            return
+
+        # Reload patterns to pick up any new ones
+        self.pattern_engine.reload()
+
+        for result in results:
+            self._reclassify_result(result)
+
+        # Refresh the display
+        self._apply_filters()
+
+        # Re-select to update preview panel
+        self._on_selection_changed()
+
+    def _reclassify_all(self):
+        """Re-run pattern matching on all results."""
+        if not self.results:
+            return
+
+        # Reload patterns to pick up any new ones
+        self.pattern_engine.reload()
+
+        for result in self.results:
+            self._reclassify_result(result)
+
+        # Refresh the display
+        self._apply_filters()
+
+        # Re-select to update preview panel
+        self._on_selection_changed()
+
+    def _reclassify_result(self, result: dict):
+        """Re-classify a single result and update its data."""
+        serial = result.get('serial', '')
+        if not serial:
+            return
+
+        # Re-run pattern matching
+        matches = self.pattern_engine.classify_simple(serial)
+
+        # Update the result
+        new_fancy_types = ', '.join(matches) if matches else ''
+        result['fancy_types'] = new_fancy_types
+        result['is_fancy'] = len(matches) > 0
+
+        # Update the tree item if it exists
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            item_result = item.data(0, Qt.UserRole)
+            if item_result and item_result.get('front_file') == result.get('front_file'):
+                # Update the Patterns column (column 2)
+                item.setText(2, new_fancy_types or "-")
+
+                # Update colors based on fancy status
+                if result.get('is_fancy'):
+                    item.setForeground(2, QBrush(QColor("#2e7d32")))  # Green for fancy
+                else:
+                    item.setForeground(2, QBrush(QColor("#000000")))  # Black for normal
+
+                # Update the stored data
+                item.setData(0, Qt.UserRole, result)
+                break
