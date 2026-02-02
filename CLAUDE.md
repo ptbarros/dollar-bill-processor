@@ -13,7 +13,8 @@ A GUI application for processing dollar bill images, detecting serial numbers vi
 
 - **pattern_engine_v3.py**: Hybrid engine supporting both YAML and Lua patterns
   - Wraps v2 engine for backward compatibility
-  - Lua patterns take precedence over YAML patterns with same name
+  - **Lua patterns fully override YAML** - if a Lua file exists for a pattern name, YAML is skipped entirely (even if Lua returns `matched = false`)
+  - This prevents loose YAML patterns from matching when stricter Lua logic correctly rejects
   - Properties for backward compat: `config`, `config_path`, `user_config`, `user_config_path`, `patterns`
 
 - **patterns/** directory structure:
@@ -54,9 +55,16 @@ end
 ```
 
 ### Visualization Features
-- **highlights**: Color individual digit positions
+- **highlights**: Color individual digit positions (each digit gets its own box)
 - **connectors**: Lines between digit pairs (styles: arc, line, bracket, arrow, dashed)
-- **group_boxes**: Single box spanning multiple digits (e.g., for MINI_REPEATER's "680" groups)
+- **group_boxes**: Single box spanning multiple digits (preferred for multi-digit groups)
+
+### Visualization Best Practices
+- Use `group_boxes` instead of `highlights` when you want one box around multiple digits (e.g., bookends, repeating groups)
+- Use one arc per group, not one per digit (cleaner visual)
+- For symmetric patterns (radar, pyramid), use arcs to show the mirror relationship
+- Color coding: lime for ascending, cyan for descending, yellow for peaks, orange for bookends
+- Example pyramid_ladder visualization: lime (ascending) → yellow (peak) → cyan (descending) with arcs connecting mirror positions
 
 ### Color Palette
 purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red, gray
@@ -157,4 +165,17 @@ python tests/verify_lua_patterns.py
 - Patterns are reloaded when `engine.reload()` is called
 - All 117 YAML patterns have been converted to Lua (Feb 2025)
 - Lua patterns provide richer visualization with custom highlights and connectors
-- YAML patterns remain for metadata (odds, prices) - Lua overrides detection logic
+- YAML patterns remain for metadata (odds, prices) but Lua fully controls detection
+- Some YAML built-in checks (like `pyramid_ladder`) were too loose - Lua versions are stricter and more accurate
+- The CSV output reflects whatever the pattern engine returns (Lua if file exists, otherwise YAML)
+
+## Pattern-Specific Notes
+
+### PYRAMID_LADDER
+- True pyramid: digits go up by 1, then down by 1 (e.g., 12321, 1234321)
+- Visualization: lime (ascending), yellow (peak), cyan (descending), orange arcs connecting mirror positions
+- The old YAML check matched any "bounce" pattern regardless of step size - Lua is stricter
+
+### Bookend Patterns (BOOKENDS, TRIPLE_BOOKENDS, DOUBLES_BOOKEND, TRIPLES_BOOKEND)
+- Use `group_boxes` to wrap each bookend group in a single box
+- Use one arc connecting the groups (not multiple arcs per digit)
