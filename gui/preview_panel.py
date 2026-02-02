@@ -804,7 +804,7 @@ class ImageLabel(QLabel):
 
         # For long-press detection
         self._right_press_time = None
-        self._right_press_pos = None
+        self._left_press_pos = None
         from PySide6.QtCore import QTimer
         self._long_press_timer = QTimer(self)
         self._long_press_timer.setSingleShot(True)
@@ -832,9 +832,9 @@ class ImageLabel(QLabel):
 
     def _on_long_press(self):
         """Show context menu on long press."""
-        if self._right_press_pos is not None:
-            self._show_context_menu(self._right_press_pos)
-            self._right_press_pos = None  # Prevent cycle on release
+        if self._left_press_pos is not None:
+            self._show_context_menu(self._left_press_pos)
+            self._left_press_pos = None  # Prevent cycle on release
 
     def _show_context_menu(self, pos):
         """Show context menu for pattern overlay selection."""
@@ -917,24 +917,25 @@ class ImageLabel(QLabel):
         self.setPixmap(scaled)
 
     def mousePressEvent(self, event):
-        """Handle click to toggle 180° rotation or start right-click detection."""
-        if event.button() == Qt.LeftButton and self.original_pixmap:
+        """Handle click to toggle 180° rotation or start left-click detection for patterns."""
+        if event.button() == Qt.RightButton and self.original_pixmap:
+            # Right click: rotate 180°
             self.is_rotated = not self.is_rotated
             self._update_display()
-        elif event.button() == Qt.RightButton:
-            # Start long press detection
-            self._right_press_pos = event.pos()
+        elif event.button() == Qt.LeftButton:
+            # Left click: start long press detection for pattern menu
+            self._left_press_pos = event.pos()
             self._long_press_timer.start(self.LONG_PRESS_MS)
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
-        """Handle right-click release - cycle if it was a quick click."""
-        if event.button() == Qt.RightButton:
+        """Handle left-click release - cycle patterns if it was a quick click."""
+        if event.button() == Qt.LeftButton:
             self._long_press_timer.stop()
             # If pos is still set, it was a quick click (not long press)
-            if self._right_press_pos is not None:
+            if self._left_press_pos is not None:
                 self._cycle_next()
-                self._right_press_pos = None
+                self._left_press_pos = None
         super().mouseReleaseEvent(event)
 
     def resizeEvent(self, event):
