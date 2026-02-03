@@ -241,6 +241,37 @@ Prime series for finding mules (transition period):
 - Series 1993
 - Series 1995
 
+## Plate Magnifier Popup (Added Feb 2025)
+
+### Overview
+Quick visual comparison of front and back plate regions at 200% zoom for mule font-size identification.
+
+### Usage
+- Press **'M'** while viewing a bill to show the popup
+- Press **'M'** again or **Escape** to close
+- Shows front plate (from front image) and back plate (from back image) side-by-side
+
+### How It Works
+1. Uses YOLO to detect `front_plate` (class 4) and `back_plate` (class 0) regions
+2. Applies cached alignment (rotation/flip) from current result
+3. Crops regions with 10px padding
+4. Scales to 200% zoom for easier font comparison
+5. Displays in frameless popup dialog
+
+### Files
+- `gui/plate_magnifier_dialog.py`: PlateMagnifierDialog class (new)
+- `gui/preview_panel.py`: `_extract_plate_regions()`, `show_plate_magnifier()` methods
+- `gui/main_window.py`: 'M' keyboard shortcut
+
+### Error Handling
+| Scenario | Behavior |
+|----------|----------|
+| No bill selected | Silent return |
+| No YOLO model | Silent return |
+| Front plate not detected | Shows "Not detected" placeholder |
+| Back plate not detected | Shows "Not detected" placeholder |
+| No back image | Shows "Not detected" for back plate |
+
 ## Session Recovery & Autosave (Added Feb 2025)
 
 ### Overview
