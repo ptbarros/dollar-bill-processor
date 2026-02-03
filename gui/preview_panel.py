@@ -1699,6 +1699,178 @@ class PreviewPanel(QWidget):
             print(f"Error generating serial crops: {e}")
             return [], 0.0
 
+    def _extract_plate_regions(self, zoom: float = 2.0) -> tuple:
+        """Extract front and back plate regions at specified zoom for mule comparison.
+
+        Uses YOLO to detect plate regions on aligned front and back images.
+
+        Args:
+            zoom: Zoom factor for the extracted regions (default 2.0 for 200%)
+
+        Returns:
+            tuple: (front_pixmap, back_pixmap) - either can be None if not detected
+        """
+        if not self._current_front_file or not Path(self._current_front_file).exists():
+            return None, None
+
+        try:
+            # Import processor lazily to avoid circular imports
+            from process_production import ProductionProcessor
+
+            # Use cached processor if available, otherwise create one
+            if not hasattr(self, '_processor'):
+                self._processor = None
+
+            if self._processor is None:
+                # Find best.pt model
+                model_path = Path(__file__).parent.parent / 'best.pt'
+                if model_path.exists():
+                    self._processor = ProductionProcessor(str(model_path))
+                else:
+                    return None, None
+
+            front_pixmap = None
+            back_pixmap = None
+
+            # Get aligned images
+            aligned_front, _ = self._processor.align_for_preview(Path(self._current_front_file))
+            if aligned_front is None:
+                aligned_front = cv2.imread(self._current_front_file)
+
+            aligned_back = None
+            if self._current_back_file and Path(self._current_back_file).exists():
+                # For back, we need to align it. Try using cached alignment from current result.
+                current_result = self.current_result or {}
+                cached_angle = current_result.get('front_align_angle', 0.0)
+                cached_flipped = current_result.get('front_align_flipped', False)
+
+                back_img = cv2.imread(self._current_back_file)
+                if back_img is not None:
+                    h, w = back_img.shape[:2]
+                    # Apply same rotation as front (same scan)
+                    if abs(cached_angle) >= 0.8:
+                        center = (w // 2, h // 2)
+                        M = cv2.getRotationMatrix2D(center, cached_angle, 1.0)
+                        back_img = cv2.warpAffine(back_img, M, (w, h),
+                                                  flags=cv2.INTER_CUBIC,
+                                                  borderMode=cv2.BORDER_CONSTANT,
+                                                  borderValue=(255, 255, 255))
+                    if cached_flipped:
+                        back_img = cv2.rotate(back_img, cv2.ROTATE_180)
+                    aligned_back = back_img
+
+            # Extract front plate from front image
+            if aligned_front is not None:
+                front_detections = self._processor._detect_all_objects(aligned_front, conf=0.3)
+                front_plate_boxes = front_detections.get('front_plate', [])
+
+                if front_plate_boxes:
+                    # Get best detection
+                    best_box = max(front_plate_boxes, key=lambda b: b[4])
+                    x1, y1, x2, y2, conf = best_box
+
+                    # Add padding
+                    h, w = aligned_front.shape[:2]
+                    padding = 10
+                    crop_x1 = max(0, x1 - padding)
+                    crop_y1 = max(0, y1 - padding)
+                    crop_x2 = min(w, x2 + padding)
+                    crop_y2 = min(h, y2 + padding)
+
+                    # Crop and zoom
+                    crop = aligned_front[crop_y1:crop_y2, crop_x1:crop_x2].copy()
+                    if zoom != 1.0:
+                        crop = cv2.resize(crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
+
+                    # Convert to QPixmap
+                    front_pixmap = self._cv2_to_qpixmap(crop)
+
+            # Extract back plate from back image
+            if aligned_back is not None:
+                back_detections = self._processor._detect_all_objects(aligned_back, conf=0.3)
+                back_plate_boxes = back_detections.get('back_plate', [])
+
+                if back_plate_boxes:
+                    # Get best detection
+                    best_box = max(back_plate_boxes, key=lambda b: b[4])
+                    x1, y1, x2, y2, conf = best_box
+
+                    # Add padding
+                    h, w = aligned_back.shape[:2]
+                    padding = 10
+                    crop_x1 = max(0, x1 - padding)
+                    crop_y1 = max(0, y1 - padding)
+                    crop_x2 = min(w, x2 + padding)
+                    crop_y2 = min(h, y2 + padding)
+
+                    # Crop and zoom
+                    crop = aligned_back[crop_y1:crop_y2, crop_x1:crop_x2].copy()
+                    if zoom != 1.0:
+                        crop = cv2.resize(crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
+
+                    # Convert to QPixmap
+                    back_pixmap = self._cv2_to_qpixmap(crop)
+
+            return front_pixmap, back_pixmap
+
+        except Exception as e:
+            print(f"Error extracting plate regions: {e}")
+            return None, None
+
+    def _cv2_to_qpixmap(self, cv2_img) -> QPixmap:
+        """Convert OpenCV BGR image to QPixmap.
+
+        Args:
+            cv2_img: OpenCV image in BGR format
+
+        Returns:
+            QPixmap
+        """
+        h, w, ch = cv2_img.shape
+        bytes_per_line = ch * w
+        # Convert BGR to RGB for Qt
+        rgb_img = cv2_img[:, :, ::-1].copy()
+        q_img = QImage(rgb_img.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        return QPixmap.fromImage(q_img)
+
+    def show_plate_magnifier(self):
+        """Toggle the plate magnifier popup for mule comparison.
+
+        Extracts front and back plate regions at 200% zoom and displays
+        them side-by-side in a popup dialog. Press 'm' again to close.
+        """
+        # Toggle off if already showing
+        if hasattr(self, '_plate_magnifier_dialog') and self._plate_magnifier_dialog is not None:
+            if self._plate_magnifier_dialog.isVisible():
+                self._plate_magnifier_dialog.close()
+                self._plate_magnifier_dialog = None
+                return
+
+        if not self.current_result:
+            return
+
+        # Check if processor is available
+        if not hasattr(self, '_processor') or self._processor is None:
+            # Try to create processor lazily
+            model_path = Path(__file__).parent.parent / 'best.pt'
+            if not model_path.exists():
+                # Can't show magnifier without model
+                return
+
+        # Extract plate regions
+        front_pixmap, back_pixmap = self._extract_plate_regions(zoom=2.0)
+
+        # Show the dialog
+        from .plate_magnifier_dialog import PlateMagnifierDialog
+        self._plate_magnifier_dialog = PlateMagnifierDialog(front_pixmap, back_pixmap, parent=self)
+        # Clear reference when dialog is closed by any means
+        self._plate_magnifier_dialog.finished.connect(self._on_plate_magnifier_closed)
+        self._plate_magnifier_dialog.show()
+
+    def _on_plate_magnifier_closed(self):
+        """Clear plate magnifier dialog reference when closed."""
+        self._plate_magnifier_dialog = None
+
     def _save_zoom_pan_state(self):
         """Save the current zoom and pan state from the active viewer."""
         viewer = self._get_active_viewer()

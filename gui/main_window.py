@@ -238,6 +238,9 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence(Qt.SHIFT | Qt.Key_Up), self, self._pan_up)
         QShortcut(QKeySequence(Qt.SHIFT | Qt.Key_Down), self, self._pan_down)
 
+        # Plate magnifier (for mule comparison)
+        QShortcut(QKeySequence(Qt.Key_M), self, self._show_plate_magnifier)
+
     def _next_bill(self):
         """Navigate to next bill in results."""
         current = self.results_list.tree.currentItem()
@@ -514,6 +517,10 @@ class MainWindow(QMainWindow):
     def _pan_down(self):
         """Pan preview down."""
         self.preview_panel.pan(0, 50)
+
+    def _show_plate_magnifier(self):
+        """Show plate magnifier popup for mule comparison."""
+        self.preview_panel.show_plate_magnifier()
 
     def _setup_statusbar(self):
         """Setup the status bar."""
