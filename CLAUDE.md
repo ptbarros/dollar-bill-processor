@@ -293,3 +293,83 @@ Catalog: A1  Pos: 5
 ==============================
 ```
 Each bill gets two labels - one without catalog (for binder) and one with catalog + position (to store with bill).
+
+## Pattern Settings Migration (Added Feb 2025)
+
+### Problem Solved
+Previously, pattern customizations (like GAS_PUMP threshold) were stored in `user_patterns.yaml`, which got overwritten by `update.bat` when copying `*.yaml` files. This caused:
+- Gas pump threshold resetting from user value (e.g., 3.6) to default (3.5)
+- Custom pattern overrides being lost
+- Disabled/enabled pattern preferences resetting
+
+### Solution
+All user-customizable pattern data is now stored in `user_settings.yaml`, which is gitignored and preserved across updates.
+
+### What's Stored in user_settings.yaml
+```yaml
+pattern_overrides:
+  GAS_PUMP:
+    baseline_variance_min: 3.6
+  OTHER_PATTERN:
+    some_rule: value
+pattern_states:
+  PATTERN_A: false  # disabled
+  PATTERN_B: true   # enabled
+custom_patterns:
+  MY_BIRTHDAY:
+    description: "My special date"
+    tier: 10
+    rules:
+      contains: "0704"
+```
+
+### Migration
+On first run after update, `SettingsManager` automatically migrates data from old `user_patterns.yaml`:
+- `pattern_overrides` → `settings.pattern_overrides`
+- `disabled_patterns` → `settings.pattern_states[name] = False`
+- `enabled_patterns` → `settings.pattern_states[name] = True`
+- `custom_patterns` → `settings.custom_patterns`
+
+Only migrates values not already present (won't overwrite).
+
+### API Changes
+
+**SettingsManager new methods:**
+```python
+# Pattern rule overrides (any pattern, any rule)
+settings.get_pattern_override('GAS_PUMP', 'baseline_variance_min', default=3.5)
+settings.set_pattern_override('GAS_PUMP', 'baseline_variance_min', 3.6)
+
+# Convenience methods for GAS_PUMP threshold
+settings.get_gas_pump_threshold(default=3.5)
+settings.set_gas_pump_threshold(3.6)
+
+# Custom YAML patterns
+settings.get_custom_pattern('MY_PATTERN')
+settings.set_custom_pattern('MY_PATTERN', defn)
+settings.remove_custom_pattern('MY_PATTERN')
+```
+
+**PatternEngine changes:**
+- Now accepts optional `settings` parameter: `PatternEngine(settings=my_settings)`
+- Falls back to `get_settings()` singleton if not provided
+- `get_gas_pump_threshold()` / `set_gas_pump_threshold()` delegate to SettingsManager
+- `save_config()` syncs to SettingsManager instead of `user_patterns.yaml`
+
+### Files Modified
+- `settings_manager.py`: Added `pattern_overrides`, `custom_patterns`, migration logic
+- `pattern_engine_v2.py`: Integrated with SettingsManager
+- `gui/pattern_dialog.py`: Threshold editor uses SettingsManager
+- `update.bat`: Selectively copies YAML files (skips `user_patterns.yaml`)
+- `.gitignore`: Added `user_patterns.yaml`
+
+### Verification
+```bash
+# Check threshold persists after update
+python -c "
+from settings_manager import get_settings
+s = get_settings()
+print('Gas pump threshold:', s.get_gas_pump_threshold())
+print('Pattern overrides:', s.pattern_overrides)
+"
+```
