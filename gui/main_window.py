@@ -430,8 +430,47 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 print(f"Error cropping {result.get('serial', 'unknown')}: {e}")
 
+        # Generate printable labels file
+        self._generate_labels(results, output_dir)
+
         # Show confirmation
         self.statusBar().showMessage(f"Generated crops for {cropped_count} bill(s) in {output_dir}", 5000)
+
+    def _generate_labels(self, results: list, output_dir: Path):
+        """Generate printable labels file for bills.
+
+        Each bill gets two label entries:
+        1. Without catalog (for reference/binder)
+        2. With catalog (to store with the physical bill)
+        """
+        labels_file = output_dir / "bill_labels.txt"
+
+        with open(labels_file, 'a', encoding='utf-8') as f:
+            for result in results:
+                serial = result.get('serial', 'Unknown')
+                fancy_types = result.get('fancy_types', '')
+                # Get first pattern from comma-separated list
+                patterns = [p.strip() for p in fancy_types.split(',') if p.strip()]
+                pattern_str = patterns[0] if patterns else 'No Pattern'
+                series = result.get('series_year', '')
+
+                # Get catalog for the first matched pattern
+                catalog = ''
+                if patterns:
+                    catalog = self.settings.get_pattern_catalog(patterns[0], '')
+
+                # Label 1: Without catalog (for reference)
+                f.write(f"Serial: {serial}\n")
+                f.write(f"Pattern: {pattern_str}\n")
+                f.write(f"Series: {series}\n")
+                f.write("-" * 30 + "\n\n")
+
+                # Label 2: With catalog (to store with bill)
+                f.write(f"Serial: {serial}\n")
+                f.write(f"Pattern: {pattern_str}\n")
+                f.write(f"Series: {series}\n")
+                f.write(f"Catalog: {catalog}\n")
+                f.write("=" * 30 + "\n\n")
 
     def _zoom_in(self):
         """Zoom in on preview."""
