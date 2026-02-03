@@ -197,6 +197,14 @@ Optional feature to extract additional bill metadata and detect potential mule n
 | front_plate | 4 | Front | "FW I 30", "G144" |
 | back_plate | 0 | Back | "108", "523" |
 
+### OCR Improvements (Feb 2025)
+All plate info OCR uses **2x upscaling** before text recognition:
+- **Series year**: Captures suffix letter (A, B, etc.) that appears below the year
+- **Front plate**: Improves detection of "FW" and other small text
+- **Back plate**: Reads both large and small font plates reliably
+
+The `ocr_region()` helper function accepts an `upscale` parameter for this purpose.
+
 ### Mule Note Detection
 A **mule note** is a bill with mismatched front/back plates from different printing eras:
 - **Pre-1988**: Back plates had small font numbers
@@ -205,15 +213,17 @@ A **mule note** is a bill with mismatched front/back plates from different print
 
 **Detection logic:**
 1. Check if series year is 1988 or later (large font era)
-2. Check if YOLO detected back_plate region but OCR failed (small font indicator)
-3. If both true = potential mule (era mismatch)
+2. Check YOLO back_plate box height: ≤14px = small font, >14px = large font
+3. If large font era + small font back plate = potential mule (era mismatch)
 
-**Why OCR failure works:** EasyOCR reliably reads the larger modern font but fails on the smaller old-style font. This failure becomes a useful signal.
+**Box height thresholds** (based on testing):
+- Large font (modern): ~15px+ box height
+- Small font (old/mule): ~13px box height
 
 ### New CSV/GUI Columns
-- **Series**: Series year (e.g., "2013")
-- **Front Plate**: Front plate number (e.g., "FW I 30")
-- **Back Plate**: Back plate number (empty if small font/OCR failed)
+- **Series**: Series year with suffix (e.g., "2013", "2017A")
+- **Front Plate**: Front plate number (e.g., "FW I 30", "G144")
+- **Back Plate**: Back plate number (now reads both font sizes)
 - **Mule?**: "Yes" if potential mule detected
 
 ### Files Modified
