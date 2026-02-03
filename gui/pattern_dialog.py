@@ -1313,12 +1313,45 @@ end
         return '''
 <h2>Pattern Script API</h2>
 
+<h3>Script Header</h3>
+<pre>
+--[[
+Pattern: PATTERN_NAME
+Description: What it matches
+Tier: 1-10 (1=rarest, 10=common)
+Examples: ["12345678", "87654321"]
+DataFile: optional_data.csv
+--]]
+</pre>
+
 <h3>Input Context (ctx)</h3>
 <pre>
 ctx.digits      -- "12345678" (8 numeric characters)
 ctx.full_serial -- "A12345678B" (with prefix/suffix letters)
 ctx.digit_list  -- {1,2,3,4,5,6,7,8} as integer array
 ctx.metadata    -- {} additional detection data
+ctx.data        -- External data (if DataFile specified)
+ctx.data_by_key -- Key lookup dict (CSV only, keyed by first column)
+</pre>
+
+<h3>External Data Files (DataFile)</h3>
+<p>Patterns can load CSV or JSON files for lookup tables:</p>
+<pre>
+-- CSV: loaded as list + key lookup
+-- File: known_serials.csv
+-- serial,description,value
+-- 12345678,Ladder,$500
+
+local entry = ctx.data_by_key[ctx.digits]
+if entry then
+    return {matched = true, message = entry.description}
+end
+
+-- JSON: loaded as-is (any structure)
+-- File: dates.json
+-- {"dates": {"07041776": {"name": "July 4th"}}}
+
+local entry = ctx.data.dates[ctx.digits]
 </pre>
 
 <h3>Return Value</h3>
@@ -1327,10 +1360,12 @@ return {
     matched = true,  -- or false
     highlights = {
         {positions = {0, 7}, color = "orange", label = "pair"},
-        {positions = {1, 6}, color = "coral"},
     },
     connectors = {
         {from = 0, to = 7, color = "orange", style = "arc"},
+    },
+    group_boxes = {
+        {from = 0, to = 2, color = "gold", thickness = 3},
     },
     message = "Optional description"
 }
@@ -1340,16 +1375,17 @@ return {
 <ul>
 <li><b>purple</b> - Flipper-valid digits (0,1,6,8,9)</li>
 <li><b>blue</b> - Binary patterns (0,1)</li>
-<li><b>cyan</b> - Trinary patterns</li>
+<li><b>cyan</b> - Trinary/descending</li>
 <li><b>orange</b> - Primary pairs (radar)</li>
 <li><b>coral</b> - Secondary pairs</li>
-<li><b>gold</b> - Quads/runs</li>
+<li><b>gold</b> - Quads/runs/known serials</li>
 <li><b>salmon</b> - Tertiary pairs</li>
 <li><b>magenta</b> - Repeater</li>
-<li><b>yellow</b> - Solid/dominant</li>
-<li><b>lime</b> - Ladder sequence</li>
+<li><b>yellow</b> - Solid/dominant/peaks</li>
+<li><b>lime</b> - Ladder/ascending</li>
 <li><b>teal</b> - Double pairs</li>
 <li><b>red</b> - Errors/broken patterns</li>
+<li><b>gray</b> - Neutral/other</li>
 </ul>
 
 <h3>Connector Styles</h3>
@@ -1358,27 +1394,45 @@ return {
 <li><b>line</b> - Straight line</li>
 <li><b>dashed</b> - Dashed line</li>
 <li><b>bracket</b> - Bracket connector</li>
+<li><b>arrow</b> - Arrow connector</li>
 </ul>
 
 <h3>Helper Functions</h3>
 <pre>
+-- Analysis
 count_digits(s)           -- {["0"]=2, ["1"]=3, ...}
 find_runs(s)              -- {{digit, start, length}, ...}
-only_digits(s, allowed)   -- true if s contains only allowed
-is_ladder(s)              -- true if ascending or descending
-is_palindrome(s)          -- true if palindrome
-most_common(s)            -- digit, count
 unique_count(s)           -- number of unique digits
 digit_sum(s)              -- sum of all digits
+most_common(s)            -- digit, count
+get_unique_digits(s)      -- sorted unique digits as string
+
+-- Pattern checks
+is_ladder(s), is_ascending(s), is_descending(s)
+is_palindrome(s)
+is_repeater(s)            -- ABCDABCD
+is_alternating(s)         -- XYXYXYXY
+has_n_consecutive(s, n)   -- N identical in a row
+all_flip_valid(s)         -- all digits are 0,1,6,8,9
+flip_string(s)            -- 180-degree rotation
+
+-- String utilities
+only_digits(s, allowed)   -- s contains only allowed
+starts_with(s, prefix), ends_with(s, suffix)
+contains(s, substr)
+is_bookended(s, n)        -- first N == last N
+
+-- Visualization helpers
 highlight(positions, color, label)
+highlight_range(start, stop, color, label)
 connector(from, to, color, style)
+find_digit_positions(s, digit)
 </pre>
 
 <h3>Example: Palindrome Pattern</h3>
 <pre>
 function match(ctx)
-    local rev = string.reverse(ctx.digits)
-    if ctx.digits ~= rev then
+    if not is_palindrome(ctx.digits) then
         return {matched = false}
     end
 
@@ -1389,7 +1443,7 @@ function match(ctx)
     for i = 0, 3 do
         local j = 7 - i
         table.insert(highlights, {positions = {i, j}, color = colors[i+1]})
-        table.insert(connectors, {from = i, to = j, color = colors[i+1]})
+        table.insert(connectors, {from = i, to = j, color = colors[i+1], style = "arc"})
     end
 
     return {matched = true, highlights = highlights, connectors = connectors}
@@ -1401,47 +1455,137 @@ end
         """Copy API docs to clipboard for pasting into AI chat."""
         docs = '''# Lua Pattern Script API for Dollar Bill Serial Numbers
 
+## Script Header
+```lua
+--[[
+Pattern: PATTERN_NAME
+Description: What this pattern matches
+Tier: 1-10 (1=rarest, 10=common)
+Examples: ["12345678", "87654321"]
+DataFile: optional_data.csv
+--]]
+```
+
 ## Input Context
 The `ctx` table is available in every pattern script:
 - ctx.digits: "12345678" (8 numeric characters)
 - ctx.full_serial: "A12345678B" (with prefix/suffix letters)
-- ctx.digit_list: {1,2,3,4,5,6,7,8} as integer array (1-indexed)
+- ctx.digit_list: {1,2,3,4,5,6,7,8} as integer array (1-indexed in Lua)
 - ctx.metadata: {} additional detection metadata
+- ctx.data: External data loaded from DataFile (if specified)
+- ctx.data_by_key: Key lookup dict for CSV files (keyed by first column)
+
+## External Data Files (DataFile header)
+Patterns can declare a DataFile to load external CSV or JSON data:
+
+**CSV files** - Loaded as list of row dicts + automatic key lookup:
+```lua
+-- DataFile: known_serials.csv
+-- CSV format: serial,description,value
+--             12345678,Perfect ladder,$500
+
+local entry = ctx.data_by_key[ctx.digits]  -- O(1) lookup by first column
+if entry then
+    return {matched = true, message = entry.description .. " - " .. entry.value}
+end
+
+-- Or iterate all rows:
+for _, row in ipairs(ctx.data) do
+    if row.serial == ctx.digits then ...
+end
+```
+
+**JSON files** - Loaded as-is (any structure):
+```lua
+-- DataFile: special_dates.json
+-- JSON: {"dates": {"07041776": {"name": "July 4th", "significance": "Independence"}}}
+
+if ctx.data and ctx.data.dates then
+    local entry = ctx.data.dates[ctx.digits]
+    if entry then
+        return {matched = true, message = entry.name}
+    end
+end
+```
+
+**Path resolution:**
+- Filename only (e.g., `data.csv`): same directory as .lua file
+- `data/` prefix (e.g., `data/shared.csv`): patterns/data/ directory
 
 ## Return Value
 The match function must return a table with:
-- matched: boolean (true if pattern matches)
+- matched: boolean (required - true if pattern matches)
 - highlights: list of {positions = {0, 7}, color = "orange", label = "optional"}
 - connectors: list of {from = 0, to = 7, color = "orange", style = "arc"}
+- group_boxes: list of {from = 0, to = 2, color = "gold", thickness = 3} (box around digit range)
 - message: optional string describing the match
 
 ## Available Colors
-purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red
+purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red, gray
+
+## Connector Styles
+arc, line, dashed, bracket, arrow
 
 ## Helper Functions
-- count_digits(s): returns table of digit counts
-- find_runs(s): finds consecutive runs of same digit
-- only_digits(s, allowed): checks if s contains only allowed digits
-- is_ladder(s), is_ascending(s), is_descending(s): ladder checks
-- is_palindrome(s): palindrome check
-- most_common(s): returns most common digit and count
-- unique_count(s): number of unique digits
-- digit_sum(s): sum of all digits
-- all_flip_valid(s): checks if all digits are flip-valid (0,1,6,8,9)
-- flip_string(s): returns flipped version
 
-## Example Pattern
+### Analysis
+- count_digits(s): returns table {["0"]=count, ["1"]=count, ...}
+- find_runs(s): finds consecutive runs, returns {{digit, start, length}, ...}
+- unique_count(s): number of unique digits in string
+- digit_sum(s): sum of all digits
+- most_common(s): returns most_digit, count
+- get_unique_digits(s): returns sorted unique digits as string
+
+### Pattern Checks
+- is_ladder(s), is_ascending(s), is_descending(s): ladder pattern checks
+- find_ladder_of_length(s, min_len): find ladder of given minimum length
+- find_longest_ladder(s): find the longest ladder in string
+- is_palindrome(s): true if string equals its reverse
+- is_broken_palindrome(s, max_mismatches): near-palindrome check
+- is_repeater(s): true if ABCDABCD pattern
+- is_super_repeater(s): true if ABABABAB pattern
+- is_alternating(s): true if XYXYXYXY pattern
+- has_n_consecutive(s, n): true if N identical digits in a row
+- all_flip_valid(s): true if all digits are 0,1,6,8,9
+- flip_string(s): returns 180-degree rotated version
+
+### String Utilities
+- only_digits(s, allowed): true if s contains only digits in allowed string
+- starts_with(s, prefix), ends_with(s, suffix): prefix/suffix checks
+- contains(s, substr): substring check
+- is_bookended(s, n): true if first N digits == last N digits
+
+### Pair/Group Detection
+- find_pairs(s): find consecutive identical pairs
+- find_consecutive_pairs(s): find pairs with positions
+- has_four_consecutive_pairs(s): true if AABBCCDD pattern
+- count_pairs(s): total number of pairs
+- find_triples(s): find triple runs
+- find_quads(s): find quad+ runs
+
+### Visualization Helpers
+- highlight(positions, color, label): build highlight entry
+- highlight_range(start, stop, color, label): highlight range of positions
+- connector(from, to, color, style): build connector entry
+- find_digit_positions(s, digit): get all positions of a specific digit
+
+## Example: Palindrome Pattern
 ```lua
+--[[
+Pattern: MY_RADAR
+Description: Serial reads same forwards and backwards
+Tier: 3
+Examples: ["12344321", "45677654"]
+--]]
+
 function match(ctx)
-    -- Check if palindrome
-    local rev = string.reverse(ctx.digits)
-    if ctx.digits ~= rev then
+    if not is_palindrome(ctx.digits) then
         return {matched = false}
     end
 
+    local colors = {"orange", "coral", "gold", "salmon"}
     local highlights = {}
     local connectors = {}
-    local colors = {"orange", "coral", "gold", "salmon"}
 
     for i = 0, 3 do
         local j = 7 - i
@@ -1449,7 +1593,39 @@ function match(ctx)
         table.insert(connectors, {from = i, to = j, color = colors[i+1], style = "arc"})
     end
 
-    return {matched = true, highlights = highlights, connectors = connectors}
+    return {
+        matched = true,
+        highlights = highlights,
+        connectors = connectors,
+        message = "Palindrome serial number"
+    }
+end
+```
+
+## Example: Pattern with External Data
+```lua
+--[[
+Pattern: KNOWN_SERIALS
+Description: Match against database of known collectible serials
+Tier: 1
+DataFile: known_serials.csv
+--]]
+
+function match(ctx)
+    if not ctx.data_by_key then
+        return {matched = false}
+    end
+
+    local entry = ctx.data_by_key[ctx.digits]
+    if entry then
+        return {
+            matched = true,
+            highlights = {highlight_range(0, 7, "gold", "Known serial")},
+            message = entry.description .. " - " .. entry.value
+        }
+    end
+
+    return {matched = false}
 end
 ```
 '''

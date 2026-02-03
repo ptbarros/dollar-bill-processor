@@ -88,6 +88,50 @@ purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, re
 - **MINIR**: Copy of MINI_REPEATER (3-digit repeat like 94680680)
 - **TRPBK**: First 3 digits match last 3 digits (ABCxxABC like 61858618)
 
+### External Data Files (Added Feb 2025)
+
+Lua patterns can declare external data file dependencies (CSV/JSON) that get automatically loaded and injected into the pattern's execution context.
+
+**Header Declaration:**
+```lua
+--[[
+Pattern: KNOWN_SERIALS
+Description: Match against known collectible serials
+Tier: 5
+DataFile: known_serials.csv
+--]]
+```
+
+**Path Resolution:**
+1. If filename only (e.g., `known_serials.csv`): look in same directory as the .lua file
+2. If starts with `data/` (e.g., `data/common.csv`): look in `patterns/data/`
+
+**Supported Formats:**
+- **CSV**: First row = headers, loaded as `ctx.data` (list of row dicts) and `ctx.data_by_key` (dict keyed by first column)
+- **JSON**: Loaded as `ctx.data`, supports any structure (no automatic key lookup)
+
+**Usage in Lua:**
+```lua
+function match(ctx)
+    if not ctx.data_by_key then
+        return {matched = false}
+    end
+
+    local entry = ctx.data_by_key[ctx.digits]
+    if entry then
+        return {
+            matched = true,
+            message = entry.description .. " - " .. entry.value
+        }
+    end
+    return {matched = false}
+end
+```
+
+**Caching:** Data loaded once at startup (or on `engine.reload()`), not on every match.
+
+**Error Handling:** Missing/invalid data files log a warning; pattern still loads with `ctx.data = nil`.
+
 ## Testing Commands
 ```bash
 # Test pattern engine

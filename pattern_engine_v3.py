@@ -40,6 +40,9 @@ class LuaPatternInfo:
     examples: list = field(default_factory=list)
     odds: str = ""
     price: str = ""
+    data_file: str = ""           # Relative path to external data file (CSV/JSON)
+    data: Any = None              # Loaded data (list of dicts for CSV, any for JSON)
+    data_by_key: dict = None      # Dict keyed by first column (CSV only)
 
 
 class PatternEngineV3:
@@ -138,6 +141,14 @@ class PatternEngineV3:
                 price=metadata.get('price', '')
             )
 
+            # Load external data file if specified
+            data_file = metadata.get('datafile', '')
+            if data_file:
+                data, data_by_key = self._load_data_file(data_file, file_path)
+                info.data_file = data_file
+                info.data = data
+                info.data_by_key = data_by_key
+
             self.lua_patterns[name] = info
 
         except Exception as e:
@@ -191,8 +202,87 @@ class PatternEngineV3:
                 return [value]
         elif key == 'enabled':
             return value.lower() in ('true', 'yes', '1')
+        elif key == 'datafile':
+            # Keep as string path
+            return value
         else:
             return value
+
+    def _load_data_file(self, data_file: str, lua_file_path: Path) -> tuple:
+        """
+        Load external data file for a pattern.
+
+        Path resolution:
+        1. If starts with 'data/': look in patterns/data/
+        2. Otherwise: resolve relative to the .lua file's directory
+
+        Args:
+            data_file: Relative path to data file from pattern header
+            lua_file_path: Path to the Lua pattern file
+
+        Returns:
+            (data, data_by_key) tuple, or (None, None) on error
+        """
+        # Resolve path
+        if data_file.startswith('data/'):
+            file_path = self.patterns_dir / data_file
+        else:
+            file_path = lua_file_path.parent / data_file
+
+        if not file_path.exists():
+            print(f"Warning: Data file not found: {file_path}")
+            return None, None
+
+        try:
+            suffix = file_path.suffix.lower()
+            if suffix == '.csv':
+                return self._load_csv(file_path)
+            elif suffix == '.json':
+                return self._load_json(file_path)
+            else:
+                print(f"Warning: Unsupported data file format: {suffix}")
+                return None, None
+        except Exception as e:
+            print(f"Warning: Failed to load {file_path}: {e}")
+            return None, None
+
+    def _load_csv(self, file_path: Path) -> tuple:
+        """
+        Load CSV file as list of dicts with key lookup.
+
+        Returns:
+            (rows, data_by_key) where:
+            - rows: list of dicts with column names as keys
+            - data_by_key: dict keyed by first column value
+        """
+        import csv
+        with open(file_path, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames
+            rows = list(reader)
+
+        # Build key lookup from first column
+        data_by_key = {}
+        if rows and fieldnames:
+            first_col = fieldnames[0]
+            for row in rows:
+                key = row.get(first_col, '')
+                if key:
+                    data_by_key[key] = row
+
+        return rows, data_by_key
+
+    def _load_json(self, file_path: Path) -> tuple:
+        """
+        Load JSON file.
+
+        Returns:
+            (data, None) - JSON data can be any structure, no automatic key lookup
+        """
+        import json
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data, None
 
     def reload(self):
         """Reload all patterns (both YAML and Lua)."""
@@ -218,12 +308,19 @@ class PatternEngineV3:
             return []
 
         # Run Lua patterns first (they take precedence)
-        ctx = create_context(serial, metadata)
+        base_ctx = create_context(serial, metadata)
         for name, info in self.lua_patterns.items():
             if not info.enabled:
                 continue
 
             try:
+                # Create context with pattern's data injected
+                ctx = base_ctx.copy()
+                if info.data is not None:
+                    ctx['data'] = info.data
+                if info.data_by_key is not None:
+                    ctx['data_by_key'] = info.data_by_key
+
                 result = self.sandbox.execute(info.script, ctx)
                 if result.success and result.matched:
                     matches.append(PatternMatchV3(
@@ -299,6 +396,11 @@ class PatternEngineV3:
                 info = self.lua_patterns[pattern_name]
                 if info.enabled:
                     ctx = create_context(serial)
+                    # Inject pattern's data if available
+                    if info.data is not None:
+                        ctx['data'] = info.data
+                    if info.data_by_key is not None:
+                        ctx['data_by_key'] = info.data_by_key
                     result = self.sandbox.execute(info.script, ctx)
                     if result.success and result.matched:
                         # Merge Lua highlights
@@ -354,6 +456,11 @@ class PatternEngineV3:
         if pattern_name in self.lua_patterns:
             info = self.lua_patterns[pattern_name]
             ctx = create_context(serial, metadata)
+            # Inject pattern's data if available
+            if info.data is not None:
+                ctx['data'] = info.data
+            if info.data_by_key is not None:
+                ctx['data_by_key'] = info.data_by_key
             return self.sandbox.execute(info.script, ctx)
         else:
             # For YAML patterns, create a pseudo-result
@@ -470,7 +577,7 @@ class PatternEngineV3:
         """Get info about a pattern (Lua or YAML)."""
         if name in self.lua_patterns:
             info = self.lua_patterns[name]
-            return {
+            result = {
                 'name': info.name,
                 'description': info.description,
                 'tier': info.tier,
@@ -481,6 +588,11 @@ class PatternEngineV3:
                 'price': info.price,
                 'script': info.script
             }
+            # Include data file info if present
+            if info.data_file:
+                result['data_file'] = info.data_file
+                result['data_loaded'] = info.data is not None
+            return result
         else:
             yaml_info = self.yaml_engine.get_pattern_info(name)
             if yaml_info:

@@ -296,7 +296,30 @@ class PatternSandbox:
             lua_metadata = lua.table_from(metadata)
             lua_table['metadata'] = lua_metadata
 
+        # Add external data if present (from DataFile)
+        data = ctx.get('data')
+        if data is not None:
+            lua_table['data'] = self._convert_to_lua(data)
+
+        data_by_key = ctx.get('data_by_key')
+        if data_by_key is not None:
+            lua_table['data_by_key'] = self._convert_to_lua(data_by_key)
+
         return lua_table
+
+    def _convert_to_lua(self, obj: Any) -> Any:
+        """Recursively convert Python object to Lua table."""
+        lua = self._get_lua()
+
+        if isinstance(obj, dict):
+            return lua.table_from({
+                k: self._convert_to_lua(v) for k, v in obj.items()
+            })
+        elif isinstance(obj, list):
+            return lua.table_from([self._convert_to_lua(item) for item in obj])
+        else:
+            # Primitives (str, int, float, bool, None) pass through
+            return obj
 
     def _lua_result_to_python(self, lua_result, execution_time: float) -> LuaExecutionResult:
         """Convert Lua result table to Python LuaExecutionResult."""
