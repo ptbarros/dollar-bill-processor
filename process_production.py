@@ -1425,7 +1425,8 @@ class ProductionProcessor:
         }
 
         # Helper function to extract text from a region using OCR
-        def ocr_region(img: np.ndarray, boxes: list, allowlist: str, clean_func=None) -> str:
+        def ocr_region(img: np.ndarray, boxes: list, allowlist: str, clean_func=None,
+                       extra_bottom_pad: int = 0, upscale: int = 1) -> str:
             if not boxes or img is None or img.size == 0:
                 return ''
             h, w = img.shape[:2]
@@ -1433,17 +1434,22 @@ class ProductionProcessor:
             best_box = max(boxes, key=lambda b: b[4])
             x1, y1, x2, y2, conf = best_box
 
-            # Add small padding
+            # Add small padding (with optional extra bottom padding for multi-line text)
             pad = 5
             x1 = max(0, x1 - pad)
             y1 = max(0, y1 - pad)
             x2 = min(w, x2 + pad)
-            y2 = min(h, y2 + pad)
+            y2 = min(h, y2 + pad + extra_bottom_pad)
 
             # Extract crop
             crop = img[y1:y2, x1:x2]
             if crop.size == 0:
                 return ''
+
+            # Upscale if requested (helps OCR detect small text like series suffix)
+            if upscale > 1:
+                crop = cv2.resize(crop, None, fx=upscale, fy=upscale,
+                                  interpolation=cv2.INTER_CUBIC)
 
             # Run OCR
             get_timing().add_ocr_call()
@@ -1467,9 +1473,14 @@ class ProductionProcessor:
         def clean_series(text: str) -> str:
             # Remove "SERIES" prefix if present
             text = text.upper().replace('SERIES', '').strip()
-            # Extract year pattern like "2017" or "2017A"
-            match = re.search(r'(\d{4}[A-Z]?)', text)
-            return match.group(1) if match else text
+            # Extract year pattern like "2017" or "2017A" (handles space between year and suffix)
+            # Pattern: 4-digit year, optional whitespace, optional single letter suffix
+            match = re.search(r'(\d{4})\s*([A-Z])?', text)
+            if match:
+                year = match.group(1)
+                suffix = match.group(2) or ''
+                return year + suffix
+            return text
 
         def clean_front_plate(text: str) -> str:
             # Keep alphanumeric and spaces
@@ -1484,12 +1495,16 @@ class ProductionProcessor:
             front_detections = self._detect_all_objects(front_img, conf=0.3)
 
             # Extract series year (class 8)
+            # Note: suffix letter (A, B, etc.) appears below the year on the bill.
+            # YOLO typically captures the full region including suffix, but OCR needs
+            # upscaling to detect the small suffix letter reliably.
             series_boxes = front_detections.get('series_year', [])
             if series_boxes:
                 result['series_year'] = ocr_region(
                     front_img, series_boxes,
                     'SERIES0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ ',
-                    clean_series
+                    clean_series,
+                    upscale=2  # 2x upscale helps OCR detect small suffix letter
                 )
 
             # Extract front plate (class 4)
@@ -1498,7 +1513,8 @@ class ProductionProcessor:
                 result['front_plate'] = ocr_region(
                     front_img, front_plate_boxes,
                     'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
-                    clean_front_plate
+                    clean_front_plate,
+                    upscale=2  # 2x upscale helps with small plate text
                 )
 
         # Extract from back image (back plate + mule detection)
@@ -1515,11 +1531,12 @@ class ProductionProcessor:
                 box_height = y2 - y1
                 result['back_plate_box_height'] = box_height
 
-                # Try OCR
+                # Try OCR (2x upscale helps detect small font on older/mule plates)
                 result['back_plate'] = ocr_region(
                     back_img, back_plate_boxes,
                     '0123456789',
-                    clean_back_plate
+                    clean_back_plate,
+                    upscale=2
                 )
 
                 # Mule detection: A mule is a MISMATCH between front/back plate eras
@@ -1536,8 +1553,8 @@ class ProductionProcessor:
                         year = int(year_match.group(1))
                         is_large_font_era = year >= 1988
 
-                # Small font detected = OCR failed on detected region
-                small_font_back = result['back_plate_detected'] and not result['back_plate']
+                # Small font detected by YOLO box height (small font ~13px, large font ~15px+)
+                small_font_back = box_height <= 14
 
                 # Mule = large font era bill with small font back plate (mismatch)
                 result['potential_mule'] = is_large_font_era and small_font_back
