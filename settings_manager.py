@@ -130,12 +130,16 @@ class SettingsManager:
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
         self.pattern_colors: Dict[str, str] = {}  # Pattern name -> hex color
         self.pattern_catalogs: Dict[str, str] = {}  # Pattern name -> catalog location (e.g., "A1", "B2")
+        self.pattern_overrides: Dict[str, Dict[str, Any]] = {}  # e.g., {'GAS_PUMP': {'baseline_variance_min': 3.6}}
+        self.custom_patterns: Dict[str, Dict] = {}  # User-defined YAML patterns
         self.custom_values: Dict[str, Any] = {}  # Arbitrary user values
         self._load()
 
     def _load(self):
         """Load settings from YAML file."""
         if not self.path.exists():
+            # Still try to migrate from user_patterns.yaml even if user_settings.yaml doesn't exist
+            self._migrate_from_user_patterns()
             return
 
         with open(self.path, 'r') as f:
@@ -227,8 +231,74 @@ class SettingsManager:
         # Load pattern catalogs
         self.pattern_catalogs = data.get('pattern_catalogs', {})
 
+        # Load pattern overrides (rule customizations like GAS_PUMP threshold)
+        self.pattern_overrides = data.get('pattern_overrides', {})
+
+        # Load custom YAML patterns
+        self.custom_patterns = data.get('custom_patterns', {})
+
         # Load custom values
         self.custom_values = data.get('custom_values', {})
+
+        # Migrate from old user_patterns.yaml if needed
+        self._migrate_from_user_patterns()
+
+    def _migrate_from_user_patterns(self):
+        """Migrate data from old user_patterns.yaml to user_settings.yaml.
+
+        This handles the one-time migration of:
+        - pattern_overrides (e.g., GAS_PUMP threshold)
+        - disabled_patterns / enabled_patterns
+        - custom_patterns
+
+        Only migrates values not already present in user_settings.yaml.
+        """
+        user_patterns_path = self.path.parent / "user_patterns.yaml"
+        if not user_patterns_path.exists():
+            return
+
+        try:
+            with open(user_patterns_path, 'r') as f:
+                old_data = yaml.safe_load(f) or {}
+        except Exception:
+            return
+
+        migrated = False
+
+        # Migrate pattern_overrides (e.g., GAS_PUMP threshold)
+        old_overrides = old_data.get('pattern_overrides', {})
+        for pattern_name, overrides in old_overrides.items():
+            if pattern_name not in self.pattern_overrides:
+                self.pattern_overrides[pattern_name] = overrides
+                migrated = True
+            else:
+                # Merge individual rule overrides
+                for rule_type, value in overrides.items():
+                    if rule_type not in self.pattern_overrides[pattern_name]:
+                        self.pattern_overrides[pattern_name][rule_type] = value
+                        migrated = True
+
+        # Migrate disabled_patterns to pattern_states
+        for pattern_name in old_data.get('disabled_patterns', []):
+            if pattern_name not in self.pattern_states:
+                self.pattern_states[pattern_name] = False
+                migrated = True
+
+        # Migrate enabled_patterns to pattern_states
+        for pattern_name in old_data.get('enabled_patterns', []):
+            if pattern_name not in self.pattern_states:
+                self.pattern_states[pattern_name] = True
+                migrated = True
+
+        # Migrate custom_patterns
+        old_custom = old_data.get('custom_patterns', {})
+        for pattern_name, defn in old_custom.items():
+            if defn and pattern_name not in self.custom_patterns:
+                self.custom_patterns[pattern_name] = defn
+                migrated = True
+
+        if migrated:
+            self.save()
 
     def save(self):
         """Save settings to YAML file."""
@@ -303,6 +373,8 @@ class SettingsManager:
             'pattern_states': self.pattern_states,
             'pattern_colors': self.pattern_colors,
             'pattern_catalogs': self.pattern_catalogs,
+            'pattern_overrides': self.pattern_overrides,
+            'custom_patterns': self.custom_patterns,
             'custom_values': self.custom_values,
         }
 
@@ -347,6 +419,43 @@ class SettingsManager:
         elif pattern_name in self.pattern_catalogs:
             del self.pattern_catalogs[pattern_name]
 
+    def get_pattern_override(self, pattern_name: str, rule_type: str, default: Any = None) -> Any:
+        """Get a pattern rule override value."""
+        return self.pattern_overrides.get(pattern_name, {}).get(rule_type, default)
+
+    def set_pattern_override(self, pattern_name: str, rule_type: str, value: Any):
+        """Set a pattern rule override value."""
+        if pattern_name not in self.pattern_overrides:
+            self.pattern_overrides[pattern_name] = {}
+        self.pattern_overrides[pattern_name][rule_type] = value
+
+    def get_gas_pump_threshold(self, default: float = 3.5) -> float:
+        """Get the GAS_PUMP baseline_variance_min threshold.
+
+        Convenience method for the common GAS_PUMP threshold setting.
+        """
+        return float(self.get_pattern_override('GAS_PUMP', 'baseline_variance_min', default))
+
+    def set_gas_pump_threshold(self, threshold: float):
+        """Set the GAS_PUMP baseline_variance_min threshold.
+
+        Convenience method for the common GAS_PUMP threshold setting.
+        """
+        self.set_pattern_override('GAS_PUMP', 'baseline_variance_min', threshold)
+
+    def get_custom_pattern(self, pattern_name: str) -> Optional[Dict]:
+        """Get a custom YAML pattern definition."""
+        return self.custom_patterns.get(pattern_name)
+
+    def set_custom_pattern(self, pattern_name: str, defn: Dict):
+        """Set a custom YAML pattern definition."""
+        self.custom_patterns[pattern_name] = defn
+
+    def remove_custom_pattern(self, pattern_name: str):
+        """Remove a custom YAML pattern."""
+        if pattern_name in self.custom_patterns:
+            del self.custom_patterns[pattern_name]
+
     def set_custom_value(self, key: str, value: Any):
         """Set a custom user value."""
         self.custom_values[key] = value
@@ -378,6 +487,8 @@ class SettingsManager:
         self.pattern_states = {}
         self.pattern_colors = {}
         self.pattern_catalogs = {}
+        self.pattern_overrides = {}
+        self.custom_patterns = {}
         self.custom_values = {}
 
     def export_settings(self, export_path: Path):

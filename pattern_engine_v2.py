@@ -8,9 +8,12 @@ Single source of truth for CLI, GUI, and multi-denomination support.
 import re
 import yaml
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from dataclasses import dataclass
 from collections import Counter
+
+if TYPE_CHECKING:
+    from settings_manager import SettingsManager
 
 
 @dataclass
@@ -27,12 +30,22 @@ class PatternEngine:
     All pattern logic driven by YAML config.
     """
 
-    def __init__(self, config_path: Path = None):
+    def __init__(self, config_path: Path = None, settings: 'SettingsManager' = None):
         if config_path is None:
             self.config_path = Path(__file__).parent / "patterns_v2.yaml"
         else:
             self.config_path = Path(config_path) if isinstance(config_path, str) else config_path
         self.user_config_path = self.config_path.parent / "user_patterns.yaml"
+
+        # Use provided settings manager or get global instance
+        self._settings = settings
+        if self._settings is None:
+            try:
+                from settings_manager import get_settings
+                self._settings = get_settings()
+            except ImportError:
+                self._settings = None
+
         self.config = self._load_config()
         self.user_config = self._load_user_config()
         self.patterns = self._build_patterns()
@@ -45,7 +58,33 @@ class PatternEngine:
             return yaml.safe_load(f)
 
     def _load_user_config(self) -> dict:
-        """Load user-specific pattern settings (custom patterns, enable/disable overrides)."""
+        """Load user-specific pattern settings from SettingsManager.
+
+        Returns a dict in the legacy format for backward compatibility:
+        - custom_patterns: dict of user-defined YAML patterns
+        - disabled_patterns: list of pattern names to disable
+        - enabled_patterns: list of pattern names to enable
+        - pattern_overrides: dict of rule overrides per pattern
+        """
+        # If we have a settings manager, use it as the source of truth
+        if self._settings is not None:
+            # Build disabled/enabled lists from pattern_states
+            disabled = []
+            enabled = []
+            for name, is_enabled in self._settings.pattern_states.items():
+                if is_enabled:
+                    enabled.append(name)
+                else:
+                    disabled.append(name)
+
+            return {
+                'custom_patterns': self._settings.custom_patterns.copy(),
+                'disabled_patterns': disabled,
+                'enabled_patterns': enabled,
+                'pattern_overrides': self._settings.pattern_overrides.copy(),
+            }
+
+        # Fallback to reading from user_patterns.yaml (legacy)
         if self.user_config_path.exists():
             with open(self.user_config_path, 'r') as f:
                 return yaml.safe_load(f) or {}
@@ -583,7 +622,11 @@ class PatternEngine:
         return {k: v for k, v in self.patterns.items() if v.get('tier') == tier}
 
     def set_pattern_enabled(self, name: str, enabled: bool):
-        """Enable/disable a pattern (stored in user config, not main file)."""
+        """Enable/disable a pattern (stored in SettingsManager or user config)."""
+        # Update SettingsManager if available
+        if self._settings is not None:
+            self._settings.set_pattern_enabled(name, enabled)
+
         # Initialize lists if needed
         if 'disabled_patterns' not in self.user_config:
             self.user_config['disabled_patterns'] = []
@@ -622,31 +665,47 @@ class PatternEngine:
         self.patterns = self._build_patterns()
 
     def add_custom_pattern(self, name: str, defn: dict):
-        """Add a custom pattern to user config."""
-        if 'custom_patterns' not in self.user_config:
-            self.user_config['custom_patterns'] = {}
-        self.user_config['custom_patterns'][name] = defn
+        """Add a custom pattern to SettingsManager or user config."""
+        if self._settings is not None:
+            self._settings.set_custom_pattern(name, defn)
+            # Update local user_config for consistency
+            if 'custom_patterns' not in self.user_config:
+                self.user_config['custom_patterns'] = {}
+            self.user_config['custom_patterns'][name] = defn
+        else:
+            if 'custom_patterns' not in self.user_config:
+                self.user_config['custom_patterns'] = {}
+            self.user_config['custom_patterns'][name] = defn
         self.patterns = self._build_patterns()
 
     def remove_custom_pattern(self, name: str):
-        """Remove a custom pattern from user config."""
-        if 'custom_patterns' in self.user_config and name in self.user_config['custom_patterns']:
-            del self.user_config['custom_patterns'][name]
+        """Remove a custom pattern from SettingsManager or user config."""
+        if self._settings is not None:
+            self._settings.remove_custom_pattern(name)
+            # Update local user_config for consistency
+            if 'custom_patterns' in self.user_config and name in self.user_config['custom_patterns']:
+                del self.user_config['custom_patterns'][name]
+        else:
+            if 'custom_patterns' in self.user_config and name in self.user_config['custom_patterns']:
+                del self.user_config['custom_patterns'][name]
         self.patterns = self._build_patterns()
 
     def get_custom_patterns(self) -> dict:
-        """Get all custom patterns from user config."""
+        """Get all custom patterns from SettingsManager or user config."""
+        if self._settings is not None:
+            return self._settings.custom_patterns.copy()
         return self.user_config.get('custom_patterns', {}).copy()
 
     def get_gas_pump_threshold(self) -> float:
         """Get the GAS_PUMP baseline_variance_min threshold.
 
-        Checks user overrides first, then main config, then defaults to 3.5.
+        Checks SettingsManager first, then main config, then defaults to 3.5.
         """
-        # Check user overrides first
-        overrides = self.user_config.get('pattern_overrides', {})
-        if 'GAS_PUMP' in overrides and 'baseline_variance_min' in overrides['GAS_PUMP']:
-            return float(overrides['GAS_PUMP']['baseline_variance_min'])
+        # Check settings manager first
+        if self._settings is not None:
+            override = self._settings.get_pattern_override('GAS_PUMP', 'baseline_variance_min')
+            if override is not None:
+                return float(override)
 
         # Check main config
         patterns = self.config.get('patterns', {})
@@ -661,23 +720,52 @@ class PatternEngine:
     def set_gas_pump_threshold(self, threshold: float):
         """Set the GAS_PUMP baseline_variance_min threshold and save.
 
-        Updates the user config overrides and saves to file.
+        Updates the SettingsManager and saves to file.
         """
-        if 'pattern_overrides' not in self.user_config:
-            self.user_config['pattern_overrides'] = {}
-        if 'GAS_PUMP' not in self.user_config['pattern_overrides']:
-            self.user_config['pattern_overrides']['GAS_PUMP'] = {}
-
-        self.user_config['pattern_overrides']['GAS_PUMP']['baseline_variance_min'] = threshold
-        self.save_config()
+        if self._settings is not None:
+            self._settings.set_gas_pump_threshold(threshold)
+            self._settings.save()
+            # Rebuild user_config to reflect the change
+            self.user_config = self._load_user_config()
+        else:
+            # Legacy fallback
+            if 'pattern_overrides' not in self.user_config:
+                self.user_config['pattern_overrides'] = {}
+            if 'GAS_PUMP' not in self.user_config['pattern_overrides']:
+                self.user_config['pattern_overrides']['GAS_PUMP'] = {}
+            self.user_config['pattern_overrides']['GAS_PUMP']['baseline_variance_min'] = threshold
+            self.save_config()
 
         # Rebuild patterns to pick up the new threshold
         self.patterns = self._build_patterns()
 
     def save_config(self):
-        """Save user config to file (preserves main patterns file)."""
-        with open(self.user_config_path, 'w') as f:
-            yaml.dump(self.user_config, f, default_flow_style=False, sort_keys=False)
+        """Save user config via SettingsManager (or legacy file).
+
+        When SettingsManager is available, syncs pattern_states, custom_patterns,
+        and pattern_overrides to user_settings.yaml.
+        """
+        if self._settings is not None:
+            # Sync disabled/enabled patterns to pattern_states
+            for name in self.user_config.get('disabled_patterns', []):
+                self._settings.pattern_states[name] = False
+            for name in self.user_config.get('enabled_patterns', []):
+                self._settings.pattern_states[name] = True
+
+            # Sync custom patterns
+            self._settings.custom_patterns = self.user_config.get('custom_patterns', {}).copy()
+
+            # Sync pattern overrides
+            for pattern_name, overrides in self.user_config.get('pattern_overrides', {}).items():
+                if pattern_name not in self._settings.pattern_overrides:
+                    self._settings.pattern_overrides[pattern_name] = {}
+                self._settings.pattern_overrides[pattern_name].update(overrides)
+
+            self._settings.save()
+        else:
+            # Legacy fallback
+            with open(self.user_config_path, 'w') as f:
+                yaml.dump(self.user_config, f, default_flow_style=False, sort_keys=False)
 
     def get_digit_highlights(self, serial: str, matched_patterns: List[str]) -> dict:
         """Get highlight and visualization info for pattern overlay.

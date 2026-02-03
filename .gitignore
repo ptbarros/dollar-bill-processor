@@ -47,6 +47,7 @@ Jan23 Test/
 
 # User data files
 user_settings.yaml
+user_patterns.yaml
 corrections.yaml
 .session_recovery.json
 

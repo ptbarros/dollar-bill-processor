@@ -519,10 +519,10 @@ class PatternDialog(QDialog):
         if height_ratio_rule:
             self._current_threshold_pattern = name
             rule_type, value = height_ratio_rule
-            # Check for user override
-            overrides = self.engine.user_config.get('pattern_overrides', {})
-            if name in overrides and rule_type in overrides[name]:
-                value = overrides[name][rule_type]
+            # Check for user override in SettingsManager first
+            override = self.settings.get_pattern_override(name, rule_type)
+            if override is not None:
+                value = override
             self.threshold_label.setText(f"Threshold ({rule_type}):")
             self.threshold_edit.setText(str(value))
             self.threshold_label.show()
@@ -570,13 +570,14 @@ class PatternDialog(QDialog):
         if not rule_type:
             return
 
-        # Store override in user config
-        if 'pattern_overrides' not in self.engine.user_config:
-            self.engine.user_config['pattern_overrides'] = {}
-        if name not in self.engine.user_config['pattern_overrides']:
-            self.engine.user_config['pattern_overrides'][name] = {}
+        # Store override in SettingsManager
+        self.settings.set_pattern_override(name, rule_type, value)
+        self.settings.save()
 
-        self.engine.user_config['pattern_overrides'][name][rule_type] = value
+        # Rebuild patterns to pick up the new threshold
+        self.engine.reload()
+
+        QMessageBox.information(self, "Saved", f"Threshold for {name} set to {value}")
 
     def _view_lua_script(self):
         """View the Lua script for the selected pattern."""
@@ -684,12 +685,6 @@ class PatternDialog(QDialog):
                     "only your modified version to be used."
                 )
         self.engine.save_config()
-
-        # Update the in-memory pattern definition
-        if name in self.engine.patterns:
-            self.engine.patterns[name]['rules'][rule_type] = value
-
-        QMessageBox.information(self, "Saved", f"Threshold for {name} set to {value}")
 
     def _test_serial(self):
         """Test a serial number against all patterns."""
