@@ -48,6 +48,7 @@ Jan23 Test/
 # User data files
 user_settings.yaml
 corrections.yaml
+.session_recovery.json
 
 # Example/test files
 *_example.py

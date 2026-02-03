@@ -34,6 +34,13 @@ class ProcessingSettings:
 
 
 @dataclass
+class AutosaveSettings:
+    """Autosave and session recovery settings."""
+    enabled: bool = True  # Enable periodic autosave
+    interval_seconds: int = 30  # Seconds between autosaves (10-300)
+
+
+@dataclass
 class UISettings:
     """UI-related settings."""
     default_working_dir: str = ""  # Starting directory for file browse dialogs
@@ -119,6 +126,7 @@ class SettingsManager:
         self.export = ExportSettings()
         self.crop = CropSettings()
         self.monitor = MonitorSettings()
+        self.autosave = AutosaveSettings()
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
         self.pattern_colors: Dict[str, str] = {}  # Pattern name -> hex color
         self.pattern_catalogs: Dict[str, str] = {}  # Pattern name -> catalog location (e.g., "A1", "B2")
@@ -204,6 +212,12 @@ class SettingsManager:
             self.monitor.file_settle_time = mon.get('file_settle_time', 1.0)
             self.monitor.auto_archive = mon.get('auto_archive', True)
 
+        # Load autosave settings
+        if 'autosave' in data:
+            auto = data['autosave']
+            self.autosave.enabled = auto.get('enabled', True)
+            self.autosave.interval_seconds = auto.get('interval_seconds', 30)
+
         # Load pattern states
         self.pattern_states = data.get('pattern_states', {})
 
@@ -282,6 +296,10 @@ class SettingsManager:
                 'file_settle_time': self.monitor.file_settle_time,
                 'auto_archive': self.monitor.auto_archive,
             },
+            'autosave': {
+                'enabled': self.autosave.enabled,
+                'interval_seconds': self.autosave.interval_seconds,
+            },
             'pattern_states': self.pattern_states,
             'pattern_colors': self.pattern_colors,
             'pattern_catalogs': self.pattern_catalogs,
@@ -356,6 +374,7 @@ class SettingsManager:
         self.export = ExportSettings()
         self.crop = CropSettings()
         self.monitor = MonitorSettings()
+        self.autosave = AutosaveSettings()
         self.pattern_states = {}
         self.pattern_colors = {}
         self.pattern_catalogs = {}

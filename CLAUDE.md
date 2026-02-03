@@ -230,3 +230,66 @@ Prime series for finding mules (transition period):
 - Series 1988A
 - Series 1993
 - Series 1995
+
+## Session Recovery & Autosave (Added Feb 2025)
+
+### Overview
+Automatic session state preservation to protect against crashes and power loss. If the app closes unexpectedly, progress can be restored on next startup.
+
+### How It Works
+- **Periodic autosave**: Every 30 seconds (configurable), session state is saved to `.session_recovery.json`
+- **Atomic writes**: Uses temp file + rename for data integrity
+- **Dirty flag tracking**: Only saves when data actually changes
+- **Auto-clear on archive**: Recovery file deleted after successful archive
+
+### Settings
+- **Settings → Processing → "Enable autosave"**: Toggle on/off (default: on)
+- **Settings → Processing → "Save interval"**: 10-300 seconds (default: 30)
+
+### Recovery Flow
+1. On startup, checks for `.session_recovery.json`
+2. If found, shows Recovery Dialog with session info
+3. User chooses "Restore Session" or "Discard & Start Fresh"
+4. If restored, YOLO processor loads automatically for cropping/alignment
+
+### Recovery File Contents
+```json
+{
+  "version": 1,
+  "timestamp": "2026-02-02T14:30:00",
+  "input_directory": "/path/to/input",
+  "results": [...],
+  "processing_complete": true,
+  "total_processed": 1000,
+  "last_selected_index": 800
+}
+```
+
+### Key Features
+- **Lazy processor loading**: YOLO loads on-demand for restored sessions
+- **Alignment data preserved**: `front_align_angle` and `front_align_flipped` saved/restored
+- **Boolean normalization**: Handles string "True"/"False" conversion on load
+- **Config loading**: Lazy processor loads `config.yaml` for crop settings
+
+### Files
+- `session_recovery.py`: SessionRecoveryManager class
+- `gui/recovery_dialog.py`: Recovery prompt dialog
+- `settings_manager.py`: AutosaveSettings dataclass
+- `gui/settings_dialog.py`: Autosave UI controls
+- `gui/main_window.py`: Timer, recovery check, lazy processor creation
+
+### Bill Labels
+When generating crops, `bill_labels.txt` is created/appended with:
+```
+Serial: A12345678B
+Pattern: RADAR
+Series: 2013
+------------------------------
+
+Serial: A12345678B
+Pattern: RADAR
+Series: 2013
+Catalog: A1  Pos: 5
+==============================
+```
+Each bill gets two labels - one without catalog (for binder) and one with catalog + position (to store with bill).

@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QSplitter, QStatusBar, QMenuBar, QMenu, QFileDialog, QMessageBox,
     QProgressBar, QLabel, QPushButton
 )
-from PySide6.QtCore import Qt, Signal, Slot, QThread
+from PySide6.QtCore import Qt, Signal, Slot, QThread, QTimer
 from PySide6.QtGui import QAction, QKeySequence, QShortcut, QPixmap, QImage
 
 # Import our components
@@ -27,6 +27,7 @@ from .preview_panel import PreviewPanel
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from settings_manager import SettingsManager, get_settings
 from correction_manager import CorrectionManager
+from session_recovery import SessionRecoveryManager, get_recovery_manager
 
 
 class MainWindow(QMainWindow):
@@ -38,6 +39,7 @@ class MainWindow(QMainWindow):
         # Load settings
         self.settings = get_settings()
         self.correction_manager = CorrectionManager()
+        self.recovery_manager = get_recovery_manager()
 
         # Processing state
         self.processor = None
@@ -49,6 +51,10 @@ class MainWindow(QMainWindow):
         self.file_watcher = None
         self.monitor_thread = None
 
+        # Autosave state
+        self._session_dirty = False
+        self._current_input_dir = ""
+
         # Debounce for alignment warnings (prevent spam during batch load)
         self._last_align_warning_time = 0
 
@@ -58,9 +64,13 @@ class MainWindow(QMainWindow):
         self._setup_shortcuts()
         self._setup_statusbar()
         self._restore_geometry()
+        self._setup_autosave_timer()
         self._apply_settings()  # Apply font size and other settings
 
         self.setWindowTitle("Dollar Bill Processor")
+
+        # Check for recovery on startup (after UI is ready)
+        QTimer.singleShot(100, self._check_for_recovery)
 
     def _setup_ui(self):
         """Setup the main UI layout."""
@@ -382,14 +392,18 @@ class MainWindow(QMainWindow):
         if not results:
             return
 
-        # Get processor
+        # Get processor - try existing ones first
         processor = self.processor
         if not processor and hasattr(self, 'processing_thread') and self.processing_thread:
             processor = self.processing_thread.processor
+        if not processor and hasattr(self, 'monitor_thread') and self.monitor_thread:
+            processor = self.monitor_thread.processor
 
+        # If no processor exists, create one lazily for cropping
         if not processor:
-            QMessageBox.warning(self, "No Processor", "Please process a folder first to enable cropping.")
-            return
+            processor = self._get_or_create_processor()
+            if not processor:
+                return  # User cancelled or error occurred
 
         # Get output directory - use last output dir or ask
         output_dir = Path(self.settings.ui.last_output_dir) if self.settings.ui.last_output_dir else None
@@ -449,6 +463,7 @@ class MainWindow(QMainWindow):
             for result in results:
                 serial = result.get('serial', 'Unknown')
                 fancy_types = result.get('fancy_types', '')
+                position = result.get('position', '')
                 # Get first pattern from comma-separated list
                 patterns = [p.strip() for p in fancy_types.split(',') if p.strip()]
                 pattern_str = patterns[0] if patterns else 'No Pattern'
@@ -469,7 +484,7 @@ class MainWindow(QMainWindow):
                 f.write(f"Serial: {serial}\n")
                 f.write(f"Pattern: {pattern_str}\n")
                 f.write(f"Series: {series}\n")
-                f.write(f"Catalog: {catalog}\n")
+                f.write(f"Catalog: {catalog}  Pos: {position}\n")
                 f.write("=" * 30 + "\n\n")
 
     def _zoom_in(self):
@@ -550,6 +565,11 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
             self._stop_monitoring()
+
+        # Final autosave before exit (if we have unarchived results)
+        if self.current_results and self._session_dirty:
+            self._trigger_autosave()
+
         event.accept()
 
     # Slots
@@ -564,6 +584,8 @@ class MainWindow(QMainWindow):
         # Clear previous results when starting a new batch
         self.current_results = []
         self.results_list.clear()
+        self._current_input_dir = input_dir
+        self._session_dirty = False
 
         # Save directories to settings
         self.settings.ui.last_input_dir = input_dir
@@ -597,6 +619,9 @@ class MainWindow(QMainWindow):
 
         # Update status
         self.status_label.setText(f"Correction saved: {original} → {corrected}")
+
+        # Mark session as dirty for autosave (correction modifies session state)
+        self._mark_session_dirty()
 
         # Refresh preview if showing this bill
         selected = self.results_list.get_selected_result()
@@ -908,6 +933,8 @@ class MainWindow(QMainWindow):
         """Handle a single result from processing."""
         self.current_results.append(result)
         self.results_list.add_result(result)
+        # Mark session as dirty for autosave
+        self._mark_session_dirty()
         # Force UI to update immediately (important for monitor mode)
         QApplication.processEvents()
 
@@ -932,6 +959,9 @@ class MainWindow(QMainWindow):
             f"Complete: {total} bills processed, {fancy} fancy, {review} need review"
         )
         self.progress_label.setText("")
+
+        # Trigger immediate autosave on batch completion
+        self._trigger_autosave()
 
         # Auto-export if enabled
         if self.current_results:
@@ -961,6 +991,9 @@ class MainWindow(QMainWindow):
         # Apply font size
         font_size = self.settings.ui.font_size
         self._apply_font_size(font_size)
+
+        # Update autosave timer in case interval changed
+        self._update_autosave_timer()
 
         # Refresh batch list from archive directory
         self.results_list.refresh_batch_list()
@@ -1033,6 +1066,277 @@ class MainWindow(QMainWindow):
         QApplication.instance().setStyleSheet(stylesheet)
 
     # =========================================================================
+    # Lazy Processor Creation
+    # =========================================================================
+
+    def _get_or_create_processor(self, silent: bool = False):
+        """Get existing processor or create one lazily for cropping/alignment.
+
+        This allows cropping from restored sessions without reprocessing.
+
+        Args:
+            silent: If True, don't ask user for confirmation (used for auto-load on restore)
+        """
+        if self.processor:
+            return self.processor
+
+        # Ask user if they want to load the processor (unless silent mode)
+        if not silent:
+            reply = QMessageBox.question(
+                self, "Load Processor",
+                "Cropping requires loading the YOLO model.\n\n"
+                "This may take a few seconds. Continue?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if reply != QMessageBox.Yes:
+                return None
+
+        # Show progress
+        self.status_label.setText("Loading YOLO model...")
+        QApplication.processEvents()
+
+        try:
+            from process_production import ProductionProcessor, Config
+
+            # Find the YOLO model
+            model_path = Path(__file__).parent.parent / "models" / "best.pt"
+            if not model_path.exists():
+                # Try alternate location
+                model_path = Path(__file__).parent.parent / "best.pt"
+            if not model_path.exists():
+                if not silent:
+                    QMessageBox.warning(
+                        self, "Model Not Found",
+                        "Could not find YOLO model (best.pt).\n\n"
+                        "Please ensure the model file is in the models/ directory."
+                    )
+                self.status_label.setText("Ready")
+                return None
+
+            # Load config from config.yaml (for crop settings, etc.)
+            script_dir = Path(__file__).parent.parent
+            config_path = script_dir / "config.yaml"
+            patterns_path = script_dir / "patterns_v2.yaml"
+
+            cfg = Config(config_path) if config_path.exists() else None
+
+            # Create processor with config
+            self.processor = ProductionProcessor(
+                yolo_model_path=model_path,
+                use_gpu=self.settings.processing.use_gpu,
+                cfg=cfg,
+                patterns_v2_path=patterns_path if patterns_path.exists() else None
+            )
+
+            # Share with preview panel
+            self.preview_panel.set_processor(self.processor)
+
+            self.status_label.setText("Ready - processor loaded")
+            return self.processor
+
+        except Exception as e:
+            if not silent:
+                QMessageBox.warning(
+                    self, "Load Error",
+                    f"Failed to load processor:\n\n{str(e)}"
+                )
+            else:
+                print(f"[MainWindow] Failed to load processor: {e}")
+            self.status_label.setText("Ready")
+            return None
+
+    def _load_processor_for_restored_session(self):
+        """Load processor automatically after restoring a session."""
+        if self.processor:
+            return  # Already loaded
+
+        if not self.current_results:
+            return  # No session to work with
+
+        print("[MainWindow] Auto-loading processor for restored session...")
+        self._get_or_create_processor(silent=True)
+
+    # =========================================================================
+    # Autosave & Recovery Methods
+    # =========================================================================
+
+    def _setup_autosave_timer(self):
+        """Setup the periodic autosave timer."""
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.timeout.connect(self._do_autosave)
+        self._update_autosave_timer()
+
+    def _update_autosave_timer(self):
+        """Update autosave timer based on settings."""
+        if self.settings.autosave.enabled:
+            interval_ms = self.settings.autosave.interval_seconds * 1000
+            self._autosave_timer.start(interval_ms)
+        else:
+            self._autosave_timer.stop()
+
+    def _check_for_recovery(self):
+        """Check for recovery file on startup and offer to restore."""
+        if not self.recovery_manager.has_recovery_file():
+            return
+
+        info = self.recovery_manager.get_recovery_info()
+        if not info or info.get("result_count", 0) == 0:
+            # Empty or invalid recovery - clear it
+            self.recovery_manager.clear_recovery()
+            return
+
+        # Show recovery dialog
+        from .recovery_dialog import RecoveryDialog
+
+        dialog = RecoveryDialog(info, self)
+        dialog.exec()
+
+        action = dialog.get_action()
+        if action == RecoveryDialog.RESTORE:
+            self._restore_session()
+        elif action == RecoveryDialog.DISCARD:
+            self.recovery_manager.clear_recovery()
+            self.status_label.setText("Recovery discarded - starting fresh")
+
+    def _restore_session(self):
+        """Restore session from recovery file."""
+        data = self.recovery_manager.load_recovery()
+        if not data:
+            QMessageBox.warning(self, "Recovery Error", "Failed to load recovery data.")
+            return
+
+        # Restore results
+        results = data.get("results", [])
+
+        # Normalize boolean fields (handle string "True"/"False" from corrupted data)
+        for result in results:
+            # Normalize is_fancy
+            is_fancy = result.get("is_fancy", False)
+            if isinstance(is_fancy, str):
+                result["is_fancy"] = is_fancy.lower() == "true"
+
+            # Normalize needs_review
+            needs_review = result.get("needs_review", False)
+            if isinstance(needs_review, str):
+                result["needs_review"] = needs_review.lower() == "true"
+
+            # Normalize front_align_flipped
+            flipped = result.get("front_align_flipped", False)
+            if isinstance(flipped, str):
+                result["front_align_flipped"] = flipped.lower() == "true"
+
+            # Normalize potential_mule
+            mule = result.get("potential_mule", False)
+            if isinstance(mule, str):
+                result["potential_mule"] = mule.lower() == "true"
+
+            # Set alignment data flag if alignment angle is present
+            # This enables the Align button to use cached values without needing YOLO
+            if "front_align_angle" in result:
+                result["_has_alignment_data"] = True
+
+        self.current_results = results
+        self._current_input_dir = data.get("input_directory", "")
+
+        # Debug: log what we're restoring
+        fancy_count = sum(1 for r in results if r.get("is_fancy"))
+        review_count = sum(1 for r in results if r.get("needs_review"))
+        has_align = sum(1 for r in results if r.get("front_align_angle", 0) != 0)
+        print(f"[Recovery] Restoring {len(results)} results: {fancy_count} fancy, {review_count} needs_review, {has_align} with alignment")
+        if results:
+            r = results[0]
+            print(f"[Recovery] Sample result: is_fancy={r.get('is_fancy')}, needs_review={r.get('needs_review')}, align_angle={r.get('front_align_angle')}")
+
+        # Populate results list
+        for result in results:
+            self.results_list.add_result(result)
+
+        # Update status
+        count = len(results)
+        complete = data.get("processing_complete", False)
+
+        status = f"Restored: {count} bills"
+        if fancy_count:
+            status += f", {fancy_count} fancy"
+        if not complete:
+            status += " (processing was interrupted)"
+
+        self.status_label.setText(status)
+
+        # Set input directory in processing panel
+        if self._current_input_dir:
+            self.processing_panel.set_input_dir(self._current_input_dir)
+
+        # Mark as clean (we just loaded from recovery)
+        self._session_dirty = False
+
+        # Enable archive button if we have results
+        self.processing_panel.set_archive_available(
+            available=bool(results),
+            auto_archive_enabled=self.settings.processing.auto_archive
+        )
+
+        # Proactively load YOLO processor for cropping/alignment
+        # Use a short delay to let the UI finish rendering first
+        QTimer.singleShot(500, self._load_processor_for_restored_session)
+
+    def _do_autosave(self):
+        """Perform periodic autosave if there are changes."""
+        if not self.settings.autosave.enabled:
+            return
+
+        # Only save if we have results and session is dirty
+        if not self.current_results:
+            return
+
+        if not self._session_dirty:
+            return
+
+        # Normalize boolean fields before saving (prevent string "True"/"False" issues)
+        for result in self.current_results:
+            for key in ("is_fancy", "needs_review", "front_align_flipped", "potential_mule"):
+                val = result.get(key)
+                if isinstance(val, str):
+                    result[key] = val.lower() == "true"
+
+        # Determine if processing is complete
+        processing_complete = not self.is_processing and not self.is_monitoring
+
+        # Get current selection index
+        selected = self.results_list.tree.currentItem()
+        last_index = -1
+        if selected:
+            last_index = self.results_list.tree.indexOfTopLevelItem(selected)
+
+        # Save session
+        success = self.recovery_manager.save_session(
+            results=self.current_results,
+            input_directory=self._current_input_dir,
+            processing_complete=processing_complete,
+            total_processed=len(self.current_results),
+            last_selected_index=last_index
+        )
+
+        if success:
+            self._session_dirty = False
+
+    def _mark_session_dirty(self):
+        """Mark the session as having unsaved changes."""
+        self._session_dirty = True
+
+    def _trigger_autosave(self):
+        """Force an immediate autosave (e.g., after batch complete)."""
+        if self.settings.autosave.enabled and self.current_results:
+            self._session_dirty = True
+            self._do_autosave()
+
+    def _clear_recovery_after_archive(self):
+        """Clear recovery file after successful archive."""
+        self.recovery_manager.clear_recovery()
+        self._session_dirty = False
+
+    # =========================================================================
     # Monitor Mode Methods
     # =========================================================================
 
@@ -1084,6 +1388,8 @@ class MainWindow(QMainWindow):
         self.current_results = []
         self.results_list.clear()
         self.preview_panel.clear()
+        self._current_input_dir = str(watch_path)
+        self._session_dirty = False
 
         # Create monitor thread
         self.monitor_thread = MonitorThread(
@@ -1197,6 +1503,9 @@ class MainWindow(QMainWindow):
         self.status_label.setText(status)
         self.progress_label.setText("")
 
+        # Trigger immediate autosave on monitor completion
+        self._trigger_autosave()
+
         # Auto-export if enabled and we have results
         if self.current_results:
             self._auto_export(summary)
@@ -1294,6 +1603,9 @@ class MainWindow(QMainWindow):
         self.status_label.setText(
             f"{action} {moved_count} files + {fancy_moved} fancy crops to {batch_dir.name}"
         )
+
+        # Clear recovery file after successful archive
+        self._clear_recovery_after_archive()
 
         return batch_dir
 
@@ -1393,6 +1705,9 @@ class MainWindow(QMainWindow):
         self.status_label.setText(
             f"{action} {moved_count} files + {fancy_moved} fancy crops to {batch_dir.name}"
         )
+
+        # Clear recovery file after successful archive
+        self._clear_recovery_after_archive()
 
         # Refresh batch list to show newly archived batch
         self.results_list.refresh_batch_list()

@@ -248,6 +248,35 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(output_group)
 
+        # Autosave settings
+        autosave_group = QGroupBox("Session Recovery")
+        autosave_layout = QFormLayout(autosave_group)
+
+        self.autosave_check, autosave_container = self._create_checkbox_with_info(
+            "Enable autosave",
+            "Periodically save session state for crash recovery.\n\n"
+            "If the app crashes or power is lost, you can restore\n"
+            "your progress when you restart.\n\n"
+            "Recovery file: .session_recovery.json in app folder"
+        )
+        autosave_layout.addRow(autosave_container)
+
+        self.autosave_interval_spin = QSpinBox()
+        self.autosave_interval_spin.setRange(10, 300)
+        self.autosave_interval_spin.setSingleStep(10)
+        self.autosave_interval_spin.setSuffix(" seconds")
+        interval_container = self._create_widget_with_info(
+            self.autosave_interval_spin,
+            "How often to save session state.\n\n"
+            "• 10-30s: Frequent saves, minimal data loss\n"
+            "• 60-120s: Balanced performance/protection\n"
+            "• 180-300s: Less frequent, lower overhead\n\n"
+            "Default: 30 seconds"
+        )
+        autosave_layout.addRow("Save interval:", interval_container)
+
+        layout.addWidget(autosave_group)
+
         layout.addStretch()
 
     def _setup_ui_tab(self, tab: QWidget):
@@ -552,6 +581,10 @@ class SettingsDialog(QDialog):
         self.archive_copy_mode_check.setChecked(self.settings.processing.archive_copy_mode)
         self.extract_plate_info_check.setChecked(self.settings.processing.extract_plate_info)
 
+        # Autosave
+        self.autosave_check.setChecked(self.settings.autosave.enabled)
+        self.autosave_interval_spin.setValue(self.settings.autosave.interval_seconds)
+
         # UI
         idx = self.theme_combo.findData(self.settings.ui.theme)
         if idx >= 0:
@@ -606,6 +639,10 @@ class SettingsDialog(QDialog):
         self.settings.processing.archive_copy_mode = self.archive_copy_mode_check.isChecked()
         self.settings.processing.extract_plate_info = self.extract_plate_info_check.isChecked()
 
+        # Autosave
+        self.settings.autosave.enabled = self.autosave_check.isChecked()
+        self.settings.autosave.interval_seconds = self.autosave_interval_spin.value()
+
         # UI
         self.settings.ui.theme = self.theme_combo.currentData()
         self.settings.ui.show_thumbnails = self.thumbnails_check.isChecked()
@@ -647,7 +684,7 @@ class SettingsDialog(QDialog):
 
     def _restore_defaults(self):
         """Restore default settings."""
-        from settings_manager import ProcessingSettings, UISettings, ExportSettings, CropSettings, MonitorSettings
+        from settings_manager import ProcessingSettings, UISettings, ExportSettings, CropSettings, MonitorSettings, AutosaveSettings
 
         # Reset to defaults
         self.settings.processing = ProcessingSettings()
@@ -655,6 +692,7 @@ class SettingsDialog(QDialog):
         self.settings.export = ExportSettings()
         self.settings.crop = CropSettings()
         self.settings.monitor = MonitorSettings()
+        self.settings.autosave = AutosaveSettings()
 
         # Reset fancy color
         self._fancy_color = "#2e7d32"
