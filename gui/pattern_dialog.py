@@ -12,7 +12,8 @@ from PySide6.QtWidgets import (
     QGroupBox, QLineEdit, QPushButton, QDialogButtonBox, QLabel,
     QTextEdit, QSplitter, QHeaderView, QCheckBox, QListWidget,
     QListWidgetItem, QFormLayout, QComboBox, QMessageBox, QColorDialog,
-    QTabWidget, QWidget, QSpinBox, QFrame, QApplication, QPlainTextEdit
+    QTabWidget, QWidget, QSpinBox, QFrame, QApplication, QPlainTextEdit,
+    QInputDialog
 )
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QFontMetrics
@@ -78,17 +79,27 @@ class PatternDialog(QDialog):
 
         # Pattern tree
         self.pattern_tree = QTreeWidget()
-        self.pattern_tree.setHeaderLabels(["Pattern", "Tier", "Enabled", "Color"])
+        self.pattern_tree.setHeaderLabels(["Pattern", "Tier", "Enabled", "Color", "Catalog"])
         self.pattern_tree.setRootIsDecorated(True)
         self.pattern_tree.itemChanged.connect(self._on_item_changed)
         self.pattern_tree.itemSelectionChanged.connect(self._on_selection_changed)
-        self.pattern_tree.itemDoubleClicked.connect(self._on_color_double_click)
+        self.pattern_tree.itemDoubleClicked.connect(self._on_item_double_click)
 
         header = self.pattern_tree.header()
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionsMovable(False)  # Don't allow reordering columns
+        header.setStretchLastSection(True)  # Last column fills remaining space
+        # All columns interactive (draggable) except last which stretches
+        header.setSectionResizeMode(0, QHeaderView.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.Interactive)
+        header.setSectionResizeMode(2, QHeaderView.Interactive)
+        header.setSectionResizeMode(3, QHeaderView.Interactive)
+        header.setSectionResizeMode(4, QHeaderView.Stretch)
+
+        # Restore saved column widths or use defaults
+        self._restore_column_widths()
+
+        # Save column widths when changed
+        header.sectionResized.connect(self._save_column_widths)
 
         left_layout.addWidget(self.pattern_tree)
 
@@ -264,6 +275,32 @@ class PatternDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
+    def _restore_column_widths(self):
+        """Restore saved column widths from settings."""
+        widths = self.settings.get_custom_value('pattern_manager_columns', None)
+        if widths and len(widths) >= 4:
+            self.pattern_tree.setColumnWidth(0, widths[0])  # Pattern
+            self.pattern_tree.setColumnWidth(1, widths[1])  # Tier
+            self.pattern_tree.setColumnWidth(2, widths[2])  # Enabled
+            self.pattern_tree.setColumnWidth(3, widths[3])  # Color
+            # Column 4 (Catalog) stretches to fill
+        else:
+            # Default widths
+            self.pattern_tree.setColumnWidth(0, 200)  # Pattern
+            self.pattern_tree.setColumnWidth(1, 50)   # Tier
+            self.pattern_tree.setColumnWidth(2, 60)   # Enabled
+            self.pattern_tree.setColumnWidth(3, 50)   # Color
+
+    def _save_column_widths(self):
+        """Save column widths to settings."""
+        widths = [
+            self.pattern_tree.columnWidth(0),
+            self.pattern_tree.columnWidth(1),
+            self.pattern_tree.columnWidth(2),
+            self.pattern_tree.columnWidth(3),
+        ]
+        self.settings.set_custom_value('pattern_manager_columns', widths)
+
     def _load_patterns(self):
         """Load patterns into the tree."""
         self.pattern_tree.clear()
@@ -328,6 +365,10 @@ class PatternDialog(QDialog):
                     pattern_item.setText(3, "○")
                     pattern_item.setForeground(3, QColor("#888888"))
 
+                # Catalog location (double-click to edit)
+                catalog = self.settings.get_pattern_catalog(name)
+                pattern_item.setText(4, catalog if catalog else "-")
+
                 # Purple tint for Lua patterns
                 if has_lua:
                     pattern_item.setForeground(0, QColor("#9C27B0"))
@@ -379,28 +420,37 @@ class PatternDialog(QDialog):
         enabled = item.checkState(2) == Qt.Checked
         self.engine.set_pattern_enabled(name, enabled)
 
-    def _on_color_double_click(self, item, column):
-        """Handle double-click on color column to pick color."""
-        if column != 3:
-            return
-
+    def _on_item_double_click(self, item, column):
+        """Handle double-click on color or catalog column."""
         data = item.data(0, Qt.UserRole)
         if not data or data.get('is_tier'):
             return
 
         name = data['name']
-        current_color = self.settings.get_pattern_color(name)
 
-        # Show color dialog
-        initial = QColor(current_color) if current_color else QColor("#2e7d32")
-        color = QColorDialog.getColor(initial, self, f"Choose color for {name}")
+        if column == 3:
+            # Color column - show color picker
+            current_color = self.settings.get_pattern_color(name)
+            initial = QColor(current_color) if current_color else QColor("#2e7d32")
+            color = QColorDialog.getColor(initial, self, f"Choose color for {name}")
 
-        if color.isValid():
-            hex_color = color.name()
-            self.settings.set_pattern_color(name, hex_color)
-            item.setText(3, "●")
-            item.setForeground(3, color)
-        # If user cancels, keep current color
+            if color.isValid():
+                hex_color = color.name()
+                self.settings.set_pattern_color(name, hex_color)
+                item.setText(3, "●")
+                item.setForeground(3, color)
+
+        elif column == 4:
+            # Catalog column - show input dialog
+            current_catalog = self.settings.get_pattern_catalog(name)
+            catalog, ok = QInputDialog.getText(
+                self, f"Catalog for {name}",
+                "Enter catalog location (e.g., A1, B2, 12):",
+                text=current_catalog
+            )
+            if ok:
+                self.settings.set_pattern_catalog(name, catalog.strip())
+                item.setText(4, catalog.strip() if catalog.strip() else "-")
 
     def _on_selection_changed(self):
         """Handle selection change to show details."""

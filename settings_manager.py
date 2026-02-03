@@ -121,6 +121,7 @@ class SettingsManager:
         self.monitor = MonitorSettings()
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
         self.pattern_colors: Dict[str, str] = {}  # Pattern name -> hex color
+        self.pattern_catalogs: Dict[str, str] = {}  # Pattern name -> catalog location (e.g., "A1", "B2")
         self.custom_values: Dict[str, Any] = {}  # Arbitrary user values
         self._load()
 
@@ -209,6 +210,9 @@ class SettingsManager:
         # Load pattern colors
         self.pattern_colors = data.get('pattern_colors', {})
 
+        # Load pattern catalogs
+        self.pattern_catalogs = data.get('pattern_catalogs', {})
+
         # Load custom values
         self.custom_values = data.get('custom_values', {})
 
@@ -280,6 +284,7 @@ class SettingsManager:
             },
             'pattern_states': self.pattern_states,
             'pattern_colors': self.pattern_colors,
+            'pattern_catalogs': self.pattern_catalogs,
             'custom_values': self.custom_values,
         }
 
@@ -313,6 +318,17 @@ class SettingsManager:
         elif pattern_name in self.pattern_colors:
             del self.pattern_colors[pattern_name]
 
+    def get_pattern_catalog(self, pattern_name: str, default: str = "") -> str:
+        """Get catalog location for a pattern (e.g., 'A1', 'B2', '12')."""
+        return self.pattern_catalogs.get(pattern_name, default)
+
+    def set_pattern_catalog(self, pattern_name: str, catalog: str):
+        """Set catalog location for a pattern (e.g., 'A1', 'B2', '12')."""
+        if catalog:
+            self.pattern_catalogs[pattern_name] = catalog
+        elif pattern_name in self.pattern_catalogs:
+            del self.pattern_catalogs[pattern_name]
+
     def set_custom_value(self, key: str, value: Any):
         """Set a custom user value."""
         self.custom_values[key] = value
@@ -341,6 +357,8 @@ class SettingsManager:
         self.crop = CropSettings()
         self.monitor = MonitorSettings()
         self.pattern_states = {}
+        self.pattern_colors = {}
+        self.pattern_catalogs = {}
         self.custom_values = {}
 
     def export_settings(self, export_path: Path):
