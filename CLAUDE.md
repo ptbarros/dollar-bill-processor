@@ -88,6 +88,13 @@ purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, re
 - **MINIR**: Copy of MINI_REPEATER (3-digit repeat like 94680680)
 - **TRPBK**: First 3 digits match last 3 digits (ABCxxABC like 61858618)
 
+### Low Run Patterns (Added Feb 2025)
+Split from a single `LOW_RUN` pattern into two independent patterns so they can be enabled/disabled separately (6.4M runs are more valuable):
+- **LOW_RUN_6M** (Tier 5): Matches bills from 6.4 million print runs
+- **LOW_RUN_12M** (Tier 6): Matches bills from 12.8 million print runs
+- Both share the same `patterns/core/low_runs.csv` data file
+- `.gitignore` has an exception (`!patterns/core/low_runs.csv`) since `*.csv` is globally ignored
+
 ### External Data Files (Added Feb 2025)
 
 Lua patterns can declare external data file dependencies (CSV/JSON) that get automatically loaded and injected into the pattern's execution context.
@@ -529,7 +536,7 @@ Standalone `segment_characters()` function extracted from `process_production.py
 Patterns that can't be tested via digit compositing alone:
 - **GAS_PUMP**: Requires physical misalignment measurement
 - **STAR**: Requires star symbol image
-- **LOW_RUNS**: Requires metadata (series/district/block)
+- **LOW_RUN_6M / LOW_RUN_12M**: Requires metadata (series/district/block)
 - **KNOWN_SERIALS**: Requires external data file match
 
 ### Coverage

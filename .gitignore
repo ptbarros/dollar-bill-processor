@@ -20,6 +20,7 @@ output/
 fancy_bills/
 debug_output/
 *.csv
+!patterns/core/low_runs.csv
 serial_numbers_*.csv
 results.csv
 non_fancy_files.txt

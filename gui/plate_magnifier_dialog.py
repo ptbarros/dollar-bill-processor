@@ -11,8 +11,8 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap, QFont, QKeyEvent
+from PySide6.QtCore import Qt, QPoint
+from PySide6.QtGui import QPixmap, QFont, QKeyEvent, QMouseEvent
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -32,6 +32,8 @@ class PlateMagnifierDialog(QDialog):
         super().__init__(parent)
         self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
+
+        self._drag_pos = None
 
         self._setup_ui(front_pixmap, back_pixmap)
 
@@ -164,6 +166,30 @@ class PlateMagnifierDialog(QDialog):
             setattr(self, attr_name, image_label)
 
         return frame
+
+    def mousePressEvent(self, event: QMouseEvent):
+        """Start dragging on left click."""
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        """Move dialog while dragging."""
+        if self._drag_pos is not None and event.buttons() & Qt.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        """Stop dragging on release."""
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = None
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event: QKeyEvent):
         """Close on Escape or M key."""
