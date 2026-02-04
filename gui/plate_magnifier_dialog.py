@@ -30,9 +30,8 @@ class PlateMagnifierDialog(QDialog):
             parent: Parent widget
         """
         super().__init__(parent)
-        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, False)
-        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
 
         self._setup_ui(front_pixmap, back_pixmap)
 
@@ -73,11 +72,13 @@ class PlateMagnifierDialog(QDialog):
         plates_layout.setSpacing(8)
 
         # Front plate
-        front_frame = self._create_plate_frame("Front Plate", front_pixmap)
+        self._front_image_label = None
+        front_frame = self._create_plate_frame("Front Plate", front_pixmap, "_front_image_label")
         plates_layout.addWidget(front_frame)
 
         # Back plate
-        back_frame = self._create_plate_frame("Back Plate", back_pixmap)
+        self._back_image_label = None
+        back_frame = self._create_plate_frame("Back Plate", back_pixmap, "_back_image_label")
         plates_layout.addWidget(back_frame)
 
         layout.addLayout(plates_layout)
@@ -88,12 +89,35 @@ class PlateMagnifierDialog(QDialog):
         instructions.setAlignment(Qt.AlignCenter)
         layout.addWidget(instructions)
 
-    def _create_plate_frame(self, label_text: str, pixmap: QPixmap) -> QFrame:
+    def update_plates(self, front_pixmap: QPixmap = None, back_pixmap: QPixmap = None):
+        """Update the displayed plate images without recreating the dialog."""
+        self._set_plate_pixmap(self._front_image_label, front_pixmap)
+        self._set_plate_pixmap(self._back_image_label, back_pixmap)
+        self.adjustSize()
+
+    def _set_plate_pixmap(self, label: QLabel, pixmap: QPixmap):
+        """Set a pixmap or 'Not detected' on a plate image label."""
+        if pixmap and not pixmap.isNull():
+            label.setPixmap(pixmap)
+            label.setText("")
+            label.setMinimumSize(pixmap.width(), pixmap.height())
+            label.setStyleSheet("border: 1px solid #666; background-color: #1d1d1d;")
+        else:
+            label.clear()
+            label.setText("Not detected")
+            label.setMinimumSize(150, 50)
+            label.setStyleSheet(
+                "border: 1px solid #666; background-color: #1d1d1d; "
+                "color: #888; font-style: italic; padding: 20px;"
+            )
+
+    def _create_plate_frame(self, label_text: str, pixmap: QPixmap, attr_name: str = None) -> QFrame:
         """Create a framed plate region with label.
 
         Args:
             label_text: Header label for the plate
             pixmap: QPixmap of the plate, or None if not detected
+            attr_name: If provided, store the image label as this attribute
 
         Returns:
             QFrame containing the plate display
@@ -135,6 +159,9 @@ class PlateMagnifierDialog(QDialog):
             )
 
         frame_layout.addWidget(image_label)
+
+        if attr_name:
+            setattr(self, attr_name, image_label)
 
         return frame
 

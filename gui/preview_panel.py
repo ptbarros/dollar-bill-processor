@@ -2100,6 +2100,12 @@ class PreviewPanel(QWidget):
 
         self.file_label.setText(self._current_front_file or "-")
 
+        # Update plate magnifier if it's open
+        if hasattr(self, '_plate_magnifier_dialog') and self._plate_magnifier_dialog is not None:
+            if self._plate_magnifier_dialog.isVisible():
+                front_pixmap, back_pixmap = self._extract_plate_regions(zoom=2.0)
+                self._plate_magnifier_dialog.update_plates(front_pixmap, back_pixmap)
+
         # Auto-align if enabled and we have a processor ready
         if self._auto_align_enabled and self._current_front_file:
             # Use a short delay to let the UI update first
