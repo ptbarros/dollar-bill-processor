@@ -2115,8 +2115,14 @@ class PreviewPanel(QWidget):
         if not serial:
             return
 
-        # Re-classify using the pattern engine
-        matches = self.pattern_engine.classify_simple(serial)
+        # Re-classify using the pattern engine with plate metadata
+        metadata = {
+            'baseline_variance': float(self.current_result.get('baseline_variance', 0)),
+            'series_year': self.current_result.get('series_year', ''),
+            'front_plate': self.current_result.get('front_plate', ''),
+            'back_plate': self.current_result.get('back_plate', ''),
+        }
+        matches = self.pattern_engine.classify_simple(serial, metadata)
 
         # Update the result
         new_fancy_types = ', '.join(matches) if matches else ''

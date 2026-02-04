@@ -1009,8 +1009,14 @@ class ResultsList(QWidget):
         if not serial:
             return
 
-        # Re-run pattern matching
-        matches = self.pattern_engine.classify_simple(serial)
+        # Re-run pattern matching with plate metadata
+        metadata = {
+            'baseline_variance': float(result.get('baseline_variance', 0)),
+            'series_year': result.get('series_year', ''),
+            'front_plate': result.get('front_plate', ''),
+            'back_plate': result.get('back_plate', ''),
+        }
+        matches = self.pattern_engine.classify_simple(serial, metadata)
 
         # Update the result
         new_fancy_types = ', '.join(matches) if matches else ''

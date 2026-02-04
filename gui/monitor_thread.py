@@ -267,7 +267,12 @@ class MonitorThread(QThread):
                     pair.fancy_types = ["ALL"]
                     pair.is_fancy = True
                 else:
-                    metadata = {'baseline_variance': pair.baseline_variance}
+                    metadata = {
+                        'baseline_variance': pair.baseline_variance,
+                        'series_year': pair.series_year,
+                        'front_plate': pair.front_plate,
+                        'back_plate': pair.back_plate,
+                    }
                     fancy_types = self.processor.pattern_engine.classify_simple(serial, metadata=metadata)
                     pair.fancy_types = fancy_types
                     pair.is_fancy = len(fancy_types) > 0

@@ -2936,8 +2936,13 @@ class ProductionProcessor:
                     pair.fancy_types = ["ALL"]
                     pair.is_fancy = True
                 else:
-                    # Pass baseline_variance for gas pump detection
-                    metadata = {'baseline_variance': pair.baseline_variance}
+                    # Pass baseline_variance and plate info for pattern detection
+                    metadata = {
+                        'baseline_variance': pair.baseline_variance,
+                        'series_year': pair.series_year,
+                        'front_plate': pair.front_plate,
+                        'back_plate': pair.back_plate,
+                    }
                     fancy_types = self.pattern_engine.classify_simple(serial, metadata)
                     pair.fancy_types = fancy_types
                     pair.is_fancy = len(fancy_types) > 0
