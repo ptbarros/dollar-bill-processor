@@ -586,6 +586,7 @@ class PatternEngineV3:
                 'examples': info.examples,
                 'odds': info.odds,
                 'price': info.price,
+                'price_range': info.price,
                 'script': info.script
             }
             # Include data file info if present

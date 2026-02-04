@@ -210,6 +210,7 @@ python tests/verify_lua_patterns.py
 - All 117 YAML patterns have been converted to Lua (Feb 2025)
 - Lua patterns provide richer visualization with custom highlights and connectors
 - YAML patterns remain for metadata (odds, prices) but Lua fully controls detection
+- **Price key normalization (Feb 2025):** Lua patterns store price as `price` in `LuaPatternInfo`, but GUI code (`results_list.py`, `preview_panel.py`) looks for `price_range` (the YAML key). Fixed by having `get_pattern_info()` return both `price` and `price_range` for Lua patterns so the Est Price column populates correctly.
 - Some YAML built-in checks (like `pyramid_ladder`) were too loose - Lua versions are stricter and more accurate
 - The CSV output reflects whatever the pattern engine returns (Lua if file exists, otherwise YAML)
 
