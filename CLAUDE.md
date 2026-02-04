@@ -489,3 +489,75 @@ print('Gas pump threshold:', s.get_gas_pump_threshold())
 print('Pattern overrides:', s.pattern_overrides)
 "
 ```
+
+## Synthetic Test Bill Generator (Added Feb 2025)
+
+### Overview
+Generates synthetic bill images with specific serial numbers by compositing individual character glyphs from real scanned bills. Enables pattern regression testing through the full pipeline (YOLO → OCR → classification).
+
+### Usage
+```bash
+# Generate a bill with a specific serial
+python tools/create_test_bill.py --serial "A12344321B" --results archive/*/results.csv --output-dir test_bills/
+
+# Generate serials matching a pattern
+python tools/create_test_bill.py --pattern RADAR --count 5 --results archive/*/results.csv --output-dir test_bills/
+
+# Generate one test bill for every pattern
+python tools/create_test_bill.py --all-patterns --results archive/*/results.csv --output-dir test_bills/
+
+# Dry-run: preview target serials without YOLO (no images generated)
+python tools/create_test_bill.py --pattern RADAR --count 3 --results archive/*/results.csv --dry-run
+```
+
+### How It Works
+1. **Digit Atlas** — Scans up to 50 bills via YOLO serial detection + vertical projection segmentation to collect character glyph crops for each digit (0-9). Stops early when each digit has ≥3 samples.
+2. **Serial Generation** — 3-tier strategy per pattern:
+   - Use `Examples:` field from Lua pattern headers (all 121 core patterns have examples)
+   - Algorithmic generators for common patterns (SOLID, RADAR, LADDER, REPEATER, BOOKENDS, BINARY, etc.)
+   - Brute-force random generation (up to 10k attempts)
+3. **Compositing** — For each target serial, finds both serial regions on a base bill via YOLO, segments characters via vertical projection, and pastes matching donor glyphs resized to fit. Only digit positions are replaced; prefix/suffix letters are preserved from the base bill.
+4. **Output** — Each bill gets a subdirectory with `front.jpg`, `front_b.jpg` (back), and `recipe.txt`.
+
+### Character Segmentation
+Standalone `segment_characters()` function extracted from `process_production.py:2233-2287`:
+- Otsu threshold (inverted) → vertical projection → gap detection (≥4px gaps) → merge nearby bounds → filter fragments (width ≥5px, height ≥50% median)
+
+### Skipped Patterns
+Patterns that can't be tested via digit compositing alone:
+- **GAS_PUMP**: Requires physical misalignment measurement
+- **STAR**: Requires star symbol image
+- **LOW_RUNS**: Requires metadata (series/district/block)
+- **KNOWN_SERIALS**: Requires external data file match
+
+### Coverage
+121 of 126 patterns can generate valid serials (4 skipped by design, 1 has bad examples in Lua header).
+
+### Files
+- `tools/create_test_bill.py`: Serial compositing test bill generator (new)
+
+### Code Reused
+| What | Source |
+|------|--------|
+| `load_inventory()`, `apply_cached_alignment()`, `detect_regions()` | `tools/create_low_run_test.py` (imported) |
+| Character segmentation algorithm | `process_production.py:2233-2287` (standalone copy) |
+| `PatternEngineV3.classify_simple()` | Serial verification |
+| `LuaPatternInfo.examples` | Example serials per pattern |
+
+## TODO: Lua Pattern Debugging / Diagnostics
+
+### Problem
+Users writing Lua patterns have no visibility into why a pattern silently fails to match. Real example: `low_runs.lua` had a duplicate header block, so the engine parsed the first one (which lacked `DataFile:`), meaning `ctx.data` was always nil. The pattern silently returned `{matched = false}` with no indication anything was wrong. Diagnosing this required reading the engine source code.
+
+### What Users Can't See Today
+- Whether their DataFile loaded (`ctx.data` nil vs populated)
+- What metadata values are arriving (`ctx.metadata.series_year`, etc.)
+- Whether the header was parsed correctly (pattern name, tier, datafile)
+- Why a match function returned false for a specific serial
+
+### Possible Approaches
+1. **Debug/trace mode in Live Preview**: Show `ctx` contents (metadata, data, digit_list) alongside match results so users can see exactly what the pattern receives
+2. **Pattern load diagnostics**: When viewing a pattern in Pattern Manager, show parsed header fields, data file status (loaded/missing/nil), row count
+3. **Console/log output**: Allow `print()` or a `log()` function in Lua sandbox that surfaces messages in the GUI (e.g., a debug pane in the script editor)
+4. **Header validation warnings**: Warn on duplicate header blocks, missing DataFile when `ctx.data` is referenced in code, etc.
+5. **Test harness in script editor**: Let users type a serial + metadata and see step-by-step what the pattern does (like a dry-run with verbose output)
