@@ -608,6 +608,26 @@ Fields `viewed`, `cropped`, `sent_for_review`, `checked` are included in CSV fie
 - `gui/results_list.py`: Status column, filters, tracking logic, `_sync_result_field()`, `_update_status_cell()`, `toggle_checked()`, `mark_cropped()`
 - `gui/main_window.py`: Space shortcut, crop tracking in `_on_crop_selected()`, CSV fieldnames, boolean normalization in recovery/autosave
 
+## TODO: Remove YAML Dependency from Pattern Manager
+
+### Problem
+The Pattern Manager GUI (`gui/pattern_dialog.py:_load_patterns()`) populates the main patterns list from `patterns_v2.yaml` (`engine.config['patterns']`). Lua-only patterns in `patterns/core/` that lack a YAML stub entry are invisible in the GUI. This was discovered when `LOW_RUN_6M` and `LOW_RUN_12M` were added as core Lua patterns without YAML entries — they simply didn't appear.
+
+### Current Workaround
+Every core Lua pattern needs a corresponding YAML stub in `patterns_v2.yaml` with at least `description`, `tier`, `enabled`, and `rules: {}`. The Lua file handles all detection logic; YAML is only needed for the GUI listing.
+
+### Goal
+Refactor Pattern Manager to build its pattern list from `engine.lua_patterns` (the authoritative source) instead of — or in addition to — the YAML config. This would:
+- Eliminate the need for YAML stubs for Lua-only patterns
+- Allow new core Lua patterns to appear automatically in the GUI
+- Reduce duplication between Lua headers and YAML entries
+- Potentially allow retiring `patterns_v2.yaml` entirely (metadata like odds/price could move to Lua headers)
+
+### Considerations
+- YAML still holds `odds` and `price_range` for some patterns — these would need to move to Lua headers or a separate metadata file
+- Pattern enable/disable state is managed via `user_settings.yaml` (`pattern_states`) — this is independent of YAML
+- The `_load_patterns()` method groups by tier and shows enable checkboxes — all this info is available from `LuaPatternInfo`
+
 ## TODO: Lua Pattern Debugging / Diagnostics
 
 ### Problem
