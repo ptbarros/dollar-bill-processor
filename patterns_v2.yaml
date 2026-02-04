@@ -1309,6 +1309,22 @@ patterns:
     price_range: "$10-$100+"
     notes: "Detected by analyzing vertical alignment of digits using projection method. Normal: 0.5-2.5px deviation. Gas pump: 3.5px+ deviation."
 
+  LOW_RUN_6M:
+    description: "Bill from a 6.4 million BEP print run"
+    tier: 5
+    enabled: true
+    rules: {}
+    examples: []
+    odds: "Varies by series/district"
+
+  LOW_RUN_12M:
+    description: "Bill from a 12.8 million BEP print run"
+    tier: 6
+    enabled: true
+    rules: {}
+    examples: []
+    odds: "Varies by series/district"
+
 # =============================================================================
 # CUSTOM USER PATTERNS
 # =============================================================================
