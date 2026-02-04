@@ -1483,12 +1483,231 @@ class ProductionProcessor:
             return text
 
         def clean_front_plate(text: str) -> str:
-            # Keep alphanumeric and spaces
-            return re.sub(r'[^A-Z0-9 ]', '', text.upper()).strip()
+            """Clean and validate front plate text using known constraints.
+
+            Front plate format: [FW] [A-J] [digits]
+            - Optional "FW" prefix (Fort Worth facility)
+            - Check letter A-J (position on 50-subject sheet)
+            - Plate number (digits)
+
+            Common OCR misreads are corrected based on valid character constraints.
+            """
+            # Normalize: uppercase, keep alphanumeric and spaces
+            text = re.sub(r'[^A-Z0-9 ]', '', text.upper()).strip()
+            if not text:
+                return ''
+
+            # Split into parts
+            parts = text.split()
+            if not parts:
+                return ''
+
+            result_parts = []
+            idx = 0
+
+            # Check for FW prefix (Fort Worth facility mark)
+            # The "W" in FW is frequently misread as H, I, F, E, 7, etc.
+            # Key insight: If we see "F" + any char as first part, and there are
+            # more parts after, it's almost certainly "FW" since that's the ONLY
+            # valid two-letter prefix on US currency.
+            valid_check_letters = set('ABCDEFGHIJ')
+            if len(parts) > 1:
+                first = parts[0]
+                # Explicit corrections for known misreads
+                fw_corrections = {
+                    'FW': 'FW',
+                    # W misread as various chars
+                    'FH': 'FW', 'FI': 'FW', 'FF': 'FW', 'FE': 'FW',
+                    'F7': 'FW', 'F1': 'FW', 'F4': 'FW',
+                    # F misread
+                    'EW': 'FW', 'FV': 'FW', 'EV': 'FW',
+                    # Other variants
+                    'FM': 'FW', 'FN': 'FW', 'RW': 'FW', 'PW': 'FW',
+                    'FVV': 'FW', 'EVV': 'FW',
+                }
+                if first in fw_corrections:
+                    result_parts.append('FW')
+                    idx = 1
+                # Catch-all: any 2-char string starting with F followed by non-letter
+                # in check position is likely FW (e.g., F7, F1, etc.)
+                elif len(first) == 2 and first[0] == 'F':
+                    result_parts.append('FW')
+                    idx = 1
+                # Handle case where W is completely missed: "F G 170" should be "FW G 170"
+                # If first part is just "F" and second part is a valid check letter (A-J),
+                # then the F is likely FW with a dropped W
+                elif first == 'F' and len(parts) > 2 and len(parts[1]) == 1 and parts[1] in valid_check_letters:
+                    result_parts.append('FW')
+                    idx = 1
+
+            # Next part should be the check letter (A-J only)
+            # Common OCR issues:
+            # - Single letter correct (A-J)
+            # - Letter merged with digits (e.g., "G144")
+            # - Digit misread as letter (e.g., "1" for "I", "0" for "D")
+            # - Letter misread as digit merged with plate number (e.g., "1179" for "I 179")
+            if idx < len(parts):
+                check_part = parts[idx]
+                valid_letters = set('ABCDEFGHIJ')
+                letter_corrections = {
+                    'K': 'H', 'L': 'I', 'O': 'D', 'P': 'F', 'Q': 'G',
+                    'R': 'B', 'S': 'G', 'T': 'I', 'U': 'H', 'V': 'A',
+                    'W': 'H', 'X': 'H', 'Y': 'A', 'Z': 'E', 'M': 'H', 'N': 'H',
+                    '0': 'D', '1': 'I', '7': 'I',  # Digits that look like letters
+                }
+
+                # If it's a single character, it should be the check letter
+                if len(check_part) == 1:
+                    letter = check_part
+                    if letter in valid_letters:
+                        result_parts.append(letter)
+                    else:
+                        corrected = letter_corrections.get(letter, '')
+                        if corrected:
+                            result_parts.append(corrected)
+                    idx += 1
+
+                # Check part starts with digit - might be misread letter + plate number
+                # e.g., "1179" could be "I" + "179" where I was misread as 1
+                elif len(check_part) > 1 and check_part[0].isdigit():
+                    first_char = check_part[0]
+                    rest = check_part[1:]
+                    # Only correct if first digit could be a misread letter
+                    if first_char in letter_corrections:
+                        corrected_letter = letter_corrections[first_char]
+                        result_parts.append(corrected_letter)
+                        # Rest should be plate digits
+                        plate_digits = re.sub(r'[^0-9]', '', rest)
+                        if plate_digits:
+                            result_parts.append(plate_digits)
+                        idx += 1
+                    else:
+                        # Can't interpret, skip to remaining processing
+                        pass
+
+                # If the check part has letter+digits merged (e.g., "G144")
+                elif len(check_part) > 1 and check_part[0].isalpha():
+                    letter = check_part[0]
+                    digits = check_part[1:]
+                    valid_letters = set('ABCDEFGHIJ')
+                    letter_corrections = {
+                        'K': 'H', 'L': 'I', 'O': 'D', 'P': 'F', 'Q': 'G',
+                        'R': 'B', 'S': 'G', 'T': 'I', 'U': 'H', 'V': 'A',
+                        'W': 'H', 'X': 'H', 'Y': 'A', 'Z': 'E', 'M': 'H', 'N': 'H',
+                    }
+                    if letter in valid_letters:
+                        corrected_letter = letter
+                    else:
+                        corrected_letter = letter_corrections.get(letter, '')
+
+                    # Clean digits (only numeric)
+                    clean_digits = re.sub(r'[^0-9]', '', digits)
+                    if corrected_letter and clean_digits:
+                        result_parts.append(f"{corrected_letter} {clean_digits}")
+                    elif corrected_letter:
+                        result_parts.append(corrected_letter)
+                    idx += 1
+
+            # Remaining parts should be the plate number (digits only)
+            if idx < len(parts):
+                remaining = ' '.join(parts[idx:])
+                # Extract only digits for the plate number
+                plate_digits = re.sub(r'[^0-9]', '', remaining)
+                if plate_digits:
+                    result_parts.append(plate_digits)
+
+            return ' '.join(result_parts)
 
         def clean_back_plate(text: str) -> str:
             # Keep only digits
             return re.sub(r'[^0-9]', '', text)
+
+        def detect_check_letter_by_contour(crop: np.ndarray) -> dict:
+            """Detect check letter using contour analysis based on character height.
+
+            The check letter (A-J) on front plates is significantly larger than
+            the FW prefix and plate number digits. This function finds the tallest
+            character and OCRs it separately for more reliable detection.
+
+            Returns dict with:
+                'check_letter': detected letter or empty string
+                'has_fw': True if likely has FW prefix (2+ contours before check letter)
+                'confidence': OCR confidence for check letter
+                'digits_start_x': x position where plate digits start (after check letter)
+            """
+            result = {'check_letter': '', 'has_fw': False, 'confidence': 0.0, 'digits_start_x': 0}
+
+            if crop is None or crop.size == 0:
+                return result
+
+            try:
+                # Convert to grayscale and threshold
+                gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+                _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+                # Find contours
+                contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                # Get bounding boxes, filter noise
+                boxes = []
+                for cnt in contours:
+                    x, y, w, h = cv2.boundingRect(cnt)
+                    if h > 5 and w > 3:  # Filter very small contours
+                        boxes.append((x, y, w, h))
+
+                if not boxes:
+                    return result
+
+                # Sort by x position (left to right)
+                boxes.sort(key=lambda b: b[0])
+
+                # Find tallest box (the check letter)
+                max_height = max(b[3] for b in boxes)
+                tallest_idx = next(i for i, b in enumerate(boxes) if b[3] == max_height)
+                x, y, bw, bh = boxes[tallest_idx]
+
+                # Determine if FW prefix exists
+                # Since "FW" is the ONLY valid prefix on US currency, if there's
+                # ANY contour before the check letter, it must be part of "FW"
+                boxes_before = tallest_idx
+                result['has_fw'] = boxes_before >= 1
+
+                # Calculate where plate digits start (after the check letter)
+                result['digits_start_x'] = x + bw + 2  # Small gap after check letter
+
+                # Extract check letter region with padding
+                h_img, w_img = crop.shape[:2]
+                pad = 3
+                letter_crop = crop[max(0,y-pad):min(h_img,y+bh+pad), max(0,x-pad):min(w_img,x+bw+pad)]
+
+                if letter_crop.size == 0:
+                    return result
+
+                # Upscale for better OCR
+                letter_crop_4x = cv2.resize(letter_crop, None, fx=4, fy=4,
+                                           interpolation=cv2.INTER_CUBIC)
+
+                # OCR just the check letter with restricted allowlist
+                get_timing().add_ocr_call()
+                ocr_results = self.ocr_reader.readtext(
+                    letter_crop_4x,
+                    allowlist='ABCDEFGHIJ',
+                    detail=1
+                )
+
+                if ocr_results:
+                    # Take the highest confidence single letter result
+                    for bbox, text, conf in sorted(ocr_results, key=lambda r: -r[2]):
+                        text = text.strip().upper()
+                        if len(text) == 1 and text in 'ABCDEFGHIJ':
+                            result['check_letter'] = text
+                            result['confidence'] = conf
+                            break
+
+            except Exception:
+                pass
+
+            return result
 
         # Extract from front image (series year, front plate)
         if front_img is not None and front_img.size > 0:
@@ -1508,14 +1727,63 @@ class ProductionProcessor:
                 )
 
             # Extract front plate (class 4)
+            # Format: [FW] [A-J] [digits]
+            # - FW = Fort Worth facility (optional)
+            # - A-J = check letter (position on 50-subject sheet)
+            # - digits = plate number
+            #
+            # Strategy: Use contour analysis as primary method for FW/check letter
+            # detection, since the check letter is always taller than FW and digits.
+            # Use standard OCR for plate digits. Fall back to pure OCR if contour
+            # analysis fails.
             front_plate_boxes = front_detections.get('front_plate', [])
             if front_plate_boxes:
-                result['front_plate'] = ocr_region(
-                    front_img, front_plate_boxes,
-                    'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
-                    clean_front_plate,
-                    upscale=2  # 2x upscale helps with small plate text
-                )
+                # Get the crop region
+                best_box = max(front_plate_boxes, key=lambda b: b[4])
+                bx1, by1, bx2, by2, bconf = best_box
+                h, w = front_img.shape[:2]
+                pad = 5
+                crop = front_img[max(0,by1-pad):min(h,by2+pad), max(0,bx1-pad):min(w,bx2+pad)]
+
+                # Try contour-based detection for FW and check letter
+                contour_result = detect_check_letter_by_contour(crop)
+
+                if contour_result['check_letter'] and contour_result['confidence'] >= 0.5:
+                    # Contour method succeeded - use it for FW and check letter
+                    prefix = 'FW ' if contour_result['has_fw'] else ''
+
+                    # Extract plate digits from area AFTER the check letter only
+                    digits_x = contour_result['digits_start_x']
+                    crop_h, crop_w = crop.shape[:2]
+                    if digits_x < crop_w:
+                        digits_crop = crop[:, digits_x:]
+                        if digits_crop.size > 0:
+                            # Upscale 3x for OCR (2x misses single-digit plate numbers)
+                            digits_crop_3x = cv2.resize(digits_crop, None, fx=3, fy=3,
+                                                       interpolation=cv2.INTER_CUBIC)
+                            get_timing().add_ocr_call()
+                            digit_results = self.ocr_reader.readtext(
+                                digits_crop_3x,
+                                allowlist='0123456789',
+                                detail=1
+                            )
+                            plate_digits = ''.join(r[1] for r in digit_results) if digit_results else ''
+                        else:
+                            plate_digits = ''
+                    else:
+                        plate_digits = ''
+
+                    result['front_plate'] = f"{prefix}{contour_result['check_letter']}"
+                    if plate_digits:
+                        result['front_plate'] += f" {plate_digits}"
+                else:
+                    # Fall back to standard OCR with corrections
+                    result['front_plate'] = ocr_region(
+                        front_img, front_plate_boxes,
+                        'FWABCDEFGHIJ0123456789 ',
+                        clean_front_plate,
+                        upscale=2
+                    )
 
         # Extract from back image (back plate + mule detection)
         if back_img is not None and back_img.size > 0:

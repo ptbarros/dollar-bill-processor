@@ -244,10 +244,41 @@ Optional feature to extract additional bill metadata and detect potential mule n
 ### OCR Improvements (Feb 2025)
 All plate info OCR uses **2x upscaling** before text recognition:
 - **Series year**: Captures suffix letter (A, B, etc.) that appears below the year
-- **Front plate**: Improves detection of "FW" and other small text
+- **Front plate**: Improved with constrained character set and validation
 - **Back plate**: Reads both large and small font plates reliably
 
 The `ocr_region()` helper function accepts an `upscale` parameter for this purpose.
+
+### Front Plate Format & Constraints (Feb 2025)
+
+**Format:** `[FW] [A-J] [digits]`
+- **FW** (optional): Fort Worth facility mark - only valid prefix
+- **Check letter**: A-J only (position on 50-subject printing sheet)
+- **Plate number**: Digits only
+
+**Detection Strategy - Contour-Based (Primary):**
+The check letter is always visually taller (~20px) than FW text and plate digits (~11px). This size difference enables reliable detection even when standard OCR fails:
+
+1. **Find tallest contour** in the plate region - this is the check letter
+2. **Count contours before it** - if 1+, FW prefix exists (FW is the only valid prefix)
+3. **OCR the check letter region** with 4x upscaling and restricted allowlist (A-J only)
+4. **OCR the digits region** with 3x upscaling (higher scale needed for small single-digit plates)
+
+This approach successfully handles cases where OCR completely mangles the text (e.g., "FW D 64" being read as "I5D64").
+
+**Upscaling rationale:**
+- Check letter: 4x - isolated region, need high accuracy
+- Plate digits: 3x - small crops (~32x20px), 2x misses single-digit numbers
+- Fallback OCR: 2x - full region, balance between accuracy and avoiding text splitting
+
+**Fallback - Standard OCR with Corrections:**
+If contour detection fails (confidence < 0.5), falls back to:
+- Restricted allowlist: `FWABCDEFGHIJ0123456789 `
+- Post-OCR validation corrects common misreads:
+  - FW variants: FH, FI, FF, FE, F7 → FW (W commonly misread)
+  - Standalone "F" followed by check letter → FW (W dropped entirely)
+  - Invalid check letters: K→H, L→I, O→D, etc.
+- Letters K-Z are invalid as check letters (32-subject sheets use A-H, 50-subject use A-J)
 
 ### Mule Note Detection
 A **mule note** is a bill with mismatched front/back plates from different printing eras:
