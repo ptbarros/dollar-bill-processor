@@ -355,7 +355,7 @@ Automatic session state preservation to protect against crashes and power loss. 
 ### How It Works
 - **Periodic autosave**: Every 30 seconds (configurable), session state is saved to `.session_recovery.json`
 - **Atomic writes**: Uses temp file + rename for data integrity
-- **Dirty flag tracking**: Only saves when data actually changes
+- **Dirty flag tracking**: Only saves when data actually changes (all status field changes mark session dirty)
 - **Auto-clear on archive**: Recovery file deleted after successful archive
 
 ### Settings
@@ -386,6 +386,7 @@ Automatic session state preservation to protect against crashes and power loss. 
 - **Alignment data preserved**: `front_align_angle` and `front_align_flipped` saved/restored
 - **Boolean normalization**: Handles string "True"/"False" conversion on load
 - **Config loading**: Lazy processor loads `config.yaml` for crop settings
+- **Review status persistence**: All status fields (`viewed`, `cropped`, `sent_for_review`, `checked`) are preserved across recovery via dirty flag tracking
 
 ### Files
 - `session_recovery.py`: SessionRecoveryManager class
@@ -582,6 +583,15 @@ Shows checked progress: `"216 bills | 10 fancy | 2 need review | 5/216 checked"`
 
 ### PySide6 Dict Copy Behavior
 **Important:** `QTreeWidgetItem.data(Qt.UserRole)` returns a **copy** of stored Python dicts, not a reference. Changes to the returned dict are lost unless stored back via `setData()`. The `_sync_result_field()` helper propagates changes to both the tree item and the authoritative `self.results` list.
+
+### Autosave Dirty Marking
+Every status field change must call `_mark_session_dirty()` so the autosave timer picks it up:
+- **`viewed`**: `_on_result_selected()` in MainWindow marks dirty on every selection
+- **`checked`**: `_toggle_checked()` in MainWindow marks dirty after toggling
+- **`cropped`**: `_on_crop_selected()` in MainWindow marks dirty after `mark_cropped()`
+- **`sent_for_review`**: `ResultsList` emits `status_changed` signal, connected to `_mark_session_dirty()`
+
+**Bug fixed (Feb 2025):** Previously only `checked` marked the session dirty. The other three status fields silently failed to persist across session recovery because the autosave skipped saving when `_session_dirty` was False.
 
 ### CSV Persistence
 Fields `viewed`, `cropped`, `sent_for_review`, `checked` are included in CSV fieldnames for both archive and export. Boolean normalization on load handles backward compatibility with older CSVs that lack these columns.
