@@ -99,6 +99,7 @@ class MainWindow(QMainWindow):
         self.results_list.item_selected.connect(self._on_result_selected)
         self.results_list.correction_applied.connect(self._on_correction_applied)
         self.results_list.batch_changed.connect(self._on_batch_changed)
+        self.results_list.status_changed.connect(self._mark_session_dirty)
         splitter.addWidget(self.results_list)
 
         # Right panel - Preview
@@ -456,6 +457,7 @@ class MainWindow(QMainWindow):
         cropped_results = [r for r in results if r.get('cropped')]
         if cropped_results:
             self.results_list.mark_cropped(cropped_results)
+            self._mark_session_dirty()
 
         # Generate printable labels file
         self._generate_labels(results, output_dir)
@@ -631,6 +633,8 @@ class MainWindow(QMainWindow):
     def _on_result_selected(self, result: dict):
         """Handle selection of a result item."""
         self.preview_panel.show_bill(result)
+        # Mark dirty so autosave captures viewed status
+        self._mark_session_dirty()
 
     @Slot(str, str, str)
     def _on_correction_applied(self, filename: str, original: str, corrected: str):

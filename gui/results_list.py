@@ -51,6 +51,7 @@ class ResultsList(QWidget):
     correction_applied = Signal(str, str, str)  # filename, original, corrected
     batch_changed = Signal(str)  # Emits batch path when changed (empty for current session)
     crop_requested = Signal(list)  # Emits list of results to crop
+    status_changed = Signal()  # Emits when review status fields change (viewed, cropped, etc.)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -798,6 +799,7 @@ class ResultsList(QWidget):
                 item_result['sent_for_review'] = True
                 self._update_status_cell(item, item_result)
                 break
+        self.status_changed.emit()
 
         # Show confirmation
         from PySide6.QtWidgets import QMessageBox
