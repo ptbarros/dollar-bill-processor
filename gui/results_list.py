@@ -108,6 +108,8 @@ class ResultsList(QWidget):
         self.status_filter.addItem("Fancy Only", "fancy")
         self.status_filter.addItem("Review Needed", "review")
         self.status_filter.addItem("Errors", "error")
+        self.status_filter.addItem("Unchecked", "unchecked")
+        self.status_filter.addItem("Not Yet Viewed", "unviewed")
         self.status_filter.currentIndexChanged.connect(self._apply_filters)
         filter_layout.addWidget(self.status_filter)
 
@@ -128,7 +130,7 @@ class ResultsList(QWidget):
 
         # Results tree
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Px Dev", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule?"])
+        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Px Dev", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule?", "Status"])
         self.tree.setAlternatingRowColors(True)
         self.tree.setRootIsDecorated(False)
         self.tree.setSortingEnabled(True)
@@ -150,7 +152,11 @@ class ResultsList(QWidget):
         header.setSectionResizeMode(7, QHeaderView.Interactive)  # Front Plate
         header.setSectionResizeMode(8, QHeaderView.Interactive)  # Back Plate
         header.setSectionResizeMode(9, QHeaderView.Interactive)  # Mule?
+        header.setSectionResizeMode(10, QHeaderView.Interactive)  # Status
         header.setMinimumSectionSize(30)  # Minimum for any column
+
+        # Move Status column (logical 10) to visual position 1 (between # and Serial)
+        header.moveSection(10, 1)
 
         # Load saved column widths or use defaults
         self._load_column_widths()
@@ -167,10 +173,10 @@ class ResultsList(QWidget):
     def _load_column_widths(self):
         """Load saved column widths from QSettings, or use defaults."""
         settings = QSettings("DollarBillProcessor", "ResultsList")
-        # Default widths: #, Serial, Patterns, Conf, Px Dev, Est. Price, Series, Front Plate, Back Plate, Mule?
-        defaults = [35, 130, 150, 50, 55, 100, 60, 70, 60, 45]
+        # Default widths: #, Serial, Patterns, Conf, Px Dev, Est. Price, Series, Front Plate, Back Plate, Mule?, Status
+        defaults = [35, 130, 150, 50, 55, 100, 60, 70, 60, 45, 50]
 
-        for i in range(10):
+        for i in range(11):
             width = settings.value(f"column_{i}_width", defaults[i], type=int)
             self.tree.setColumnWidth(i, width)
 
@@ -261,6 +267,12 @@ class ResultsList(QWidget):
             elif status_filter == "error":
                 if not result.get('error'):
                     continue
+            elif status_filter == "unchecked":
+                if result.get('checked'):
+                    continue
+            elif status_filter == "unviewed":
+                if result.get('viewed'):
+                    continue
 
             # Custom filters from menu
             if self.filters.get('needs_review') and not result.get('needs_review'):
@@ -340,6 +352,21 @@ class ResultsList(QWidget):
             else:
                 item.setText(9, "")
 
+            # Status column (review tracking)
+            status_parts = []
+            if result.get('checked'):
+                status_parts.append('\u2713')
+            auto = ''
+            if result.get('viewed'):
+                auto += 'V'
+            if result.get('cropped'):
+                auto += 'C'
+            if result.get('sent_for_review'):
+                auto += 'R'
+            if auto:
+                status_parts.append(auto)
+            item.setText(10, ' '.join(status_parts))
+
             # Build comprehensive row tooltip with all bill details
             tooltip_lines = [f"Serial: {serial}"]
             if patterns:
@@ -360,7 +387,7 @@ class ResultsList(QWidget):
                 tooltip_lines.append(f"File: {Path(front_file).name}")
 
             row_tooltip = '\n'.join(tooltip_lines)
-            for col in range(10):
+            for col in range(11):
                 item.setToolTip(col, row_tooltip)
 
             # Color coding with explicit text color for contrast
@@ -381,18 +408,18 @@ class ResultsList(QWidget):
                     default_color = self.settings.ui.default_fancy_color
                     bg_color = QColor(default_color) if default_color else QColor(46, 125, 50)
 
-                for i in range(10):
+                for i in range(11):
                     item.setBackground(i, QBrush(bg_color))
                     # Use white or black text based on brightness
                     brightness = (bg_color.red() * 299 + bg_color.green() * 587 + bg_color.blue() * 114) / 1000
                     text_color = QColor(0, 0, 0) if brightness > 128 else QColor(255, 255, 255)
                     item.setForeground(i, QBrush(text_color))
             elif result.get('needs_review'):
-                for i in range(10):
+                for i in range(11):
                     item.setBackground(i, QBrush(QColor(245, 124, 0)))    # Orange background
                     item.setForeground(i, QBrush(QColor(255, 255, 255)))  # White text
             elif result.get('error'):
-                for i in range(10):
+                for i in range(11):
                     item.setBackground(i, QBrush(QColor(211, 47, 47)))    # Red background
                     item.setForeground(i, QBrush(QColor(255, 255, 255)))  # White text
 
@@ -420,13 +447,54 @@ class ResultsList(QWidget):
         filtered = len(self.filtered_results)
         fancy = sum(1 for r in self.results if r.get('is_fancy'))
         review = sum(1 for r in self.results if r.get('needs_review'))
+        checked = sum(1 for r in self.results if r.get('checked'))
 
         if filtered == total:
             text = f"{total} bills | {fancy} fancy | {review} need review"
         else:
             text = f"{filtered}/{total} bills (filtered) | {fancy} fancy | {review} need review"
 
+        if checked:
+            text += f" | {checked}/{total} checked"
+
+        text += "    Space=check  C=crop  M=magnifier"
+
         self.summary_label.setText(text)
+
+    def _sync_result_field(self, result_copy: dict, field: str, value):
+        """Sync a field change back to the authoritative self.results list.
+
+        PySide6's data()/setData() copies dicts, so changes to a dict
+        obtained from item.data() won't reflect in self.results.
+        """
+        front_file = result_copy.get('front_file')
+        if front_file:
+            for r in self.results:
+                if r.get('front_file') == front_file:
+                    r[field] = value
+                    break
+
+    def _update_status_cell(self, item, result: dict):
+        """Update the status column text for a single tree item.
+
+        Note: PySide6's data()/setData() copies dicts, so the caller must
+        pass the already-modified result AND store it back via setData().
+        """
+        status_parts = []
+        if result.get('checked'):
+            status_parts.append('\u2713')
+        auto = ''
+        if result.get('viewed'):
+            auto += 'V'
+        if result.get('cropped'):
+            auto += 'C'
+        if result.get('sent_for_review'):
+            auto += 'R'
+        if auto:
+            status_parts.append(auto)
+        item.setText(10, ' '.join(status_parts))
+        # Store the modified dict back (PySide6 copies on setData)
+        item.setData(0, Qt.UserRole, result)
 
     def _on_selection_changed(self):
         """Handle selection change."""
@@ -434,6 +502,14 @@ class ResultsList(QWidget):
         if items:
             result = items[0].data(0, Qt.UserRole)
             self.item_selected.emit(result)
+            # Auto-track viewed status
+            if result and not result.get('viewed'):
+                result['viewed'] = True
+                self._sync_result_field(result, 'viewed', True)
+                sorting_enabled = self.tree.isSortingEnabled()
+                self.tree.setSortingEnabled(False)
+                self._update_status_cell(items[0], result)
+                self.tree.setSortingEnabled(sorting_enabled)
 
     def _show_context_menu(self, pos):
         """Show context menu for item."""
@@ -576,6 +652,15 @@ class ResultsList(QWidget):
 
             menu.addSeparator()
 
+        # Toggle checked
+        if is_multi_select:
+            checked_label = f"Toggle Checked ({len(selected_results)} bills)"
+        else:
+            checked_label = "Toggle Checked"
+        toggle_checked_action = QAction(checked_label, self)
+        toggle_checked_action.triggered.connect(self.toggle_checked)
+        menu.addAction(toggle_checked_action)
+
         # Copy serial
         copy_action = QAction("Copy Serial", self)
         copy_action.triggered.connect(lambda: self._copy_serial(result))
@@ -703,6 +788,17 @@ class ResultsList(QWidget):
                 '; '.join(files_copied)
             ])
 
+        # Mark as sent for review and update status cell
+        result['sent_for_review'] = True
+        self._sync_result_field(result, 'sent_for_review', True)
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            item_result = item.data(0, Qt.UserRole)
+            if item_result and item_result.get('front_file') == result.get('front_file'):
+                item_result['sent_for_review'] = True
+                self._update_status_cell(item, item_result)
+                break
+
         # Show confirmation
         from PySide6.QtWidgets import QMessageBox
         QMessageBox.information(self, "Saved for Review",
@@ -717,6 +813,31 @@ class ResultsList(QWidget):
         if items:
             return items[0].data(0, Qt.UserRole)
         return None
+
+    def toggle_checked(self):
+        """Toggle checked status on currently selected bill(s)."""
+        items = self.tree.selectedItems()
+        if not items:
+            return
+        for item in items:
+            result = item.data(0, Qt.UserRole)
+            if result:
+                new_val = not result.get('checked', False)
+                result['checked'] = new_val
+                self._sync_result_field(result, 'checked', new_val)
+                self._update_status_cell(item, result)
+        self._update_summary()
+
+    def mark_cropped(self, results: list):
+        """Mark given results as cropped and update their status cells."""
+        cropped_files = {r.get('front_file') for r in results}
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            item_result = item.data(0, Qt.UserRole)
+            if item_result and item_result.get('front_file') in cropped_files:
+                item_result['cropped'] = True
+                self._sync_result_field(item_result, 'cropped', True)
+                self._update_status_cell(item, item_result)
 
     def select_by_filename(self, filename: str) -> bool:
         """Select an item by its front_file. Returns True if found."""
@@ -840,6 +961,12 @@ class ResultsList(QWidget):
                     result['back_plate'] = result.get('back_plate', '')
                     result['potential_mule'] = result.get('potential_mule', '').lower() == 'true'
 
+                    # Review status fields (backward compatible - missing columns default to False)
+                    result['viewed'] = result.get('viewed', '').lower() == 'true'
+                    result['cropped'] = result.get('cropped', '').lower() == 'true'
+                    result['sent_for_review'] = result.get('sent_for_review', '').lower() == 'true'
+                    result['checked'] = result.get('checked', '').lower() == 'true'
+
                     # Update file paths to point to archive location
                     front_file = result.get('front_file', '')
                     if front_file:
@@ -881,7 +1008,8 @@ class ResultsList(QWidget):
                     'position', 'front_file', 'back_file', 'serial', 'fancy_types',
                     'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
                     'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped',
-                    'series_year', 'front_plate', 'back_plate', 'potential_mule'
+                    'series_year', 'front_plate', 'back_plate', 'potential_mule',
+                    'viewed', 'cropped', 'sent_for_review', 'checked'
                 ])
                 writer.writeheader()
 

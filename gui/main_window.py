@@ -238,6 +238,10 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence(Qt.SHIFT | Qt.Key_Up), self, self._pan_up)
         QShortcut(QKeySequence(Qt.SHIFT | Qt.Key_Down), self, self._pan_down)
 
+        # Toggle checked (review status)
+        space_shortcut = QShortcut(QKeySequence(Qt.Key_Space), self, self._toggle_checked)
+        space_shortcut.setContext(Qt.ApplicationShortcut)
+
         # Plate magnifier (for mule comparison)
         QShortcut(QKeySequence(Qt.Key_M), self, self._show_plate_magnifier)
 
@@ -443,9 +447,15 @@ class MainWindow(QMainWindow):
                 # Generate crops
                 processor.generate_crops(pair, output_dir)
                 cropped_count += 1
+                result['cropped'] = True
 
             except Exception as e:
                 print(f"Error cropping {result.get('serial', 'unknown')}: {e}")
+
+        # Update status cells for cropped results
+        cropped_results = [r for r in results if r.get('cropped')]
+        if cropped_results:
+            self.results_list.mark_cropped(cropped_results)
 
         # Generate printable labels file
         self._generate_labels(results, output_dir)
@@ -517,6 +527,11 @@ class MainWindow(QMainWindow):
     def _pan_down(self):
         """Pan preview down."""
         self.preview_panel.pan(0, 50)
+
+    def _toggle_checked(self):
+        """Toggle checked status on currently selected bill(s)."""
+        self.results_list.toggle_checked()
+        self._mark_session_dirty()
 
     def _show_plate_magnifier(self):
         """Show plate magnifier popup for mule comparison."""
@@ -802,7 +817,8 @@ class MainWindow(QMainWindow):
                 'position', 'front_file', 'back_file', 'serial', 'fancy_types',
                 'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
                 'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped',
-                'series_year', 'front_plate', 'back_plate', 'potential_mule'
+                'series_year', 'front_plate', 'back_plate', 'potential_mule',
+                'viewed', 'cropped', 'sent_for_review', 'checked'
             ])
             writer.writeheader()
             writer.writerows(self.current_results)
@@ -1238,6 +1254,12 @@ class MainWindow(QMainWindow):
             if isinstance(mule, str):
                 result["potential_mule"] = mule.lower() == "true"
 
+            # Normalize review status fields
+            for key in ("viewed", "cropped", "sent_for_review", "checked"):
+                val = result.get(key, False)
+                if isinstance(val, str):
+                    result[key] = val.lower() == "true"
+
             # Set alignment data flag if alignment angle is present
             # This enables the Align button to use cached values without needing YOLO
             if "front_align_angle" in result:
@@ -1302,7 +1324,8 @@ class MainWindow(QMainWindow):
 
         # Normalize boolean fields before saving (prevent string "True"/"False" issues)
         for result in self.current_results:
-            for key in ("is_fancy", "needs_review", "front_align_flipped", "potential_mule"):
+            for key in ("is_fancy", "needs_review", "front_align_flipped", "potential_mule",
+                        "viewed", "cropped", "sent_for_review", "checked"):
                 val = result.get(key)
                 if isinstance(val, str):
                     result[key] = val.lower() == "true"
@@ -1737,7 +1760,8 @@ class MainWindow(QMainWindow):
                 'position', 'front_file', 'back_file', 'serial', 'fancy_types',
                 'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
                 'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped',
-                'series_year', 'front_plate', 'back_plate', 'potential_mule'
+                'series_year', 'front_plate', 'back_plate', 'potential_mule',
+                'viewed', 'cropped', 'sent_for_review', 'checked'
             ])
             writer.writeheader()
             writer.writerows(self.current_results)

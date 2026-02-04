@@ -544,6 +544,52 @@ Patterns that can't be tested via digit compositing alone:
 | `PatternEngineV3.classify_simple()` | Serial verification |
 | `LuaPatternInfo.examples` | Example serials per pattern |
 
+## Bill Review Status Tracking (Added Feb 2025)
+
+### Overview
+Tracks which bills have been viewed, cropped, sent for review, and manually checked off during a review session. Combines automatic tracking with manual toggle.
+
+### Status Fields (on each result dict)
+
+| Field | Type | Default | Set By |
+|-------|------|---------|--------|
+| `viewed` | bool | `False` | Auto: when bill is selected in results list |
+| `cropped` | bool | `False` | Auto: after crops are generated |
+| `sent_for_review` | bool | `False` | Auto: after "Save for Review" completes |
+| `checked` | bool | `False` | Manual: user presses `Space` key |
+
+### Status Column
+- Visual position: between `#` and `Serial` (logical column index 10, moved via `header.moveSection`)
+- Display format: `✓` for checked, `V`/`C`/`R` for viewed/cropped/sent-for-review
+- Examples: `✓ VCR` (all done), `VC` (viewed+cropped), empty (untouched)
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Space` | Toggle checked on selected bill(s) |
+| `C` | Generate crops (also auto-sets `cropped`) |
+| `M` | Plate magnifier popup |
+
+Shortcut hints shown in the summary bar.
+
+### Filter Options
+- **Unchecked**: Hide bills already checked off
+- **Not Yet Viewed**: Hide bills already viewed
+
+### Summary Bar
+Shows checked progress: `"216 bills | 10 fancy | 2 need review | 5/216 checked"`
+
+### PySide6 Dict Copy Behavior
+**Important:** `QTreeWidgetItem.data(Qt.UserRole)` returns a **copy** of stored Python dicts, not a reference. Changes to the returned dict are lost unless stored back via `setData()`. The `_sync_result_field()` helper propagates changes to both the tree item and the authoritative `self.results` list.
+
+### CSV Persistence
+Fields `viewed`, `cropped`, `sent_for_review`, `checked` are included in CSV fieldnames for both archive and export. Boolean normalization on load handles backward compatibility with older CSVs that lack these columns.
+
+### Files Modified
+- `gui/results_list.py`: Status column, filters, tracking logic, `_sync_result_field()`, `_update_status_cell()`, `toggle_checked()`, `mark_cropped()`
+- `gui/main_window.py`: Space shortcut, crop tracking in `_on_crop_selected()`, CSV fieldnames, boolean normalization in recovery/autosave
+
 ## TODO: Lua Pattern Debugging / Diagnostics
 
 ### Problem
