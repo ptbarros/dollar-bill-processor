@@ -258,6 +258,24 @@ class PatternDialog(QDialog):
         self._current_lua_pattern = None
         self._current_lua_editable = False  # True if pattern is not from 'core'
 
+        # Pattern preview section
+        preview_layout = QHBoxLayout()
+        self.pattern_preview = DigitPreviewWidget()
+        self.pattern_preview.setMinimumHeight(80)
+        preview_layout.addWidget(self.pattern_preview)
+
+        self.generate_serial_btn = QPushButton("Generate Random")
+        self.generate_serial_btn.setToolTip("Generate a random matching serial")
+        self.generate_serial_btn.clicked.connect(self._generate_test_serial)
+        self.generate_serial_btn.setEnabled(False)
+        preview_layout.addWidget(self.generate_serial_btn)
+        details_layout.addLayout(preview_layout)
+
+        self.match_message_label = QLabel("")
+        self.match_message_label.setWordWrap(True)
+        self.match_message_label.setStyleSheet("color: #666; font-style: italic;")
+        details_layout.addWidget(self.match_message_label)
+
         right_layout.addWidget(details_group)
 
         # Serial tester
@@ -837,6 +855,280 @@ class PatternDialog(QDialog):
             self._current_lua_editable = False
             self.lua_script_label.hide()
             self.view_script_btn.hide()
+
+        # Update pattern preview
+        self._update_pattern_preview(name, lua_info)
+
+    def _update_pattern_preview(self, name: str, lua_info):
+        """Update the pattern preview widget for the selected pattern."""
+        print(f"[DEBUG] _update_pattern_preview called for: {name}")
+
+        # Reset preview
+        self.pattern_preview.set_serial("--------")
+        self.pattern_preview.set_highlights([], [])
+        self.pattern_preview.set_group_boxes([])
+        self.match_message_label.setText("")
+
+        # Patterns that can't generate test serials
+        skip_patterns = {'GAS_PUMP', 'STAR', 'LOW_RUN_6M', 'LOW_RUN_12M', 'LOW_RUNS', 'KNOWN_SERIALS'}
+
+        # Enable/disable button based on whether pattern can generate serials
+        can_generate = name not in skip_patterns
+        self.generate_serial_btn.setEnabled(can_generate)
+        if not can_generate:
+            self.generate_serial_btn.setToolTip("This pattern requires special conditions")
+        else:
+            self.generate_serial_btn.setToolTip("Generate a random matching serial")
+
+        # Show first example if available
+        examples = lua_info.examples if lua_info else []
+        if examples and examples[0]:
+            ex = examples[0]
+            serial = f"A{ex}B" if len(ex) == 8 and ex.isdigit() else ex
+            self.pattern_preview.set_serial(serial)
+            viz = self.engine.get_digit_highlights(serial, [name])
+            highlights = self._flatten_highlights(viz.get('highlights', []))
+            self.pattern_preview.set_highlights(highlights, viz.get('connectors', []))
+            self.pattern_preview.set_group_boxes(viz.get('group_boxes', []))
+            self.match_message_label.setText(f"Example: {serial}")
+
+    def _flatten_highlights(self, position_highlights: list) -> list:
+        """Convert per-position highlight format to simple format.
+
+        The engine returns: [{'position': 0, 'digit': '1', 'highlights': [{'color': 'orange'}]}, ...]
+        The widget expects: [{'positions': [0], 'color': 'orange'}, ...]
+        """
+        result = []
+        for ph in position_highlights:
+            pos = ph.get('position')
+            for h in ph.get('highlights', []):
+                result.append({
+                    'positions': [pos],
+                    'color': h.get('color', 'gray'),
+                    'label': h.get('label', '')
+                })
+        return result
+
+    def _generate_test_serial(self):
+        """Generate and display a random serial matching the selected pattern."""
+        import random
+
+        print("[DEBUG] _generate_test_serial called")
+
+        # Get selected pattern
+        items = self.pattern_tree.selectedItems()
+        if not items:
+            print("[DEBUG] No items selected")
+            return
+        data = items[0].data(0, Qt.UserRole)
+        if not data or data.get('is_library'):
+            print("[DEBUG] Selected item is library or no data")
+            return
+        name = data['name']
+        print(f"[DEBUG] Selected pattern name: {name}")
+
+        # Generate a truly random matching serial
+        serial = self._generate_random_matching_serial(name)
+        if not serial:
+            self.match_message_label.setText("Could not generate matching serial")
+            return
+
+        print(f"[DEBUG] Setting preview serial to: {serial}")
+        self.pattern_preview.set_serial(serial)
+
+        # Get visualization
+        viz = self.engine.get_digit_highlights(serial, [name])
+        raw_highlights = viz.get('highlights', [])
+        connectors = viz.get('connectors', [])
+        group_boxes = viz.get('group_boxes', [])
+
+        # Count how many positions actually have highlight data
+        positions_with_highlights = sum(1 for h in raw_highlights if h.get('highlights'))
+        print(f"[DEBUG] Visualization: {positions_with_highlights} positions with highlights, {len(connectors)} connectors, {len(group_boxes)} group_boxes")
+
+        highlights = self._flatten_highlights(raw_highlights)
+        if highlights:
+            print(f"[DEBUG]   Flattened highlights: {highlights}")
+        else:
+            print(f"[DEBUG]   No highlights returned by pattern!")
+
+        self.pattern_preview.set_highlights(highlights, connectors)
+        self.pattern_preview.set_group_boxes(group_boxes)
+        self.match_message_label.setText(f"Generated: {serial}")
+        print(f"[DEBUG] Preview update complete")
+
+    def _generate_random_matching_serial(self, pattern_name: str) -> str:
+        """Generate a random serial that matches the given pattern.
+
+        Strategy:
+        1. Get examples from Lua pattern header
+        2. Analyze example structure (which positions must match)
+        3. Generate new digits following that structure with random values
+        4. Verify it matches, fall back to using example directly if needed
+        """
+        import random
+
+        prefixes = 'ABCDEFGHIJKL'
+        suffixes = 'ABCDEFGHIJKLMNOPQRSTUVWXY'
+
+        print(f"[DEBUG] Generating random serial for pattern: {pattern_name}")
+
+        # Get pattern info and examples
+        info = self.engine.lua_patterns.get(pattern_name)
+        if not info or not info.examples:
+            print(f"[DEBUG] No examples found for {pattern_name}")
+            return None
+
+        examples = [ex for ex in info.examples if len(ex) == 8 and ex.isdigit()]
+        if not examples:
+            print(f"[DEBUG] No valid 8-digit examples for {pattern_name}")
+            return None
+
+        # Special handling for patterns with mathematical constraints
+        if 'SUM' in pattern_name.upper():
+            digits = self._generate_sum_pattern(pattern_name, examples)
+            if digits:
+                prefix = random.choice(prefixes)
+                suffix = random.choice(suffixes)
+                serial = f"{prefix}{digits}{suffix}"
+                matches = self.engine.classify_simple(serial)
+                if pattern_name in matches:
+                    print(f"[DEBUG] Generated sum pattern: {serial}")
+                    return serial
+
+        # Shuffle examples and try each one's structure
+        random.shuffle(examples)
+
+        for example in examples:
+            print(f"[DEBUG] Trying example: {example}")
+
+            # Find structure: which positions share the same digit?
+            structure = self._analyze_serial_structure(example)
+            print(f"[DEBUG] Structure groups: {structure}")
+
+            # Generate new digits following the structure
+            # Try up to 5 times per example to get a valid match
+            for attempt in range(5):
+                new_digits = self._generate_from_structure(structure, example)
+                prefix = random.choice(prefixes)
+                suffix = random.choice(suffixes)
+                serial = f"{prefix}{new_digits}{suffix}"
+
+                matches = self.engine.classify_simple(serial)
+                if pattern_name in matches:
+                    print(f"[DEBUG] Generated matching serial: {serial} (example {example}, attempt {attempt + 1})")
+                    return serial
+
+            # This example's structure didn't work, try next example
+            print(f"[DEBUG] Structure from {example} didn't produce matches, trying next...")
+
+        # Fallback: use a random valid example directly (with random prefix/suffix)
+        print(f"[DEBUG] All structure attempts failed, finding valid example...")
+        random.shuffle(examples)
+        for ex in examples:
+            prefix = random.choice(prefixes)
+            suffix = random.choice(suffixes)
+            serial = f"{prefix}{ex}{suffix}"
+            matches = self.engine.classify_simple(serial)
+            if pattern_name in matches:
+                print(f"[DEBUG] Using example directly: {serial}")
+                return serial
+
+        # Last resort: return first example
+        print(f"[DEBUG] No valid examples, using first anyway")
+        prefix = random.choice(prefixes)
+        suffix = random.choice(suffixes)
+        return f"{prefix}{examples[0]}{suffix}"
+
+    def _analyze_serial_structure(self, example: str) -> list:
+        """Analyze which positions in the serial share the same digit.
+
+        Returns list of position groups, where each group shares the same digit.
+        Example: "12344321" -> [[0,7], [1,6], [2,5], [3,4]] (radar structure)
+        Example: "11122233" -> [[0,1,2], [3,4,5], [6,7]] (triple-triple-double)
+        """
+        # Group positions by their digit value
+        digit_positions = {}
+        for i, d in enumerate(example):
+            if d not in digit_positions:
+                digit_positions[d] = []
+            digit_positions[d].append(i)
+
+        # Return list of position groups
+        return list(digit_positions.values())
+
+    def _generate_from_structure(self, structure: list, example: str) -> str:
+        """Generate new digits following the analyzed structure.
+
+        Each group of positions gets a random digit, but all positions
+        in the same group get the same digit.
+        """
+        import random
+
+        new_digits = list(example)  # Start with example as template
+        used_digits = set()
+
+        for group in structure:
+            # Pick a random digit for this group
+            # Try to pick a digit not used by other groups (for variety)
+            available = [d for d in range(10) if d not in used_digits]
+            if available:
+                new_digit = random.choice(available)
+            else:
+                new_digit = random.randint(0, 9)
+
+            used_digits.add(new_digit)
+
+            # Apply to all positions in this group
+            for pos in group:
+                new_digits[pos] = str(new_digit)
+
+        return ''.join(new_digits)
+
+    def _generate_sum_pattern(self, pattern_name: str, examples: list) -> str:
+        """Generate digits for sum-based patterns.
+
+        Analyzes examples to find target sums, then generates random digits
+        that add up to those targets.
+        """
+        import random
+
+        # Find target sums from examples
+        target_sums = set()
+        for ex in examples:
+            if len(ex) == 8 and ex.isdigit():
+                s = sum(int(d) for d in ex)
+                target_sums.add(s)
+
+        if not target_sums:
+            return None
+
+        print(f"[DEBUG] Sum pattern targets: {target_sums}")
+
+        # Pick a random target sum
+        target = random.choice(list(target_sums))
+
+        # Generate random digits that sum to target
+        if target <= 36:  # Low sum (like 7) - start with zeros, add up
+            digits = [0] * 8
+            remaining = target
+            while remaining > 0:
+                pos = random.randint(0, 7)
+                add = min(remaining, 9 - digits[pos], random.randint(1, min(3, remaining)))
+                digits[pos] += add
+                remaining -= add
+        else:  # High sum (like 65) - start with 9s, subtract down
+            digits = [9] * 8
+            current_sum = 72
+            while current_sum > target:
+                pos = random.randint(0, 7)
+                sub = min(current_sum - target, digits[pos], random.randint(1, min(3, current_sum - target)))
+                digits[pos] -= sub
+                current_sum -= sub
+
+        result = ''.join(str(d) for d in digits)
+        print(f"[DEBUG] Generated sum={sum(digits)} digits: {result}")
+        return result
 
     def _save_threshold(self):
         """Save threshold override for the selected pattern."""
@@ -1444,17 +1736,22 @@ class DigitPreviewWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.digits = "12345678"
+        self.digits = "--------"
         self.highlights = []
         self.connectors = []
+        self.group_boxes = []
         self.setMinimumHeight(80)
         self.setMinimumWidth(400)
 
     def set_serial(self, serial: str):
         """Set the serial number to display."""
-        self.digits = ''.join(c for c in serial if c.isdigit())
-        if len(self.digits) != 8:
-            self.digits = self.digits[:8].ljust(8, '0')
+        # Keep dashes as placeholder, otherwise extract digits
+        if serial == "--------":
+            self.digits = serial
+        else:
+            self.digits = ''.join(c for c in serial if c.isdigit())
+            if len(self.digits) != 8:
+                self.digits = self.digits[:8].ljust(8, '-')
         self.update()
 
     def set_highlights(self, highlights: list, connectors: list):
@@ -1463,12 +1760,25 @@ class DigitPreviewWidget(QWidget):
         self.connectors = connectors or []
         self.update()
 
+    def set_group_boxes(self, group_boxes: list):
+        """Set group boxes for multi-digit highlighting."""
+        self.group_boxes = group_boxes or []
+        self.update()
+
     def paintEvent(self, event):
-        from PySide6.QtGui import QPainter, QPen, QBrush
+        from PySide6.QtGui import QPainter, QPen, QBrush, QPainterPath
         from PySide6.QtCore import QRect, QPoint
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+
+        # Bill-like colors
+        bg_color = QColor("#D4C4A8")  # Tan/cream - bill paper
+        digit_color = QColor("#1B5E20")  # Dark green - bill ink
+        border_color = QColor("#5D4037")  # Brown border
+
+        # Fill background with tan color
+        painter.fillRect(self.rect(), bg_color)
 
         # Calculate box dimensions
         box_width = 40
@@ -1478,7 +1788,7 @@ class DigitPreviewWidget(QWidget):
         start_x = (self.width() - total_width) // 2
         start_y = 20
 
-        # Build color map for each position
+        # Build color map for each position (from individual highlights)
         position_colors = {}
         for h in self.highlights:
             positions = h.get('positions', [])
@@ -1516,20 +1826,47 @@ class DigitPreviewWidget(QWidget):
             rect = QRect(x, start_y, box_width, box_height)
             box_rects.append(rect)
 
-            # Background color
+            # Background and border for each digit box
             if i in position_colors:
-                bg_color = color_map.get(position_colors[i], QColor("#9E9E9E"))
-                painter.setBrush(QBrush(bg_color))
-                painter.setPen(QPen(bg_color.darker(120), 2))
+                # Highlighted digit - use highlight color for border
+                hl_color = color_map.get(position_colors[i], QColor("#9E9E9E"))
+                painter.setBrush(QBrush(bg_color.lighter(105)))
+                painter.setPen(QPen(hl_color, 3))
             else:
-                painter.setBrush(QBrush(QColor("#2D2D2D")))
-                painter.setPen(QPen(QColor("#555555"), 2))
+                # Normal digit
+                painter.setBrush(QBrush(bg_color.lighter(105)))
+                painter.setPen(QPen(border_color, 2))
 
             painter.drawRoundedRect(rect, 5, 5)
 
-            # Draw digit
-            painter.setPen(QPen(QColor("white")))
+            # Draw digit in green
+            painter.setPen(QPen(digit_color))
             painter.drawText(rect, Qt.AlignCenter, digit)
+
+        # Draw group boxes (spans multiple digits with a single box)
+        for gb in self.group_boxes:
+            from_pos = gb.get('from', 0)
+            to_pos = gb.get('to', 0)
+            color = gb.get('color', 'gold')
+            thickness = gb.get('thickness', 3)
+
+            if 0 <= from_pos < 8 and 0 <= to_pos < 8 and from_pos <= to_pos:
+                from_rect = box_rects[from_pos]
+                to_rect = box_rects[to_pos]
+
+                # Create spanning rectangle with some padding
+                padding = 3
+                span_rect = QRect(
+                    from_rect.left() - padding,
+                    from_rect.top() - padding,
+                    to_rect.right() - from_rect.left() + 2 * padding,
+                    from_rect.height() + 2 * padding
+                )
+
+                pen = QPen(color_map.get(color, QColor("#FFD700")), thickness)
+                painter.setPen(pen)
+                painter.setBrush(Qt.NoBrush)
+                painter.drawRoundedRect(span_rect, 8, 8)
 
         # Draw connectors (arcs above the boxes)
         for conn in self.connectors:
@@ -1555,7 +1892,6 @@ class DigitPreviewWidget(QWidget):
                 mid_x = (from_x + to_x) // 2
                 arc_height = min(15, abs(to_pos - from_pos) * 4)
 
-                from PySide6.QtGui import QPainterPath
                 path = QPainterPath()
                 path.moveTo(from_x, y)
                 path.quadTo(mid_x, y - arc_height, to_x, y)

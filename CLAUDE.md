@@ -807,6 +807,63 @@ Removed all YAML pattern dependencies, making Lua the single source of truth for
 - `get_pattern_info()` returns both `price` and `price_range` keys
 - Migration code in `settings_manager.py` still handles old `user_patterns.yaml` files
 
+## Visual Pattern Preview (Added Feb 2025)
+
+### Overview
+The Pattern Manager now includes a visual preview widget that shows how a pattern's visualization looks on a sample serial number. Users can generate random matching serials to see the pattern's highlights, connectors, and group boxes in action.
+
+### Features
+- **Bill-like styling**: Tan background (`#D4C4A8`) with green digits (`#1B5E20`) simulates actual bill appearance
+- **Generate Random button**: Creates a new random serial that matches the selected pattern
+- **Live visualization**: Shows highlights (colored borders), connectors (arcs), and group boxes (spanning rectangles)
+- **Example on selection**: When selecting a pattern, shows the first example from the Lua header with visualization
+
+### How Random Generation Works
+The generator uses a structure-based approach that learns from examples:
+
+1. **Analyze example structure** - Find which positions share the same digit
+   - RADAR `"12344321"` → groups: `[[0,7], [1,6], [2,5], [3,4]]` (mirrored pairs)
+   - REPEATER `"12341234"` → groups: `[[0,4], [1,5], [2,6], [3,7]]` (repeated halves)
+
+2. **Generate new digits** - Each group gets a random digit, all positions in a group get the same value
+
+3. **Verify match** - Confirms the generated serial actually matches the pattern
+
+4. **Special handling for math patterns** - SUM patterns analyze target sums from examples and generate digits that add up correctly
+
+### Limitations
+Some patterns can only use examples directly (structure generation won't work):
+- **SUM patterns**: Require specific digit sums (handled specially)
+- **Patterns with bad examples**: If an example doesn't actually match the pattern, it's skipped
+- **Complex semantic constraints**: Patterns like THREE_PAIRS_NOT_TOGETHER exclude certain structures
+
+### Tips for Pattern Authors
+- **More examples = better generation**: Each example with a different structure provides more variety
+- **Verify examples match**: Run the audit script to find examples that don't match their pattern:
+  ```bash
+  python3 -c "
+  from pattern_engine_v3 import PatternEngineV3
+  engine = PatternEngineV3()
+  for name, info in engine.lua_patterns.items():
+      if info.examples:
+          for ex in info.examples:
+              if len(ex) == 8 and ex.isdigit():
+                  matches = engine.classify_simple(f'A{ex}B')
+                  if name not in matches:
+                      print(f'{name}: example {ex} matches {matches} instead!')
+  "
+  ```
+
+### Files Modified
+- `gui/pattern_dialog.py`:
+  - `DigitPreviewWidget`: Enhanced with group_boxes, bill-like colors
+  - `_generate_test_serial()`: Button click handler
+  - `_generate_random_matching_serial()`: Structure-based generation
+  - `_analyze_serial_structure()`: Find position groups from example
+  - `_generate_from_structure()`: Create new digits following structure
+  - `_generate_sum_pattern()`: Special handling for SUM patterns
+  - `_update_pattern_preview()`: Show example on pattern selection
+
 ## TODO: Lua Pattern Debugging / Diagnostics
 
 ### Problem
