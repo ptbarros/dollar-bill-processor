@@ -20,19 +20,23 @@ A GUI application for processing dollar bill images, detecting serial numbers vi
 - **patterns/** directory structure:
   ```
   patterns/
-  ├── core/           # Built-in Lua patterns (121 patterns)
-  ├── user/           # User-created patterns (not in git)
-  └── lib/
-      └── helpers.lua # Shared utility functions (~400 lines)
+  ├── core/              # Built-in Lua patterns (121 patterns)
+  ├── user/              # User-created patterns (not in git)
+  ├── <custom library>/  # Any folder becomes a library (e.g., "The Green Guide")
+  ├── lib/
+  │   └── helpers.lua    # Shared utility functions (~400 lines)
+  └── data/              # Shared data files (CSV/JSON)
   ```
 
 ### Lua Script Structure
 ```lua
 --[[
 Pattern: PATTERN_NAME
+DisplayName: Friendly Name With Spaces
 Description: What it matches
 Tier: 1-10
 Examples: ["12345678"]
+DataFile: optional_data.csv
 --]]
 
 function match(ctx)
@@ -70,10 +74,16 @@ end
 purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red, gray
 
 ### GUI Features
-- Pattern Manager shows `[Lua]` indicator in purple for Lua-implemented patterns
-- "View Script" button shows source code with Copy to Clipboard
+- **Pattern Manager** with library-based organization:
+  - Patterns grouped by library (collapsible sections)
+  - Library checkbox enables/disables all patterns in that library
+  - Friendly display names auto-generated from pattern names (e.g., `LOW_RUN_6M` → `Low Run 6M`)
+  - `[Lua]` indicator in purple for Lua-implemented patterns
+  - Sortable by tier (click column header)
+- **View/Edit Script**: "View Script" for core (read-only), "Edit Script" for user libraries (with Save)
+- **Create Pattern**: "New Pattern..." button with library selection
+- **API Docs** button for quick access to Lua scripting documentation
 - Script editor tab with syntax highlighting, templates, and live preview
-- API Docs tab with copyable documentation for AI prompt generation
 - "Re-classify All" button in results list
 - Right-click "Re-classify" option for selected rows
 
@@ -608,25 +618,55 @@ Fields `viewed`, `cropped`, `sent_for_review`, `checked` are included in CSV fie
 - `gui/results_list.py`: Status column, filters, tracking logic, `_sync_result_field()`, `_update_status_cell()`, `toggle_checked()`, `mark_cropped()`
 - `gui/main_window.py`: Space shortcut, crop tracking in `_on_crop_selected()`, CSV fieldnames, boolean normalization in recovery/autosave
 
-## TODO: Remove YAML Dependency from Pattern Manager
+## Pattern Library System (Added Feb 2025)
 
-### Problem
-The Pattern Manager GUI (`gui/pattern_dialog.py:_load_patterns()`) populates the main patterns list from `patterns_v2.yaml` (`engine.config['patterns']`). Lua-only patterns in `patterns/core/` that lack a YAML stub entry are invisible in the GUI. This was discovered when `LOW_RUN_6M` and `LOW_RUN_12M` were added as core Lua patterns without YAML entries — they simply didn't appear.
+### Overview
+Refactored Pattern Manager to use a library-based organization where Lua patterns are the authoritative source (not YAML).
 
-### Current Workaround
-Every core Lua pattern needs a corresponding YAML stub in `patterns_v2.yaml` with at least `description`, `tier`, `enabled`, and `rules: {}`. The Lua file handles all detection logic; YAML is only needed for the GUI listing.
+### Key Changes
+- **Library-based grouping**: Patterns organized by library (directory) instead of tier
+- **Lua-first loading**: `engine.lua_patterns` is the primary source; YAML only for fallback metadata
+- **Dynamic library discovery**: Any subdirectory under `patterns/` (except `lib/`, `data/`, `__pycache__/`) becomes a library
+- **Library enable/disable**: Checkbox on library header enables/disables all patterns in that library
+- **DisplayName support**: Lua headers can include `DisplayName:` for friendly GUI names
+- **Auto-generated friendly names**: `LOW_RUN_6M` → `Low Run 6M` when no DisplayName set
 
-### Goal
-Refactor Pattern Manager to build its pattern list from `engine.lua_patterns` (the authoritative source) instead of — or in addition to — the YAML config. This would:
-- Eliminate the need for YAML stubs for Lua-only patterns
-- Allow new core Lua patterns to appear automatically in the GUI
-- Reduce duplication between Lua headers and YAML entries
-- Potentially allow retiring `patterns_v2.yaml` entirely (metadata like odds/price could move to Lua headers)
+### DisplayName Header Field
+```lua
+--[[
+Pattern: DOUBLE_YEAR
+DisplayName: Double Year Note
+Description: Two complete years side by side
+Tier: 4
+--]]
+```
 
-### Considerations
-- YAML still holds `odds` and `price_range` for some patterns — these would need to move to Lua headers or a separate metadata file
-- Pattern enable/disable state is managed via `user_settings.yaml` (`pattern_states`) — this is independent of YAML
-- The `_load_patterns()` method groups by tier and shows enable checkboxes — all this info is available from `LuaPatternInfo`
+If `DisplayName:` is not set, a friendly name is auto-generated from the pattern name.
+
+### Library States
+Library enable/disable states stored in `user_settings.yaml`:
+```yaml
+library_states:
+  core: true
+  user: true
+  "The Green Guide": true
+```
+
+### Files Modified
+- `pattern_engine_v3.py`:
+  - `_load_lua_patterns()` scans all subdirectories (not just core/user)
+  - `LuaPatternInfo` has `display_name` field
+  - `save_user_pattern()` accepts `library` and `display_name` parameters
+- `gui/pattern_dialog.py`:
+  - `_load_patterns()` groups by library, uses Lua patterns as primary source
+  - `_make_friendly_name()` converts `PATTERN_NAME` → `Pattern Name`
+  - Library checkboxes in tree for bulk enable/disable
+  - "Edit Script" button for non-core patterns (with Save functionality)
+  - "New Library..." and "New Pattern..." buttons
+  - DisplayName field in CustomPatternDialog
+- `settings_manager.py`:
+  - Added `library_states` dict
+  - Added `get_library_enabled()` / `set_library_enabled()` methods
 
 ## TODO: Lua Pattern Debugging / Diagnostics
 

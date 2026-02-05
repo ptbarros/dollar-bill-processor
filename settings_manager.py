@@ -132,6 +132,7 @@ class SettingsManager:
         self.pattern_catalogs: Dict[str, str] = {}  # Pattern name -> catalog location (e.g., "A1", "B2")
         self.pattern_overrides: Dict[str, Dict[str, Any]] = {}  # e.g., {'GAS_PUMP': {'baseline_variance_min': 3.6}}
         self.custom_patterns: Dict[str, Dict] = {}  # User-defined YAML patterns
+        self.library_states: Dict[str, bool] = {}  # Library name -> enabled (e.g., {'core': True, 'user': True})
         self.custom_values: Dict[str, Any] = {}  # Arbitrary user values
         self._load()
 
@@ -236,6 +237,9 @@ class SettingsManager:
 
         # Load custom YAML patterns
         self.custom_patterns = data.get('custom_patterns', {})
+
+        # Load library states (enable/disable entire libraries)
+        self.library_states = data.get('library_states', {})
 
         # Load custom values
         self.custom_values = data.get('custom_values', {})
@@ -375,6 +379,7 @@ class SettingsManager:
             'pattern_catalogs': self.pattern_catalogs,
             'pattern_overrides': self.pattern_overrides,
             'custom_patterns': self.custom_patterns,
+            'library_states': self.library_states,
             'custom_values': self.custom_values,
         }
 
@@ -396,6 +401,22 @@ class SettingsManager:
     def get_disabled_patterns(self) -> List[str]:
         """Get list of explicitly disabled patterns."""
         return [name for name, enabled in self.pattern_states.items() if not enabled]
+
+    def get_library_enabled(self, library_name: str, default: bool = True) -> bool:
+        """Get whether a pattern library is enabled."""
+        return self.library_states.get(library_name, default)
+
+    def set_library_enabled(self, library_name: str, enabled: bool):
+        """Set whether a pattern library is enabled."""
+        self.library_states[library_name] = enabled
+
+    def get_enabled_libraries(self) -> List[str]:
+        """Get list of explicitly enabled libraries."""
+        return [name for name, enabled in self.library_states.items() if enabled]
+
+    def get_disabled_libraries(self) -> List[str]:
+        """Get list of explicitly disabled libraries."""
+        return [name for name, enabled in self.library_states.items() if not enabled]
 
     def get_pattern_color(self, pattern_name: str, default: str = "") -> str:
         """Get custom color for a pattern (hex format like '#FF0000')."""
@@ -489,6 +510,7 @@ class SettingsManager:
         self.pattern_catalogs = {}
         self.pattern_overrides = {}
         self.custom_patterns = {}
+        self.library_states = {}
         self.custom_values = {}
 
     def export_settings(self, export_path: Path):

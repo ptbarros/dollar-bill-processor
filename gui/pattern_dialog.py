@@ -77,23 +77,25 @@ class PatternDialog(QDialog):
 
         left_layout.addLayout(filter_layout)
 
-        # Pattern tree
+        # Pattern tree - grouped by library, sortable by tier
         self.pattern_tree = QTreeWidget()
         self.pattern_tree.setHeaderLabels(["Pattern", "Tier", "Enabled", "Color", "Catalog"])
         self.pattern_tree.setRootIsDecorated(True)
         self.pattern_tree.itemChanged.connect(self._on_item_changed)
         self.pattern_tree.itemSelectionChanged.connect(self._on_selection_changed)
         self.pattern_tree.itemDoubleClicked.connect(self._on_item_double_click)
+        self.pattern_tree.setSortingEnabled(True)
 
         header = self.pattern_tree.header()
         header.setSectionsMovable(False)  # Don't allow reordering columns
         header.setStretchLastSection(True)  # Last column fills remaining space
+        header.setSortIndicatorShown(True)
         # All columns interactive (draggable) except last which stretches
-        header.setSectionResizeMode(0, QHeaderView.Interactive)
-        header.setSectionResizeMode(1, QHeaderView.Interactive)
-        header.setSectionResizeMode(2, QHeaderView.Interactive)
-        header.setSectionResizeMode(3, QHeaderView.Interactive)
-        header.setSectionResizeMode(4, QHeaderView.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.Interactive)  # Pattern
+        header.setSectionResizeMode(1, QHeaderView.Interactive)  # Tier
+        header.setSectionResizeMode(2, QHeaderView.Interactive)  # Enabled
+        header.setSectionResizeMode(3, QHeaderView.Interactive)  # Color
+        header.setSectionResizeMode(4, QHeaderView.Stretch)      # Catalog
 
         # Restore saved column widths or use defaults
         self._restore_column_widths()
@@ -184,6 +186,7 @@ class PatternDialog(QDialog):
         self.lua_script_label.hide()
         self.view_script_btn.hide()
         self._current_lua_pattern = None
+        self._current_lua_editable = False  # True if pattern is not from 'core'
 
         right_layout.addWidget(details_group)
 
@@ -230,33 +233,41 @@ class PatternDialog(QDialog):
 
         right_layout.addWidget(examples_group)
 
-        # Custom patterns section
-        custom_group = QGroupBox("Custom Patterns (Birthdays, Anniversaries, etc.)")
-        custom_layout = QVBoxLayout(custom_group)
+        # Actions section
+        actions_group = QGroupBox("Actions")
+        actions_layout = QVBoxLayout(actions_group)
 
-        self.custom_list = QListWidget()
-        self.custom_list.itemSelectionChanged.connect(self._on_custom_selection_changed)
-        custom_layout.addWidget(self.custom_list)
+        # Row 1: Library and Pattern creation
+        row1 = QHBoxLayout()
 
-        custom_btn_layout = QHBoxLayout()
-        add_custom_btn = QPushButton("Add...")
-        add_custom_btn.clicked.connect(self._add_custom_pattern)
-        custom_btn_layout.addWidget(add_custom_btn)
+        new_library_btn = QPushButton("New Library...")
+        new_library_btn.setToolTip("Create a new pattern library folder")
+        new_library_btn.clicked.connect(self._create_new_library)
+        row1.addWidget(new_library_btn)
 
-        edit_custom_btn = QPushButton("Edit...")
-        edit_custom_btn.clicked.connect(self._edit_custom_pattern)
-        custom_btn_layout.addWidget(edit_custom_btn)
+        new_pattern_btn = QPushButton("New Pattern...")
+        new_pattern_btn.setToolTip("Create a new Lua pattern script")
+        new_pattern_btn.clicked.connect(self._add_custom_pattern)
+        row1.addWidget(new_pattern_btn)
 
-        delete_custom_btn = QPushButton("Delete")
-        delete_custom_btn.clicked.connect(self._delete_custom_pattern)
-        custom_btn_layout.addWidget(delete_custom_btn)
+        actions_layout.addLayout(row1)
 
-        custom_layout.addLayout(custom_btn_layout)
+        # Row 2: Documentation and utilities
+        row2 = QHBoxLayout()
 
-        right_layout.addWidget(custom_group)
+        api_docs_btn = QPushButton("API Docs")
+        api_docs_btn.setToolTip("View Lua pattern scripting documentation")
+        api_docs_btn.clicked.connect(self._show_api_docs)
+        row2.addWidget(api_docs_btn)
 
-        # Load custom patterns
-        self._load_custom_patterns()
+        open_folder_btn = QPushButton("Open Patterns Folder")
+        open_folder_btn.setToolTip("Open the patterns directory in file explorer")
+        open_folder_btn.clicked.connect(self._open_patterns_folder)
+        row2.addWidget(open_folder_btn)
+
+        actions_layout.addLayout(row2)
+
+        right_layout.addWidget(actions_group)
 
         right_layout.addStretch()
 
@@ -277,7 +288,7 @@ class PatternDialog(QDialog):
 
     def _restore_column_widths(self):
         """Restore saved column widths from settings."""
-        widths = self.settings.get_custom_value('pattern_manager_columns', None)
+        widths = self.settings.get_custom_value('pattern_manager_columns_v3', None)
         if widths and len(widths) >= 4:
             self.pattern_tree.setColumnWidth(0, widths[0])  # Pattern
             self.pattern_tree.setColumnWidth(1, widths[1])  # Tier
@@ -287,9 +298,9 @@ class PatternDialog(QDialog):
         else:
             # Default widths
             self.pattern_tree.setColumnWidth(0, 200)  # Pattern
-            self.pattern_tree.setColumnWidth(1, 50)   # Tier
-            self.pattern_tree.setColumnWidth(2, 60)   # Enabled
-            self.pattern_tree.setColumnWidth(3, 50)   # Color
+            self.pattern_tree.setColumnWidth(1, 40)   # Tier
+            self.pattern_tree.setColumnWidth(2, 55)   # Enabled
+            self.pattern_tree.setColumnWidth(3, 45)   # Color
 
     def _save_column_widths(self):
         """Save column widths to settings."""
@@ -299,62 +310,137 @@ class PatternDialog(QDialog):
             self.pattern_tree.columnWidth(2),
             self.pattern_tree.columnWidth(3),
         ]
-        self.settings.set_custom_value('pattern_manager_columns', widths)
+        self.settings.set_custom_value('pattern_manager_columns_v3', widths)
+
+    def _make_friendly_name(self, name: str) -> str:
+        """Convert pattern name to friendly display name.
+
+        Examples:
+            LOW_RUN_6M -> Low Run 6M
+            RADAR -> Radar
+            DOUBLE_YEAR -> Double Year
+        """
+        words = name.replace('_', ' ').split()
+        friendly_words = []
+        for word in words:
+            # Keep short alphanumeric tokens (like "6M", "3D") uppercase
+            if len(word) <= 3 and any(c.isdigit() for c in word):
+                friendly_words.append(word.upper())
+            else:
+                friendly_words.append(word.capitalize())
+        return ' '.join(friendly_words)
 
     def _load_patterns(self):
-        """Load patterns into the tree."""
+        """Load patterns into the tree, grouped by library."""
         self.pattern_tree.clear()
 
-        # Get Lua pattern names for indicator
-        lua_pattern_names = set()
+        # Temporarily disable sorting while loading
+        self.pattern_tree.setSortingEnabled(False)
+
+        # Get Lua pattern info (includes file paths for library detection)
+        lua_pattern_info = {}
         if HAS_V3_ENGINE and hasattr(self.engine, 'lua_patterns'):
-            lua_pattern_names = set(self.engine.lua_patterns.keys())
+            lua_pattern_info = self.engine.lua_patterns
 
-        # Group by tier
-        tiers = {}
-        all_patterns = self.engine.config.get('patterns', {})
+        # Get YAML patterns for fallback/metadata
+        yaml_patterns = self.engine.config.get('patterns', {})
 
-        for name, defn in all_patterns.items():
-            if defn is None:
+        # Group patterns by library - Lua patterns are the primary source
+        libraries = {}  # library_name -> [(name, defn, lua_info), ...]
+        seen_names = set()
+
+        # First, add all Lua patterns (primary source)
+        for name, lua_info in lua_pattern_info.items():
+            seen_names.add(name)
+
+            # Extract library from file path
+            library = 'user'  # Default for Lua patterns without recognized path
+            if lua_info.file_path:
+                path_parts = Path(lua_info.file_path).parts
+                if 'patterns' in path_parts:
+                    patterns_idx = path_parts.index('patterns')
+                    if patterns_idx + 1 < len(path_parts):
+                        library = path_parts[patterns_idx + 1]
+
+            # Build defn from Lua info (with YAML fallback for extra metadata)
+            yaml_defn = yaml_patterns.get(name, {}) or {}
+            defn = {
+                'description': lua_info.description or yaml_defn.get('description', ''),
+                'tier': lua_info.tier,
+                'examples': lua_info.examples or yaml_defn.get('examples', []),
+                'odds': lua_info.odds or yaml_defn.get('odds', ''),
+                'price_range': lua_info.price or yaml_defn.get('price_range', ''),
+            }
+
+            if library not in libraries:
+                libraries[library] = []
+            libraries[library].append((name, defn, lua_info))
+
+        # Then add YAML-only patterns (no Lua implementation)
+        for name, defn in yaml_patterns.items():
+            if name in seen_names or defn is None:
                 continue
-            tier = defn.get('tier', 10)
-            if tier not in tiers:
-                tiers[tier] = []
-            tiers[tier].append((name, defn))
 
-        # Add to tree
-        tier_names = {
-            1: "Tier 1: Holy Grail ($500+)",
-            2: "Tier 2: Premium ($100-500)",
-            3: "Tier 3: Collector ($20-100)",
-            4: "Tier 4: Interesting ($5-20)",
-            5: "Tier 5: Sum Patterns",
-            6: "Tier 6: Ladder Variants",
-            7: "Tier 7: Flipper Patterns",
-            8: "Tier 8: Low Serial Variants",
-            9: "Tier 9: Structural Combos",
-            10: "Tier 10: Novelty",
+            library = 'core'  # YAML patterns default to core
+            if library not in libraries:
+                libraries[library] = []
+            libraries[library].append((name, defn, None))
+
+        # Library colors for visual distinction
+        lib_colors = {
+            'core': QColor("#607D8B"),   # Blue-gray
+            'user': QColor("#4CAF50"),   # Green
         }
 
-        for tier in sorted(tiers.keys()):
-            tier_item = QTreeWidgetItem()
-            tier_item.setText(0, tier_names.get(tier, f"Tier {tier}"))
-            tier_item.setData(0, Qt.UserRole, {'is_tier': True, 'tier': tier})
-            tier_item.setFlags(tier_item.flags() & ~Qt.ItemIsSelectable)
+        # Sort libraries: core first, then alphabetically
+        sorted_libs = sorted(libraries.keys(), key=lambda x: (x != 'core', x))
 
-            for name, defn in sorted(tiers[tier], key=lambda x: x[0]):
-                pattern_item = QTreeWidgetItem(tier_item)
+        for library in sorted_libs:
+            patterns = libraries[library]
+            lib_enabled = self.settings.get_library_enabled(library, default=True)
 
-                # Add [Lua] indicator if pattern has Lua implementation
-                has_lua = name in lua_pattern_names
-                display_name = f"{name} [Lua]" if has_lua else name
-                pattern_item.setText(0, display_name)
+            # Create library header item (checkable)
+            lib_item = QTreeWidgetItem()
+            lib_item.setText(0, f"{library} ({len(patterns)} patterns)")
+            lib_item.setData(0, Qt.UserRole, {'is_library': True, 'library': library})
+            lib_item.setFlags(lib_item.flags() | Qt.ItemIsUserCheckable)
+            lib_item.setCheckState(0, Qt.Checked if lib_enabled else Qt.Unchecked)
+
+            # Style the library header
+            font = lib_item.font(0)
+            font.setBold(True)
+            lib_item.setFont(0, font)
+            if library in lib_colors:
+                lib_item.setForeground(0, lib_colors[library])
+
+            # Add patterns under this library
+            for name, defn, lua_info in sorted(patterns, key=lambda x: x[0]):
+                pattern_item = QTreeWidgetItem(lib_item)
+
+                has_lua = lua_info is not None
+                tier = defn.get('tier', 10)
+
+                # Use display_name from Lua info if available, otherwise auto-generate
+                if has_lua and lua_info.display_name:
+                    friendly_name = lua_info.display_name
+                else:
+                    # Auto-generate: LOW_RUN_6M -> Low Run 6M
+                    friendly_name = self._make_friendly_name(name)
+
+                if has_lua:
+                    shown_name = f"{friendly_name} [Lua]"
+                else:
+                    shown_name = friendly_name
+                pattern_item.setText(0, shown_name)
+
+                # Tier column (for sorting)
                 pattern_item.setText(1, str(tier))
+                pattern_item.setData(1, Qt.UserRole, tier)  # Store as int for proper sorting
 
-                # Checkbox for enabled - check if pattern is active (considers user overrides)
+                # Checkbox for enabled
                 enabled = name in self.engine.patterns
                 pattern_item.setCheckState(2, Qt.Checked if enabled else Qt.Unchecked)
-                pattern_item.setData(0, Qt.UserRole, {'name': name, 'defn': defn, 'has_lua': has_lua})
+                pattern_item.setData(0, Qt.UserRole, {'name': name, 'defn': defn, 'has_lua': has_lua, 'library': library})
 
                 # Color indicator (double-click to change)
                 color = self.settings.get_pattern_color(name)
@@ -373,9 +459,10 @@ class PatternDialog(QDialog):
                 if has_lua:
                     pattern_item.setForeground(0, QColor("#9C27B0"))
 
-            self.pattern_tree.addTopLevelItem(tier_item)
+            self.pattern_tree.addTopLevelItem(lib_item)
 
         self.pattern_tree.expandAll()
+        self.pattern_tree.setSortingEnabled(True)
 
     def _filter_patterns(self):
         """Filter patterns based on search text."""
@@ -383,18 +470,20 @@ class PatternDialog(QDialog):
         show_disabled = self.show_disabled_check.isChecked()
 
         for i in range(self.pattern_tree.topLevelItemCount()):
-            tier_item = self.pattern_tree.topLevelItem(i)
+            lib_item = self.pattern_tree.topLevelItem(i)
+            lib_data = lib_item.data(0, Qt.UserRole)
+            library = lib_data.get('library', '').lower() if lib_data else ''
             visible_children = 0
 
-            for j in range(tier_item.childCount()):
-                pattern_item = tier_item.child(j)
+            for j in range(lib_item.childCount()):
+                pattern_item = lib_item.child(j)
                 data = pattern_item.data(0, Qt.UserRole)
                 name = data['name'].lower()
                 desc = data['defn'].get('description', '').lower()
-                enabled = pattern_item.checkState(2) == Qt.Checked
+                enabled = pattern_item.checkState(2) == Qt.Checked  # Column 2 = Enabled
 
-                # Filter by text
-                text_match = not filter_text or filter_text in name or filter_text in desc
+                # Filter by text (searches pattern name, description, and library name)
+                text_match = not filter_text or filter_text in name or filter_text in desc or filter_text in library
 
                 # Filter by enabled state
                 enabled_match = show_disabled or enabled
@@ -405,25 +494,49 @@ class PatternDialog(QDialog):
                 if visible:
                     visible_children += 1
 
-            tier_item.setHidden(visible_children == 0)
+            lib_item.setHidden(visible_children == 0)
 
     def _on_item_changed(self, item, column):
         """Handle item check state change."""
+        data = item.data(0, Qt.UserRole)
+        if not data:
+            return
+
+        # Handle library checkbox (column 0 for library headers)
+        if data.get('is_library') and column == 0:
+            lib_name = data['library']
+            enabled = item.checkState(0) == Qt.Checked
+            self.settings.set_library_enabled(lib_name, enabled)
+            # Update all patterns in this library
+            self._update_library_patterns(item, enabled)
+            return
+
+        # Handle pattern checkbox (column 2)
         if column != 2:
             return
 
-        data = item.data(0, Qt.UserRole)
-        if not data or data.get('is_tier'):
+        if data.get('is_library'):
             return
 
         name = data['name']
         enabled = item.checkState(2) == Qt.Checked
         self.engine.set_pattern_enabled(name, enabled)
 
+    def _update_library_patterns(self, lib_item, enabled: bool):
+        """Enable or disable all patterns under a library item."""
+        self.pattern_tree.blockSignals(True)
+        for i in range(lib_item.childCount()):
+            pattern_item = lib_item.child(i)
+            pattern_item.setCheckState(2, Qt.Checked if enabled else Qt.Unchecked)
+            data = pattern_item.data(0, Qt.UserRole)
+            if data and 'name' in data:
+                self.engine.set_pattern_enabled(data['name'], enabled)
+        self.pattern_tree.blockSignals(False)
+
     def _on_item_double_click(self, item, column):
         """Handle double-click on color or catalog column."""
         data = item.data(0, Qt.UserRole)
-        if not data or data.get('is_tier'):
+        if not data or data.get('is_library'):
             return
 
         name = data['name']
@@ -459,7 +572,7 @@ class PatternDialog(QDialog):
             return
 
         data = items[0].data(0, Qt.UserRole)
-        if not data or data.get('is_tier'):
+        if not data or data.get('is_library'):
             return
 
         name = data['name']
@@ -471,7 +584,12 @@ class PatternDialog(QDialog):
         if has_lua and HAS_V3_ENGINE and hasattr(self.engine, 'lua_patterns'):
             lua_info = self.engine.lua_patterns.get(name)
 
-        self.pattern_name_label.setText(name)
+        # Use display name if available, otherwise auto-generate friendly name
+        if lua_info and lua_info.display_name:
+            display_name = lua_info.display_name
+        else:
+            display_name = self._make_friendly_name(name)
+        self.pattern_name_label.setText(display_name)
 
         # Use Lua description if available and better
         if lua_info and lua_info.description:
@@ -534,13 +652,26 @@ class PatternDialog(QDialog):
             self.threshold_edit.hide()
             self.threshold_save_btn.hide()
 
-        # Show/hide Lua script viewer
+        # Show/hide Lua script viewer/editor
         if has_lua and lua_info:
             self._current_lua_pattern = name
+            # Check if editable (not from core library)
+            library = data.get('library', 'core')
+            self._current_lua_editable = library != 'core'
+
             self.lua_script_label.show()
             self.view_script_btn.show()
+
+            # Update button text based on editability
+            if self._current_lua_editable:
+                self.view_script_btn.setText("Edit Script")
+                self.view_script_btn.setToolTip("Edit this Lua pattern script")
+            else:
+                self.view_script_btn.setText("View Script")
+                self.view_script_btn.setToolTip("View the Lua source code (core patterns are read-only)")
         else:
             self._current_lua_pattern = None
+            self._current_lua_editable = False
             self.lua_script_label.hide()
             self.view_script_btn.hide()
 
@@ -580,7 +711,7 @@ class PatternDialog(QDialog):
         QMessageBox.information(self, "Saved", f"Threshold for {name} set to {value}")
 
     def _view_lua_script(self):
-        """View the Lua script for the selected pattern."""
+        """View or edit the Lua script for the selected pattern."""
         if not self._current_lua_pattern:
             return
 
@@ -591,25 +722,36 @@ class PatternDialog(QDialog):
         if not lua_info:
             return
 
-        # Create a dialog to show the script
+        is_editable = self._current_lua_editable
+
+        # Create a dialog to show/edit the script
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"Lua Script: {self._current_lua_pattern}")
+        title = f"Edit Script: {self._current_lua_pattern}" if is_editable else f"View Script: {self._current_lua_pattern}"
+        dialog.setWindowTitle(title)
         dialog.setMinimumSize(700, 500)
 
         layout = QVBoxLayout(dialog)
 
         # Info label
-        info_label = QLabel(
-            f"<b>{self._current_lua_pattern}</b> - {lua_info.description}<br>"
-            f"<i>File: {lua_info.file_path}</i><br><br>"
-            "You can copy this script and use it as a template for your own pattern."
-        )
+        if is_editable:
+            info_text = (
+                f"<b>{self._current_lua_pattern}</b> - {lua_info.description}<br>"
+                f"<i>File: {lua_info.file_path}</i><br><br>"
+                "Edit the script below and click Save to apply changes."
+            )
+        else:
+            info_text = (
+                f"<b>{self._current_lua_pattern}</b> - {lua_info.description}<br>"
+                f"<i>File: {lua_info.file_path}</i><br><br>"
+                "Core patterns are read-only. Use 'Create Copy' to make an editable version."
+            )
+        info_label = QLabel(info_text)
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
 
-        # Script viewer
+        # Script editor/viewer
         script_edit = QPlainTextEdit()
-        script_edit.setReadOnly(True)
+        script_edit.setReadOnly(not is_editable)
         script_edit.setPlainText(lua_info.script)
         font = QFont("Consolas, Monaco, monospace")
         font.setPointSize(11)
@@ -621,15 +763,37 @@ class PatternDialog(QDialog):
 
         layout.addWidget(script_edit)
 
+        # Status label for validation feedback
+        status_label = QLabel("")
+        status_label.setStyleSheet("color: gray;")
+        layout.addWidget(status_label)
+
         # Buttons
         btn_layout = QHBoxLayout()
 
+        if is_editable:
+            # Validate button
+            validate_btn = QPushButton("Validate")
+            validate_btn.setToolTip("Check script syntax")
+            validate_btn.clicked.connect(
+                lambda: self._validate_script_in_dialog(script_edit, status_label)
+            )
+            btn_layout.addWidget(validate_btn)
+
+            # Save button
+            save_btn = QPushButton("Save")
+            save_btn.setToolTip("Save changes to the script file")
+            save_btn.clicked.connect(
+                lambda: self._save_edited_script(lua_info, script_edit, status_label, dialog)
+            )
+            btn_layout.addWidget(save_btn)
+
         copy_btn = QPushButton("Copy to Clipboard")
-        copy_btn.clicked.connect(lambda: self._copy_script_to_clipboard(lua_info.script))
+        copy_btn.clicked.connect(lambda: self._copy_script_to_clipboard(script_edit.toPlainText()))
         btn_layout.addWidget(copy_btn)
 
-        create_copy_btn = QPushButton("Create Modified Copy...")
-        create_copy_btn.setToolTip("Create a new user pattern based on this script")
+        create_copy_btn = QPushButton("Create Copy...")
+        create_copy_btn.setToolTip("Create a new pattern based on this script")
         create_copy_btn.clicked.connect(lambda: self._create_pattern_copy(lua_info, dialog))
         btn_layout.addWidget(create_copy_btn)
 
@@ -643,6 +807,50 @@ class PatternDialog(QDialog):
 
         dialog.exec()
 
+    def _validate_script_in_dialog(self, script_edit, status_label):
+        """Validate script syntax and update status label."""
+        script = script_edit.toPlainText()
+        valid, error = self.engine.validate_script(script)
+        if valid:
+            status_label.setText("✓ Syntax OK")
+            status_label.setStyleSheet("color: green;")
+        else:
+            status_label.setText(f"✗ Error: {error}")
+            status_label.setStyleSheet("color: red;")
+
+    def _save_edited_script(self, lua_info, script_edit, status_label, dialog):
+        """Save the edited script to the file."""
+        script = script_edit.toPlainText()
+
+        # Validate first
+        valid, error = self.engine.validate_script(script)
+        if not valid:
+            status_label.setText(f"✗ Cannot save - syntax error: {error}")
+            status_label.setStyleSheet("color: red;")
+            return
+
+        # Save to file
+        try:
+            with open(lua_info.file_path, 'w') as f:
+                f.write(script)
+
+            status_label.setText("✓ Saved successfully!")
+            status_label.setStyleSheet("color: green;")
+
+            # Reload the engine to pick up changes
+            self.engine.reload()
+            self._load_patterns()
+
+            QMessageBox.information(
+                dialog, "Saved",
+                f"Script saved to:\n{lua_info.file_path}\n\nPatterns have been reloaded."
+            )
+
+        except Exception as e:
+            status_label.setText(f"✗ Save failed: {e}")
+            status_label.setStyleSheet("color: red;")
+            QMessageBox.critical(dialog, "Save Error", f"Failed to save script:\n{e}")
+
     def _copy_script_to_clipboard(self, script: str):
         """Copy script to clipboard."""
         clipboard = QApplication.clipboard()
@@ -654,12 +862,16 @@ class PatternDialog(QDialog):
         # Close the view dialog
         parent_dialog.accept()
 
+        # Generate display name from original or create new one
+        original_display = lua_info.display_name if lua_info.display_name else lua_info.name.replace('_', ' ').title()
+
         # Open CustomPatternDialog pre-filled with the script
         dialog = CustomPatternDialog(
             self,
             name=f"{lua_info.name}_CUSTOM",
             defn={
                 'description': f"Modified version of {lua_info.name}",
+                'display_name': f"{original_display} (Custom)",
                 'tier': lua_info.tier,
             },
             script=lua_info.script
@@ -673,11 +885,16 @@ class PatternDialog(QDialog):
                         name,
                         defn.get('script', ''),
                         defn.get('description', ''),
-                        defn.get('tier', 5)
+                        defn.get('tier', 5),
+                        display_name=defn.get('display_name', '')
                     )
                 else:
                     self.engine.add_custom_pattern(name, defn)
-                self._load_custom_patterns()
+
+                # Reload patterns
+                self.engine.reload()
+                self._load_patterns()
+
                 QMessageBox.information(
                     self, "Pattern Created",
                     f"Created new pattern '{name}'.\n\n"
@@ -724,20 +941,22 @@ class PatternDialog(QDialog):
         self._test_serial()
 
     def _enable_all(self):
-        """Enable all patterns."""
+        """Enable all patterns and libraries."""
         for i in range(self.pattern_tree.topLevelItemCount()):
-            tier_item = self.pattern_tree.topLevelItem(i)
-            for j in range(tier_item.childCount()):
-                pattern_item = tier_item.child(j)
-                pattern_item.setCheckState(2, Qt.Checked)
+            lib_item = self.pattern_tree.topLevelItem(i)
+            lib_item.setCheckState(0, Qt.Checked)  # Library checkbox
+            for j in range(lib_item.childCount()):
+                pattern_item = lib_item.child(j)
+                pattern_item.setCheckState(2, Qt.Checked)  # Column 2 = Enabled
 
     def _disable_all(self):
-        """Disable all patterns."""
+        """Disable all patterns and libraries."""
         for i in range(self.pattern_tree.topLevelItemCount()):
-            tier_item = self.pattern_tree.topLevelItem(i)
-            for j in range(tier_item.childCount()):
-                pattern_item = tier_item.child(j)
-                pattern_item.setCheckState(2, Qt.Unchecked)
+            lib_item = self.pattern_tree.topLevelItem(i)
+            lib_item.setCheckState(0, Qt.Unchecked)  # Library checkbox
+            for j in range(lib_item.childCount()):
+                pattern_item = lib_item.child(j)
+                pattern_item.setCheckState(2, Qt.Unchecked)  # Column 2 = Enabled
 
     def _save_and_close(self):
         """Save pattern states and close."""
@@ -745,125 +964,257 @@ class PatternDialog(QDialog):
         self.settings.save()  # Save colors
         self.accept()
 
-    def _load_custom_patterns(self):
-        """Load custom patterns into the list."""
-        self.custom_list.clear()
+    def _discover_libraries(self) -> list:
+        """Discover all pattern library names (directories under patterns/)."""
+        libraries = []
+        patterns_dir = Path(__file__).parent.parent / 'patterns'
 
-        # Load YAML custom patterns
-        custom = self.engine.get_custom_patterns()
-        if custom:
-            for name, defn in custom.items():
-                if defn is None:
-                    continue
-                desc = defn.get('description', '')
-                rules = defn.get('rules', {})
-                value = rules.get('contains', rules.get('regex', rules.get('starts_with', rules.get('ends_with', ''))))
-                enabled = defn.get('enabled', True)
+        if not patterns_dir.exists():
+            return libraries
 
-                item = QListWidgetItem()
-                item.setText(f"[YAML] {name}: {desc}")
-                item.setData(Qt.UserRole, {'name': name, 'defn': defn, 'script': None})
-                item.setCheckState(Qt.Checked if enabled else Qt.Unchecked)
-                self.custom_list.addItem(item)
+        for subdir in patterns_dir.iterdir():
+            if subdir.is_dir() and subdir.name not in ('lib', 'data', '__pycache__'):
+                libraries.append(subdir.name)
 
-        # Load Lua user patterns (if v3 engine available)
-        if HAS_V3_ENGINE and hasattr(self.engine, 'get_user_patterns'):
-            user_lua = self.engine.get_user_patterns()
-            for name, info in user_lua.items():
-                item = QListWidgetItem()
-                item.setText(f"[Lua] {name}: {info.description}")
-                item.setData(Qt.UserRole, {
-                    'name': name,
-                    'defn': {
-                        'description': info.description,
-                        'tier': info.tier,
-                    },
-                    'script': info.script
-                })
-                item.setCheckState(Qt.Checked if info.enabled else Qt.Unchecked)
-                self.custom_list.addItem(item)
+        return sorted(libraries, key=lambda x: (x != 'core', x))
 
-    def _on_custom_selection_changed(self):
-        """Handle custom pattern selection change."""
-        pass  # Could show details if needed
+    def _create_new_library(self):
+        """Create a new pattern library folder."""
+        name, ok = QInputDialog.getText(
+            self, "New Library",
+            "Enter library name:",
+            text=""
+        )
+
+        if not ok or not name:
+            return
+
+        # Light sanitization - just remove characters that are problematic for file systems
+        name = name.strip()
+        name = ''.join(c for c in name if c not in '<>:"/\\|?*')
+
+        if not name:
+            QMessageBox.warning(self, "Invalid Name", "Please enter a valid library name.")
+            return
+
+        # Check if already exists
+        patterns_dir = Path(__file__).parent.parent / 'patterns'
+        lib_dir = patterns_dir / name
+
+        if lib_dir.exists():
+            QMessageBox.warning(self, "Already Exists", f"Library '{name}' already exists.")
+            return
+
+        # Create the directory
+        try:
+            lib_dir.mkdir(parents=True, exist_ok=True)
+            # Create a .gitkeep to ensure the folder is tracked
+            (lib_dir / '.gitkeep').touch()
+            QMessageBox.information(
+                self, "Library Created",
+                f"Library '{name}' created at:\n{lib_dir}\n\n"
+                "Add .lua pattern files to this folder, then reload patterns."
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to create library: {e}")
+
+    def _open_patterns_folder(self):
+        """Open the patterns directory in the system file explorer."""
+        import subprocess
+        import sys
+
+        patterns_dir = Path(__file__).parent.parent / 'patterns'
+
+        if sys.platform == 'win32':
+            subprocess.Popen(['explorer', str(patterns_dir)])
+        elif sys.platform == 'darwin':
+            subprocess.Popen(['open', str(patterns_dir)])
+        else:
+            subprocess.Popen(['xdg-open', str(patterns_dir)])
+
+    def _show_api_docs(self):
+        """Show API documentation in a popup dialog."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Lua Pattern API Documentation")
+        dialog.setMinimumSize(700, 500)
+
+        layout = QVBoxLayout(dialog)
+
+        # Copy button
+        copy_btn = QPushButton("Copy to Clipboard")
+        copy_btn.clicked.connect(lambda: self._copy_api_docs_text())
+        layout.addWidget(copy_btn)
+
+        # Documentation
+        docs = QTextEdit()
+        docs.setReadOnly(True)
+        docs.setHtml(self._get_api_docs_html())
+        layout.addWidget(docs)
+
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn)
+
+        dialog.exec()
+
+    def _copy_api_docs_text(self):
+        """Copy API docs as plain text to clipboard."""
+        # Reuse the existing method from CustomPatternDialog
+        docs = self._get_api_docs_plain_text()
+        clipboard = QApplication.clipboard()
+        clipboard.setText(docs)
+        QMessageBox.information(self, "Copied", "API documentation copied to clipboard!")
+
+    def _get_api_docs_html(self) -> str:
+        """Get API documentation as HTML (reused from CustomPatternDialog)."""
+        return '''
+<h2>Pattern Script API</h2>
+
+<h3>Script Header</h3>
+<pre>
+--[[
+Pattern: PATTERN_NAME
+DisplayName: Friendly Name With Spaces
+Description: What it matches
+Tier: 1-10 (1=rarest, 10=common)
+Examples: ["12345678", "87654321"]
+DataFile: optional_data.csv
+--]]
+</pre>
+<p><b>DisplayName</b> is optional - if provided, it's shown in the GUI instead of the pattern name.</p>
+
+<h3>Input Context (ctx)</h3>
+<pre>
+ctx.digits      -- "12345678" (8 numeric characters)
+ctx.full_serial -- "A12345678B" (with prefix/suffix letters)
+ctx.digit_list  -- {1,2,3,4,5,6,7,8} as integer array
+ctx.metadata    -- {} additional detection data
+ctx.data        -- External data (if DataFile specified)
+ctx.data_by_key -- Key lookup dict (CSV only, keyed by first column)
+</pre>
+
+<h3>Return Value</h3>
+<pre>
+return {
+    matched = true,  -- or false
+    highlights = {{positions = {0, 7}, color = "orange"}},
+    connectors = {{from = 0, to = 7, color = "orange", style = "arc"}},
+    group_boxes = {{from = 0, to = 2, color = "gold", thickness = 3}},
+    message = "Optional description"
+}
+</pre>
+
+<h3>Available Colors</h3>
+<p>purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red, gray</p>
+
+<h3>Connector Styles</h3>
+<p>arc, line, dashed, bracket, arrow</p>
+
+<h3>Helper Functions</h3>
+<pre>
+-- Analysis
+count_digits(s), find_runs(s), unique_count(s), digit_sum(s), most_common(s)
+
+-- Pattern checks
+is_ladder(s), is_palindrome(s), is_repeater(s), is_alternating(s)
+has_n_consecutive(s, n), all_flip_valid(s), flip_string(s)
+
+-- String utilities
+only_digits(s, allowed), starts_with(s, prefix), ends_with(s, suffix)
+contains(s, substr), is_bookended(s, n)
+
+-- Visualization helpers
+highlight(positions, color, label), highlight_range(start, stop, color, label)
+connector(from, to, color, style), find_digit_positions(s, digit)
+</pre>
+'''
+
+    def _get_api_docs_plain_text(self) -> str:
+        """Get API docs as plain text for clipboard."""
+        return '''# Lua Pattern Script API
+
+## Script Header
+--[[
+Pattern: PATTERN_NAME
+DisplayName: Friendly Name With Spaces (optional)
+Description: What it matches
+Tier: 1-10 (1=rarest, 10=common)
+Examples: ["12345678"]
+DataFile: optional_data.csv
+--]]
+
+## Input Context (ctx)
+- ctx.digits: "12345678" (8 numeric characters)
+- ctx.full_serial: "A12345678B" (with prefix/suffix)
+- ctx.digit_list: {1,2,3,4,5,6,7,8} as integers
+- ctx.metadata: {} additional detection data
+- ctx.data: External data (if DataFile specified)
+- ctx.data_by_key: Key lookup dict (CSV only)
+
+## Return Value
+return {
+    matched = true,
+    highlights = {{positions = {0, 7}, color = "orange"}},
+    connectors = {{from = 0, to = 7, color = "orange", style = "arc"}},
+    group_boxes = {{from = 0, to = 2, color = "gold"}},
+    message = "Description"
+}
+
+## Colors
+purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red, gray
+
+## Connector Styles
+arc, line, dashed, bracket, arrow
+
+## Helper Functions
+count_digits(s), find_runs(s), unique_count(s), digit_sum(s)
+is_ladder(s), is_palindrome(s), is_repeater(s), is_alternating(s)
+has_n_consecutive(s, n), all_flip_valid(s), flip_string(s)
+highlight(positions, color), connector(from, to, color, style)
+'''
 
     def _add_custom_pattern(self):
-        """Add a new custom pattern."""
+        """Add a new custom pattern to a library."""
+        # Get available libraries for the dropdown
+        libraries = self._discover_libraries()
+        if 'user' not in libraries:
+            libraries.append('user')
+
+        # Ask which library to add to
+        default_idx = libraries.index('user') if 'user' in libraries else 0
+        library, ok = QInputDialog.getItem(
+            self, "Select Library",
+            "Add pattern to library:",
+            libraries,
+            default_idx,
+            False  # Not editable
+        )
+
+        if not ok:
+            return
+
         dialog = CustomPatternDialog(self)
         if dialog.exec() == QDialog.Accepted:
             name, defn = dialog.get_pattern()
             if name:
                 if defn.get('source') == 'lua' and HAS_V3_ENGINE:
-                    # Save as Lua script pattern
+                    # Save as Lua script pattern to specified library
                     self.engine.save_user_pattern(
                         name,
                         defn.get('script', ''),
                         defn.get('description', ''),
-                        defn.get('tier', 5)
+                        defn.get('tier', 5),
+                        library=library,
+                        display_name=defn.get('display_name', '')
                     )
                 else:
-                    # Save as YAML rule pattern
+                    # Save as YAML rule pattern (legacy)
                     self.engine.add_custom_pattern(name, defn)
-                self._load_custom_patterns()
 
-    def _edit_custom_pattern(self):
-        """Edit the selected custom pattern."""
-        item = self.custom_list.currentItem()
-        if not item:
-            QMessageBox.information(self, "Edit Pattern", "Please select a pattern to edit.")
-            return
-
-        data = item.data(Qt.UserRole)
-        name = data['name']
-        defn = data['defn']
-        script = data.get('script')
-
-        dialog = CustomPatternDialog(self, name, defn, script)
-        if dialog.exec() == QDialog.Accepted:
-            new_name, new_defn = dialog.get_pattern()
-            if new_name:
-                # Remove old pattern if name changed
-                if new_name != name:
-                    if script and HAS_V3_ENGINE:
-                        self.engine.delete_user_pattern(name)
-                    else:
-                        self.engine.remove_custom_pattern(name)
-
-                # Add updated pattern
-                if new_defn.get('source') == 'lua' and HAS_V3_ENGINE:
-                    self.engine.save_user_pattern(
-                        new_name,
-                        new_defn.get('script', ''),
-                        new_defn.get('description', ''),
-                        new_defn.get('tier', 5)
-                    )
-                else:
-                    self.engine.add_custom_pattern(new_name, new_defn)
-                self._load_custom_patterns()
-
-    def _delete_custom_pattern(self):
-        """Delete the selected custom pattern."""
-        item = self.custom_list.currentItem()
-        if not item:
-            QMessageBox.information(self, "Delete Pattern", "Please select a pattern to delete.")
-            return
-
-        data = item.data(Qt.UserRole)
-        name = data['name']
-        script = data.get('script')
-
-        reply = QMessageBox.question(
-            self, "Delete Pattern",
-            f"Are you sure you want to delete '{name}'?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-
-        if reply == QMessageBox.Yes:
-            if script and HAS_V3_ENGINE:
-                self.engine.delete_user_pattern(name)
-            else:
-                self.engine.remove_custom_pattern(name)
-            self._load_custom_patterns()
+                # Reload patterns to show the new one
+                self.engine.reload()
+                self._load_patterns()
 
 
 class LuaSyntaxHighlighter(QSyntaxHighlighter):
@@ -1089,7 +1440,12 @@ class CustomPatternDialog(QDialog):
 
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("e.g., MY_BIRTHDAY, CUSTOM_RADAR")
+        self.name_edit.textChanged.connect(self._auto_generate_display_name)
         header_layout.addRow("Pattern Name:", self.name_edit)
+
+        self.display_name_edit = QLineEdit()
+        self.display_name_edit.setPlaceholderText("e.g., My Birthday, Custom Radar (shown in GUI)")
+        header_layout.addRow("Display Name:", self.display_name_edit)
 
         self.desc_edit = QLineEdit()
         self.desc_edit.setPlaceholderText("Brief description of what this pattern matches")
@@ -1317,12 +1673,14 @@ end
 <pre>
 --[[
 Pattern: PATTERN_NAME
+DisplayName: Friendly Name With Spaces
 Description: What it matches
 Tier: 1-10 (1=rarest, 10=common)
 Examples: ["12345678", "87654321"]
 DataFile: optional_data.csv
 --]]
 </pre>
+<p><b>DisplayName</b> is optional - if provided, it's shown in the GUI instead of the pattern name.</p>
 
 <h3>Input Context (ctx)</h3>
 <pre>
@@ -1459,12 +1817,15 @@ end
 ```lua
 --[[
 Pattern: PATTERN_NAME
+DisplayName: Friendly Name With Spaces
 Description: What this pattern matches
 Tier: 1-10 (1=rarest, 10=common)
 Examples: ["12345678", "87654321"]
 DataFile: optional_data.csv
 --]]
 ```
+
+**DisplayName** is optional - if provided, it's shown in the GUI instead of the pattern name (which must be uppercase with underscores for internal use).
 
 ## Input Context
 The `ctx` table is available in every pattern script:
@@ -1857,9 +2218,41 @@ end
                 self.test_results.setText(f"No match\n\nRule: {rule_type}\nValue: {value}")
                 self.test_results.setStyleSheet("color: gray;")
 
+    def _auto_generate_display_name(self):
+        """Auto-generate a friendly display name from the pattern name."""
+        # Only auto-generate if display name is empty or was auto-generated
+        current_display = self.display_name_edit.text()
+        name = self.name_edit.text().strip()
+
+        # Generate friendly name: LOW_RUN_6M -> Low Run 6M
+        if name:
+            words = name.replace('_', ' ').split()
+            friendly_words = []
+            for word in words:
+                # Keep numbers/acronyms as-is but title-case regular words
+                if word.isdigit() or (len(word) <= 3 and any(c.isdigit() for c in word)):
+                    friendly_words.append(word.upper())
+                else:
+                    friendly_words.append(word.capitalize())
+            generated = ' '.join(friendly_words)
+
+            # Only update if display name is empty or matches previous auto-generation
+            if not current_display or current_display == getattr(self, '_last_auto_display', ''):
+                self.display_name_edit.setText(generated)
+                self._last_auto_display = generated
+
     def _load_existing(self):
         """Load existing pattern data."""
         self.name_edit.setText(self.original_name)
+
+        # Load display name - either from defn or auto-generate from name
+        display_name = self.defn.get('display_name', '')
+        if display_name:
+            self.display_name_edit.setText(display_name)
+        else:
+            # Auto-generate from pattern name
+            self._auto_generate_display_name()
+
         self.desc_edit.setText(self.defn.get('description', ''))
         self.tier_spin.setValue(self.defn.get('tier', 5))
 
@@ -1909,12 +2302,14 @@ end
         name = self.name_edit.text().strip().upper().replace(' ', '_')
         tier = self.tier_spin.value()
         description = self.desc_edit.text().strip() or f"Custom pattern: {name}"
+        display_name = self.display_name_edit.text().strip()
 
         if self.is_lua_pattern and HAS_V3_ENGINE:
             # Return script
             script = self.script_edit.toPlainText()
             return name, {
                 'description': description,
+                'display_name': display_name,
                 'tier': tier,
                 'script': script,
                 'source': 'lua'
@@ -1926,6 +2321,7 @@ end
 
             return name, {
                 'description': description,
+                'display_name': display_name,
                 'tier': tier,
                 'enabled': True,
                 'rules': {rule_type: value},

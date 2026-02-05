@@ -37,6 +37,7 @@ class LuaPatternInfo:
     script: str
     file_path: Path
     enabled: bool = True
+    display_name: str = ""        # User-friendly name for GUI (falls back to name if empty)
     examples: list = field(default_factory=list)
     odds: str = ""
     price: str = ""
@@ -95,20 +96,23 @@ class PatternEngineV3:
             self.sandbox.load_helpers(helpers_code)
 
     def _load_lua_patterns(self):
-        """Load all Lua pattern scripts."""
+        """Load all Lua pattern scripts from all library directories."""
         self.lua_patterns.clear()
 
-        # Load core patterns
-        core_dir = self.patterns_dir / "core"
-        if core_dir.exists():
-            for lua_file in core_dir.glob("*.lua"):
-                self._load_lua_pattern(lua_file, is_user=False)
+        # Skip these directories (not pattern libraries)
+        skip_dirs = {'lib', 'data', '__pycache__'}
 
-        # Load user patterns (can override core)
-        user_dir = self.patterns_dir / "user"
-        if user_dir.exists():
-            for lua_file in user_dir.glob("*.lua"):
-                self._load_lua_pattern(lua_file, is_user=True)
+        # Scan all subdirectories under patterns/
+        if self.patterns_dir.exists():
+            for subdir in sorted(self.patterns_dir.iterdir()):
+                if not subdir.is_dir() or subdir.name in skip_dirs:
+                    continue
+
+                # core is loaded first, everything else is considered "user" (can override)
+                is_user = subdir.name != 'core'
+
+                for lua_file in subdir.glob("*.lua"):
+                    self._load_lua_pattern(lua_file, is_user=is_user)
 
     def _load_lua_pattern(self, file_path: Path, is_user: bool = False):
         """Load a single Lua pattern from file."""
@@ -136,6 +140,7 @@ class PatternEngineV3:
                 script=script,
                 file_path=file_path,
                 enabled=metadata.get('enabled', True),
+                display_name=metadata.get('displayname', ''),
                 examples=metadata.get('examples', []),
                 odds=metadata.get('odds', ''),
                 price=metadata.get('price', '')
@@ -497,9 +502,10 @@ class PatternEngineV3:
         return self.sandbox.validate_syntax(script)
 
     def save_user_pattern(self, name: str, script: str, description: str = "",
-                          tier: int = 5, examples: list = None) -> bool:
+                          tier: int = 5, examples: list = None,
+                          library: str = "user", display_name: str = "") -> bool:
         """
-        Save a user pattern to the user patterns directory.
+        Save a user pattern to a library directory.
 
         Args:
             name: Pattern name (will be converted to filename)
@@ -507,24 +513,36 @@ class PatternEngineV3:
             description: Pattern description
             tier: Pattern tier (1-10)
             examples: Example serial numbers
+            library: Library directory name (default: "user")
+            display_name: User-friendly name for GUI display
 
         Returns:
             True if saved successfully
         """
-        # Ensure user directory exists
-        self.user_patterns_dir.mkdir(parents=True, exist_ok=True)
+        # Determine the target directory based on library
+        if library == "user":
+            target_dir = self.user_patterns_dir
+        else:
+            target_dir = self.patterns_dir / library
+
+        # Ensure directory exists
+        target_dir.mkdir(parents=True, exist_ok=True)
 
         # Create filename from pattern name
         filename = name.lower().replace(' ', '_') + '.lua'
-        file_path = self.user_patterns_dir / filename
+        file_path = target_dir / filename
 
         # Build header
         header_lines = [
             '--[[',
             f'Pattern: {name}',
+        ]
+        if display_name:
+            header_lines.append(f'DisplayName: {display_name}')
+        header_lines.extend([
             f'Description: {description}',
             f'Tier: {tier}',
-        ]
+        ])
         if examples:
             import json
             header_lines.append(f'Examples: {json.dumps(examples)}')
@@ -539,7 +557,9 @@ class PatternEngineV3:
                 f.write(full_script)
 
             # Reload to pick up the new pattern
-            self._load_lua_pattern(file_path, is_user=True)
+            # Consider non-core libraries as "user" patterns for enable/disable purposes
+            is_user = library != 'core'
+            self._load_lua_pattern(file_path, is_user=is_user)
             return True
 
         except Exception as e:
