@@ -1144,7 +1144,7 @@ class MainWindow(QMainWindow):
             # Load config from config.yaml (for crop settings, etc.)
             script_dir = Path(__file__).parent.parent
             config_path = script_dir / "config.yaml"
-            patterns_path = script_dir / "patterns_v2.yaml"
+            patterns_dir = script_dir / "patterns"
 
             cfg = Config(config_path) if config_path.exists() else None
 
@@ -1153,7 +1153,7 @@ class MainWindow(QMainWindow):
                 yolo_model_path=model_path,
                 use_gpu=self.settings.processing.use_gpu,
                 cfg=cfg,
-                patterns_v2_path=patterns_path if patterns_path.exists() else None
+                patterns_dir=patterns_dir if patterns_dir.exists() else None
             )
 
             # Share with preview panel

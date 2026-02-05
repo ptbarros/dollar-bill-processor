@@ -20,11 +20,7 @@ from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QP
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Try to import v3 engine (Lua support), fall back to v2
-try:
-    from pattern_engine_v3 import PatternEngineV3 as PatternEngine
-except ImportError:
-    from pattern_engine_v2 import PatternEngine
+from pattern_engine_v3 import PatternEngineV3 as PatternEngine
 
 from settings_manager import get_settings
 

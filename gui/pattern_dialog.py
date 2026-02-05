@@ -21,13 +21,8 @@ from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QF
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Try to import v3 engine, fall back to v2
-try:
-    from pattern_engine_v3 import PatternEngineV3 as PatternEngine
-    HAS_V3_ENGINE = True
-except ImportError:
-    from pattern_engine_v2 import PatternEngine
-    HAS_V3_ENGINE = False
+from pattern_engine_v3 import PatternEngineV3 as PatternEngine
+HAS_V3_ENGINE = True
 
 from settings_manager import get_settings
 
@@ -338,20 +333,13 @@ class PatternDialog(QDialog):
         self.pattern_tree.setSortingEnabled(False)
 
         # Get Lua pattern info (includes file paths for library detection)
-        lua_pattern_info = {}
-        if HAS_V3_ENGINE and hasattr(self.engine, 'lua_patterns'):
-            lua_pattern_info = self.engine.lua_patterns
+        lua_pattern_info = self.engine.lua_patterns
 
-        # Get YAML patterns for fallback/metadata
-        yaml_patterns = self.engine.config.get('patterns', {})
-
-        # Group patterns by library - Lua patterns are the primary source
+        # Group patterns by library - Lua patterns are the only source
         libraries = {}  # library_name -> [(name, defn, lua_info), ...]
-        seen_names = set()
 
-        # First, add all Lua patterns (primary source)
+        # Add all Lua patterns
         for name, lua_info in lua_pattern_info.items():
-            seen_names.add(name)
 
             # Extract library from file path
             library = 'user'  # Default for Lua patterns without recognized path
@@ -362,29 +350,18 @@ class PatternDialog(QDialog):
                     if patterns_idx + 1 < len(path_parts):
                         library = path_parts[patterns_idx + 1]
 
-            # Build defn from Lua info (with YAML fallback for extra metadata)
-            yaml_defn = yaml_patterns.get(name, {}) or {}
+            # Build defn from Lua info
             defn = {
-                'description': lua_info.description or yaml_defn.get('description', ''),
+                'description': lua_info.description,
                 'tier': lua_info.tier,
-                'examples': lua_info.examples or yaml_defn.get('examples', []),
-                'odds': lua_info.odds or yaml_defn.get('odds', ''),
-                'price_range': lua_info.price or yaml_defn.get('price_range', ''),
+                'examples': lua_info.examples,
+                'odds': lua_info.odds,
+                'price_range': lua_info.price,
             }
 
             if library not in libraries:
                 libraries[library] = []
             libraries[library].append((name, defn, lua_info))
-
-        # Then add YAML-only patterns (no Lua implementation)
-        for name, defn in yaml_patterns.items():
-            if name in seen_names or defn is None:
-                continue
-
-            library = 'core'  # YAML patterns default to core
-            if library not in libraries:
-                libraries[library] = []
-            libraries[library].append((name, defn, None))
 
         # Library colors for visual distinction
         lib_colors = {
@@ -437,11 +414,8 @@ class PatternDialog(QDialog):
                 pattern_item.setText(1, str(tier))
                 pattern_item.setData(1, Qt.UserRole, tier)  # Store as int for proper sorting
 
-                # Checkbox for enabled - use Lua info if available, else check YAML patterns
-                if has_lua:
-                    enabled = lua_info.enabled
-                else:
-                    enabled = name in self.engine.patterns
+                # Checkbox for enabled
+                enabled = lua_info.enabled
                 pattern_item.setCheckState(2, Qt.Checked if enabled else Qt.Unchecked)
                 pattern_item.setData(0, Qt.UserRole, {'name': name, 'defn': defn, 'has_lua': has_lua, 'library': library})
 
@@ -699,26 +673,15 @@ class PatternDialog(QDialog):
             return
 
         name = self._current_threshold_pattern
-        # Get the rule type from the pattern definition
-        all_patterns = self.engine.config.get('patterns', {})
-        defn = all_patterns.get(name, {})
-        rules = defn.get('rules', {})
 
-        rule_type = None
-        for rt in ['baseline_variance_min', 'baseline_variance_max']:
-            if rt in rules:
-                rule_type = rt
-                break
-
-        if not rule_type:
-            return
-
-        # Store override in SettingsManager
-        self.settings.set_pattern_override(name, rule_type, value)
-        self.settings.save()
-
-        # Rebuild patterns to pick up the new threshold
-        self.engine.reload()
+        # GAS_PUMP uses baseline_variance_min
+        if name == 'GAS_PUMP':
+            self.engine.set_gas_pump_threshold(value)
+        else:
+            # For other patterns, store generic threshold override
+            self.settings.set_pattern_override(name, 'threshold', value)
+            self.settings.save()
+            self.engine.reload()
 
         QMessageBox.information(self, "Saved", f"Threshold for {name} set to {value}")
 

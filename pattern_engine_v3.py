@@ -1,24 +1,29 @@
 """
-Pattern Engine v3 - Hybrid Lua/YAML Pattern System
+Pattern Engine v3 - Lua-Only Pattern System
 
-Supports both:
-- Legacy YAML patterns (via pattern_engine_v2)
-- Lua script patterns (via pattern_sandbox)
+All patterns are defined in Lua scripts under the patterns/ directory.
+This is the single source of truth for pattern detection.
 
-Script patterns can provide rich visualization with custom highlights and connectors.
+Script patterns provide rich visualization with custom highlights and connectors.
 """
 
 import re
-import yaml
 from pathlib import Path
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from dataclasses import dataclass, field
 
-from pattern_engine_v2 import PatternEngine as PatternEngineV2, PatternMatch
 from pattern_sandbox import PatternSandbox, create_context, LuaExecutionResult
 
 if TYPE_CHECKING:
     from settings_manager import SettingsManager
+
+
+@dataclass
+class PatternMatch:
+    """Result of a pattern match."""
+    name: str
+    description: str
+    tier: int
 
 
 @dataclass
@@ -28,7 +33,7 @@ class PatternMatchV3(PatternMatch):
     connectors: list = field(default_factory=list)
     group_boxes: list = field(default_factory=list)  # Boxes spanning multiple digits
     message: str = ""
-    source: str = "yaml"  # "yaml" or "lua"
+    source: str = "lua"
 
 
 @dataclass
@@ -52,7 +57,7 @@ class LuaPatternInfo:
 
 class PatternEngineV3:
     """
-    Hybrid pattern engine supporting YAML and Lua patterns.
+    Lua-only pattern engine.
 
     Usage:
         engine = PatternEngineV3()
@@ -60,12 +65,11 @@ class PatternEngineV3:
         highlights = engine.get_digit_highlights("A12344321B", ["RADAR"])
     """
 
-    def __init__(self, config_path: Path = None, patterns_dir: Path = None):
+    def __init__(self, patterns_dir: Path = None):
         """
-        Initialize the hybrid engine.
+        Initialize the pattern engine.
 
         Args:
-            config_path: Path to patterns_v2.yaml (default: auto-detect)
             patterns_dir: Path to patterns/ directory (default: auto-detect)
         """
         # Base directory
@@ -73,9 +77,6 @@ class PatternEngineV3:
 
         # Settings manager (lazy loaded)
         self._settings: Optional['SettingsManager'] = None
-
-        # Initialize YAML engine (v2)
-        self.yaml_engine = PatternEngineV2(config_path)
 
         # Set up patterns directory
         if patterns_dir is None:
@@ -318,8 +319,7 @@ class PatternEngineV3:
         return data, None
 
     def reload(self):
-        """Reload all patterns (both YAML and Lua)."""
-        self.yaml_engine.reload()
+        """Reload all Lua patterns."""
         self._load_lua_patterns()
 
     def classify(self, serial: str, metadata: dict = None) -> List[PatternMatchV3]:
@@ -340,7 +340,7 @@ class PatternEngineV3:
         if len(digits) != 8:
             return []
 
-        # Run Lua patterns first (they take precedence)
+        # Run Lua patterns
         base_ctx = create_context(serial, metadata)
         for name, info in self.lua_patterns.items():
             if not info.enabled:
@@ -369,24 +369,6 @@ class PatternEngineV3:
             except Exception as e:
                 # Log but don't fail on individual pattern errors
                 pass
-
-        # Run YAML patterns (skip if Lua file exists for that pattern name)
-        yaml_matches = self.yaml_engine.classify(serial, metadata)
-        for m in yaml_matches:
-            # Skip YAML pattern if a Lua file exists for this pattern name
-            # This prevents loose YAML patterns from overriding stricter Lua logic
-            if m.name not in self.lua_patterns:
-                # Get visualization from YAML engine
-                highlights_data = self.yaml_engine.get_digit_highlights(serial, [m.name])
-
-                matches.append(PatternMatchV3(
-                    name=m.name,
-                    description=m.description,
-                    tier=m.tier,
-                    highlights=highlights_data.get('highlights', []),
-                    connectors=highlights_data.get('connectors', []),
-                    source="yaml"
-                ))
 
         # Sort by tier
         matches.sort(key=lambda m: (m.tier, m.name))
@@ -446,16 +428,6 @@ class PatternEngineV3:
                         for gb in result.group_boxes:
                             gb['pattern'] = pattern_name
                             all_group_boxes.append(gb)
-            else:
-                # Fall back to YAML engine
-                yaml_data = self.yaml_engine.get_digit_highlights(serial, [pattern_name])
-                # Merge YAML highlights
-                for h in yaml_data.get('highlights', []):
-                    pos = h['position']
-                    for hl in h.get('highlights', []):
-                        all_highlights[pos]['highlights'].append(hl)
-                # Add connectors
-                all_connectors.extend(yaml_data.get('connectors', []))
 
         return {'highlights': all_highlights, 'connectors': all_connectors, 'group_boxes': all_group_boxes}
 
@@ -496,13 +468,11 @@ class PatternEngineV3:
                 ctx['data_by_key'] = info.data_by_key
             return self.sandbox.execute(info.script, ctx)
         else:
-            # For YAML patterns, create a pseudo-result
-            matches = self.yaml_engine.classify(serial, metadata)
-            matched = any(m.name == pattern_name for m in matches)
+            # Pattern not found
             return LuaExecutionResult(
-                success=True,
-                matched=matched,
-                message="YAML pattern" if matched else ""
+                success=False,
+                matched=False,
+                message=f"Pattern '{pattern_name}' not found"
             )
 
     def test_script(self, script: str, serial: str, metadata: dict = None) -> LuaExecutionResult:
@@ -620,7 +590,7 @@ class PatternEngineV3:
             return False
 
     def get_pattern_info(self, name: str) -> Optional[dict]:
-        """Get info about a pattern (Lua or YAML)."""
+        """Get info about a pattern."""
         if name in self.lua_patterns:
             info = self.lua_patterns[name]
             result = {
@@ -632,7 +602,7 @@ class PatternEngineV3:
                 'examples': info.examples,
                 'odds': info.odds,
                 'price': info.price,
-                'price_range': info.price,
+                'price_range': info.price,  # Alias for backward compatibility
                 'script': info.script
             }
             # Include data file info if present
@@ -640,22 +610,12 @@ class PatternEngineV3:
                 result['data_file'] = info.data_file
                 result['data_loaded'] = info.data is not None
             return result
-        else:
-            yaml_info = self.yaml_engine.get_pattern_info(name)
-            if yaml_info:
-                yaml_info['source'] = 'yaml'
-            return yaml_info
+        return None
 
     def get_all_patterns(self) -> dict:
-        """Get all patterns (combined Lua and YAML)."""
+        """Get all patterns."""
         patterns = {}
 
-        # YAML patterns first
-        for name, defn in self.yaml_engine.get_all_patterns().items():
-            patterns[name] = defn
-            patterns[name]['source'] = 'yaml'
-
-        # Lua patterns override YAML
         for name, info in self.lua_patterns.items():
             patterns[name] = {
                 'name': info.name,
@@ -664,6 +624,8 @@ class PatternEngineV3:
                 'enabled': info.enabled,
                 'source': 'lua',
                 'examples': info.examples,
+                'odds': info.odds,
+                'price': info.price,
             }
 
         return patterns
@@ -679,34 +641,9 @@ class PatternEngineV3:
             if str(info.file_path).startswith(str(self.user_patterns_dir))
         }
 
-    # Delegate to YAML engine for backward compatibility
-    @property
-    def config(self) -> dict:
-        """Access YAML config for backward compatibility."""
-        return self.yaml_engine.config
-
-    @property
-    def config_path(self) -> Path:
-        """Access config path for backward compatibility."""
-        return self.yaml_engine.config_path
-
-    @property
-    def user_config(self) -> dict:
-        """Access user config for backward compatibility."""
-        return self.yaml_engine.user_config
-
-    @property
-    def user_config_path(self) -> Path:
-        """Access user config path for backward compatibility."""
-        return self.yaml_engine.user_config_path
-
-    @property
-    def patterns(self) -> dict:
-        """Access loaded patterns for backward compatibility."""
-        return self.yaml_engine.patterns
-
     def extract_digits(self, serial: str) -> str:
-        return self.yaml_engine.extract_digits(serial)
+        """Extract numeric portion of serial."""
+        return ''.join(c for c in serial if c.isdigit())
 
     def set_pattern_enabled(self, name: str, enabled: bool):
         """Enable/disable a pattern."""
@@ -715,8 +652,6 @@ class PatternEngineV3:
             # Persist to settings
             if self.settings:
                 self.settings.set_pattern_enabled(name, enabled)
-        else:
-            self.yaml_engine.set_pattern_enabled(name, enabled)
 
     def clear_pattern_enabled(self, name: str):
         """Clear explicit pattern state, reverting to library default.
@@ -733,27 +668,23 @@ class PatternEngineV3:
                 lib_enabled = self.settings.get_library_enabled(info.library, default=True)
                 info.enabled = lib_enabled
 
-    def add_custom_pattern(self, name: str, defn: dict):
-        """Add a custom YAML pattern."""
-        self.yaml_engine.add_custom_pattern(name, defn)
-
-    def remove_custom_pattern(self, name: str):
-        """Remove a custom YAML pattern."""
-        self.yaml_engine.remove_custom_pattern(name)
-
-    def get_custom_patterns(self) -> dict:
-        """Get custom YAML patterns."""
-        return self.yaml_engine.get_custom_patterns()
-
     def get_gas_pump_threshold(self) -> float:
-        return self.yaml_engine.get_gas_pump_threshold()
+        """Get the GAS_PUMP baseline_variance_min threshold.
+
+        Checks SettingsManager first, then defaults to 3.5.
+        """
+        if self.settings:
+            return self.settings.get_gas_pump_threshold(default=3.5)
+        return 3.5
 
     def set_gas_pump_threshold(self, threshold: float):
-        self.yaml_engine.set_gas_pump_threshold(threshold)
+        """Set the GAS_PUMP baseline_variance_min threshold and save.
 
-    def save_config(self):
-        """Save YAML user config."""
-        self.yaml_engine.save_config()
+        Updates the SettingsManager and saves to file.
+        """
+        if self.settings:
+            self.settings.set_gas_pump_threshold(threshold)
+            self.settings.save()
 
 
 # Alias for backward compatibility
@@ -765,33 +696,57 @@ PatternEngine = PatternEngineV3
 # =============================================================================
 
 if __name__ == "__main__":
-    print("Pattern Engine v3 - Hybrid Test")
+    print("Pattern Engine v3 - Lua-Only Test")
     print("=" * 70)
 
     engine = PatternEngineV3()
 
     test_serials = [
-        ("A88888888B", "SOLID"),
-        ("A12344321B", "RADAR"),
-        ("A12341234B", "REPEATER"),
-        ("A01234567B", "LADDER_UP"),
-        ("A76543210B", "LADDER_DOWN"),
-        ("A10101010B", "BINARY"),
-        ("A11223344B", "DOUBLE_DOUBLE"),
+        ("A88888888B", "solid/8-of-a-kind"),  # All 8s
+        ("A12344321B", "radar/palindrome"),  # Palindrome
+        ("A12341234B", "repeater"),  # ABCDABCD
+        ("A01234567B", "ladder"),  # Full 8-digit ladder
+        ("A76543210B", "ladder"),  # Descending
+        ("A00001111B", "binary"),  # Only 0s and 1s
+        ("A11223344B", "doubles ladder"),  # Pairs forming ladder
     ]
 
-    print("\nClassification test:")
-    for serial, expected in test_serials:
+    print("\nClassification test (patterns must match):")
+    for serial, desc in test_serials:
         matches = engine.classify(serial)
         names = [m.name for m in matches]
-        status = "?" if expected in names else "?"
-        sources = {m.name: m.source for m in matches if m.name in names[:5]}
-        print(f"{status} {serial}: {', '.join(names[:5])}")
-        print(f"   Sources: {sources}")
+        status = "✓" if names else "✗"
+        print(f"{status} {serial} ({desc}): {', '.join(names[:5])}")
 
     print(f"\nTotal patterns: {len(engine.get_all_patterns())}")
-    print(f"  YAML patterns: {len(engine.yaml_engine.get_all_patterns())}")
     print(f"  Lua patterns: {len(engine.lua_patterns)}")
+
+    # Show library breakdown
+    libs = {}
+    for name, info in engine.lua_patterns.items():
+        lib = info.library
+        if lib not in libs:
+            libs[lib] = {'enabled': 0, 'disabled': 0}
+        if info.enabled:
+            libs[lib]['enabled'] += 1
+        else:
+            libs[lib]['disabled'] += 1
+
+    print("\n  By library:")
+    for lib, counts in sorted(libs.items()):
+        print(f"    {lib}: {counts['enabled']} enabled, {counts['disabled']} disabled")
+
+    # Test pattern info
+    print("\n" + "=" * 70)
+    print("Pattern info test (RADAR):")
+    info = engine.get_pattern_info("RADAR")
+    if info:
+        print(f"  Description: {info.get('description')}")
+        print(f"  Tier: {info.get('tier')}")
+        print(f"  Odds: {info.get('odds')}")
+        print(f"  Price: {info.get('price')}")
+    else:
+        print("  Pattern not found!")
 
     # Test script execution
     print("\n" + "=" * 70)

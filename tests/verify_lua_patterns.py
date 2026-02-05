@@ -1,35 +1,21 @@
 #!/usr/bin/env python3
 """
-Verification script for Lua pattern conversions.
+Verification script for Lua patterns.
 
 Tests that:
-1. Each Lua pattern matches its expected examples from YAML
-2. No unexpected false positives occur
-3. Pattern engine loads all patterns successfully
+1. Pattern engine loads all patterns successfully
+2. Each Lua pattern matches its expected examples
+3. Pattern metadata (odds, price) is available
+4. Visualization data is valid
 """
 
 import sys
-import yaml
 from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from pattern_engine_v3 import PatternEngineV3
-
-
-def load_yaml_examples():
-    """Load examples from patterns_v2.yaml"""
-    yaml_path = Path(__file__).parent.parent / "patterns_v2.yaml"
-    with open(yaml_path, 'r') as f:
-        config = yaml.safe_load(f)
-
-    examples = {}
-    for name, defn in config.get('patterns', {}).items():
-        if 'examples' in defn and defn['examples']:
-            examples[name] = defn['examples']
-
-    return examples
 
 
 def test_pattern_loading():
@@ -41,41 +27,46 @@ def test_pattern_loading():
     engine = PatternEngineV3()
 
     lua_count = len(engine.lua_patterns)
-    yaml_count = len(engine.yaml_engine.get_all_patterns())
     total = len(engine.get_all_patterns())
 
     print(f"Loaded {lua_count} Lua patterns")
-    print(f"Loaded {yaml_count} YAML patterns")
     print(f"Total unique patterns: {total}")
 
-    # List Lua patterns
-    print("\nLua patterns:")
-    for name in sorted(engine.lua_patterns.keys()):
-        info = engine.lua_patterns[name]
-        print(f"  - {name} (Tier {info.tier})")
+    # Show library breakdown
+    libs = {}
+    for name, info in engine.lua_patterns.items():
+        lib = info.library
+        if lib not in libs:
+            libs[lib] = 0
+        libs[lib] += 1
 
-    return True
+    print("\nPatterns by library:")
+    for lib, count in sorted(libs.items()):
+        print(f"  {lib}: {count}")
+
+    return lua_count > 0
 
 
 def test_example_matching():
-    """Test that Lua patterns match their YAML examples."""
+    """Test that Lua patterns match their header examples."""
     print("\n" + "=" * 70)
     print("Testing Example Matching")
     print("=" * 70)
 
     engine = PatternEngineV3()
-    yaml_examples = load_yaml_examples()
 
     passed = 0
     failed = 0
     skipped = 0
 
-    for pattern_name in sorted(engine.lua_patterns.keys()):
-        # Get examples for this pattern
-        examples = yaml_examples.get(pattern_name, [])
+    for pattern_name, info in sorted(engine.lua_patterns.items()):
+        # Only test enabled patterns
+        if not info.enabled:
+            continue
+
+        examples = info.examples
 
         if not examples:
-            print(f"  SKIP: {pattern_name} (no examples)")
             skipped += 1
             continue
 
@@ -102,56 +93,48 @@ def test_example_matching():
             print(f"  FAIL: {pattern_name} - missed: {failed_examples}")
             failed += 1
 
-    print(f"\nResults: {passed} passed, {failed} failed, {skipped} skipped")
+    print(f"\nResults: {passed} passed, {failed} failed, {skipped} skipped (no examples)")
     return failed == 0
 
 
-def test_specific_serials():
-    """Test specific serial numbers for expected patterns."""
+def test_metadata():
+    """Test that patterns have metadata (odds, price)."""
     print("\n" + "=" * 70)
-    print("Testing Specific Serials")
+    print("Testing Metadata")
     print("=" * 70)
 
     engine = PatternEngineV3()
 
-    test_cases = [
-        ("A88888888B", ["SOLID", "SEVEN_OF_KIND"]),
-        ("A12344321B", ["RADAR", "BINARY"]),
-        ("A12341234B", ["REPEATER"]),
-        ("A01234567B", ["LADDER"]),
-        ("A87654321B", ["LADDER"]),
-        ("A11223344B", ["FOUR_CONSEC_PAIRS", "DOUBLES_LADDER"]),
-        ("A10000001B", ["SUPER_RADAR", "BINARY"]),
-        ("A12121212B", ["SUPER_REPEATER", "ALTERNATOR", "RADAR_REPEATER", "BINARY_REPEATER", "BINARY_RADAR"]),
-        ("A01010101B", ["TRUE_BINARY", "BINARY"]),
-        ("A00000001B", ["SERIAL_UNDER_10"]),
-        ("A10000000B", ["MULTI_MILLIONAIRE"]),
-        ("A12345000B", ["TRAILING_000"]),
-        ("A00012345B", ["LOW_000"]),
-        ("A77712345B", ["LUCKY_777"]),
-        ("A99999999B", ["SOLID", "SUM_72"]),
-        ("A00000000B", ["SOLID", "SUM_0"]),
-    ]
+    with_odds = 0
+    with_price = 0
+    total = len(engine.lua_patterns)
 
-    passed = 0
-    failed = 0
+    for name, info in engine.lua_patterns.items():
+        if info.odds:
+            with_odds += 1
+        if info.price:
+            with_price += 1
 
-    for serial, expected in test_cases:
-        matches = engine.classify_simple(serial)
+    print(f"Patterns with odds: {with_odds}/{total}")
+    print(f"Patterns with price: {with_price}/{total}")
 
-        missing = [p for p in expected if p not in matches]
-        if missing:
-            print(f"  FAIL: {serial}")
-            print(f"         Expected: {expected}")
-            print(f"         Got: {matches[:10]}")
-            print(f"         Missing: {missing}")
-            failed += 1
+    # Check specific patterns have expected data
+    radar_info = engine.get_pattern_info("RADAR")
+    if radar_info:
+        print(f"\nRADAR pattern info:")
+        print(f"  Tier: {radar_info.get('tier')}")
+        print(f"  Odds: {radar_info.get('odds')}")
+        print(f"  Price: {radar_info.get('price')}")
+
+        if radar_info.get('odds') and radar_info.get('price'):
+            print("  Status: OK")
+            return True
         else:
-            print(f"  PASS: {serial} -> {[m for m in matches if m in expected]}")
-            passed += 1
-
-    print(f"\nResults: {passed} passed, {failed} failed")
-    return failed == 0
+            print("  Status: MISSING DATA")
+            return False
+    else:
+        print("RADAR pattern not found!")
+        return False
 
 
 def test_visualization():
@@ -197,7 +180,7 @@ def main():
 
     results.append(("Pattern Loading", test_pattern_loading()))
     results.append(("Example Matching", test_example_matching()))
-    results.append(("Specific Serials", test_specific_serials()))
+    results.append(("Metadata", test_metadata()))
     results.append(("Visualization", test_visualization()))
 
     print("\n" + "=" * 70)

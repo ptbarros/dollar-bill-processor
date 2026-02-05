@@ -77,7 +77,7 @@ class MonitorThread(QThread):
             # Find config and model
             script_dir = Path(__file__).parent.parent
             config_path = script_dir / "config.yaml"
-            patterns_path = script_dir / "patterns_v2.yaml"
+            patterns_dir = script_dir / "patterns"
             model_path = script_dir / "best.pt"
 
             if not model_path.exists():
@@ -95,7 +95,7 @@ class MonitorThread(QThread):
                 model_path,
                 use_gpu=self.use_gpu,
                 cfg=cfg,
-                patterns_v2_path=patterns_path if patterns_path.exists() else None
+                patterns_dir=patterns_dir if patterns_dir.exists() else None
             )
 
             self.status_updated.emit("Monitor ready - waiting for files...")

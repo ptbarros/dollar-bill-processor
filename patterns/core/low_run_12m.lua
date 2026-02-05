@@ -4,6 +4,8 @@ Description: Match bills from 12.8 million BEP print runs
 Tier: 6
 DataFile: low_runs.csv
 Examples: []
+Odds: Varies by series/district
+Price: $3-$15
 --]]
 
 function match(ctx)

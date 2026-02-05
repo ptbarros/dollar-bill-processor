@@ -11,16 +11,17 @@ A GUI application for processing dollar bill images, detecting serial numbers vi
   - Blocks dangerous functions (os, io, require, debug)
   - Instruction limits to prevent infinite loops
 
-- **pattern_engine_v3.py**: Hybrid engine supporting both YAML and Lua patterns
-  - Wraps v2 engine for backward compatibility
-  - **Lua patterns fully override YAML** - if a Lua file exists for a pattern name, YAML is skipped entirely (even if Lua returns `matched = false`)
-  - This prevents loose YAML patterns from matching when stricter Lua logic correctly rejects
-  - Properties for backward compat: `config`, `config_path`, `user_config`, `user_config_path`, `patterns`
+- **pattern_engine_v3.py**: Lua-only pattern engine (YAML removed Feb 2025)
+  - Standalone engine - no YAML dependency
+  - All patterns defined in Lua files under `patterns/` directory
+  - Metadata (odds, price, tier) parsed from Lua header comments
+  - `PatternMatch` and `PatternMatchV3` dataclasses defined here
 
 - **patterns/** directory structure:
   ```
   patterns/
-  ├── core/              # Built-in Lua patterns (121 patterns)
+  ├── core/              # Built-in Lua patterns (123 patterns)
+  ├── Nicks/             # Nick's pattern library (62 patterns)
   ├── user/              # User-created patterns (not in git)
   ├── <custom library>/  # Any folder becomes a library (e.g., "The Green Guide")
   ├── lib/
@@ -36,6 +37,8 @@ DisplayName: Friendly Name With Spaces
 Description: What it matches
 Tier: 1-10
 Examples: ["12345678"]
+Odds: 1 in 10,000
+Price: $20-$100
 DataFile: optional_data.csv
 --]]
 
@@ -87,12 +90,14 @@ purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, re
 - "Re-classify All" button in results list
 - Right-click "Re-classify" option for selected rows
 
-### Key Files Modified
-- `gui/pattern_dialog.py`: Extended CustomPatternDialog with script editor tabs
-- `gui/preview_panel.py`: Added group_boxes rendering, Re-classify button
-- `gui/results_list.py`: Added Re-classify All button and context menu option
-- `process_production.py`: Updated to use v3 engine
-- `requirements.txt`: Added `lupa>=2.0`
+### Key Files
+- `pattern_engine_v3.py`: Lua-only pattern engine (standalone, no YAML dependency)
+- `pattern_sandbox.py`: Secure Lua execution environment
+- `gui/pattern_dialog.py`: Pattern Manager with library-based organization
+- `gui/preview_panel.py`: Pattern visualization with highlights/connectors/group_boxes
+- `gui/results_list.py`: Results list with Re-classify functionality
+- `process_production.py`: Main processing pipeline
+- `requirements.txt`: Includes `lupa>=2.0` for Lua support
 
 ### Example User Patterns Created
 - **MINIR**: Copy of MINI_REPEATER (3-digit repeat like 94680680)
@@ -224,12 +229,11 @@ python tests/verify_lua_patterns.py
 - User patterns in `patterns/user/` are gitignored (except .gitkeep)
 - The v3 engine automatically loads helpers.lua into the sandbox
 - Patterns are reloaded when `engine.reload()` is called
-- All 117 YAML patterns have been converted to Lua (Feb 2025)
-- Lua patterns provide richer visualization with custom highlights and connectors
-- YAML patterns remain for metadata (odds, prices) but Lua fully controls detection
-- **Price key normalization (Feb 2025):** Lua patterns store price as `price` in `LuaPatternInfo`, but GUI code (`results_list.py`, `preview_panel.py`) looks for `price_range` (the YAML key). Fixed by having `get_pattern_info()` return both `price` and `price_range` for Lua patterns so the Est Price column populates correctly.
-- Some YAML built-in checks (like `pyramid_ladder`) were too loose - Lua versions are stricter and more accurate
-- The CSV output reflects whatever the pattern engine returns (Lua if file exists, otherwise YAML)
+- **YAML patterns removed (Feb 2025):** All patterns are now Lua-only. The `patterns_v2.yaml` and `pattern_engine_v2.py` files have been deleted.
+- Lua patterns provide rich visualization with custom highlights, connectors, and group_boxes
+- Metadata (odds, price, tier) is parsed from Lua header comments
+- **Price key normalization:** `get_pattern_info()` returns both `price` and `price_range` for backward compatibility with GUI code
+- The CSV output reflects pattern matches from the Lua engine
 
 ## Pattern-Specific Notes
 
@@ -493,10 +497,8 @@ settings.remove_custom_pattern('MY_PATTERN')
 
 ### Files Modified
 - `settings_manager.py`: Added `pattern_overrides`, `custom_patterns`, migration logic
-- `pattern_engine_v2.py`: Integrated with SettingsManager
+- `pattern_engine_v3.py`: `get_gas_pump_threshold()` / `set_gas_pump_threshold()` use SettingsManager
 - `gui/pattern_dialog.py`: Threshold editor uses SettingsManager
-- `update.bat`: Selectively copies YAML files (skips `user_patterns.yaml`)
-- `.gitignore`: Added `user_patterns.yaml`
 
 ### Verification
 ```bash
@@ -625,7 +627,7 @@ Refactored Pattern Manager to use a library-based organization where Lua pattern
 
 ### Key Changes
 - **Library-based grouping**: Patterns organized by library (directory) instead of tier
-- **Lua-first loading**: `engine.lua_patterns` is the primary source; YAML only for fallback metadata
+- **Lua-only loading**: `engine.lua_patterns` is the sole source of patterns (YAML removed)
 - **Dynamic library discovery**: Any subdirectory under `patterns/` (except `lib/`, `data/`, `__pycache__/`) becomes a library
 - **Library enable/disable**: Checkbox on library header enables/disables all patterns in that library
 - **DisplayName support**: Lua headers can include `DisplayName:` for friendly GUI names
@@ -724,13 +726,11 @@ Patterns that have the same name as core patterns are prefixed with `NICKS_` (e.
 **Root causes:**
 1. Toggling library checkbox called `set_pattern_enabled()` for each pattern, creating explicit entries in `pattern_states`
 2. These explicit entries overrode the library default on next load
-3. `pattern_engine_v2.save_config()` was syncing stale `user_config` data back to `pattern_states`, overwriting cleared states
 
 **Fixes:**
 1. Added `clear_pattern_enabled()` to `settings_manager.py` - removes pattern from `pattern_states` so it inherits library default
 2. Added `clear_pattern_enabled()` to `pattern_engine_v3.py` - clears settings and updates in-memory state from library default
 3. `_update_library_patterns()` now calls `clear_pattern_enabled()` instead of `set_pattern_enabled()`
-4. Removed pattern state sync from `pattern_engine_v2.save_config()` - v3 engine now owns pattern state management
 
 **Behavior:** When you toggle a library checkbox, all patterns in that library now inherit the library's enabled state (no individual overrides). To override a specific pattern, toggle it individually after setting the library state.
 
@@ -746,6 +746,46 @@ pattern_states:
   # Patterns not listed inherit from their library's state
   SOME_PATTERN: false
 ```
+
+## YAML Pattern Removal (Feb 2025)
+
+### Overview
+Removed all YAML pattern dependencies, making Lua the single source of truth for pattern definitions.
+
+### What Was Removed
+- `patterns_v2.yaml` - YAML pattern definitions (119 patterns)
+- `pattern_engine_v2.py` - YAML-based pattern engine
+- `user_patterns.yaml` - User pattern overrides (migrated to `user_settings.yaml`)
+
+### Migration Steps Completed
+1. **Added Odds/Price to Lua headers** - All core patterns now have `Odds:` and `Price:` fields in their Lua header comments
+2. **Made v3 engine standalone** - Removed all v2 dependencies, moved `PatternMatch` dataclass into v3
+3. **Updated constructor** - Changed from `config_path` (YAML) to `patterns_dir` (Lua directory)
+4. **Updated dependent code** - All files now import directly from `pattern_engine_v3`
+
+### Files Modified
+| File | Changes |
+|------|---------|
+| `pattern_engine_v3.py` | Standalone Lua-only engine |
+| `gui/pattern_dialog.py` | Removed YAML references |
+| `gui/preview_panel.py` | Updated import |
+| `gui/results_list.py` | Updated import |
+| `gui/main_window.py` | Changed `patterns_v2_path` to `patterns_dir` |
+| `gui/monitor_thread.py` | Changed `patterns_v2_path` to `patterns_dir` |
+| `gui/processing_thread.py` | Changed `patterns_v2_path` to `patterns_dir` |
+| `process_production.py` | Changed constructor parameter |
+| `tests/verify_lua_patterns.py` | Rewrote for Lua-only engine |
+
+### Pattern Engine API Changes
+- Constructor: `PatternEngineV3(patterns_dir=None)` instead of `config_path`
+- Removed properties: `config`, `config_path`, `user_config`, `user_config_path`, `patterns`
+- `get_gas_pump_threshold()` / `set_gas_pump_threshold()` now use SettingsManager directly
+- `get_pattern_info()` returns metadata from Lua headers (odds, price, tier, examples)
+
+### Backward Compatibility
+- `PatternEngine` alias still points to `PatternEngineV3`
+- `get_pattern_info()` returns both `price` and `price_range` keys
+- Migration code in `settings_manager.py` still handles old `user_patterns.yaml` files
 
 ## TODO: Lua Pattern Debugging / Diagnostics
 

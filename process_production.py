@@ -34,11 +34,7 @@ import argparse
 import shutil
 import yaml
 
-# Import pattern engine (v3 with Lua support, falls back to v2)
-try:
-    from pattern_engine_v3 import PatternEngineV3 as PatternEngine
-except ImportError:
-    from pattern_engine_v2 import PatternEngine
+from pattern_engine_v3 import PatternEngineV3 as PatternEngine
 
 
 # =============================================================================
@@ -123,7 +119,7 @@ def get_timing() -> TimingStats:
 class Config:
     """Loads and manages configuration from config.yaml (crop settings only).
 
-    Pattern definitions are now in patterns_v2.yaml, managed by PatternEngine.
+    Pattern definitions are in Lua files under patterns/, managed by PatternEngine.
     """
 
     # Default values (used if config.yaml is missing)
@@ -742,7 +738,7 @@ class ProductionProcessor:
     }
 
     def __init__(self, yolo_model_path: Path, use_gpu: bool = False, cfg: Optional[Config] = None,
-                 patterns_v2_path: Optional[Path] = None):
+                 patterns_dir: Optional[Path] = None):
         self.cfg = cfg or Config()  # Use provided config or create default
         self.use_gpu = use_gpu
 
@@ -770,11 +766,11 @@ class ProductionProcessor:
         print(f"Loading EasyOCR (GPU={use_gpu})...")
         self.ocr_reader = easyocr.Reader(['en'], gpu=use_gpu, verbose=False)
 
-        # Use v2 pattern engine (single YAML config)
-        print(f"Loading pattern engine v2...")
-        self.pattern_engine = PatternEngine(patterns_v2_path)
-        pattern_count = len(self.pattern_engine.patterns)
-        print(f"  Loaded {pattern_count} patterns from {self.pattern_engine.config_path}")
+        # Load pattern engine (Lua patterns)
+        print(f"Loading pattern engine...")
+        self.pattern_engine = PatternEngine(patterns_dir)
+        pattern_count = len(self.pattern_engine.lua_patterns)
+        print(f"  Loaded {pattern_count} Lua patterns from {self.pattern_engine.patterns_dir}")
 
         # Review queue for items needing manual review
         self.review_queue: List[ReviewItem] = []
@@ -3133,11 +3129,11 @@ Examples:
     # Find and load config
     script_dir = Path(__file__).parent
     config_path = args.config or script_dir / "config.yaml"
-    patterns_v2_path = script_dir / "patterns_v2.yaml"
+    patterns_dir = script_dir / "patterns"
 
     cfg = Config(
         config_path if config_path.exists() else None,
-        None  # patterns.txt no longer used - v2 YAML is the source of truth
+        None  # patterns.txt no longer used - Lua patterns are the source of truth
     )
 
     # Find model
@@ -3151,7 +3147,7 @@ Examples:
         model_path,
         use_gpu=args.gpu,
         cfg=cfg,
-        patterns_v2_path=patterns_v2_path if patterns_v2_path.exists() else None
+        patterns_dir=patterns_dir if patterns_dir.exists() else None
     )
 
     if args.all:
