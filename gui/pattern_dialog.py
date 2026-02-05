@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QSplitter, QHeaderView, QCheckBox, QListWidget,
     QListWidgetItem, QFormLayout, QComboBox, QMessageBox, QColorDialog,
     QTabWidget, QWidget, QSpinBox, QFrame, QApplication, QPlainTextEdit,
-    QInputDialog
+    QInputDialog, QMenu
 )
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QFontMetrics
@@ -34,6 +34,77 @@ except ImportError:
     HAS_QSCINTILLA = False
 
 
+class ColorPickerDialog(QDialog):
+    """Color picker dialog with Clear Color option."""
+
+    # Result codes
+    CANCELLED = 0
+    COLOR_SELECTED = 1
+    COLOR_CLEARED = 2
+
+    def __init__(self, parent=None, title="Choose Color", initial_color=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.selected_color = None
+        self.result_code = self.CANCELLED
+
+        layout = QVBoxLayout(self)
+
+        # Color dialog widget (non-modal, embedded)
+        self.color_dialog = QColorDialog(self)
+        self.color_dialog.setWindowFlags(Qt.Widget)  # Embed as widget, not separate window
+        self.color_dialog.setOptions(
+            QColorDialog.DontUseNativeDialog |
+            QColorDialog.NoButtons  # We'll add our own buttons
+        )
+        if initial_color:
+            self.color_dialog.setCurrentColor(initial_color)
+        layout.addWidget(self.color_dialog)
+
+        # Button row
+        btn_layout = QHBoxLayout()
+
+        clear_btn = QPushButton("Clear Color")
+        clear_btn.clicked.connect(self._on_clear)
+        btn_layout.addWidget(clear_btn)
+
+        btn_layout.addStretch()
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(cancel_btn)
+
+        ok_btn = QPushButton("OK")
+        ok_btn.setDefault(True)
+        ok_btn.clicked.connect(self._on_ok)
+        btn_layout.addWidget(ok_btn)
+
+        layout.addLayout(btn_layout)
+
+    def _on_ok(self):
+        self.selected_color = self.color_dialog.currentColor()
+        self.result_code = self.COLOR_SELECTED
+        self.accept()
+
+    def _on_clear(self):
+        self.selected_color = None
+        self.result_code = self.COLOR_CLEARED
+        self.accept()
+
+    @staticmethod
+    def getColor(initial=None, parent=None, title="Choose Color"):
+        """Show dialog and return (result_code, color).
+
+        Returns:
+            (COLOR_SELECTED, QColor) - User picked a color
+            (COLOR_CLEARED, None) - User clicked Clear Color
+            (CANCELLED, None) - User cancelled
+        """
+        dialog = ColorPickerDialog(parent, title, initial)
+        dialog.exec()
+        return dialog.result_code, dialog.selected_color
+
+
 class PatternDialog(QDialog):
     """Dialog for managing patterns and testing serials."""
 
@@ -46,6 +117,7 @@ class PatternDialog(QDialog):
         self.setMinimumSize(900, 600)
         self._setup_ui()
         self._load_patterns()
+        self._restore_window_geometry()
 
     def _setup_ui(self):
         """Setup the dialog UI."""
@@ -79,10 +151,12 @@ class PatternDialog(QDialog):
         self.pattern_tree.itemChanged.connect(self._on_item_changed)
         self.pattern_tree.itemSelectionChanged.connect(self._on_selection_changed)
         self.pattern_tree.itemDoubleClicked.connect(self._on_item_double_click)
+        self.pattern_tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.pattern_tree.customContextMenuRequested.connect(self._on_context_menu)
         self.pattern_tree.setSortingEnabled(True)
 
         header = self.pattern_tree.header()
-        header.setSectionsMovable(False)  # Don't allow reordering columns
+        header.setSectionsMovable(True)  # Allow reordering columns by dragging
         header.setStretchLastSection(True)  # Last column fills remaining space
         header.setSortIndicatorShown(True)
         # All columns interactive (draggable) except last which stretches
@@ -92,11 +166,12 @@ class PatternDialog(QDialog):
         header.setSectionResizeMode(3, QHeaderView.Interactive)  # Color
         header.setSectionResizeMode(4, QHeaderView.Stretch)      # Catalog
 
-        # Restore saved column widths or use defaults
+        # Restore saved column widths/order or use defaults
         self._restore_column_widths()
 
-        # Save column widths when changed
+        # Save column widths and order when changed
         header.sectionResized.connect(self._save_column_widths)
+        header.sectionMoved.connect(self._save_column_widths)
 
         left_layout.addWidget(self.pattern_tree)
 
@@ -282,7 +357,18 @@ class PatternDialog(QDialog):
         layout.addWidget(button_box)
 
     def _restore_column_widths(self):
-        """Restore saved column widths from settings."""
+        """Restore saved column widths and order from settings."""
+        header = self.pattern_tree.header()
+
+        # Restore column order
+        order = self.settings.get_custom_value('pattern_manager_column_order', None)
+        if order and len(order) == 5:
+            for visual_idx, logical_idx in enumerate(order):
+                current_visual = header.visualIndex(logical_idx)
+                if current_visual != visual_idx:
+                    header.moveSection(current_visual, visual_idx)
+
+        # Restore column widths
         widths = self.settings.get_custom_value('pattern_manager_columns_v3', None)
         if widths and len(widths) >= 4:
             self.pattern_tree.setColumnWidth(0, widths[0])  # Pattern
@@ -298,7 +384,10 @@ class PatternDialog(QDialog):
             self.pattern_tree.setColumnWidth(3, 45)   # Color
 
     def _save_column_widths(self):
-        """Save column widths to settings."""
+        """Save column widths and order to settings."""
+        header = self.pattern_tree.header()
+
+        # Save widths
         widths = [
             self.pattern_tree.columnWidth(0),
             self.pattern_tree.columnWidth(1),
@@ -306,6 +395,25 @@ class PatternDialog(QDialog):
             self.pattern_tree.columnWidth(3),
         ]
         self.settings.set_custom_value('pattern_manager_columns_v3', widths)
+
+        # Save column order (logical indices in visual order)
+        order = [header.logicalIndex(i) for i in range(header.count())]
+        self.settings.set_custom_value('pattern_manager_column_order', order)
+
+    def _restore_window_geometry(self):
+        """Restore saved window size and position."""
+        geometry = self.settings.get_custom_value('pattern_manager_geometry', None)
+        if geometry and len(geometry) == 4:
+            x, y, w, h = geometry
+            self.setGeometry(x, y, w, h)
+        else:
+            # Default size - wide enough to show all columns
+            self.resize(1100, 700)
+
+    def _save_window_geometry(self):
+        """Save window size and position to settings."""
+        geo = self.geometry()
+        self.settings.set_custom_value('pattern_manager_geometry', [geo.x(), geo.y(), geo.width(), geo.height()])
 
     def _make_friendly_name(self, name: str) -> str:
         """Convert pattern name to friendly display name.
@@ -389,6 +497,15 @@ class PatternDialog(QDialog):
             lib_item.setFont(0, font)
             if library in lib_colors:
                 lib_item.setForeground(0, lib_colors[library])
+
+            # Library color indicator (double-click to change)
+            lib_color = self.settings.get_library_color(library)
+            if lib_color:
+                lib_item.setText(3, "●")
+                lib_item.setForeground(3, QColor(lib_color))
+            else:
+                lib_item.setText(3, "○")
+                lib_item.setForeground(3, QColor("#888888"))
 
             # Add patterns under this library
             for name, defn, lua_info in sorted(patterns, key=lambda x: x[0]):
@@ -522,22 +639,42 @@ class PatternDialog(QDialog):
     def _on_item_double_click(self, item, column):
         """Handle double-click on color or catalog column."""
         data = item.data(0, Qt.UserRole)
-        if not data or data.get('is_library'):
+        if not data:
+            return
+
+        # Handle library row
+        if data.get('is_library'):
+            if column == 3:
+                # Library color column - show color picker
+                lib_name = data['library']
+                current_color = self.settings.get_library_color(lib_name)
+                initial = QColor(current_color) if current_color else QColor("#2e7d32")
+                result, color = ColorPickerDialog.getColor(initial, self, f"Choose color for {lib_name} library")
+
+                if result == ColorPickerDialog.COLOR_SELECTED and color.isValid():
+                    hex_color = color.name()
+                    self.settings.set_library_color(lib_name, hex_color)
+                    item.setText(3, "●")
+                    item.setForeground(3, color)
+                elif result == ColorPickerDialog.COLOR_CLEARED:
+                    self._clear_library_color(item, lib_name)
             return
 
         name = data['name']
 
         if column == 3:
-            # Color column - show color picker
+            # Pattern color column - show color picker
             current_color = self.settings.get_pattern_color(name)
             initial = QColor(current_color) if current_color else QColor("#2e7d32")
-            color = QColorDialog.getColor(initial, self, f"Choose color for {name}")
+            result, color = ColorPickerDialog.getColor(initial, self, f"Choose color for {name}")
 
-            if color.isValid():
+            if result == ColorPickerDialog.COLOR_SELECTED and color.isValid():
                 hex_color = color.name()
                 self.settings.set_pattern_color(name, hex_color)
                 item.setText(3, "●")
                 item.setForeground(3, color)
+            elif result == ColorPickerDialog.COLOR_CLEARED:
+                self._clear_pattern_color(item, name)
 
         elif column == 4:
             # Catalog column - show input dialog
@@ -550,6 +687,46 @@ class PatternDialog(QDialog):
             if ok:
                 self.settings.set_pattern_catalog(name, catalog.strip())
                 item.setText(4, catalog.strip() if catalog.strip() else "-")
+
+    def _on_context_menu(self, pos):
+        """Show context menu for clearing colors."""
+        item = self.pattern_tree.itemAt(pos)
+        if not item:
+            return
+
+        data = item.data(0, Qt.UserRole)
+        if not data:
+            return
+
+        menu = QMenu(self)
+
+        if data.get('is_library'):
+            # Library row
+            lib_name = data['library']
+            if self.settings.get_library_color(lib_name):
+                clear_action = menu.addAction("Clear Library Color")
+                clear_action.triggered.connect(lambda: self._clear_library_color(item, lib_name))
+        else:
+            # Pattern row
+            name = data['name']
+            if self.settings.get_pattern_color(name):
+                clear_action = menu.addAction("Clear Pattern Color")
+                clear_action.triggered.connect(lambda: self._clear_pattern_color(item, name))
+
+        if menu.actions():
+            menu.exec(self.pattern_tree.viewport().mapToGlobal(pos))
+
+    def _clear_library_color(self, item, lib_name):
+        """Clear the color for a library."""
+        self.settings.set_library_color(lib_name, '')
+        item.setText(3, "○")
+        item.setForeground(3, QColor("#888888"))
+
+    def _clear_pattern_color(self, item, name):
+        """Clear the color for a pattern."""
+        self.settings.set_pattern_color(name, '')
+        item.setText(3, "○")
+        item.setForeground(3, QColor("#888888"))
 
     def _on_selection_changed(self):
         """Handle selection change to show details."""
@@ -936,8 +1113,15 @@ class PatternDialog(QDialog):
     def _save_and_close(self):
         """Save pattern states and close."""
         # Pattern states are persisted via SettingsManager when changed
+        self._save_window_geometry()
         self.settings.save()
         self.accept()
+
+    def closeEvent(self, event):
+        """Save geometry when dialog is closed."""
+        self._save_window_geometry()
+        self.settings.save()
+        super().closeEvent(event)
 
     def _discover_libraries(self) -> list:
         """Discover all pattern library names (directories under patterns/)."""

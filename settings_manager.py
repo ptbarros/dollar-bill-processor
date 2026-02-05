@@ -133,6 +133,7 @@ class SettingsManager:
         self.pattern_overrides: Dict[str, Dict[str, Any]] = {}  # e.g., {'GAS_PUMP': {'baseline_variance_min': 3.6}}
         self.custom_patterns: Dict[str, Dict] = {}  # User-defined YAML patterns
         self.library_states: Dict[str, bool] = {}  # Library name -> enabled (e.g., {'core': True, 'user': True})
+        self.library_colors: Dict[str, str] = {}  # Library name -> hex color
         self.custom_values: Dict[str, Any] = {}  # Arbitrary user values
         self._load()
 
@@ -240,6 +241,9 @@ class SettingsManager:
 
         # Load library states (enable/disable entire libraries)
         self.library_states = data.get('library_states', {})
+
+        # Load library colors
+        self.library_colors = data.get('library_colors', {})
 
         # Load custom values
         self.custom_values = data.get('custom_values', {})
@@ -380,6 +384,7 @@ class SettingsManager:
             'pattern_overrides': self.pattern_overrides,
             'custom_patterns': self.custom_patterns,
             'library_states': self.library_states,
+            'library_colors': self.library_colors,
             'custom_values': self.custom_values,
         }
 
@@ -422,6 +427,17 @@ class SettingsManager:
     def get_disabled_libraries(self) -> List[str]:
         """Get list of explicitly disabled libraries."""
         return [name for name, enabled in self.library_states.items() if not enabled]
+
+    def get_library_color(self, library_name: str, default: str = "") -> str:
+        """Get custom color for a library (hex format like '#FF0000')."""
+        return self.library_colors.get(library_name, default)
+
+    def set_library_color(self, library_name: str, color: str):
+        """Set custom color for a library (hex format like '#FF0000')."""
+        if color:
+            self.library_colors[library_name] = color
+        elif library_name in self.library_colors:
+            del self.library_colors[library_name]
 
     def get_pattern_color(self, pattern_name: str, default: str = "") -> str:
         """Get custom color for a pattern (hex format like '#FF0000')."""

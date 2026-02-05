@@ -83,6 +83,13 @@ purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, re
   - Friendly display names auto-generated from pattern names (e.g., `LOW_RUN_6M` → `Low Run 6M`)
   - `[Lua]` indicator in purple for Lua-implemented patterns
   - Sortable by tier (click column header)
+  - Draggable columns (reorder by dragging headers)
+  - Window size/position and column order persist across sessions
+- **Color customization** with 3-tier hierarchy:
+  - **Pattern color** (highest priority): Double-click color column on a pattern row
+  - **Library color** (middle priority): Double-click color column on a library header
+  - **Default fancy color** (fallback): Set in Settings → UI
+  - Clear colors via right-click context menu or "Clear Color" button in color picker
 - **View/Edit Script**: "View Script" for core (read-only), "Edit Script" for user libraries (with Save)
 - **Create Pattern**: "New Pattern..." button with library selection
 - **API Docs** button for quick access to Lua scripting documentation
@@ -454,12 +461,25 @@ pattern_overrides:
 pattern_states:
   PATTERN_A: false  # disabled
   PATTERN_B: true   # enabled
+pattern_colors:
+  STAR: '#c061cb'
+  RADAR: '#ff6600'
+library_states:
+  core: true
+  Nicks: true
+library_colors:
+  Nicks: '#ff6600'
+  core: '#2196f3'
 custom_patterns:
   MY_BIRTHDAY:
     description: "My special date"
     tier: 10
     rules:
       contains: "0704"
+custom_values:
+  pattern_manager_geometry: [100, 100, 1100, 700]
+  pattern_manager_columns_v3: [200, 40, 55, 45]
+  pattern_manager_column_order: [0, 1, 2, 3, 4]
 ```
 
 ### Migration

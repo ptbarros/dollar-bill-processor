@@ -412,7 +412,7 @@ class ResultsList(QWidget):
                 item.setToolTip(col, row_tooltip)
 
             # Color coding with explicit text color for contrast
-            # Tiered color system: Pattern color > Default fancy color
+            # Tiered color system: Pattern color > Library color > Default fancy color
             if result.get('is_fancy'):
                 bg_color = None
                 pattern_names = [p.strip() for p in patterns.split(',')] if patterns else []
@@ -424,7 +424,17 @@ class ResultsList(QWidget):
                         bg_color = QColor(custom_color)
                         break  # Use first pattern's custom color
 
-                # Tier 2: Fall back to default fancy color (user-customizable)
+                # Tier 2: Check for library color
+                if bg_color is None:
+                    for pname in pattern_names:
+                        lua_info = self.pattern_engine.lua_patterns.get(pname)
+                        if lua_info:
+                            lib_color = self.settings.get_library_color(lua_info.library)
+                            if lib_color:
+                                bg_color = QColor(lib_color)
+                                break  # Use first pattern's library color
+
+                # Tier 3: Fall back to default fancy color (user-customizable)
                 if bg_color is None:
                     default_color = self.settings.ui.default_fancy_color
                     bg_color = QColor(default_color) if default_color else QColor(46, 125, 50)
