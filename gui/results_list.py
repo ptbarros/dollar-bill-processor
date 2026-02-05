@@ -182,6 +182,21 @@ class ResultsList(QWidget):
         settings = QSettings("DollarBillProcessor", "ResultsList")
         settings.setValue(f"column_{logical_index}_width", new_size)
 
+    def _get_display_name(self, pattern_name: str) -> str:
+        """Get the display name for a pattern."""
+        info = self.pattern_engine.get_pattern_info(pattern_name)
+        if info:
+            return info.get('display_name', pattern_name)
+        return pattern_name
+
+    def _format_patterns_display(self, patterns_str: str) -> str:
+        """Convert comma-separated pattern names to display names."""
+        if not patterns_str:
+            return ''
+        names = [p.strip() for p in patterns_str.split(',')]
+        display_names = [self._get_display_name(name) for name in names]
+        return ', '.join(display_names)
+
     def add_result(self, result: dict):
         """Add a single result to the list."""
         self.results.append(result)
@@ -215,8 +230,15 @@ class ResultsList(QWidget):
         patterns = result.get('fancy_types', '').split(', ')
         for pattern in patterns:
             pattern = pattern.strip()
-            if pattern and self.pattern_filter.findText(pattern) == -1:
-                self.pattern_filter.addItem(pattern, pattern)
+            # Check by data value (internal name), not display text
+            found = False
+            for i in range(self.pattern_filter.count()):
+                if self.pattern_filter.itemData(i) == pattern:
+                    found = True
+                    break
+            if pattern and not found:
+                display_name = self._get_display_name(pattern)
+                self.pattern_filter.addItem(display_name, pattern)
 
     def _rebuild_pattern_filter(self):
         """Rebuild pattern filter dropdown from all results."""
@@ -231,7 +253,8 @@ class ResultsList(QWidget):
                     patterns.add(pattern)
 
         for pattern in sorted(patterns):
-            self.pattern_filter.addItem(pattern, pattern)
+            display_name = self._get_display_name(pattern)
+            self.pattern_filter.addItem(display_name, pattern)
 
     def _apply_filters(self):
         """Apply all filters and update display."""
@@ -311,9 +334,9 @@ class ResultsList(QWidget):
                 serial = f"{serial} (corrected)"
             item.setText(1, serial)
 
-            # Patterns
+            # Patterns - show display names in the column
             patterns = result.get('fancy_types', '')
-            item.setText(2, patterns)
+            item.setText(2, self._format_patterns_display(patterns))
 
             # Confidence
             conf = result.get('confidence', '0.00')
@@ -367,13 +390,14 @@ class ResultsList(QWidget):
             # Build comprehensive row tooltip with all bill details
             tooltip_lines = [f"Serial: {serial}"]
             if patterns:
-                tooltip_lines.append(f"Patterns: {patterns}")
+                tooltip_lines.append(f"Patterns: {self._format_patterns_display(patterns)}")
                 # Add odds for each pattern
                 for name in [p.strip() for p in patterns.split(',')]:
                     info = self.pattern_engine.get_pattern_info(name)
                     if info:
+                        display_name = info.get('display_name', name)
                         odds = info.get('odds', 'unknown')
-                        tooltip_lines.append(f"  {name}: {odds}")
+                        tooltip_lines.append(f"  {display_name}: {odds}")
             tooltip_lines.append(f"Confidence: {conf}")
             tooltip_lines.append(f"Pixel Dev: {baseline_variance} px (gas pump threshold)")
             if price_text:

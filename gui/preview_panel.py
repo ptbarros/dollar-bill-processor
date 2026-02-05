@@ -801,7 +801,7 @@ class ImageLabel(QLabel):
         self.is_rotated = False
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip("Left-click: flip 180° | Right-click: cycle overlays | Hold right-click: menu")
-        self._matched_patterns = []  # Patterns that match current serial
+        self._matched_patterns = []  # List of (internal_name, display_name) tuples
         self._current_pattern_index = 0  # For cycling: 0=gas_pump, 1+=patterns, last=none
 
         # For long-press detection
@@ -813,15 +813,19 @@ class ImageLabel(QLabel):
         self._long_press_timer.timeout.connect(self._on_long_press)
 
     def set_matched_patterns(self, patterns: list):
-        """Set the list of matched patterns for context menu."""
+        """Set the list of matched patterns for context menu.
+
+        Args:
+            patterns: List of (internal_name, display_name) tuples
+        """
         self._matched_patterns = patterns or []
         self._current_pattern_index = 0  # Reset to gas pump when patterns change
 
     def _get_cycle_options(self):
-        """Get the list of options to cycle through."""
+        """Get the list of internal pattern names to cycle through."""
         # Order: Gas Pump -> each pattern -> No Overlay -> (back to Gas Pump)
         options = ["__gas_pump__"]
-        options.extend(self._matched_patterns)
+        options.extend([name for name, _ in self._matched_patterns])
         options.append("__none__")
         return options
 
@@ -851,10 +855,10 @@ class ImageLabel(QLabel):
         if self._matched_patterns:
             menu.addSeparator()
 
-            # Add each matched pattern
-            for pattern in self._matched_patterns:
-                action = menu.addAction(f"{pattern}")
-                action.setData(pattern)
+            # Add each matched pattern (show display name, store internal name as data)
+            for internal_name, display_name in self._matched_patterns:
+                action = menu.addAction(display_name)
+                action.setData(internal_name)
 
         menu.addSeparator()
 
@@ -1973,6 +1977,25 @@ class PreviewPanel(QWidget):
         # Clear preserved zoom/pan state
         self.clear_preserved_state()
 
+    def _format_pattern_with_library(self, name: str) -> str:
+        """Format a pattern name as 'Display Name (library)'."""
+        info = self.pattern_engine.get_pattern_info(name)
+        if info:
+            display = info.get('display_name', name)
+            library = info.get('library', '')
+            if library:
+                return f"{display} ({library})"
+            return display
+        return name
+
+    def _format_patterns_display(self, patterns_str: str) -> str:
+        """Convert comma-separated pattern names to display names with library."""
+        if not patterns_str:
+            return "None"
+        names = [p.strip() for p in patterns_str.split(',')]
+        display_parts = [self._format_pattern_with_library(name) for name in names if name]
+        return ', '.join(display_parts) if display_parts else "None"
+
     def show_bill(self, result: dict):
         """Display a bill result."""
         # Save current zoom/pan state BEFORE loading new images
@@ -2026,9 +2049,15 @@ class PreviewPanel(QWidget):
 
         # Generate serial region crops on-demand (only if serial view is visible)
         if self.serial_frame.isVisible():
-            # Update matched patterns for context menu
+            # Update matched patterns for context menu (list of (internal_name, display_name) tuples)
             fancy_types_str = result.get('fancy_types', '')
-            matched_patterns = [p.strip() for p in fancy_types_str.split(',')] if fancy_types_str else []
+            if fancy_types_str:
+                matched_patterns = []
+                for name in [p.strip() for p in fancy_types_str.split(',')]:
+                    if name:
+                        matched_patterns.append((name, self._format_pattern_with_library(name)))
+            else:
+                matched_patterns = []
             self.serial_image_1.set_matched_patterns(matched_patterns)
             self.serial_image_2.set_matched_patterns(matched_patterns)
 
@@ -2058,7 +2087,7 @@ class PreviewPanel(QWidget):
         self.serial_label.setText(serial or "-")
 
         patterns = result.get('fancy_types', '')
-        self.patterns_label.setText(patterns or "None")
+        self.patterns_label.setText(self._format_patterns_display(patterns))
 
         # Look up odds and price for matched patterns
         odds_parts = []
@@ -2068,10 +2097,11 @@ class PreviewPanel(QWidget):
             for name in pattern_names:
                 info = self.pattern_engine.get_pattern_info(name)
                 if info:
+                    label = self._format_pattern_with_library(name)
                     if 'odds' in info:
-                        odds_parts.append(f"{name}: {info['odds']}")
+                        odds_parts.append(f"{label}: {info['odds']}")
                     if 'price_range' in info:
-                        price_parts.append(f"{name}: {info['price_range']}")
+                        price_parts.append(f"{label}: {info['price_range']}")
         if odds_parts:
             self.odds_label.setText('\n'.join(odds_parts))
         else:
@@ -2132,7 +2162,7 @@ class PreviewPanel(QWidget):
         self.current_result['is_fancy'] = len(matches) > 0
 
         # Update the patterns label
-        self.patterns_label.setText(new_fancy_types or "None")
+        self.patterns_label.setText(self._format_patterns_display(new_fancy_types))
 
         # Update odds and price
         odds_parts = []
@@ -2140,10 +2170,11 @@ class PreviewPanel(QWidget):
         for name in matches:
             info = self.pattern_engine.get_pattern_info(name)
             if info:
+                label = self._format_pattern_with_library(name)
                 if info.get('odds'):
-                    odds_parts.append(f"{name}: {info['odds']}")
+                    odds_parts.append(f"{label}: {info['odds']}")
                 if info.get('price_range'):
-                    price_parts.append(f"{name}: {info['price_range']}")
+                    price_parts.append(f"{label}: {info['price_range']}")
         self.odds_label.setText('\n'.join(odds_parts) if odds_parts else "-")
         self.price_label.setText('\n'.join(price_parts) if price_parts else "-")
 
@@ -2155,9 +2186,10 @@ class PreviewPanel(QWidget):
             status_parts.append("Needs Review")
         self.status_label.setText(', '.join(status_parts) if status_parts else "OK")
 
-        # Update matched patterns for overlay cycling
-        self.serial_image_1.set_matched_patterns(matches)
-        self.serial_image_2.set_matched_patterns(matches)
+        # Update matched patterns for overlay cycling (list of (internal_name, display_name) tuples)
+        matched_tuples = [(name, self._format_pattern_with_library(name)) for name in matches]
+        self.serial_image_1.set_matched_patterns(matched_tuples)
+        self.serial_image_2.set_matched_patterns(matched_tuples)
 
         # Refresh serial region crops to show updated overlays
         if self.serial_frame.isVisible() and self._current_front_file:
@@ -2185,7 +2217,7 @@ class PreviewPanel(QWidget):
         self.serial_label.setText(serial or "-")
 
         patterns = result.get('fancy_types', '')
-        self.patterns_label.setText(patterns or "None")
+        self.patterns_label.setText(self._format_patterns_display(patterns))
 
         # Look up odds and price for matched patterns
         odds_parts = []
@@ -2195,10 +2227,11 @@ class PreviewPanel(QWidget):
             for name in pattern_names:
                 info = self.pattern_engine.get_pattern_info(name)
                 if info:
+                    label = self._format_pattern_with_library(name)
                     if 'odds' in info:
-                        odds_parts.append(f"{name}: {info['odds']}")
+                        odds_parts.append(f"{label}: {info['odds']}")
                     if 'price_range' in info:
-                        price_parts.append(f"{name}: {info['price_range']}")
+                        price_parts.append(f"{label}: {info['price_range']}")
         if odds_parts:
             self.odds_label.setText('\n'.join(odds_parts))
         else:
@@ -2523,8 +2556,10 @@ class PreviewPanel(QWidget):
                 QLabel { color: #aaa; font-size: 9pt; padding: 2px 4px; background: #e8e8e8; border-radius: 3px; }
             """)
         else:
-            # Specific pattern - show name with highlight
-            self.pattern_mode_label.setText(pattern_filter)
+            # Specific pattern - show display name with highlight
+            info = self.pattern_engine.get_pattern_info(pattern_filter)
+            display_name = info.get('display_name', pattern_filter) if info else pattern_filter
+            self.pattern_mode_label.setText(display_name)
             self.pattern_mode_label.setStyleSheet("""
                 QLabel { color: #2a6; font-size: 9pt; font-weight: bold; padding: 2px 4px; background: #e8f5e9; border-radius: 3px; }
             """)

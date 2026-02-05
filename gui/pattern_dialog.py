@@ -935,7 +935,7 @@ class PatternDialog(QDialog):
 
     def _save_and_close(self):
         """Save pattern states and close."""
-        self.engine.save_config()
+        # Pattern states are persisted via SettingsManager when changed
         self.settings.save()
         self.accept()
 

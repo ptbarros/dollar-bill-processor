@@ -589,12 +589,28 @@ class PatternEngineV3:
             print(f"Error deleting pattern: {e}")
             return False
 
+    def _make_friendly_name(self, name: str) -> str:
+        """Convert PATTERN_NAME to 'Pattern Name' for display."""
+        # Split on underscores and capitalize each word
+        words = name.split('_')
+        # Keep numbers/acronyms as-is, title-case others
+        result = []
+        for word in words:
+            if word.isdigit() or (len(word) <= 2 and word.isupper()):
+                # Keep short acronyms and numbers as-is (e.g., "6M", "12M")
+                result.append(word)
+            else:
+                result.append(word.capitalize())
+        return ' '.join(result)
+
     def get_pattern_info(self, name: str) -> Optional[dict]:
         """Get info about a pattern."""
         if name in self.lua_patterns:
             info = self.lua_patterns[name]
             result = {
                 'name': info.name,
+                'display_name': info.display_name or self._make_friendly_name(info.name),
+                'library': info.library,
                 'description': info.description,
                 'tier': info.tier,
                 'enabled': info.enabled,
