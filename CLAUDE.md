@@ -21,7 +21,7 @@ A GUI application for processing dollar bill images, detecting serial numbers vi
   ```
   patterns/
   ├── core/              # Built-in Lua patterns (123 patterns)
-  ├── Nicks/             # Nick's pattern library (62 patterns)
+  ├── Nicks/             # Nick's pattern library (62 patterns) - bundled with updates
   ├── user/              # User-created patterns (not in git)
   ├── <custom library>/  # Any folder becomes a library (e.g., "The Green Guide")
   ├── lib/

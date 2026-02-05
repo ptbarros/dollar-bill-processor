@@ -104,15 +104,17 @@ if exist "%SOURCE_DIR%\gui" (
     xcopy /y /e /q "%SOURCE_DIR%\gui\*" "gui\" >nul 2>&1
 )
 
-:: Copy patterns folder (core Lua patterns and helpers)
+:: Copy patterns folder (core Lua patterns, Nicks library, and helpers)
 if exist "%SOURCE_DIR%\patterns" (
     echo Updating pattern files...
     if not exist "patterns" mkdir "patterns"
     if not exist "patterns\core" mkdir "patterns\core"
+    if not exist "patterns\Nicks" mkdir "patterns\Nicks"
     if not exist "patterns\lib" mkdir "patterns\lib"
     if not exist "patterns\user" mkdir "patterns\user"
-    :: Copy core patterns and lib (but not user patterns)
+    :: Copy core patterns, Nicks library, and lib (but not user patterns)
     xcopy /y /e /q "%SOURCE_DIR%\patterns\core\*" "patterns\core\" >nul 2>&1
+    xcopy /y /e /q "%SOURCE_DIR%\patterns\Nicks\*" "patterns\Nicks\" >nul 2>&1
     xcopy /y /e /q "%SOURCE_DIR%\patterns\lib\*" "patterns\lib\" >nul 2>&1
 )
 
