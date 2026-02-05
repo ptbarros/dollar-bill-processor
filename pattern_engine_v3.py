@@ -11,11 +11,14 @@ Script patterns can provide rich visualization with custom highlights and connec
 import re
 import yaml
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 from pattern_engine_v2 import PatternEngine as PatternEngineV2, PatternMatch
 from pattern_sandbox import PatternSandbox, create_context, LuaExecutionResult
+
+if TYPE_CHECKING:
+    from settings_manager import SettingsManager
 
 
 @dataclass
@@ -36,6 +39,7 @@ class LuaPatternInfo:
     tier: int
     script: str
     file_path: Path
+    library: str = "user"         # Library name (directory under patterns/)
     enabled: bool = True
     display_name: str = ""        # User-friendly name for GUI (falls back to name if empty)
     examples: list = field(default_factory=list)
@@ -67,6 +71,9 @@ class PatternEngineV3:
         # Base directory
         base_dir = Path(__file__).parent
 
+        # Settings manager (lazy loaded)
+        self._settings: Optional['SettingsManager'] = None
+
         # Initialize YAML engine (v2)
         self.yaml_engine = PatternEngineV2(config_path)
 
@@ -86,6 +93,17 @@ class PatternEngineV3:
 
         # Cache for user config path
         self.user_patterns_dir = self.patterns_dir / "user"
+
+    @property
+    def settings(self) -> Optional['SettingsManager']:
+        """Lazy-load settings manager."""
+        if self._settings is None:
+            try:
+                from settings_manager import get_settings
+                self._settings = get_settings()
+            except ImportError:
+                self._settings = None
+        return self._settings
 
     def _load_helpers(self):
         """Load helper functions into sandbox."""
@@ -108,13 +126,12 @@ class PatternEngineV3:
                 if not subdir.is_dir() or subdir.name in skip_dirs:
                     continue
 
-                # core is loaded first, everything else is considered "user" (can override)
-                is_user = subdir.name != 'core'
+                library_name = subdir.name
 
                 for lua_file in subdir.glob("*.lua"):
-                    self._load_lua_pattern(lua_file, is_user=is_user)
+                    self._load_lua_pattern(lua_file, library=library_name)
 
-    def _load_lua_pattern(self, file_path: Path, is_user: bool = False):
+    def _load_lua_pattern(self, file_path: Path, library: str = "user"):
         """Load a single Lua pattern from file."""
         try:
             with open(file_path, 'r') as f:
@@ -123,14 +140,24 @@ class PatternEngineV3:
             # Parse metadata from header comment
             metadata = self._parse_lua_metadata(script)
 
-            # Use filename as pattern name if not in metadata
-            name = metadata.get('name', file_path.stem.upper())
+            # Use Pattern: field from header, or filename as fallback
+            name = metadata.get('pattern', file_path.stem.upper())
 
             # Validate syntax
             valid, error = self.sandbox.validate_syntax(script)
             if not valid:
                 print(f"Warning: Syntax error in {file_path}: {error}")
                 return
+
+            # Determine enabled state from settings (pattern state overrides library state)
+            # Default: enabled unless explicitly disabled in settings
+            enabled = True
+            if self.settings:
+                # Check library enabled state first
+                lib_enabled = self.settings.get_library_enabled(library, default=True)
+                # Check pattern-specific state (overrides library)
+                pattern_enabled = self.settings.get_pattern_enabled(name, default=lib_enabled)
+                enabled = pattern_enabled
 
             # Create pattern info
             info = LuaPatternInfo(
@@ -139,7 +166,8 @@ class PatternEngineV3:
                 tier=int(metadata.get('tier', 10)),
                 script=script,
                 file_path=file_path,
-                enabled=metadata.get('enabled', True),
+                library=library,
+                enabled=enabled,
                 display_name=metadata.get('displayname', ''),
                 examples=metadata.get('examples', []),
                 odds=metadata.get('odds', ''),
@@ -557,9 +585,7 @@ class PatternEngineV3:
                 f.write(full_script)
 
             # Reload to pick up the new pattern
-            # Consider non-core libraries as "user" patterns for enable/disable purposes
-            is_user = library != 'core'
-            self._load_lua_pattern(file_path, is_user=is_user)
+            self._load_lua_pattern(file_path, library=library)
             return True
 
         except Exception as e:
@@ -686,6 +712,9 @@ class PatternEngineV3:
         """Enable/disable a pattern."""
         if name in self.lua_patterns:
             self.lua_patterns[name].enabled = enabled
+            # Persist to settings
+            if self.settings:
+                self.settings.set_pattern_enabled(name, enabled)
         else:
             self.yaml_engine.set_pattern_enabled(name, enabled)
 

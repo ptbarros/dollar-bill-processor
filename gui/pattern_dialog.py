@@ -437,8 +437,11 @@ class PatternDialog(QDialog):
                 pattern_item.setText(1, str(tier))
                 pattern_item.setData(1, Qt.UserRole, tier)  # Store as int for proper sorting
 
-                # Checkbox for enabled
-                enabled = name in self.engine.patterns
+                # Checkbox for enabled - use Lua info if available, else check YAML patterns
+                if has_lua:
+                    enabled = lua_info.enabled
+                else:
+                    enabled = name in self.engine.patterns
                 pattern_item.setCheckState(2, Qt.Checked if enabled else Qt.Unchecked)
                 pattern_item.setData(0, Qt.UserRole, {'name': name, 'defn': defn, 'has_lua': has_lua, 'library': library})
 
@@ -961,7 +964,7 @@ class PatternDialog(QDialog):
     def _save_and_close(self):
         """Save pattern states and close."""
         self.engine.save_config()
-        self.settings.save()  # Save colors
+        self.settings.save()
         self.accept()
 
     def _discover_libraries(self) -> list:

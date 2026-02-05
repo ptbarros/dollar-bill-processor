@@ -668,6 +668,67 @@ library_states:
   - Added `library_states` dict
   - Added `get_library_enabled()` / `set_library_enabled()` methods
 
+## Nicks Pattern Library (Added Feb 2025)
+
+### Overview
+Created a "Nicks" pattern library with 62 Lua patterns ported from an external Python-based fancy serial checker (`~/Documents/Fancy/functions.py`). These patterns represent Nick's trusted detection logic and can be used alongside or instead of core patterns.
+
+### Patterns Included
+- **Ladders**: `LADDER_8` through `LADDER_4`, `STEP_LADDER`, `COUNTING_LADDER`, `DOUBLES_LADDER`, `CONSECUTIVE_PAIRS_LADDER`, `BROKEN_LADDER_8`
+- **Chunky Ladders**: `CHUNKY_LADDER_7` through `CHUNKY_LADDER_3`, `SUPER_LADDER`, `LADDER_QUAD`
+- **N of a Kind**: `EIGHT_OF_A_KIND`, `SEVEN_OF_A_KIND`, `SIX_OF_A_KIND`, `FIVE_OF_A_KIND`
+- **N in a Row**: `SEVEN_IN_A_ROW`, `SIX_IN_A_ROW`, `FIVE_IN_A_ROW`, `FOUR_IN_A_ROW`
+- **Serial Ranges**: `SUPER_LOW_SERIAL`, `VERY_LOW_SERIAL`, `LOW_SERIAL`, `MILLIONAIRE`, `MULTI_MILLIONAIRE`
+- **Radar/Repeater**: `RADAR`, `REPEATER`, `SUPER_RADAR`, `SUPER_REPEATER`, `RADAR_REPEATER`, `BINARY_RADAR`, `BINARY_REPEATER`
+- **Binary/Trinary**: `BINARY`, `TRUE_BINARY`, `TRINARY`, `TRUE_TRINARY`, `TRUE_FLIPPER`, `TRUE_QUADRINARY`
+- **Pairs**: `CONSECUTIVE_PAIRS_4`, `CONSECUTIVE_PAIRS_3`, `ANY_4_PAIRS`, `FULL_HOUSE`, `CONSECUTIVE_TRIPLES`, `TRIPLE_DOUBLE_DOUBLE`, `SUPER_TRINARY`
+- **Bookends**: `DOUBLE_BOOKEND`, `TRIPLE_BOOKEND`, `BRIDGED_BOOKEND`
+- **Other**: `DOUBLE_QUAD`, `TRIPLE_QUAD`, `BROKEN_RADAR`, `TWIN_SET_DOUBLES`, `ALTERNATOR`, `VALID_DATE`, `TOMBSTONE`, `STAR_NOTE`, `DUPLICATE_SN`
+
+### Naming Convention
+Patterns that have the same name as core patterns are prefixed with `NICKS_` (e.g., `NICKS_RADAR`, `NICKS_BINARY`). This allows both versions to coexist and be enabled/disabled independently.
+
+### Location
+`patterns/Nicks/` - Each pattern is a separate `.lua` file with full visualization support (highlights, connectors, group_boxes).
+
+## Pattern Engine Bug Fixes (Feb 2025)
+
+### Pattern Name Loading Fix
+**Bug:** Pattern names were read from filename instead of `Pattern:` header field.
+- `metadata.get('name')` was used, but header field is `Pattern:` which parses as `metadata['pattern']`
+- Fixed by changing to `metadata.get('pattern', file_path.stem.upper())`
+
+### Library/Pattern State Persistence Fix
+**Bug:** Library and pattern enabled states weren't persisting across Pattern Manager reopens.
+
+**Root causes:**
+1. `LuaPatternInfo` had no `library` field - couldn't track which library a pattern belongs to
+2. Engine didn't check `settings.pattern_states` when loading Lua patterns
+3. `set_pattern_enabled()` only updated in-memory state, not `settings.pattern_states`
+4. Pattern dialog checked `name in self.engine.patterns` (YAML dict) for Lua pattern enabled state
+
+**Fixes in `pattern_engine_v3.py`:**
+- Added `library` field to `LuaPatternInfo` dataclass
+- Added `settings` property (lazy-loaded singleton)
+- `_load_lua_pattern()` now checks `settings.get_library_enabled()` and `settings.get_pattern_enabled()`
+- `set_pattern_enabled()` now persists to `settings.pattern_states`
+
+**Fixes in `gui/pattern_dialog.py`:**
+- Pattern checkbox now uses `lua_info.enabled` for Lua patterns instead of checking YAML dict
+
+### Settings Persistence
+Library and pattern states are stored in `user_settings.yaml`:
+```yaml
+library_states:
+  core: true
+  Nicks: true
+  user: false
+pattern_states:
+  NICKS_RADAR: true
+  NICKS_BINARY: false
+  # ... individual pattern overrides
+```
+
 ## TODO: Lua Pattern Debugging / Diagnostics
 
 ### Problem
