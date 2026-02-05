@@ -742,16 +742,15 @@ class PatternEngine:
     def save_config(self):
         """Save user config via SettingsManager (or legacy file).
 
-        When SettingsManager is available, syncs pattern_states, custom_patterns,
-        and pattern_overrides to user_settings.yaml.
+        When SettingsManager is available, syncs custom_patterns and
+        pattern_overrides to user_settings.yaml.
+
+        NOTE: Pattern enabled/disabled states are NOT synced here anymore.
+        The v3 engine manages pattern_states directly via set_pattern_enabled()
+        and clear_pattern_enabled(). Syncing from user_config would overwrite
+        those changes with stale data.
         """
         if self._settings is not None:
-            # Sync disabled/enabled patterns to pattern_states
-            for name in self.user_config.get('disabled_patterns', []):
-                self._settings.pattern_states[name] = False
-            for name in self.user_config.get('enabled_patterns', []):
-                self._settings.pattern_states[name] = True
-
             # Sync custom patterns
             self._settings.custom_patterns = self.user_config.get('custom_patterns', {}).copy()
 

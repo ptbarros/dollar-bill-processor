@@ -716,6 +716,24 @@ Patterns that have the same name as core patterns are prefixed with `NICKS_` (e.
 **Fixes in `gui/pattern_dialog.py`:**
 - Pattern checkbox now uses `lua_info.enabled` for Lua patterns instead of checking YAML dict
 
+### Library Checkbox Behavior Fix (Feb 2025)
+**Bug:** Toggling a library checkbox didn't properly sync pattern states on dialog reopen.
+- Library checkbox showed one state, but individual patterns showed conflicting states
+- Example: Nicks library checked, but all Nicks patterns unchecked
+
+**Root causes:**
+1. Toggling library checkbox called `set_pattern_enabled()` for each pattern, creating explicit entries in `pattern_states`
+2. These explicit entries overrode the library default on next load
+3. `pattern_engine_v2.save_config()` was syncing stale `user_config` data back to `pattern_states`, overwriting cleared states
+
+**Fixes:**
+1. Added `clear_pattern_enabled()` to `settings_manager.py` - removes pattern from `pattern_states` so it inherits library default
+2. Added `clear_pattern_enabled()` to `pattern_engine_v3.py` - clears settings and updates in-memory state from library default
+3. `_update_library_patterns()` now calls `clear_pattern_enabled()` instead of `set_pattern_enabled()`
+4. Removed pattern state sync from `pattern_engine_v2.save_config()` - v3 engine now owns pattern state management
+
+**Behavior:** When you toggle a library checkbox, all patterns in that library now inherit the library's enabled state (no individual overrides). To override a specific pattern, toggle it individually after setting the library state.
+
 ### Settings Persistence
 Library and pattern states are stored in `user_settings.yaml`:
 ```yaml
@@ -724,9 +742,9 @@ library_states:
   Nicks: true
   user: false
 pattern_states:
-  NICKS_RADAR: true
-  NICKS_BINARY: false
-  # ... individual pattern overrides
+  # Only patterns with explicit individual overrides appear here
+  # Patterns not listed inherit from their library's state
+  SOME_PATTERN: false
 ```
 
 ## TODO: Lua Pattern Debugging / Diagnostics

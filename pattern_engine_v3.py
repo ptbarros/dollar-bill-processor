@@ -718,6 +718,21 @@ class PatternEngineV3:
         else:
             self.yaml_engine.set_pattern_enabled(name, enabled)
 
+    def clear_pattern_enabled(self, name: str):
+        """Clear explicit pattern state, reverting to library default.
+
+        This is used when toggling a library checkbox - we want the library
+        state to control patterns rather than individual overrides.
+        """
+        if name in self.lua_patterns:
+            info = self.lua_patterns[name]
+            # Clear from settings (removes explicit override)
+            if self.settings:
+                self.settings.clear_pattern_enabled(name)
+                # Recalculate enabled state from library default
+                lib_enabled = self.settings.get_library_enabled(info.library, default=True)
+                info.enabled = lib_enabled
+
     def add_custom_pattern(self, name: str, defn: dict):
         """Add a custom YAML pattern."""
         self.yaml_engine.add_custom_pattern(name, defn)

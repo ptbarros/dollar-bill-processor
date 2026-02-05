@@ -394,6 +394,11 @@ class SettingsManager:
         """Set whether a pattern is enabled."""
         self.pattern_states[pattern_name] = enabled
 
+    def clear_pattern_enabled(self, pattern_name: str):
+        """Clear explicit enabled state for a pattern (reverts to library default)."""
+        if pattern_name in self.pattern_states:
+            del self.pattern_states[pattern_name]
+
     def get_enabled_patterns(self) -> List[str]:
         """Get list of explicitly enabled patterns."""
         return [name for name, enabled in self.pattern_states.items() if enabled]

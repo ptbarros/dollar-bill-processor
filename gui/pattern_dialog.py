@@ -526,14 +526,23 @@ class PatternDialog(QDialog):
         self.engine.set_pattern_enabled(name, enabled)
 
     def _update_library_patterns(self, lib_item, enabled: bool):
-        """Enable or disable all patterns under a library item."""
+        """Enable or disable all patterns under a library item.
+
+        Clears individual pattern overrides so patterns inherit the library state.
+        This ensures library checkbox state is respected on reload.
+        """
         self.pattern_tree.blockSignals(True)
         for i in range(lib_item.childCount()):
             pattern_item = lib_item.child(i)
             pattern_item.setCheckState(2, Qt.Checked if enabled else Qt.Unchecked)
             data = pattern_item.data(0, Qt.UserRole)
             if data and 'name' in data:
-                self.engine.set_pattern_enabled(data['name'], enabled)
+                # Clear individual pattern state so it inherits from library
+                # (only for v3 engine with clear_pattern_enabled method)
+                if hasattr(self.engine, 'clear_pattern_enabled'):
+                    self.engine.clear_pattern_enabled(data['name'])
+                else:
+                    self.engine.set_pattern_enabled(data['name'], enabled)
         self.pattern_tree.blockSignals(False)
 
     def _on_item_double_click(self, item, column):
