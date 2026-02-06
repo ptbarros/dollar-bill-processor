@@ -1477,6 +1477,7 @@ class PatternDialog(QDialog):
                         defn.get('script', ''),
                         defn.get('description', ''),
                         defn.get('tier', 5),
+                        examples=defn.get('examples'),
                         display_name=defn.get('display_name', '')
                     )
                 else:
@@ -1782,6 +1783,7 @@ Logs appear in batch test results and "Copy for AI Debug" output.
                         defn.get('script', ''),
                         defn.get('description', ''),
                         defn.get('tier', 5),
+                        examples=defn.get('examples'),
                         library=library,
                         display_name=defn.get('display_name', '')
                     )
@@ -3442,12 +3444,19 @@ end
             QMessageBox.warning(self, "Validation Error", "Please enter a pattern name.")
             return
 
-        # Check which mode we're in - use is_lua_pattern flag or check if script has content
-        # (user might be on Test or API Docs tab while editing a Lua pattern)
+        # Check which mode we're in based on:
+        # 1. If editing an existing Lua pattern (is_lua_pattern flag) → Lua mode
+        # 2. If user is on Lua Script tab (index 1) → Lua mode (explicit choice)
+        # 3. If script has header block (--[[) → Lua mode (user customized script)
+        # 4. Otherwise → Simple Rule mode (default for new patterns)
         script = self.script_edit.toPlainText().strip() if HAS_V3_ENGINE else ""
-        has_lua_content = bool(script) and "function match" in script
+        current_tab = self.tab_widget.currentIndex() if HAS_V3_ENGINE else 0
+        has_custom_script = script.startswith('--[[')  # Default template doesn't have header
 
-        if HAS_V3_ENGINE and (self.is_lua_pattern or has_lua_content):
+        # Use Lua mode if: editing a Lua pattern, on Lua Script tab, or script has header
+        use_lua_mode = self.is_lua_pattern or current_tab == 1 or has_custom_script
+
+        if HAS_V3_ENGINE and use_lua_mode:
             # Script mode - validate syntax
             valid, error = self.engine.validate_script(script)
             if not valid:
@@ -3479,6 +3488,107 @@ end
 
         self.accept()
 
+    def _generate_examples_for_rule(self, rule_type: str, value: str) -> list:
+        """Generate example serials that match the given simple rule."""
+        examples = []
+
+        if rule_type == "contains":
+            # Place the value at different positions
+            val_len = len(value)
+            if val_len <= 8:
+                # At start
+                examples.append(value + "0" * (8 - val_len))
+                # In middle (if room)
+                if val_len <= 6:
+                    pad = (8 - val_len) // 2
+                    examples.append("0" * pad + value + "0" * (8 - val_len - pad))
+                # At end
+                examples.append("0" * (8 - val_len) + value)
+
+        elif rule_type == "starts_with":
+            val_len = len(value)
+            if val_len <= 8:
+                examples.append(value + "0" * (8 - val_len))
+                examples.append(value + "1" * (8 - val_len))
+                examples.append(value + "2" * (8 - val_len))
+
+        elif rule_type == "ends_with":
+            val_len = len(value)
+            if val_len <= 8:
+                examples.append("0" * (8 - val_len) + value)
+                examples.append("1" * (8 - val_len) + value)
+                examples.append("2" * (8 - val_len) + value)
+
+        elif rule_type == "regex":
+            # For regex, we can't easily generate examples
+            # User will need to add them manually or test will show warning
+            pass
+
+        # Filter to valid 8-digit examples
+        examples = [ex for ex in examples if len(ex) == 8 and ex.isdigit()]
+        return examples[:3]  # Return up to 3 examples
+
+    def _generate_lua_from_rule(self, rule_type: str, value: str, description: str) -> str:
+        """Generate a Lua script from a simple rule."""
+
+        if rule_type == "contains":
+            # Find positions where value appears for highlighting
+            highlight_code = f'''    local pos = ctx.digits:find("{value}", 1, true)
+    if pos then
+        local positions = {{}}
+        for i = 0, {len(value) - 1} do
+            table.insert(positions, pos - 1 + i)
+        end
+        return {{
+            matched = true,
+            highlights = {{{{positions = positions, color = "orange"}}}},
+            message = "{description}"
+        }}
+    end'''
+            match_logic = highlight_code
+
+        elif rule_type == "starts_with":
+            positions = list(range(len(value)))
+            match_logic = f'''    if starts_with(ctx.digits, "{value}") then
+        return {{
+            matched = true,
+            highlights = {{{{positions = {{{", ".join(map(str, positions))}}}, color = "orange"}}}},
+            message = "{description}"
+        }}
+    end'''
+
+        elif rule_type == "ends_with":
+            positions = list(range(8 - len(value), 8))
+            match_logic = f'''    if ends_with(ctx.digits, "{value}") then
+        return {{
+            matched = true,
+            highlights = {{{{positions = {{{", ".join(map(str, positions))}}}, color = "orange"}}}},
+            message = "{description}"
+        }}
+    end'''
+
+        elif rule_type == "regex":
+            # Lua patterns are different from regex, but we can try basic conversion
+            # For simple patterns, just use Lua's string.match
+            match_logic = f'''    if ctx.digits:match("{value}") then
+        return {{
+            matched = true,
+            message = "{description}"
+        }}
+    end'''
+
+        else:
+            # Fallback for unknown rule types
+            match_logic = f'''    -- Rule type: {rule_type}, value: {value}
+    return {{matched = false}}'''
+
+        script = f'''function match(ctx)
+{match_logic}
+    return {{matched = false}}
+end
+'''
+        return script
+
     def get_pattern(self) -> tuple:
         """Return the pattern name and definition."""
         name = self.name_edit.text().strip().upper().replace(' ', '_')
@@ -3497,17 +3607,38 @@ end
                 'source': 'lua'
             }
         else:
-            # Return simple rule
+            # Convert simple rule to Lua script
             rule_type = self.rule_type.currentText()
             value = self.value_edit.text().strip()
+
+            # Generate examples and Lua script
+            examples = self._generate_examples_for_rule(rule_type, value)
+            lua_body = self._generate_lua_from_rule(rule_type, value, description)
+
+            # Build full script with header
+            import json
+            header_lines = [
+                '--[[',
+                f'Pattern: {name}',
+            ]
+            if display_name:
+                header_lines.append(f'DisplayName: {display_name}')
+            header_lines.append(f'Description: {description}')
+            header_lines.append(f'Tier: {tier}')
+            if examples:
+                header_lines.append(f'Examples: {json.dumps(examples)}')
+            header_lines.append('--]]')
+            header_lines.append('')
+
+            script = '\n'.join(header_lines) + lua_body
 
             return name, {
                 'description': description,
                 'display_name': display_name,
                 'tier': tier,
-                'enabled': True,
-                'rules': {rule_type: value},
-                'source': 'yaml'
+                'script': script,
+                'examples': examples,
+                'source': 'lua'
             }
 
 
