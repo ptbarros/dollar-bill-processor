@@ -810,11 +810,17 @@ Removed all YAML pattern dependencies, making Lua the single source of truth for
 ## Visual Pattern Preview (Added Feb 2025)
 
 ### Overview
-The Pattern Manager now includes a visual preview widget that shows how a pattern's visualization looks on a sample serial number. Users can generate random matching serials to see the pattern's highlights, connectors, and group boxes in action.
+The Pattern Manager includes a visual preview widget that shows how a pattern's visualization looks on a sample serial number. Users can generate random matching serials or manually test specific serials to see the pattern's highlights, connectors, and group boxes in action.
 
 ### Features
+- **Full serial display**: Shows complete serial with prefix/suffix letters (e.g., `A12345678B`)
 - **Bill-like styling**: Tan background (`#D4C4A8`) with green digits (`#1B5E20`) simulates actual bill appearance
+- **Large, clean digits**: 33pt font with 48×63 boxes, only highlighted digits show colored borders
 - **Generate Random button**: Creates a new random serial that matches the selected pattern
+- **Test serial input**: Inline text field for manually testing any serial against the selected pattern
+  - Live updates as you type
+  - Shows "Matches PATTERN_NAME" in green with highlights if it matches
+  - Shows "No match" if it doesn't match
 - **Live visualization**: Shows highlights (colored borders), connectors (arcs), and group boxes (spanning rectangles)
 - **Example on selection**: When selecting a pattern, shows the first example from the Lua header with visualization
 
@@ -856,13 +862,15 @@ Some patterns can only use examples directly (structure generation won't work):
 
 ### Files Modified
 - `gui/pattern_dialog.py`:
-  - `DigitPreviewWidget`: Enhanced with group_boxes, bill-like colors
-  - `_generate_test_serial()`: Button click handler
+  - `DigitPreviewWidget`: Full serial display with prefix/suffix, 1.5x size, highlight-only borders
+  - `_on_test_serial_changed()`: Live manual serial testing against selected pattern
+  - `_generate_test_serial()`: Random serial generation button handler
   - `_generate_random_matching_serial()`: Structure-based generation
   - `_analyze_serial_structure()`: Find position groups from example
   - `_generate_from_structure()`: Create new digits following structure
   - `_generate_sum_pattern()`: Special handling for SUM patterns
   - `_update_pattern_preview()`: Show example on pattern selection
+  - Removed: Serial Tester section, Quick Test Examples section
 
 ## TODO: Lua Pattern Debugging / Diagnostics
 
