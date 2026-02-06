@@ -27,6 +27,12 @@ HAS_V3_ENGINE = True
 
 from settings_manager import get_settings
 
+# Import pattern recipes for wizard
+from gui.pattern_recipes import get_all_recipes, ParameterDef
+
+# Import AI pattern generator
+from gui.ai_pattern_generator import AIPatternGenerator
+
 # Try to import QScintilla for better code editing
 try:
     from PyQt5.Qsci import QsciScintilla, QsciLexerLua
@@ -2074,6 +2080,12 @@ class CustomPatternDialog(QDialog):
         self._last_batch_results: list = []
         self._last_script: str = ""
 
+        # Wizard mode instance variables
+        self._is_wizard_pattern: bool = False
+        self._wizard_generated_script: str = ""
+        self._wizard_examples: list = []
+        self.param_widgets: dict = {}  # Will be populated by _create_wizard_tab
+
         self._setup_ui()
         if name:
             self._load_existing()
@@ -2119,16 +2131,26 @@ class CustomPatternDialog(QDialog):
         self.simple_tab = self._create_simple_tab()
         self.tab_widget.addTab(self.simple_tab, "Simple Rule")
 
-        # Tab 2: Lua Script (if v3 engine available)
+        # Tab 2: Pattern Wizard
+        if HAS_V3_ENGINE:
+            self.wizard_tab = self._create_wizard_tab()
+            self.tab_widget.addTab(self.wizard_tab, "Pattern Wizard")
+
+        # Tab 3: AI Generate
+        if HAS_V3_ENGINE:
+            self.ai_tab = self._create_ai_tab()
+            self.tab_widget.addTab(self.ai_tab, "AI Generate")
+
+        # Tab 4: Lua Script (if v3 engine available)
         if HAS_V3_ENGINE:
             self.script_tab = self._create_script_tab()
             self.tab_widget.addTab(self.script_tab, "Lua Script")
 
-            # Tab 3: Test/Preview
+            # Tab 5: Test/Preview
             self.test_tab = self._create_test_tab()
             self.tab_widget.addTab(self.test_tab, "Test")
 
-            # Tab 4: Documentation
+            # Tab 6: Documentation
             self.docs_tab = self._create_docs_tab()
             self.tab_widget.addTab(self.docs_tab, "API Docs")
 
@@ -2183,6 +2205,548 @@ class CustomPatternDialog(QDialog):
         layout.addStretch()
 
         return widget
+
+    def _create_wizard_tab(self) -> QWidget:
+        """Create the Pattern Wizard tab for recipe-based pattern creation."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        # Recipe selector
+        recipe_group = QGroupBox("Recipe Type")
+        recipe_layout = QVBoxLayout(recipe_group)
+
+        self.recipe_combo = QComboBox()
+        self.recipes = get_all_recipes()
+        for recipe in self.recipes:
+            self.recipe_combo.addItem(recipe.display_name)
+        self.recipe_combo.currentIndexChanged.connect(self._on_recipe_changed)
+        recipe_layout.addWidget(self.recipe_combo)
+
+        # Recipe description
+        self.recipe_desc_label = QLabel()
+        self.recipe_desc_label.setWordWrap(True)
+        self.recipe_desc_label.setStyleSheet("color: gray; font-style: italic;")
+        recipe_layout.addWidget(self.recipe_desc_label)
+
+        layout.addWidget(recipe_group)
+
+        # Parameters section (dynamic)
+        self.params_group = QGroupBox("Parameters")
+        self.params_layout = QVBoxLayout(self.params_group)
+        self.param_widgets = {}  # name -> widget
+
+        layout.addWidget(self.params_group)
+
+        # Visualization options
+        viz_group = QGroupBox("Visualization")
+        viz_layout = QFormLayout(viz_group)
+
+        self.wizard_color_combo = QComboBox()
+        self.wizard_color_combo.addItems([
+            "orange", "lime", "cyan", "blue", "purple", "coral",
+            "gold", "salmon", "magenta", "yellow", "teal", "red", "gray"
+        ])
+        self.wizard_color_combo.currentTextChanged.connect(self._on_wizard_param_changed)
+        viz_layout.addRow("Highlight color:", self.wizard_color_combo)
+
+        layout.addWidget(viz_group)
+
+        # Live preview
+        preview_group = QGroupBox("Live Preview")
+        preview_layout = QVBoxLayout(preview_group)
+
+        # Example serials
+        self.wizard_examples_label = QLabel("Matching examples will appear here")
+        self.wizard_examples_label.setWordWrap(True)
+        preview_layout.addWidget(self.wizard_examples_label)
+
+        # Digit preview widget
+        self.wizard_preview = DigitPreviewWidget()
+        self.wizard_preview.setMinimumHeight(100)
+        preview_layout.addWidget(self.wizard_preview)
+
+        # Preview message
+        self.wizard_preview_message = QLabel("")
+        self.wizard_preview_message.setWordWrap(True)
+        self.wizard_preview_message.setStyleSheet("color: #666; font-style: italic;")
+        preview_layout.addWidget(self.wizard_preview_message)
+
+        layout.addWidget(preview_group)
+
+        # Generated code section (collapsible)
+        self.code_group = QGroupBox("Generated Lua Code")
+        self.code_group.setCheckable(True)
+        self.code_group.setChecked(False)
+        code_layout = QVBoxLayout(self.code_group)
+
+        self.wizard_code_preview = QPlainTextEdit()
+        self.wizard_code_preview.setReadOnly(True)
+        self.wizard_code_preview.setMaximumHeight(200)
+        font = QFont("Consolas, Monaco, monospace")
+        font.setPointSize(10)
+        self.wizard_code_preview.setFont(font)
+        code_layout.addWidget(self.wizard_code_preview)
+
+        # Connect checkbox to show/hide content
+        self.code_group.toggled.connect(self._on_code_group_toggled)
+
+        layout.addWidget(self.code_group)
+
+        # Initialize with first recipe
+        self._on_recipe_changed(0)
+
+        return widget
+
+    def _on_code_group_toggled(self, checked: bool):
+        """Show/hide generated code content."""
+        self.wizard_code_preview.setVisible(checked)
+        if checked:
+            self._update_wizard_preview()
+
+    def _on_recipe_changed(self, index: int):
+        """Handle recipe type change."""
+        if index < 0 or index >= len(self.recipes):
+            return
+
+        recipe = self.recipes[index]
+        self.recipe_desc_label.setText(recipe.description)
+
+        # Clear existing parameter widgets
+        while self.params_layout.count():
+            item = self.params_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                self._clear_layout(item.layout())
+
+        self.param_widgets = {}
+
+        # Create widgets for each parameter
+        for param_def in recipe.get_parameter_definitions():
+            self._create_param_widget(param_def)
+
+        # Update preview
+        self._update_wizard_preview()
+
+    def _clear_layout(self, layout):
+        """Recursively clear a layout."""
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                self._clear_layout(item.layout())
+
+    def _create_param_widget(self, param_def: ParameterDef):
+        """Create a widget for a parameter definition."""
+        row_layout = QHBoxLayout()
+
+        label = QLabel(param_def.label + ":")
+        label.setMinimumWidth(120)
+        row_layout.addWidget(label)
+
+        if param_def.widget_type == "dropdown":
+            widget = QComboBox()
+            widget.addItems(param_def.options)
+            if param_def.default:
+                idx = widget.findText(str(param_def.default))
+                if idx >= 0:
+                    widget.setCurrentIndex(idx)
+            widget.currentTextChanged.connect(self._on_wizard_param_changed)
+            self.param_widgets[param_def.name] = widget
+            row_layout.addWidget(widget)
+
+        elif param_def.widget_type == "spinbox":
+            widget = QSpinBox()
+            if param_def.min_value is not None:
+                widget.setMinimum(param_def.min_value)
+            if param_def.max_value is not None:
+                widget.setMaximum(param_def.max_value)
+            if param_def.default is not None:
+                widget.setValue(param_def.default)
+            widget.valueChanged.connect(self._on_wizard_param_changed)
+            self.param_widgets[param_def.name] = widget
+            row_layout.addWidget(widget)
+
+        elif param_def.widget_type == "checkbox_group":
+            # Create a horizontal layout with checkboxes
+            check_layout = QVBoxLayout()
+
+            # First row: checkboxes for each option
+            checkbox_row = QHBoxLayout()
+            checkboxes = {}
+            for opt in param_def.options:
+                cb = QCheckBox(opt)
+                if param_def.default and opt in param_def.default:
+                    cb.setChecked(True)
+                cb.stateChanged.connect(self._on_wizard_param_changed)
+                checkbox_row.addWidget(cb)
+                checkboxes[opt] = cb
+            check_layout.addLayout(checkbox_row)
+
+            # Second row: preset buttons
+            preset_row = QHBoxLayout()
+            presets = {
+                "Binary (0,1)": ["0", "1"],
+                "Flipper (0,1,6,8,9)": ["0", "1", "6", "8", "9"],
+                "Evens (0,2,4,6,8)": ["0", "2", "4", "6", "8"],
+                "Odds (1,3,5,7,9)": ["1", "3", "5", "7", "9"],
+            }
+            for preset_name, preset_digits in presets.items():
+                btn = QPushButton(preset_name.split(" ")[0])  # Just "Binary", "Flipper", etc.
+                btn.setMaximumWidth(70)
+                btn.clicked.connect(
+                    lambda checked, cbs=checkboxes, digits=preset_digits:
+                    self._apply_digit_preset(cbs, digits)
+                )
+                preset_row.addWidget(btn)
+            preset_row.addStretch()
+            check_layout.addLayout(preset_row)
+
+            self.param_widgets[param_def.name] = checkboxes
+            row_layout.addLayout(check_layout)
+
+        elif param_def.widget_type == "radio":
+            # Create radio buttons
+            radio_layout = QHBoxLayout()
+            from PySide6.QtWidgets import QButtonGroup, QRadioButton
+            group = QButtonGroup(self)
+            radios = {}
+            for i, opt in enumerate(param_def.options):
+                rb = QRadioButton(opt)
+                if param_def.default and opt == param_def.default:
+                    rb.setChecked(True)
+                elif i == 0 and not param_def.default:
+                    rb.setChecked(True)
+                rb.toggled.connect(self._on_wizard_param_changed)
+                group.addButton(rb)
+                radio_layout.addWidget(rb)
+                radios[opt] = rb
+            self.param_widgets[param_def.name] = radios
+            row_layout.addLayout(radio_layout)
+
+        row_layout.addStretch()
+
+        # Add description as tooltip on the label
+        if param_def.description:
+            label.setToolTip(param_def.description)
+
+        self.params_layout.addLayout(row_layout)
+
+    def _apply_digit_preset(self, checkboxes: dict, digits: list):
+        """Apply a digit preset to checkboxes."""
+        for digit, cb in checkboxes.items():
+            cb.setChecked(digit in digits)
+
+    def _on_wizard_param_changed(self, *args):
+        """Handle parameter change in wizard."""
+        self._update_wizard_preview()
+
+    def _get_wizard_params(self) -> dict:
+        """Get current parameter values from wizard widgets."""
+        params = {}
+        for name, widget in self.param_widgets.items():
+            if isinstance(widget, QComboBox):
+                params[name] = widget.currentText()
+            elif isinstance(widget, QSpinBox):
+                params[name] = widget.value()
+            elif isinstance(widget, dict):
+                # Checkbox group or radio group
+                first_widget = next(iter(widget.values()))
+                if isinstance(first_widget, QCheckBox):
+                    # Checkbox group - return list of checked values
+                    params[name] = [k for k, cb in widget.items() if cb.isChecked()]
+                else:
+                    # Radio group - return selected value
+                    for k, rb in widget.items():
+                        if rb.isChecked():
+                            params[name] = k
+                            break
+        return params
+
+    def _get_current_recipe(self):
+        """Get the currently selected recipe."""
+        index = self.recipe_combo.currentIndex()
+        if 0 <= index < len(self.recipes):
+            return self.recipes[index]
+        return None
+
+    def _update_wizard_preview(self):
+        """Update the wizard preview with current settings."""
+        recipe = self._get_current_recipe()
+        if not recipe:
+            return
+
+        params = self._get_wizard_params()
+        color = self.wizard_color_combo.currentText()
+
+        # Generate examples
+        try:
+            examples = recipe.generate_examples(params)
+            if examples:
+                self.wizard_examples_label.setText("Examples: " + ", ".join(examples[:5]))
+
+                # Show first example in preview
+                test_serial = examples[0]
+
+                # Generate Lua and test it
+                pattern_name = self.name_edit.text().strip().upper().replace(' ', '_') or "WIZARD_PATTERN"
+                description = self.desc_edit.text().strip() or recipe.description
+                tier = self.tier_spin.value()
+
+                lua_code = recipe.generate_lua(params, pattern_name, description, tier, color)
+
+                # Update code preview
+                self.wizard_code_preview.setPlainText(lua_code)
+
+                # Test the pattern
+                if self.engine:
+                    try:
+                        result = self.engine.test_script(lua_code, f"A{test_serial}B")
+                        if result and result.matched:
+                            self.wizard_preview.set_serial(
+                                test_serial,
+                                result.highlights or [],
+                                result.connectors or [],
+                                result.group_boxes or []
+                            )
+                            self.wizard_preview_message.setText(result.message or 'Pattern matched')
+                            self.wizard_preview_message.setStyleSheet("color: #2e7d32; font-weight: bold;")
+                        else:
+                            self.wizard_preview.set_serial(test_serial, [], [], [])
+                            self.wizard_preview_message.setText("Pattern did not match (check parameters)")
+                            self.wizard_preview_message.setStyleSheet("color: #d32f2f;")
+                    except Exception as e:
+                        self.wizard_preview.set_serial(test_serial, [], [], [])
+                        self.wizard_preview_message.setText(f"Error: {str(e)[:50]}")
+                        self.wizard_preview_message.setStyleSheet("color: #d32f2f;")
+            else:
+                self.wizard_examples_label.setText("No examples could be generated")
+                self.wizard_preview_message.setText("")
+        except Exception as e:
+            self.wizard_examples_label.setText(f"Error: {str(e)[:50]}")
+            self.wizard_preview_message.setText("")
+
+    def _create_ai_tab(self) -> QWidget:
+        """Create the AI Generate tab for AI-assisted pattern creation."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        # Description input
+        desc_group = QGroupBox("Describe Your Pattern")
+        desc_layout = QVBoxLayout(desc_group)
+
+        desc_hint = QLabel("Describe the pattern you want to create in plain English:")
+        desc_hint.setStyleSheet("color: gray;")
+        desc_layout.addWidget(desc_hint)
+
+        self.ai_description_edit = QTextEdit()
+        self.ai_description_edit.setPlaceholderText(
+            "Example: Find serials where there are exactly 3 pairs of consecutive identical digits "
+            "(like 11, 22, 33) anywhere in the serial, but not 4 pairs."
+        )
+        self.ai_description_edit.setMaximumHeight(100)
+        desc_layout.addWidget(self.ai_description_edit)
+
+        layout.addWidget(desc_group)
+
+        # Optional examples
+        examples_group = QGroupBox("Optional: Provide Examples")
+        examples_layout = QFormLayout(examples_group)
+
+        self.ai_should_match_edit = QLineEdit()
+        self.ai_should_match_edit.setPlaceholderText("11223456, 00112345, 12334455")
+        examples_layout.addRow("Should match:", self.ai_should_match_edit)
+
+        self.ai_should_not_match_edit = QLineEdit()
+        self.ai_should_not_match_edit.setPlaceholderText("11223344, 12345678, 00000000")
+        examples_layout.addRow("Should NOT match:", self.ai_should_not_match_edit)
+
+        layout.addWidget(examples_group)
+
+        # Generate button and status
+        generate_layout = QHBoxLayout()
+
+        self.ai_generate_btn = QPushButton("Generate Pattern")
+        self.ai_generate_btn.setMinimumHeight(35)
+        self.ai_generate_btn.clicked.connect(self._on_ai_generate)
+        generate_layout.addWidget(self.ai_generate_btn)
+
+        generate_layout.addStretch()
+
+        self.ai_status_label = QLabel("")
+        self.ai_status_label.setStyleSheet("color: gray;")
+        generate_layout.addWidget(self.ai_status_label)
+
+        layout.addLayout(generate_layout)
+
+        # Generated code preview
+        code_group = QGroupBox("Generated Code")
+        code_layout = QVBoxLayout(code_group)
+
+        self.ai_code_preview = QPlainTextEdit()
+        self.ai_code_preview.setReadOnly(True)
+        font = QFont("Consolas, Monaco, monospace")
+        font.setPointSize(10)
+        self.ai_code_preview.setFont(font)
+        self.ai_code_preview.setPlaceholderText("Generated Lua code will appear here...")
+        code_layout.addWidget(self.ai_code_preview)
+
+        # Action buttons
+        action_layout = QHBoxLayout()
+
+        self.ai_use_code_btn = QPushButton("Use This Code")
+        self.ai_use_code_btn.setToolTip("Copy the generated code to the Lua Script tab")
+        self.ai_use_code_btn.setEnabled(False)
+        self.ai_use_code_btn.clicked.connect(self._on_ai_use_code)
+        action_layout.addWidget(self.ai_use_code_btn)
+
+        self.ai_test_code_btn = QPushButton("Test Code")
+        self.ai_test_code_btn.setToolTip("Switch to the Test tab to test the generated code")
+        self.ai_test_code_btn.setEnabled(False)
+        self.ai_test_code_btn.clicked.connect(self._on_ai_test_code)
+        action_layout.addWidget(self.ai_test_code_btn)
+
+        action_layout.addStretch()
+
+        code_layout.addLayout(action_layout)
+        layout.addWidget(code_group)
+
+        # Configuration hint
+        config_hint = QLabel("Configure your AI provider in Settings → AI tab")
+        config_hint.setStyleSheet("color: gray; font-size: 10px;")
+        layout.addWidget(config_hint)
+
+        return widget
+
+    def _on_ai_generate(self):
+        """Handle AI generate button click."""
+        from settings_manager import get_settings
+
+        settings = get_settings()
+
+        # Check if AI is configured
+        if not settings.ai.provider:
+            QMessageBox.warning(
+                self,
+                "AI Not Configured",
+                "Please configure your AI provider in Settings → AI tab first."
+            )
+            return
+
+        if not settings.ai.api_key:
+            QMessageBox.warning(
+                self,
+                "API Key Missing",
+                "Please enter your API key in Settings → AI tab."
+            )
+            return
+
+        description = self.ai_description_edit.toPlainText().strip()
+        if not description:
+            QMessageBox.warning(
+                self,
+                "Description Required",
+                "Please enter a description of the pattern you want to create."
+            )
+            return
+
+        # Parse examples
+        should_match = self._parse_example_serials(self.ai_should_match_edit.text())
+        should_not_match = self._parse_example_serials(self.ai_should_not_match_edit.text())
+
+        # Get suggested pattern name from header
+        pattern_name = self.name_edit.text().strip().upper().replace(' ', '_')
+
+        # Determine model
+        if settings.ai.provider == "anthropic":
+            model = settings.ai.anthropic_model
+        else:
+            model = settings.ai.openai_model
+
+        # Create generator
+        generator = AIPatternGenerator(
+            provider=settings.ai.provider,
+            api_key=settings.ai.api_key,
+            model=model
+        )
+
+        # Update UI
+        self.ai_generate_btn.setEnabled(False)
+        self.ai_status_label.setText("Generating...")
+        self.ai_status_label.setStyleSheet("color: blue;")
+        self.ai_code_preview.setPlainText("")
+        self.ai_use_code_btn.setEnabled(False)
+        self.ai_test_code_btn.setEnabled(False)
+
+        # Force UI update
+        QApplication.processEvents()
+
+        # Generate
+        def progress_callback(msg):
+            self.ai_status_label.setText(msg)
+            QApplication.processEvents()
+
+        result = generator.generate(
+            description=description,
+            should_match=should_match,
+            should_not_match=should_not_match,
+            pattern_name=pattern_name,
+            progress_callback=progress_callback
+        )
+
+        self.ai_generate_btn.setEnabled(True)
+
+        if result.success:
+            self.ai_code_preview.setPlainText(result.lua_code)
+            self.ai_status_label.setText("✓ Generated successfully")
+            self.ai_status_label.setStyleSheet("color: green;")
+            self.ai_use_code_btn.setEnabled(True)
+            self.ai_test_code_btn.setEnabled(True)
+
+            # Store for later use
+            self._ai_generated_code = result.lua_code
+        else:
+            self.ai_status_label.setText(f"✗ {result.error}")
+            self.ai_status_label.setStyleSheet("color: red;")
+
+            if result.raw_response:
+                # Show raw response for debugging
+                self.ai_code_preview.setPlainText(
+                    f"-- Error: {result.error}\n"
+                    f"-- Raw response:\n{result.raw_response}"
+                )
+
+    def _on_ai_use_code(self):
+        """Copy generated code to Lua Script tab."""
+        if hasattr(self, '_ai_generated_code') and self._ai_generated_code:
+            self.script_edit.setPlainText(self._ai_generated_code)
+            # Switch to Lua Script tab (index 3, after AI Generate)
+            self.tab_widget.setCurrentIndex(3)
+            self.ai_status_label.setText("Code copied to Lua Script tab")
+
+    def _on_ai_test_code(self):
+        """Copy code to Lua Script tab and switch to Test tab."""
+        if hasattr(self, '_ai_generated_code') and self._ai_generated_code:
+            self.script_edit.setPlainText(self._ai_generated_code)
+            # Switch to Test tab (index 4)
+            self.tab_widget.setCurrentIndex(4)
+
+    def _parse_example_serials(self, text: str) -> list[str]:
+        """Parse comma-separated serial numbers."""
+        serials = []
+        for entry in text.strip().split(','):
+            entry = entry.strip()
+            if not entry:
+                continue
+            # Extract digits only
+            digits = ''.join(c for c in entry if c.isdigit())
+            if len(digits) == 8:
+                serials.append(digits)
+            elif len(digits) == 10 and len(entry) >= 10:
+                # Full serial like A12345678B - extract middle 8
+                serials.append(digits[:8] if entry[0].isalpha() else digits[-8:])
+        return serials
 
     def _create_script_tab(self) -> QWidget:
         """Create the Lua script editor tab."""
@@ -3446,23 +4010,91 @@ end
 
         # Check which mode we're in based on:
         # 1. If editing an existing Lua pattern (is_lua_pattern flag) → Lua mode
-        # 2. If user is on Lua Script tab (index 1) → Lua mode (explicit choice)
-        # 3. If script has header block (--[[) → Lua mode (user customized script)
-        # 4. Otherwise → Simple Rule mode (default for new patterns)
+        # 2. If user is on Pattern Wizard tab (index 1) → Wizard mode
+        # 3. If user is on AI Generate tab (index 2) → AI mode (use generated code)
+        # 4. If user is on Lua Script tab (index 3) → Lua mode (explicit choice)
+        # 5. If script has header block (--[[) → Lua mode (user customized script)
+        # 6. Otherwise → Simple Rule mode (default for new patterns)
         script = self.script_edit.toPlainText().strip() if HAS_V3_ENGINE else ""
         current_tab = self.tab_widget.currentIndex() if HAS_V3_ENGINE else 0
         has_custom_script = script.startswith('--[[')  # Default template doesn't have header
 
-        # Use Lua mode if: editing a Lua pattern, on Lua Script tab, or script has header
-        use_lua_mode = self.is_lua_pattern or current_tab == 1 or has_custom_script
+        # Check for wizard mode (tab index 1)
+        use_wizard_mode = HAS_V3_ENGINE and current_tab == 1
 
-        if HAS_V3_ENGINE and use_lua_mode:
+        # Check for AI mode (tab index 2)
+        use_ai_mode = HAS_V3_ENGINE and current_tab == 2
+
+        # Use Lua mode if: editing a Lua pattern, on Lua Script tab (index 3), or script has header
+        use_lua_mode = self.is_lua_pattern or current_tab == 3 or has_custom_script
+
+        if use_wizard_mode:
+            # Wizard mode - validate that we have a valid recipe and parameters
+            recipe = self._get_current_recipe()
+            if not recipe:
+                QMessageBox.warning(self, "Validation Error", "Please select a recipe type.")
+                return
+
+            params = self._get_wizard_params()
+
+            # For digit set, ensure at least 1 digit is selected
+            if recipe.name == "digit_set":
+                digits = params.get("digits", [])
+                if not digits:
+                    QMessageBox.warning(self, "Validation Error", "Please select at least one digit.")
+                    return
+
+            # Generate and validate the script
+            try:
+                color = self.wizard_color_combo.currentText()
+                description = self.desc_edit.text().strip() or recipe.description
+                tier = self.tier_spin.value()
+                lua_code = recipe.generate_lua(params, name, description, tier, color)
+
+                valid, error = self.engine.validate_script(lua_code)
+                if not valid:
+                    QMessageBox.warning(self, "Script Error", f"Generated Lua has syntax error:\n{error}")
+                    return
+
+                # Store the generated script for get_pattern()
+                self._wizard_generated_script = lua_code
+                self._wizard_examples = recipe.generate_examples(params)
+                self.is_lua_pattern = True
+                self._is_wizard_pattern = True
+            except Exception as e:
+                QMessageBox.warning(self, "Generation Error", f"Failed to generate pattern:\n{str(e)}")
+                return
+
+        elif use_ai_mode:
+            # AI mode - use the generated code if available
+            if not hasattr(self, '_ai_generated_code') or not self._ai_generated_code:
+                QMessageBox.warning(
+                    self,
+                    "No Generated Code",
+                    "Please generate a pattern using the AI first, or switch to another tab."
+                )
+                return
+
+            # Validate the generated script
+            valid, error = self.engine.validate_script(self._ai_generated_code)
+            if not valid:
+                QMessageBox.warning(self, "Script Error", f"Generated Lua has syntax error:\n{error}")
+                return
+
+            # Store for get_pattern()
+            self._wizard_generated_script = self._ai_generated_code
+            self._wizard_examples = []  # AI-generated code should have Examples in header
+            self.is_lua_pattern = True
+            self._is_wizard_pattern = True  # Reuse wizard pattern flow
+
+        elif HAS_V3_ENGINE and use_lua_mode:
             # Script mode - validate syntax
             valid, error = self.engine.validate_script(script)
             if not valid:
                 QMessageBox.warning(self, "Script Error", f"Lua syntax error:\n{error}")
                 return
             self.is_lua_pattern = True
+            self._is_wizard_pattern = False
 
             # Check for missing Examples in header
             if 'Examples:' not in script and 'Examples :' not in script:
@@ -3485,6 +4117,7 @@ end
                 QMessageBox.warning(self, "Validation Error", "Please enter a value to match.")
                 return
             self.is_lua_pattern = False
+            self._is_wizard_pattern = False
 
         self.accept()
 
@@ -3596,8 +4229,20 @@ end
         description = self.desc_edit.text().strip() or f"Custom pattern: {name}"
         display_name = self.display_name_edit.text().strip()
 
-        if self.is_lua_pattern and HAS_V3_ENGINE:
-            # Return script
+        # Check for wizard-generated pattern
+        if getattr(self, '_is_wizard_pattern', False) and hasattr(self, '_wizard_generated_script'):
+            script = self._wizard_generated_script
+            examples = getattr(self, '_wizard_examples', [])
+            return name, {
+                'description': description,
+                'display_name': display_name,
+                'tier': tier,
+                'script': script,
+                'examples': examples,
+                'source': 'lua'
+            }
+        elif self.is_lua_pattern and HAS_V3_ENGINE:
+            # Return script from editor
             script = self.script_edit.toPlainText()
             return name, {
                 'description': description,

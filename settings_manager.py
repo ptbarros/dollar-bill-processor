@@ -106,6 +106,15 @@ class MonitorSettings:
     auto_archive: bool = True  # Move files to timestamped dir on stop
 
 
+@dataclass
+class AISettings:
+    """AI-assisted pattern generation settings."""
+    provider: str = ""  # "anthropic" or "openai"
+    api_key: str = ""  # API key (stored in plain text in user_settings.yaml)
+    anthropic_model: str = "claude-sonnet-4-20250514"
+    openai_model: str = "gpt-4o"
+
+
 class SettingsManager:
     """
     Manages persistent user settings.
@@ -127,6 +136,7 @@ class SettingsManager:
         self.crop = CropSettings()
         self.monitor = MonitorSettings()
         self.autosave = AutosaveSettings()
+        self.ai = AISettings()
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
         self.pattern_colors: Dict[str, str] = {}  # Pattern name -> hex color
         self.pattern_catalogs: Dict[str, str] = {}  # Pattern name -> catalog location (e.g., "A1", "B2")
@@ -223,6 +233,14 @@ class SettingsManager:
             auto = data['autosave']
             self.autosave.enabled = auto.get('enabled', True)
             self.autosave.interval_seconds = auto.get('interval_seconds', 30)
+
+        # Load AI settings
+        if 'ai' in data:
+            ai = data['ai']
+            self.ai.provider = ai.get('provider', '')
+            self.ai.api_key = ai.get('api_key', '')
+            self.ai.anthropic_model = ai.get('anthropic_model', 'claude-sonnet-4-20250514')
+            self.ai.openai_model = ai.get('openai_model', 'gpt-4o')
 
         # Load pattern states
         self.pattern_states = data.get('pattern_states', {})
@@ -377,6 +395,12 @@ class SettingsManager:
             'autosave': {
                 'enabled': self.autosave.enabled,
                 'interval_seconds': self.autosave.interval_seconds,
+            },
+            'ai': {
+                'provider': self.ai.provider,
+                'api_key': self.ai.api_key,
+                'anthropic_model': self.ai.anthropic_model,
+                'openai_model': self.ai.openai_model,
             },
             'pattern_states': self.pattern_states,
             'pattern_colors': self.pattern_colors,

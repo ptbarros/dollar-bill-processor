@@ -112,6 +112,11 @@ class SettingsDialog(QDialog):
         self._setup_monitor_tab(monitor_tab)
         tabs.addTab(monitor_tab, "Monitor")
 
+        # AI tab
+        ai_tab = QWidget()
+        self._setup_ai_tab(ai_tab)
+        tabs.addTab(ai_tab, "AI")
+
         layout.addWidget(tabs)
 
         # Buttons
@@ -566,6 +571,178 @@ class SettingsDialog(QDialog):
 
         layout.addStretch()
 
+    def _setup_ai_tab(self, tab: QWidget):
+        """Setup the AI-assisted pattern generation settings tab."""
+        layout = QVBoxLayout(tab)
+
+        # Provider settings
+        provider_group = QGroupBox("AI Provider")
+        provider_layout = QFormLayout(provider_group)
+
+        self.ai_provider_combo = QComboBox()
+        self.ai_provider_combo.addItem("(Not configured)", "")
+        self.ai_provider_combo.addItem("Anthropic (Claude)", "anthropic")
+        self.ai_provider_combo.addItem("OpenAI (GPT)", "openai")
+        self.ai_provider_combo.currentIndexChanged.connect(self._on_ai_provider_changed)
+        provider_layout.addRow("Provider:", self.ai_provider_combo)
+
+        # API Key
+        self.ai_api_key_edit = QLineEdit()
+        self.ai_api_key_edit.setEchoMode(QLineEdit.Password)
+        self.ai_api_key_edit.setPlaceholderText("Enter your API key...")
+
+        key_layout = QHBoxLayout()
+        key_layout.addWidget(self.ai_api_key_edit)
+
+        self.show_key_btn = QPushButton("Show")
+        self.show_key_btn.setMaximumWidth(50)
+        self.show_key_btn.setCheckable(True)
+        self.show_key_btn.toggled.connect(self._toggle_api_key_visibility)
+        key_layout.addWidget(self.show_key_btn)
+
+        provider_layout.addRow("API Key:", key_layout)
+
+        key_hint = QLabel("Your API key is stored locally in user_settings.yaml")
+        key_hint.setStyleSheet("color: gray; font-size: 9px;")
+        provider_layout.addRow("", key_hint)
+
+        layout.addWidget(provider_group)
+
+        # Model settings
+        model_group = QGroupBox("Model Selection")
+        model_layout = QFormLayout(model_group)
+
+        # Anthropic model
+        self.anthropic_model_combo = QComboBox()
+        self.anthropic_model_combo.addItems([
+            "claude-sonnet-4-20250514",
+            "claude-opus-4-20250514",
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-haiku-20241022",
+        ])
+        self.anthropic_model_combo.setEditable(True)  # Allow custom model names
+        model_layout.addRow("Anthropic Model:", self.anthropic_model_combo)
+
+        # OpenAI model
+        self.openai_model_combo = QComboBox()
+        self.openai_model_combo.addItems([
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4-turbo",
+            "gpt-4",
+            "o4-mini",
+        ])
+        self.openai_model_combo.setEditable(True)  # Allow custom model names
+        model_layout.addRow("OpenAI Model:", self.openai_model_combo)
+
+        layout.addWidget(model_group)
+
+        # Test connection
+        test_group = QGroupBox("Test Connection")
+        test_layout = QVBoxLayout(test_group)
+
+        test_btn_layout = QHBoxLayout()
+        self.test_ai_btn = QPushButton("Test Connection")
+        self.test_ai_btn.clicked.connect(self._test_ai_connection)
+        test_btn_layout.addWidget(self.test_ai_btn)
+        test_btn_layout.addStretch()
+        test_layout.addLayout(test_btn_layout)
+
+        self.ai_test_result = QLabel("")
+        self.ai_test_result.setWordWrap(True)
+        test_layout.addWidget(self.ai_test_result)
+
+        layout.addWidget(test_group)
+
+        layout.addStretch()
+
+    def _on_ai_provider_changed(self, index: int):
+        """Handle AI provider selection change."""
+        provider = self.ai_provider_combo.currentData()
+        # Could enable/disable relevant model combo based on provider
+        # For now, just clear test result
+        self.ai_test_result.setText("")
+
+    def _toggle_api_key_visibility(self, checked: bool):
+        """Toggle API key visibility."""
+        if checked:
+            self.ai_api_key_edit.setEchoMode(QLineEdit.Normal)
+            self.show_key_btn.setText("Hide")
+        else:
+            self.ai_api_key_edit.setEchoMode(QLineEdit.Password)
+            self.show_key_btn.setText("Show")
+
+    def _test_ai_connection(self):
+        """Test the AI API connection."""
+        provider = self.ai_provider_combo.currentData()
+        api_key = self.ai_api_key_edit.text().strip()
+
+        if not provider:
+            self.ai_test_result.setText("Please select a provider first.")
+            self.ai_test_result.setStyleSheet("color: orange;")
+            return
+
+        if not api_key:
+            self.ai_test_result.setText("Please enter an API key.")
+            self.ai_test_result.setStyleSheet("color: orange;")
+            return
+
+        self.ai_test_result.setText("Testing connection...")
+        self.ai_test_result.setStyleSheet("color: gray;")
+
+        # Force UI update
+        from PySide6.QtWidgets import QApplication
+        QApplication.processEvents()
+
+        try:
+            if provider == "anthropic":
+                model = self.anthropic_model_combo.currentText()
+                self._test_anthropic(api_key, model)
+            elif provider == "openai":
+                model = self.openai_model_combo.currentText()
+                self._test_openai(api_key, model)
+        except Exception as e:
+            self.ai_test_result.setText(f"Error: {str(e)}")
+            self.ai_test_result.setStyleSheet("color: red;")
+
+    def _test_anthropic(self, api_key: str, model: str):
+        """Test Anthropic API connection."""
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=api_key)
+            response = client.messages.create(
+                model=model,
+                max_tokens=10,
+                messages=[{"role": "user", "content": "Say 'OK'"}]
+            )
+            self.ai_test_result.setText(f"✓ Connected to Anthropic ({model})")
+            self.ai_test_result.setStyleSheet("color: green;")
+        except ImportError:
+            self.ai_test_result.setText("Error: 'anthropic' package not installed.\nRun: pip install anthropic")
+            self.ai_test_result.setStyleSheet("color: red;")
+        except Exception as e:
+            self.ai_test_result.setText(f"Error: {str(e)}")
+            self.ai_test_result.setStyleSheet("color: red;")
+
+    def _test_openai(self, api_key: str, model: str):
+        """Test OpenAI API connection."""
+        try:
+            import openai
+            client = openai.OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model=model,
+                max_tokens=10,
+                messages=[{"role": "user", "content": "Say 'OK'"}]
+            )
+            self.ai_test_result.setText(f"✓ Connected to OpenAI ({model})")
+            self.ai_test_result.setStyleSheet("color: green;")
+        except ImportError:
+            self.ai_test_result.setText("Error: 'openai' package not installed.\nRun: pip install openai")
+            self.ai_test_result.setStyleSheet("color: red;")
+        except Exception as e:
+            self.ai_test_result.setText(f"Error: {str(e)}")
+            self.ai_test_result.setStyleSheet("color: red;")
+
     def _load_settings(self):
         """Load current settings into the UI."""
         # Processing
@@ -624,6 +801,15 @@ class SettingsDialog(QDialog):
         self.poll_interval_spin.setValue(self.settings.monitor.poll_interval)
         self.settle_time_spin.setValue(self.settings.monitor.file_settle_time)
 
+        # AI
+        provider = self.settings.ai.provider
+        idx = self.ai_provider_combo.findData(provider)
+        if idx >= 0:
+            self.ai_provider_combo.setCurrentIndex(idx)
+        self.ai_api_key_edit.setText(self.settings.ai.api_key)
+        self.anthropic_model_combo.setCurrentText(self.settings.ai.anthropic_model)
+        self.openai_model_combo.setCurrentText(self.settings.ai.openai_model)
+
     def _save_settings(self):
         """Save UI values to settings."""
         # Processing
@@ -677,6 +863,12 @@ class SettingsDialog(QDialog):
         self.settings.monitor.poll_interval = self.poll_interval_spin.value()
         self.settings.monitor.file_settle_time = self.settle_time_spin.value()
 
+        # AI
+        self.settings.ai.provider = self.ai_provider_combo.currentData() or ""
+        self.settings.ai.api_key = self.ai_api_key_edit.text()
+        self.settings.ai.anthropic_model = self.anthropic_model_combo.currentText()
+        self.settings.ai.openai_model = self.openai_model_combo.currentText()
+
     def _save_and_accept(self):
         """Save settings and close."""
         self._save_settings()
@@ -684,7 +876,7 @@ class SettingsDialog(QDialog):
 
     def _restore_defaults(self):
         """Restore default settings."""
-        from settings_manager import ProcessingSettings, UISettings, ExportSettings, CropSettings, MonitorSettings, AutosaveSettings
+        from settings_manager import ProcessingSettings, UISettings, ExportSettings, CropSettings, MonitorSettings, AutosaveSettings, AISettings
 
         # Reset to defaults
         self.settings.processing = ProcessingSettings()
@@ -693,6 +885,7 @@ class SettingsDialog(QDialog):
         self.settings.crop = CropSettings()
         self.settings.monitor = MonitorSettings()
         self.settings.autosave = AutosaveSettings()
+        self.settings.ai = AISettings()
 
         # Reset fancy color
         self._fancy_color = "#2e7d32"
