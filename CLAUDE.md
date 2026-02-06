@@ -247,6 +247,35 @@ Composites character glyphs from real scanned bills. Skipped patterns: GAS_PUMP,
 Users have no visibility into why patterns silently fail. Possible approaches:
 1. Debug mode in Live Preview showing `ctx` contents
 2. Pattern load diagnostics (parsed header, data file status)
-3. `log()` function in Lua sandbox surfacing to GUI
+3. ~~`log()` function in Lua sandbox surfacing to GUI~~ (DONE - see Debug Logging section below)
 4. Header validation warnings (duplicate blocks, missing DataFile)
 5. ~~Test harness with step-by-step trace output~~ (partially addressed via batch testing in CustomPatternDialog)
+
+## Debug Logging for Pattern Scripts
+
+Lua patterns can use `log()` to output debug information during batch testing:
+
+```lua
+function match(ctx)
+    log("digits:", ctx.digits)
+    log("digit_list:", ctx.digit_list)
+
+    local count = unique_count(ctx.digits)
+    log("unique count:", count)
+
+    if count <= 2 then
+        log("matched!")
+        return {matched = true, message = "Binary"}
+    end
+
+    log("no match, count was", count)
+    return {matched = false}
+end
+```
+
+**Features:**
+- `log(value1, value2, ...)` - accepts multiple values, space-separated
+- Tables are serialized as `{key=value, ...}` format
+- Logs appear inline with batch test results in the Test tab
+- Logs are included in "Copy for AI Debug" output
+- Zero overhead in production (debug mode only enabled during testing)

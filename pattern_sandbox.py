@@ -21,6 +21,7 @@ class LuaExecutionResult:
     message: str = ""
     error: str = ""
     execution_time_ms: float = 0.0
+    debug_log: list = field(default_factory=list)  # Debug log entries from log() calls
 
 
 class PatternSandbox:
@@ -162,8 +163,46 @@ class PatternSandbox:
             -- Add print as a no-op (scripts shouldn't print)
             sandbox_env.print = function(...) end
 
+            -- Helper to serialize a value for logging
+            local function serialize_value(v, depth)
+                depth = depth or 0
+                if depth > 3 then return "..." end
+
+                if type(v) == "table" then
+                    local parts = {}
+                    local is_array = true
+                    local max_index = 0
+
+                    -- Check if it's an array
+                    for k, _ in pairs(v) do
+                        if type(k) ~= "number" or k < 1 or math.floor(k) ~= k then
+                            is_array = false
+                            break
+                        end
+                        if k > max_index then max_index = k end
+                    end
+
+                    if is_array and max_index > 0 then
+                        -- Array format
+                        for i = 1, max_index do
+                            table.insert(parts, serialize_value(v[i], depth + 1))
+                        end
+                        return "{" .. table.concat(parts, ", ") .. "}"
+                    else
+                        -- Dict format
+                        for k, val in pairs(v) do
+                            local key_str = tostring(k)
+                            table.insert(parts, key_str .. "=" .. serialize_value(val, depth + 1))
+                        end
+                        return "{" .. table.concat(parts, ", ") .. "}"
+                    end
+                else
+                    return tostring(v)
+                end
+            end
+
             -- Helper to run code in sandbox
-            function run_sandboxed(code, ctx)
+            function run_sandboxed(code, ctx, debug_enabled)
                 -- Create fresh environment for this execution
                 local env = {}
                 setmetatable(env, {__index = sandbox_env})
@@ -171,34 +210,53 @@ class PatternSandbox:
                 -- Inject context
                 env.ctx = ctx
 
+                -- Create per-execution debug log
+                local debug_log = {}
+
+                -- Create log function (only functional when debug_enabled)
+                if debug_enabled then
+                    env.log = function(...)
+                        local args = {...}
+                        local parts = {}
+                        for i, v in ipairs(args) do
+                            table.insert(parts, serialize_value(v))
+                        end
+                        table.insert(debug_log, table.concat(parts, " "))
+                    end
+                else
+                    -- No-op when debug disabled
+                    env.log = function(...) end
+                end
+
                 -- Load and run the code
                 local fn, err = load(code, "pattern", "t", env)
                 if not fn then
-                    return {success = false, error = "Syntax error: " .. tostring(err)}
+                    return {success = false, error = "Syntax error: " .. tostring(err), debug_log = debug_log}
                 end
 
                 -- Execute to define the match function
                 local ok, result = pcall(fn)
                 if not ok then
-                    return {success = false, error = "Load error: " .. tostring(result)}
+                    return {success = false, error = "Load error: " .. tostring(result), debug_log = debug_log}
                 end
 
                 -- Call the match function
                 if type(env.match) ~= "function" then
-                    return {success = false, error = "Pattern must define a match(ctx) function"}
+                    return {success = false, error = "Pattern must define a match(ctx) function", debug_log = debug_log}
                 end
 
                 ok, result = pcall(env.match, ctx)
                 if not ok then
-                    return {success = false, error = "Runtime error: " .. tostring(result)}
+                    return {success = false, error = "Runtime error: " .. tostring(result), debug_log = debug_log}
                 end
 
                 -- Validate result
                 if type(result) ~= "table" then
-                    return {success = false, error = "match() must return a table"}
+                    return {success = false, error = "match() must return a table", debug_log = debug_log}
                 end
 
                 result.success = true
+                result.debug_log = debug_log
                 return result
             end
         """)
@@ -230,13 +288,14 @@ class PatternSandbox:
         except Exception as e:
             return False
 
-    def execute(self, script: str, ctx: dict) -> LuaExecutionResult:
+    def execute(self, script: str, ctx: dict, debug: bool = False) -> LuaExecutionResult:
         """
         Execute a pattern script in the sandbox.
 
         Args:
             script: The Lua pattern script code
             ctx: Context dict with digits, full_serial, metadata, digit_list
+            debug: If True, enable log() function to collect debug messages
 
         Returns:
             LuaExecutionResult with match status and visualization data
@@ -258,8 +317,8 @@ class PatternSandbox:
             # Get the sandboxed runner
             run_sandboxed = lua.globals()['run_sandboxed']
 
-            # Execute with timeout check (basic - full timeout requires threads)
-            result = run_sandboxed(script, lua_ctx)
+            # Execute with debug flag
+            result = run_sandboxed(script, lua_ctx, debug)
 
             execution_time = (time.time() - start_time) * 1000
 
@@ -332,6 +391,14 @@ class PatternSandbox:
                 except (KeyError, TypeError, IndexError):
                     return default
 
+            # Extract debug_log (available in both success and error cases)
+            debug_log = []
+            debug_log_table = get_lua_value(lua_result, 'debug_log')
+            if debug_log_table:
+                debug_log = self._lua_table_to_list(debug_log_table)
+                # Ensure all entries are strings
+                debug_log = [str(entry) for entry in debug_log]
+
             # Check for errors first
             success = get_lua_value(lua_result, 'success', False)
             if not success:
@@ -339,7 +406,8 @@ class PatternSandbox:
                 return LuaExecutionResult(
                     success=False,
                     error=str(error_msg) if error_msg else 'Unknown error',
-                    execution_time_ms=execution_time
+                    execution_time_ms=execution_time,
+                    debug_log=debug_log
                 )
 
             # Extract matched status
@@ -374,7 +442,8 @@ class PatternSandbox:
                 connectors=connectors,
                 group_boxes=group_boxes,
                 message=message,
-                execution_time_ms=execution_time
+                execution_time_ms=execution_time,
+                debug_log=debug_log
             )
 
         except Exception as e:

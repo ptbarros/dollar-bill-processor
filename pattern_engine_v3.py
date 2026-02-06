@@ -475,7 +475,7 @@ class PatternEngineV3:
                 message=f"Pattern '{pattern_name}' not found"
             )
 
-    def test_script(self, script: str, serial: str, metadata: dict = None) -> LuaExecutionResult:
+    def test_script(self, script: str, serial: str, metadata: dict = None, debug: bool = False) -> LuaExecutionResult:
         """
         Test a pattern script without saving it.
 
@@ -483,12 +483,13 @@ class PatternEngineV3:
             script: Lua script code
             serial: Serial number to test
             metadata: Optional metadata
+            debug: If True, enable log() function to collect debug messages
 
         Returns:
-            LuaExecutionResult with execution details
+            LuaExecutionResult with execution details and debug_log
         """
         ctx = create_context(serial, metadata)
-        return self.sandbox.execute(script, ctx)
+        return self.sandbox.execute(script, ctx, debug=debug)
 
     def validate_script(self, script: str) -> tuple:
         """

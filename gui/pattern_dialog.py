@@ -1644,6 +1644,7 @@ DataFile: optional_data.csv
 --]]
 </pre>
 <p><b>DisplayName</b> is optional - if provided, it's shown in the GUI instead of the pattern name.</p>
+<p><b style="color: #c9622c;">Examples</b> is required for the random preview generator to work. Without it, clicking "Generate Random" won't produce matching serials.</p>
 
 <h3>Input Context (ctx)</h3>
 <pre>
@@ -1689,6 +1690,12 @@ contains(s, substr), is_bookended(s, n)
 highlight(positions, color, label), highlight_range(start, stop, color, label)
 connector(from, to, color, style), find_digit_positions(s, digit)
 </pre>
+
+<h3>Debug Logging</h3>
+<pre>
+log(value1, value2, ...)  -- Log values for debugging
+</pre>
+<p>Use <code>log()</code> to trace script execution during batch testing. Logs appear in test results and "Copy for AI Debug" output.</p>
 '''
 
     def _get_api_docs_plain_text(self) -> str:
@@ -1704,6 +1711,8 @@ Tier: 1-10 (1=rarest, 10=common)
 Examples: ["12345678"]
 DataFile: optional_data.csv
 --]]
+
+**IMPORTANT:** Examples is required for the random preview generator to work!
 
 ## Input Context (ctx)
 - ctx.digits: "12345678" (8 numeric characters)
@@ -1733,6 +1742,10 @@ count_digits(s), find_runs(s), unique_count(s), digit_sum(s)
 is_ladder(s), is_palindrome(s), is_repeater(s), is_alternating(s)
 has_n_consecutive(s, n), all_flip_valid(s), flip_string(s)
 highlight(positions, color), connector(from, to, color, style)
+
+## Debug Logging
+log(value1, value2, ...)  -- trace execution during testing
+Logs appear in batch test results and "Copy for AI Debug" output.
 '''
 
     def _add_custom_pattern(self):
@@ -2378,6 +2391,7 @@ DataFile: optional_data.csv
 --]]
 </pre>
 <p><b>DisplayName</b> is optional - if provided, it's shown in the GUI instead of the pattern name.</p>
+<p><b style="color: #c9622c;">Examples</b> is required for the random preview generator to work. Without it, clicking "Generate Random" won't produce matching serials.</p>
 
 <h3>Input Context (ctx)</h3>
 <pre>
@@ -2484,6 +2498,28 @@ connector(from, to, color, style)
 find_digit_positions(s, digit)
 </pre>
 
+<h3>Debug Logging</h3>
+<pre>
+log(value1, value2, ...)  -- Log values for debugging
+</pre>
+<p>Use <code>log()</code> to trace script execution during testing. Values are concatenated with spaces, tables are displayed as <code>{key=value, ...}</code>.</p>
+<p>Logs appear in batch test results and are included in "Copy for AI Debug" output.</p>
+<pre>
+function match(ctx)
+    log("digits:", ctx.digits)
+    local count = unique_count(ctx.digits)
+    log("unique count:", count)
+
+    if count <= 2 then
+        log("matched!")
+        return {matched = true, message = "Binary"}
+    end
+
+    log("no match")
+    return {matched = false}
+end
+</pre>
+
 <h3>Example: Palindrome Pattern</h3>
 <pre>
 function match(ctx)
@@ -2523,6 +2559,8 @@ DataFile: optional_data.csv
 ```
 
 **DisplayName** is optional - if provided, it's shown in the GUI instead of the pattern name (which must be uppercase with underscores for internal use).
+
+**IMPORTANT: Examples is required** for the random preview generator to work. Without examples, clicking "Generate Random" won't produce matching serials.
 
 ## Input Context
 The `ctx` table is available in every pattern script:
@@ -2626,6 +2664,31 @@ arc, line, dashed, bracket, arrow
 - highlight_range(start, stop, color, label): highlight range of positions
 - connector(from, to, color, style): build connector entry
 - find_digit_positions(s, digit): get all positions of a specific digit
+
+## Debug Logging
+Use log() to trace script execution during testing:
+```lua
+log(value1, value2, ...)  -- values are space-separated, tables shown as {k=v, ...}
+```
+
+Example:
+```lua
+function match(ctx)
+    log("digits:", ctx.digits)
+    local count = unique_count(ctx.digits)
+    log("unique count:", count)
+
+    if count <= 2 then
+        log("matched!")
+        return {matched = true, message = "Binary"}
+    end
+
+    log("no match")
+    return {matched = false}
+end
+```
+
+Logs appear in batch test results and are included in "Copy for AI Debug" output.
 
 ## Example: Palindrome Pattern
 ```lua
@@ -2788,6 +2851,8 @@ Create a Lua pattern script for the following:
 
 6. **Test edge cases:** Consider what happens with all-same digits (11111111), ascending (12345678), palindromes, etc.
 
+7. **Debug with log():** Use `log("message", value)` to trace execution. Logs appear in batch test results and "Copy for AI Debug" output.
+
 ## Response Format
 
 Provide the complete Lua script including the header comment block with Pattern, Description, Tier, and Examples fields.
@@ -2812,6 +2877,8 @@ DataFile: optional_data.csv
 ```
 
 **DisplayName** is optional - if provided, it's shown in the GUI instead of the pattern name.
+
+**IMPORTANT: Examples is required** for the random preview generator to work. Without examples, clicking "Generate Random" won't produce matching serials.
 
 ## Input Context
 The `ctx` table is available in every pattern script:
@@ -2852,7 +2919,7 @@ arc, line, dashed, bracket, arrow'''
                 serials.append(digits)
         return serials
 
-    def _test_single_case(self, script: str, serial: str, expected: bool) -> dict:
+    def _test_single_case(self, script: str, serial: str, expected: bool, debug: bool = False) -> dict:
         """Test one serial against the script, return result dict."""
         result = {
             'serial': serial,
@@ -2860,7 +2927,8 @@ arc, line, dashed, bracket, arrow'''
             'actual': False,
             'passed': False,
             'error': '',
-            'message': ''
+            'message': '',
+            'debug_log': []
         }
 
         if not self.engine:
@@ -2870,14 +2938,16 @@ arc, line, dashed, bracket, arrow'''
         try:
             # Add prefix/suffix if just digits
             full_serial = f"A{serial}B" if len(serial) == 8 and serial.isdigit() else serial
-            test_result = self.engine.test_script(script, full_serial)
+            test_result = self.engine.test_script(script, full_serial, debug=debug)
 
             if test_result.success:
                 result['actual'] = test_result.matched
                 result['message'] = test_result.message or ''
+                result['debug_log'] = test_result.debug_log or []
             else:
                 result['error'] = test_result.error or 'Unknown error'
                 result['actual'] = False
+                result['debug_log'] = test_result.debug_log or []
         except Exception as e:
             result['error'] = str(e)
             result['actual'] = False
@@ -2907,18 +2977,18 @@ arc, line, dashed, bracket, arrow'''
         passed = 0
         failed = 0
 
-        # Test should-match cases
+        # Test should-match cases (with debug enabled)
         for serial in should_match:
-            result = self._test_single_case(script, serial, expected=True)
+            result = self._test_single_case(script, serial, expected=True, debug=True)
             results.append(result)
             if result['passed']:
                 passed += 1
             else:
                 failed += 1
 
-        # Test should-not-match cases
+        # Test should-not-match cases (with debug enabled)
         for serial in should_not_match:
-            result = self._test_single_case(script, serial, expected=False)
+            result = self._test_single_case(script, serial, expected=False, debug=True)
             results.append(result)
             if result['passed']:
                 passed += 1
@@ -2965,6 +3035,16 @@ arc, line, dashed, bracket, arrow'''
 
             html += "<br>"
 
+            # Show debug log entries if present
+            debug_log = result.get('debug_log', [])
+            if debug_log:
+                html += "<div style='margin-left: 20px; margin-bottom: 8px;'>"
+                for entry in debug_log:
+                    # Escape HTML entities in log entry
+                    safe_entry = str(entry).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    html += f"<code style='color: #888; font-size: 0.9em;'>log: {safe_entry}</code><br>"
+                html += "</div>"
+
         self.test_results.setHtml(html)
 
     def _export_test_cases(self):
@@ -3010,32 +3090,62 @@ arc, line, dashed, bracket, arrow'''
         QMessageBox.information(self, "Copied", f"Debug info for {len(failures)} failing test(s) copied to clipboard!")
 
     def _build_debug_prompt(self, failures: list) -> str:
-        """Construct debug prompt with script + failures."""
-        prompt = '''I need help debugging a Lua pattern for dollar bill serial number classification.
+        """Construct debug prompt with script + failures + debug logs."""
+        # Build context example using the first failing serial
+        sample_serial = failures[0]['serial'] if failures else "12345678"
+        digit_list_str = ', '.join(sample_serial)
+
+        prompt = f'''I need help debugging a Lua pattern for dollar bill serial number classification.
+
+## Context (ctx) Contents
+
+For serial "{sample_serial}":
+- `ctx.digits` = "{sample_serial}" (8-digit string)
+- `ctx.full_serial` = "A{sample_serial}B" (with prefix/suffix)
+- `ctx.digit_list` = {{{digit_list_str}}} (1-indexed array of integers)
+- `ctx.metadata` = {{}} (may contain series_year, front_plate, back_plate)
 
 ## Current Script
 
 ```lua
-'''
-        prompt += self._last_script
-        prompt += '''
+{self._last_script}
 ```
 
 ## Failing Tests
 
 '''
+        has_debug_logs = False
         for f in failures:
             expected_str = "should match" if f['expected'] else "should NOT match"
             actual_str = "matched" if f['actual'] else "did not match"
-            prompt += f"- **{f['serial']}**: Expected to {expected_str}, but {actual_str}"
+            prompt += f"### Serial: {f['serial']}\n"
+            prompt += f"- Expected: {expected_str}\n"
+            prompt += f"- Actual: {actual_str}\n"
             if f['error']:
-                prompt += f" (Error: {f['error']})"
+                prompt += f"- Error: {f['error']}\n"
+
+            # Include debug log if present
+            debug_log = f.get('debug_log', [])
+            if debug_log:
+                has_debug_logs = True
+                prompt += "- Debug log:\n"
+                for entry in debug_log:
+                    prompt += f"  - `{entry}`\n"
             prompt += "\n"
 
-        prompt += '''
-## Request
+        prompt += '''## Request
 
 Please analyze why these tests are failing and provide a corrected version of the script. Explain what was wrong and how your fix addresses it.
+'''
+
+        # Add suggestion to use log() if no debug logs were found
+        if not has_debug_logs:
+            prompt += '''
+**Tip:** The script has no `log()` calls. Consider adding debug logging to trace execution:
+```lua
+log("digits:", ctx.digits)
+log("checking condition:", some_value)
+```
 '''
         return prompt
 
@@ -3342,6 +3452,21 @@ end
                 QMessageBox.warning(self, "Script Error", f"Lua syntax error:\n{error}")
                 return
             self.is_lua_pattern = True
+
+            # Check for missing Examples in header
+            if 'Examples:' not in script and 'Examples :' not in script:
+                reply = QMessageBox.warning(
+                    self,
+                    "Missing Examples",
+                    "Your pattern is missing the Examples field in the header.\n\n"
+                    "Without examples, the random serial generator won't work in the preview.\n\n"
+                    "Add a line like:\nExamples: [\"12345678\", \"87654321\"]\n\n"
+                    "Save anyway?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
+                if reply == QMessageBox.No:
+                    return
         else:
             # Simple rule mode
             value = self.value_edit.text().strip()
