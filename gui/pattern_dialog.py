@@ -5,6 +5,7 @@ Supports both YAML-based simple rules and Lua script patterns.
 """
 
 import sys
+import re
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -890,10 +891,24 @@ class PatternDialog(QDialog):
             ex = examples[0]
             serial = f"A{ex}B" if len(ex) == 8 and ex.isdigit() else ex
             self.pattern_preview.set_serial(serial)
-            viz = self.engine.get_digit_highlights(serial, [name])
-            highlights = self._flatten_highlights(viz.get('highlights', []))
-            self.pattern_preview.set_highlights(highlights, viz.get('connectors', []))
-            self.pattern_preview.set_group_boxes(viz.get('group_boxes', []))
+
+            # Temporarily enable pattern if disabled (for preview purposes)
+            was_enabled = True
+            if lua_info and name in self.engine.lua_patterns:
+                was_enabled = self.engine.lua_patterns[name].enabled
+                if not was_enabled:
+                    self.engine.lua_patterns[name].enabled = True
+
+            try:
+                viz = self.engine.get_digit_highlights(serial, [name])
+                highlights = self._flatten_highlights(viz.get('highlights', []))
+                self.pattern_preview.set_highlights(highlights, viz.get('connectors', []))
+                self.pattern_preview.set_group_boxes(viz.get('group_boxes', []))
+            finally:
+                # Restore original enabled state
+                if not was_enabled and name in self.engine.lua_patterns:
+                    self.engine.lua_patterns[name].enabled = False
+
             self.match_message_label.setText(f"Example: {serial}")
 
     def _flatten_highlights(self, position_highlights: list) -> list:
@@ -990,35 +1005,49 @@ class PatternDialog(QDialog):
         name = data['name']
         print(f"[DEBUG] Selected pattern name: {name}")
 
-        # Generate a truly random matching serial
-        serial = self._generate_random_matching_serial(name)
-        if not serial:
-            self.match_message_label.setText("Could not generate matching serial")
-            return
+        # Temporarily enable pattern if disabled (for preview purposes)
+        was_enabled = True
+        if name in self.engine.lua_patterns:
+            was_enabled = self.engine.lua_patterns[name].enabled
+            if not was_enabled:
+                self.engine.lua_patterns[name].enabled = True
+                print(f"[DEBUG] Temporarily enabled pattern for preview")
 
-        print(f"[DEBUG] Setting preview serial to: {serial}")
-        self.pattern_preview.set_serial(serial)
+        try:
+            # Generate a truly random matching serial
+            serial = self._generate_random_matching_serial(name)
+            if not serial:
+                self.match_message_label.setText("Could not generate matching serial")
+                return
 
-        # Get visualization
-        viz = self.engine.get_digit_highlights(serial, [name])
-        raw_highlights = viz.get('highlights', [])
-        connectors = viz.get('connectors', [])
-        group_boxes = viz.get('group_boxes', [])
+            print(f"[DEBUG] Setting preview serial to: {serial}")
+            self.pattern_preview.set_serial(serial)
 
-        # Count how many positions actually have highlight data
-        positions_with_highlights = sum(1 for h in raw_highlights if h.get('highlights'))
-        print(f"[DEBUG] Visualization: {positions_with_highlights} positions with highlights, {len(connectors)} connectors, {len(group_boxes)} group_boxes")
+            # Get visualization
+            viz = self.engine.get_digit_highlights(serial, [name])
+            raw_highlights = viz.get('highlights', [])
+            connectors = viz.get('connectors', [])
+            group_boxes = viz.get('group_boxes', [])
 
-        highlights = self._flatten_highlights(raw_highlights)
-        if highlights:
-            print(f"[DEBUG]   Flattened highlights: {highlights}")
-        else:
-            print(f"[DEBUG]   No highlights returned by pattern!")
+            # Count how many positions actually have highlight data
+            positions_with_highlights = sum(1 for h in raw_highlights if h.get('highlights'))
+            print(f"[DEBUG] Visualization: {positions_with_highlights} positions with highlights, {len(connectors)} connectors, {len(group_boxes)} group_boxes")
 
-        self.pattern_preview.set_highlights(highlights, connectors)
-        self.pattern_preview.set_group_boxes(group_boxes)
-        self.match_message_label.setText(f"Generated: {serial}")
-        print(f"[DEBUG] Preview update complete")
+            highlights = self._flatten_highlights(raw_highlights)
+            if highlights:
+                print(f"[DEBUG]   Flattened highlights: {highlights}")
+            else:
+                print(f"[DEBUG]   No highlights returned by pattern!")
+
+            self.pattern_preview.set_highlights(highlights, connectors)
+            self.pattern_preview.set_group_boxes(group_boxes)
+            self.match_message_label.setText(f"Generated: {serial}")
+            print(f"[DEBUG] Preview update complete")
+        finally:
+            # Restore original enabled state
+            if not was_enabled and name in self.engine.lua_patterns:
+                self.engine.lua_patterns[name].enabled = False
+                print(f"[DEBUG] Restored pattern to disabled state")
 
     def _generate_random_matching_serial(self, pattern_name: str) -> str:
         """Generate a random serial that matches the given pattern.
@@ -1265,7 +1294,7 @@ class PatternDialog(QDialog):
             self.pattern_preview.set_group_boxes([])
             self.match_message_label.setText("")
             # Refresh the pattern list
-            self._populate_tree()
+            self._load_patterns()
         else:
             QMessageBox.warning(
                 self,
@@ -1288,34 +1317,95 @@ class PatternDialog(QDialog):
 
         is_editable = self._current_lua_editable
 
-        # Create a dialog to show/edit the script
+        if is_editable:
+            # Use CustomPatternDialog for editing user patterns
+            self._edit_pattern_with_dialog(lua_info)
+        else:
+            # Use read-only view for core patterns
+            self._view_core_pattern(lua_info)
+
+    def _edit_pattern_with_dialog(self, lua_info):
+        """Edit a user pattern using CustomPatternDialog."""
+        dialog = CustomPatternDialog(
+            self,
+            name=lua_info.name,
+            defn={
+                'description': lua_info.description,
+                'display_name': lua_info.display_name or '',
+                'tier': lua_info.tier,
+            },
+            script=lua_info.script
+        )
+
+        # Store file path for saving
+        dialog._edit_file_path = lua_info.file_path
+
+        if dialog.exec() == QDialog.Accepted:
+            name, defn = dialog.get_pattern()
+            if name and defn.get('source') == 'lua':
+                script = defn.get('script', '')
+
+                # Validate before saving
+                valid, error = self.engine.validate_script(script)
+                if not valid:
+                    QMessageBox.warning(
+                        self, "Script Error",
+                        f"Cannot save - syntax error:\n{error}"
+                    )
+                    return
+
+                # Save to the existing file
+                try:
+                    with open(lua_info.file_path, 'w') as f:
+                        f.write(script)
+
+                    # Mark that patterns were modified
+                    self._patterns_modified = True
+
+                    # Reload the engine to pick up changes
+                    self.engine.reload()
+                    self._load_patterns()
+
+                    # Find the pattern by file path (name might have changed in script header)
+                    new_pattern_name = None
+                    for pname, pinfo in self.engine.lua_patterns.items():
+                        if pinfo.file_path == lua_info.file_path:
+                            new_pattern_name = pname
+                            break
+
+                    # Re-select the pattern in the tree
+                    if new_pattern_name:
+                        self._select_pattern_by_name(new_pattern_name)
+
+                    QMessageBox.information(
+                        self, "Saved",
+                        f"Script saved to:\n{lua_info.file_path}\n\nPatterns have been reloaded."
+                    )
+
+                except Exception as e:
+                    QMessageBox.critical(self, "Save Error", f"Failed to save script:\n{e}")
+
+    def _view_core_pattern(self, lua_info):
+        """View a core (read-only) pattern."""
         dialog = QDialog(self)
-        title = f"Edit Script: {self._current_lua_pattern}" if is_editable else f"View Script: {self._current_lua_pattern}"
-        dialog.setWindowTitle(title)
+        dialog.setWindowTitle(f"View Script: {lua_info.name}")
         dialog.setMinimumSize(700, 500)
 
         layout = QVBoxLayout(dialog)
 
         # Info label
-        if is_editable:
-            info_text = (
-                f"<b>{self._current_lua_pattern}</b> - {lua_info.description}<br>"
-                f"<i>File: {lua_info.file_path}</i><br><br>"
-                "Edit the script below and click Save to apply changes."
-            )
-        else:
-            info_text = (
-                f"<b>{self._current_lua_pattern}</b> - {lua_info.description}<br>"
-                f"<i>File: {lua_info.file_path}</i><br><br>"
-                "Core patterns are read-only. Use 'Create Copy' to make an editable version."
-            )
+        info_text = (
+            f"<b>{lua_info.name}</b> - {lua_info.description}<br>"
+            f"<i>File: {lua_info.file_path}</i><br><br>"
+            "Core patterns are read-only. Use 'Create Copy' to make an editable version."
+        )
         info_label = QLabel(info_text)
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
 
-        # Script editor/viewer
+        # Script viewer (read-only)
         script_edit = QPlainTextEdit()
-        script_edit.setReadOnly(not is_editable)
+        script_edit.setReadOnly(True)
         script_edit.setPlainText(lua_info.script)
         font = QFont("Consolas, Monaco, monospace")
         font.setPointSize(11)
@@ -1327,30 +1417,8 @@ class PatternDialog(QDialog):
 
         layout.addWidget(script_edit)
 
-        # Status label for validation feedback
-        status_label = QLabel("")
-        status_label.setStyleSheet("color: gray;")
-        layout.addWidget(status_label)
-
         # Buttons
         btn_layout = QHBoxLayout()
-
-        if is_editable:
-            # Validate button
-            validate_btn = QPushButton("Validate")
-            validate_btn.setToolTip("Check script syntax")
-            validate_btn.clicked.connect(
-                lambda: self._validate_script_in_dialog(script_edit, status_label)
-            )
-            btn_layout.addWidget(validate_btn)
-
-            # Save button
-            save_btn = QPushButton("Save")
-            save_btn.setToolTip("Save changes to the script file")
-            save_btn.clicked.connect(
-                lambda: self._save_edited_script(lua_info, script_edit, status_label, dialog)
-            )
-            btn_layout.addWidget(save_btn)
 
         copy_btn = QPushButton("Copy to Clipboard")
         copy_btn.clicked.connect(lambda: self._copy_script_to_clipboard(script_edit.toPlainText()))
@@ -1370,59 +1438,6 @@ class PatternDialog(QDialog):
         layout.addLayout(btn_layout)
 
         dialog.exec()
-
-    def _validate_script_in_dialog(self, script_edit, status_label):
-        """Validate script syntax and update status label."""
-        script = script_edit.toPlainText()
-        valid, error = self.engine.validate_script(script)
-        if valid:
-            status_label.setText("✓ Syntax OK")
-            status_label.setStyleSheet("color: green;")
-        else:
-            status_label.setText(f"✗ Error: {error}")
-            status_label.setStyleSheet("color: red;")
-
-    def _save_edited_script(self, lua_info, script_edit, status_label, dialog):
-        """Save the edited script to the file."""
-        script = script_edit.toPlainText()
-
-        # Validate first
-        valid, error = self.engine.validate_script(script)
-        if not valid:
-            status_label.setText(f"✗ Cannot save - syntax error: {error}")
-            status_label.setStyleSheet("color: red;")
-            return
-
-        # Save to file
-        try:
-            with open(lua_info.file_path, 'w') as f:
-                f.write(script)
-
-            status_label.setText("✓ Saved successfully!")
-            status_label.setStyleSheet("color: green;")
-
-            # Mark that patterns were modified
-            self._patterns_modified = True
-
-            # Remember the pattern name to re-select after reload
-            pattern_name = self._current_lua_pattern
-
-            # Reload the engine to pick up changes
-            self.engine.reload()
-            self._load_patterns()
-
-            # Re-select the pattern in the tree
-            self._select_pattern_by_name(pattern_name)
-
-            QMessageBox.information(
-                dialog, "Saved",
-                f"Script saved to:\n{lua_info.file_path}\n\nPatterns have been reloaded."
-            )
-
-        except Exception as e:
-            status_label.setText(f"✗ Save failed: {e}")
-            status_label.setStyleSheet("color: red;")
-            QMessageBox.critical(dialog, "Save Error", f"Failed to save script:\n{e}")
 
     def _copy_script_to_clipboard(self, script: str):
         """Copy script to clipboard."""
@@ -2034,6 +2049,13 @@ class CustomPatternDialog(QDialog):
             except Exception:
                 pass
 
+        # Batch testing instance variables
+        self.should_match_edit: QPlainTextEdit = None
+        self.should_not_match_edit: QPlainTextEdit = None
+        self.copy_debug_btn: QPushButton = None
+        self._last_batch_results: list = []
+        self._last_script: str = ""
+
         self._setup_ui()
         if name:
             self._load_existing()
@@ -2214,7 +2236,10 @@ end
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
-        # Test input
+        # Quick Test group
+        quick_group = QGroupBox("Quick Test")
+        quick_layout = QVBoxLayout(quick_group)
+
         input_layout = QHBoxLayout()
         input_layout.addWidget(QLabel("Test Serial:"))
 
@@ -2228,7 +2253,51 @@ end
         test_btn.clicked.connect(self._run_live_test)
         input_layout.addWidget(test_btn)
 
-        layout.addLayout(input_layout)
+        quick_layout.addLayout(input_layout)
+        layout.addWidget(quick_group)
+
+        # Batch Test Cases group
+        batch_group = QGroupBox("Batch Test Cases")
+        batch_layout = QVBoxLayout(batch_group)
+
+        # Two-column layout for should match / should not match
+        cases_layout = QHBoxLayout()
+
+        # Should Match column
+        should_match_layout = QVBoxLayout()
+        should_match_layout.addWidget(QLabel("Should Match (one per line):"))
+        self.should_match_edit = QPlainTextEdit()
+        self.should_match_edit.setPlaceholderText("12344321\n11111111\n45677654")
+        self.should_match_edit.setMaximumHeight(100)
+        should_match_layout.addWidget(self.should_match_edit)
+        cases_layout.addLayout(should_match_layout)
+
+        # Should NOT Match column
+        should_not_match_layout = QVBoxLayout()
+        should_not_match_layout.addWidget(QLabel("Should NOT Match (one per line):"))
+        self.should_not_match_edit = QPlainTextEdit()
+        self.should_not_match_edit.setPlaceholderText("12345678\n12344322\n98765432")
+        self.should_not_match_edit.setMaximumHeight(100)
+        should_not_match_layout.addWidget(self.should_not_match_edit)
+        cases_layout.addLayout(should_not_match_layout)
+
+        batch_layout.addLayout(cases_layout)
+
+        # Batch buttons row
+        batch_btn_layout = QHBoxLayout()
+        run_batch_btn = QPushButton("Run All Tests")
+        run_batch_btn.clicked.connect(self._run_batch_tests)
+        batch_btn_layout.addWidget(run_batch_btn)
+
+        export_cases_btn = QPushButton("Export for AI")
+        export_cases_btn.setToolTip("Copy test cases formatted for AI prompts")
+        export_cases_btn.clicked.connect(self._export_test_cases)
+        batch_btn_layout.addWidget(export_cases_btn)
+
+        batch_btn_layout.addStretch()
+        batch_layout.addLayout(batch_btn_layout)
+
+        layout.addWidget(batch_group)
 
         # Preview widget
         preview_group = QGroupBox("Visual Preview")
@@ -2248,6 +2317,16 @@ end
         self.test_results.setMaximumHeight(150)
         results_layout.addWidget(self.test_results)
 
+        # Copy for AI Debug button
+        debug_btn_layout = QHBoxLayout()
+        self.copy_debug_btn = QPushButton("Copy for AI Debug")
+        self.copy_debug_btn.setToolTip("Copy script + failing tests for AI assistance")
+        self.copy_debug_btn.setEnabled(False)
+        self.copy_debug_btn.clicked.connect(self._copy_debug_info)
+        debug_btn_layout.addWidget(self.copy_debug_btn)
+        debug_btn_layout.addStretch()
+        results_layout.addLayout(debug_btn_layout)
+
         layout.addWidget(results_group)
 
         layout.addStretch()
@@ -2259,10 +2338,20 @@ end
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
-        # Copy button
-        copy_btn = QPushButton("Copy API Docs to Clipboard")
+        # Button row with both copy buttons
+        btn_layout = QHBoxLayout()
+
+        copy_btn = QPushButton("Copy API Docs")
         copy_btn.clicked.connect(self._copy_api_docs)
-        layout.addWidget(copy_btn)
+        btn_layout.addWidget(copy_btn)
+
+        copy_ai_btn = QPushButton("Copy for AI")
+        copy_ai_btn.setToolTip("Copy comprehensive prompt for ChatGPT/Claude")
+        copy_ai_btn.clicked.connect(self._copy_for_ai_prompt)
+        btn_layout.addWidget(copy_ai_btn)
+
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
 
         # Documentation
         docs = QTextEdit()
@@ -2602,6 +2691,354 @@ end
         clipboard.setText(docs)
         QMessageBox.information(self, "Copied", "API documentation copied to clipboard!")
 
+    def _copy_for_ai_prompt(self):
+        """Copy comprehensive AI prompt with docs, helpers, and template."""
+        # Load helper function reference
+        helpers_content = self._load_helpers_reference()
+
+        # Build the full AI prompt
+        prompt = self._build_ai_prompt_template(helpers_content)
+
+        clipboard = QApplication.clipboard()
+        clipboard.setText(prompt)
+        QMessageBox.information(self, "Copied", "AI prompt copied to clipboard!\n\nPaste into ChatGPT/Claude to get help writing your pattern.")
+
+    def _load_helpers_reference(self) -> str:
+        """Read helpers.lua and extract function signatures with docs."""
+        helpers_path = Path(__file__).parent.parent / "patterns" / "lib" / "helpers.lua"
+        if not helpers_path.exists():
+            return "(helpers.lua not found)"
+
+        try:
+            content = helpers_path.read_text(encoding='utf-8')
+        except Exception as e:
+            return f"(Error reading helpers.lua: {e})"
+
+        # Parse functions with their comments
+        functions = []
+        lines = content.split('\n')
+        current_comment = []
+
+        for line in lines:
+            stripped = line.strip()
+
+            # Collect comments
+            if stripped.startswith('--') and not stripped.startswith('--[['):
+                # Single-line comment
+                comment_text = stripped[2:].strip()
+                if comment_text:
+                    current_comment.append(comment_text)
+            elif stripped.startswith('function ') and '(' in stripped:
+                # Function definition
+                match = re.match(r'function\s+(\w+)\s*\(([^)]*)\)', stripped)
+                if match:
+                    func_name = match.group(1)
+                    params = match.group(2)
+                    doc = ' '.join(current_comment) if current_comment else ''
+                    functions.append(f"- {func_name}({params}): {doc}" if doc else f"- {func_name}({params})")
+                current_comment = []
+            elif stripped and not stripped.startswith('--'):
+                # Non-comment, non-function line - reset comment accumulator
+                current_comment = []
+
+        return '\n'.join(functions)
+
+    def _build_ai_prompt_template(self, helpers_content: str) -> str:
+        """Construct the full AI prompt for pattern creation."""
+        # Get the plain text API docs
+        api_docs = self._get_api_docs_plain_text()
+
+        prompt = f'''You are helping write Lua patterns for dollar bill serial number classification. These patterns analyze 8-digit serial numbers and return match results with optional visual highlighting.
+
+## API Documentation
+
+{api_docs}
+
+## Helper Functions Reference (from helpers.lua)
+
+The following helper functions are automatically available in all pattern scripts:
+
+{helpers_content}
+
+## Your Task
+
+Create a Lua pattern script for the following:
+
+**Pattern Name:** [PATTERN_NAME]
+
+**Description:** [DESCRIPTION]
+
+**Should Match (examples):**
+[SHOULD_MATCH_EXAMPLES - one per line]
+
+**Should NOT Match (examples):**
+[SHOULD_NOT_MATCH_EXAMPLES - one per line]
+
+## Validation Rules & Common Pitfalls
+
+1. **Return structure:** Always return a table with `matched = true/false`. Include `highlights`, `connectors`, and/or `message` when matched.
+
+2. **Position indexing:** All positions are 0-indexed (0-7 for 8 digits), but Lua strings are 1-indexed. Use `ctx.digits:sub(i+1, i+1)` to get the character at position `i`.
+
+3. **ctx.digit_list:** This is a 1-indexed Lua array of integers: `{{1,2,3,4,5,6,7,8}}`. Use `ctx.digit_list[1]` for the first digit.
+
+4. **Use helper functions:** Don't reinvent - use `is_palindrome()`, `find_runs()`, `count_digits()`, etc.
+
+5. **Highlights vs group_boxes:** Use `highlights` for individual digit positions, `group_boxes` for spanning a range of consecutive digits.
+
+6. **Test edge cases:** Consider what happens with all-same digits (11111111), ascending (12345678), palindromes, etc.
+
+## Response Format
+
+Provide the complete Lua script including the header comment block with Pattern, Description, Tier, and Examples fields.
+'''
+        return prompt
+
+    def _get_api_docs_plain_text(self) -> str:
+        """Get API documentation as plain text for AI prompts."""
+        # Reuse the content from _copy_api_docs but return it instead of copying
+        return '''# Lua Pattern Script API for Dollar Bill Serial Numbers
+
+## Script Header
+```lua
+--[[
+Pattern: PATTERN_NAME
+DisplayName: Friendly Name With Spaces
+Description: What this pattern matches
+Tier: 1-10 (1=rarest, 10=common)
+Examples: ["12345678", "87654321"]
+DataFile: optional_data.csv
+--]]
+```
+
+**DisplayName** is optional - if provided, it's shown in the GUI instead of the pattern name.
+
+## Input Context
+The `ctx` table is available in every pattern script:
+- ctx.digits: "12345678" (8 numeric characters)
+- ctx.full_serial: "A12345678B" (with prefix/suffix letters)
+- ctx.digit_list: {1,2,3,4,5,6,7,8} as integer array (1-indexed in Lua)
+- ctx.metadata: {} additional detection metadata
+- ctx.data: External data loaded from DataFile (if specified)
+- ctx.data_by_key: Key lookup dict for CSV files (keyed by first column)
+
+## Return Value
+The match function must return a table with:
+- matched: boolean (required - true if pattern matches)
+- highlights: list of {positions = {0, 7}, color = "orange", label = "optional"}
+- connectors: list of {from = 0, to = 7, color = "orange", style = "arc"}
+- group_boxes: list of {from = 0, to = 2, color = "gold", thickness = 3}
+- message: optional string describing the match
+
+## Available Colors
+purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red, gray
+
+## Connector Styles
+arc, line, dashed, bracket, arrow'''
+
+    def _parse_serials(self, text: str) -> list:
+        """Parse multiline text into list of 8-digit serials."""
+        serials = []
+        for line in text.strip().split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            # Extract digits only
+            digits = ''.join(c for c in line if c.isdigit())
+            if len(digits) == 8:
+                serials.append(digits)
+            elif len(digits) == 10 and line[0].isalpha() and line[-1].isalpha():
+                # Full serial like A12345678B
+                serials.append(digits)
+        return serials
+
+    def _test_single_case(self, script: str, serial: str, expected: bool) -> dict:
+        """Test one serial against the script, return result dict."""
+        result = {
+            'serial': serial,
+            'expected': expected,
+            'actual': False,
+            'passed': False,
+            'error': '',
+            'message': ''
+        }
+
+        if not self.engine:
+            result['error'] = 'No pattern engine available'
+            return result
+
+        try:
+            # Add prefix/suffix if just digits
+            full_serial = f"A{serial}B" if len(serial) == 8 and serial.isdigit() else serial
+            test_result = self.engine.test_script(script, full_serial)
+
+            if test_result.success:
+                result['actual'] = test_result.matched
+                result['message'] = test_result.message or ''
+            else:
+                result['error'] = test_result.error or 'Unknown error'
+                result['actual'] = False
+        except Exception as e:
+            result['error'] = str(e)
+            result['actual'] = False
+
+        result['passed'] = (result['actual'] == expected) and not result['error']
+        return result
+
+    def _run_batch_tests(self):
+        """Execute all test cases and display results."""
+        if not self.engine:
+            self.test_results.setHtml("<span style='color: red;'>No pattern engine available</span>")
+            return
+
+        script = self.script_edit.toPlainText()
+        self._last_script = script
+
+        # Parse test cases
+        should_match = self._parse_serials(self.should_match_edit.toPlainText())
+        should_not_match = self._parse_serials(self.should_not_match_edit.toPlainText())
+
+        if not should_match and not should_not_match:
+            self.test_results.setHtml("<span style='color: gray;'>Enter test serials above (one per line)</span>")
+            self.copy_debug_btn.setEnabled(False)
+            return
+
+        results = []
+        passed = 0
+        failed = 0
+
+        # Test should-match cases
+        for serial in should_match:
+            result = self._test_single_case(script, serial, expected=True)
+            results.append(result)
+            if result['passed']:
+                passed += 1
+            else:
+                failed += 1
+
+        # Test should-not-match cases
+        for serial in should_not_match:
+            result = self._test_single_case(script, serial, expected=False)
+            results.append(result)
+            if result['passed']:
+                passed += 1
+            else:
+                failed += 1
+
+        self._last_batch_results = results
+        self._display_batch_results(results, passed, failed)
+
+        # Enable debug button if there are failures
+        self.copy_debug_btn.setEnabled(failed > 0)
+
+    def _display_batch_results(self, results: list, passed: int, failed: int):
+        """Render HTML results for batch tests."""
+        total = passed + failed
+
+        if failed == 0:
+            summary_color = "green"
+            summary = f"All {total} tests passed!"
+        else:
+            summary_color = "red"
+            summary = f"{passed}/{total} passed, {failed} failed"
+
+        html = f"<b style='color: {summary_color};'>{summary}</b><br><br>"
+
+        for result in results:
+            if result['passed']:
+                icon = "✓"
+                color = "green"
+            else:
+                icon = "✗"
+                color = "red"
+
+            expected_str = "should match" if result['expected'] else "should NOT match"
+            actual_str = "matched" if result['actual'] else "no match"
+
+            html += f"<span style='color: {color};'>{icon}</span> "
+            html += f"<code>{result['serial']}</code> - {expected_str}, {actual_str}"
+
+            if result['error']:
+                html += f" <span style='color: orange;'>(Error: {result['error']})</span>"
+            elif result['message'] and result['actual']:
+                html += f" <span style='color: gray;'>({result['message']})</span>"
+
+            html += "<br>"
+
+        self.test_results.setHtml(html)
+
+    def _export_test_cases(self):
+        """Copy test cases formatted for AI prompts."""
+        should_match = self._parse_serials(self.should_match_edit.toPlainText())
+        should_not_match = self._parse_serials(self.should_not_match_edit.toPlainText())
+
+        if not should_match and not should_not_match:
+            QMessageBox.information(self, "No Test Cases", "Enter test serials first.")
+            return
+
+        export = "## Test Cases\n\n"
+
+        if should_match:
+            export += "**Should Match:**\n"
+            for serial in should_match:
+                export += f"- {serial}\n"
+            export += "\n"
+
+        if should_not_match:
+            export += "**Should NOT Match:**\n"
+            for serial in should_not_match:
+                export += f"- {serial}\n"
+
+        clipboard = QApplication.clipboard()
+        clipboard.setText(export)
+        QMessageBox.information(self, "Copied", "Test cases copied to clipboard!")
+
+    def _copy_debug_info(self):
+        """Copy failing test context for AI debugging assistance."""
+        if not self._last_batch_results:
+            return
+
+        failures = [r for r in self._last_batch_results if not r['passed']]
+        if not failures:
+            QMessageBox.information(self, "No Failures", "All tests passed!")
+            return
+
+        prompt = self._build_debug_prompt(failures)
+
+        clipboard = QApplication.clipboard()
+        clipboard.setText(prompt)
+        QMessageBox.information(self, "Copied", f"Debug info for {len(failures)} failing test(s) copied to clipboard!")
+
+    def _build_debug_prompt(self, failures: list) -> str:
+        """Construct debug prompt with script + failures."""
+        prompt = '''I need help debugging a Lua pattern for dollar bill serial number classification.
+
+## Current Script
+
+```lua
+'''
+        prompt += self._last_script
+        prompt += '''
+```
+
+## Failing Tests
+
+'''
+        for f in failures:
+            expected_str = "should match" if f['expected'] else "should NOT match"
+            actual_str = "matched" if f['actual'] else "did not match"
+            prompt += f"- **{f['serial']}**: Expected to {expected_str}, but {actual_str}"
+            if f['error']:
+                prompt += f" (Error: {f['error']})"
+            prompt += "\n"
+
+        prompt += '''
+## Request
+
+Please analyze why these tests are failing and provide a corrected version of the script. Explain what was wrong and how your fix addresses it.
+'''
+        return prompt
+
     def _update_hint(self):
         """Update the hint based on rule type."""
         rule = self.rule_type.currentText()
@@ -2772,13 +3209,20 @@ end
 
         self.digit_preview.set_serial(serial)
 
-        # Check which tab is active
-        if self.tab_widget.currentIndex() == 1:  # Script tab
+        # Check if we should run Lua script test (Script tab or Test tab with Lua pattern)
+        current_tab = self.tab_widget.currentIndex()
+        is_lua_mode = current_tab == 1 or (current_tab == 2 and self.is_lua_pattern)
+
+        if is_lua_mode:
+            # Lua script test
             script = self.script_edit.toPlainText()
             result = self.engine.test_script(script, serial)
 
             if result.success:
                 self.digit_preview.set_highlights(result.highlights, result.connectors)
+                # Also set group_boxes if available
+                if hasattr(result, 'group_boxes') and result.group_boxes:
+                    self.digit_preview.set_group_boxes(result.group_boxes)
 
                 if result.matched:
                     self.test_results.setText(
@@ -2797,8 +3241,8 @@ end
                 self.test_results.setText(f"Error: {result.error}")
                 self.test_results.setStyleSheet("color: red;")
                 self.digit_preview.set_highlights([], [])
-        else:
-            # Simple rule test
+        elif current_tab == 0:
+            # Simple rule test (only on Simple Rule tab)
             self.digit_preview.set_highlights([], [])
             rule_type = self.rule_type.currentText()
             value = self.value_edit.text().strip()
@@ -2886,10 +3330,13 @@ end
             QMessageBox.warning(self, "Validation Error", "Please enter a pattern name.")
             return
 
-        # Check which mode we're in
-        if HAS_V3_ENGINE and self.tab_widget.currentIndex() == 1:
+        # Check which mode we're in - use is_lua_pattern flag or check if script has content
+        # (user might be on Test or API Docs tab while editing a Lua pattern)
+        script = self.script_edit.toPlainText().strip() if HAS_V3_ENGINE else ""
+        has_lua_content = bool(script) and "function match" in script
+
+        if HAS_V3_ENGINE and (self.is_lua_pattern or has_lua_content):
             # Script mode - validate syntax
-            script = self.script_edit.toPlainText()
             valid, error = self.engine.validate_script(script)
             if not valid:
                 QMessageBox.warning(self, "Script Error", f"Lua syntax error:\n{error}")

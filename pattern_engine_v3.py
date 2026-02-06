@@ -547,8 +547,20 @@ class PatternEngineV3:
         header_lines.append('--]]')
         header = '\n'.join(header_lines)
 
-        # Combine header and script
-        full_script = f"{header}\n\n{script}"
+        # Strip any existing header block(s) from the script to avoid duplicates
+        import re
+        # Remove all --[[ ... --]] blocks at the start of the script
+        cleaned_script = script.strip()
+        while cleaned_script.startswith('--[['):
+            # Find the closing --]]
+            end_pos = cleaned_script.find('--]]')
+            if end_pos != -1:
+                cleaned_script = cleaned_script[end_pos + 4:].strip()
+            else:
+                break  # Malformed header, stop trying
+
+        # Combine header and cleaned script
+        full_script = f"{header}\n\n{cleaned_script}"
 
         try:
             with open(file_path, 'w') as f:
