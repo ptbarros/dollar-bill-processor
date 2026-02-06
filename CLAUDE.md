@@ -54,7 +54,7 @@ end
 - **highlights**: Color individual digit positions (each gets own box)
 - **connectors**: Lines between digit pairs (styles: arc, line, bracket, arrow, dashed)
 - **group_boxes**: Single box spanning multiple digits (preferred for multi-digit groups)
-- **Color palette**: purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red, gray
+- **Color palette**: purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, green, teal, red, gray
 
 Best practices:
 - Use `group_boxes` for bookends and repeating groups
@@ -105,11 +105,62 @@ The New/Edit Pattern dialog includes features to streamline pattern creation wit
 **Save Validation:**
 - Warning dialog if Examples field is missing (required for random preview generator)
 
+### Pattern Wizard (Recipe-Based Creation)
+
+The "Pattern Wizard" tab provides GUI-based pattern creation for non-coders:
+
+**Recipe Types:**
+- **Ladder/Sequence**: Ascending/descending digit runs (min length 4-8)
+- **Digit Set Restriction**: Match only specific digits (presets: Binary, Flipper, Evens, Odds)
+- **Repeating Patterns**: Consecutive pairs, Repeater, Super Repeater, Alternator
+- **Palindrome/Radar**: Exact or near-palindromes (1-2 mismatches)
+- **Digit Sum**: Match by digit sum (exact value or range)
+- **Bookends**: First N digits = last N digits
+
+**Features:**
+- Dynamic parameter widgets based on selected recipe
+- Live preview with generated examples
+- Collapsible "Generated Lua Code" section
+- Automatic Examples generation for preview compatibility
+
+**Files:** `gui/pattern_recipes.py` (recipe infrastructure)
+
+### AI Generate (Integrated AI Pattern Creation)
+
+The "AI Generate" tab provides natural language to Lua code generation:
+
+**Workflow:**
+1. Describe pattern in plain English
+2. Optionally provide "Should match" / "Should NOT match" examples
+3. Click "Generate Pattern" - calls Anthropic or OpenAI API
+4. Review generated code in preview
+5. Click "Use This Code" to copy to Lua Script tab (auto-prefills Pattern Info from header)
+6. Test and save
+
+**AI Prompt Features:**
+- Comprehensive helper function documentation with examples
+- Warnings for common gotchas (nil returns, pair spacing math, etc.)
+- Automatic Examples injection if AI omits them
+
+**Configuration:** Settings → AI tab
+- Provider selection (Anthropic/OpenAI)
+- API key storage
+- Model selection (editable dropdowns)
+- Test Connection button
+
+**Files:** `gui/ai_pattern_generator.py` (API client and prompt building)
+
+**Dependencies:** `pip install anthropic` and/or `pip install openai`
+
 ### Key Files
 - `pattern_engine_v3.py`: Lua-only pattern engine
 - `pattern_sandbox.py`: Secure Lua execution environment
-- `gui/pattern_dialog.py`: Pattern Manager dialog
+- `gui/pattern_dialog.py`: Pattern Manager dialog (includes CustomPatternDialog with Wizard/AI tabs)
+- `gui/pattern_recipes.py`: Recipe-based pattern creation (6 recipe types)
+- `gui/ai_pattern_generator.py`: AI pattern generation (Anthropic/OpenAI)
 - `gui/preview_panel.py`: Pattern visualization
+- `gui/settings_dialog.py`: Settings dialog (includes AI configuration tab)
+- `settings_manager.py`: User settings persistence (includes AISettings)
 - `process_production.py`: Main processing pipeline
 
 ## Helper Functions (patterns/lib/helpers.lua)
@@ -216,6 +267,11 @@ library_states:
   Nicks: true
 library_colors:
   Nicks: '#ff6600'
+ai:
+  provider: anthropic  # or "openai"
+  api_key: sk-...
+  anthropic_model: claude-sonnet-4-20250514
+  openai_model: gpt-4o
 ```
 
 Access via SettingsManager:
