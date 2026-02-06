@@ -1015,9 +1015,9 @@ class PatternDialog(QDialog):
 
         try:
             # Generate a truly random matching serial
-            serial = self._generate_random_matching_serial(name)
+            serial, error = self._generate_random_matching_serial(name)
             if not serial:
-                self.match_message_label.setText("Could not generate matching serial")
+                self.match_message_label.setText(error or "Could not generate matching serial")
                 return
 
             print(f"[DEBUG] Setting preview serial to: {serial}")
@@ -1049,7 +1049,7 @@ class PatternDialog(QDialog):
                 self.engine.lua_patterns[name].enabled = False
                 print(f"[DEBUG] Restored pattern to disabled state")
 
-    def _generate_random_matching_serial(self, pattern_name: str) -> str:
+    def _generate_random_matching_serial(self, pattern_name: str) -> tuple:
         """Generate a random serial that matches the given pattern.
 
         Strategy:
@@ -1057,6 +1057,9 @@ class PatternDialog(QDialog):
         2. Analyze example structure (which positions must match)
         3. Generate new digits following that structure with random values
         4. Verify it matches, fall back to using example directly if needed
+
+        Returns:
+            tuple: (serial, None) on success, (None, error_message) on failure
         """
         import random
 
@@ -1069,12 +1072,12 @@ class PatternDialog(QDialog):
         info = self.engine.lua_patterns.get(pattern_name)
         if not info or not info.examples:
             print(f"[DEBUG] No examples found for {pattern_name}")
-            return None
+            return None, "Pattern has no Examples defined in header"
 
         examples = [ex for ex in info.examples if len(ex) == 8 and ex.isdigit()]
         if not examples:
             print(f"[DEBUG] No valid 8-digit examples for {pattern_name}")
-            return None
+            return None, "Examples must be 8-digit numbers (e.g. \"12345678\")"
 
         # Special handling for patterns with mathematical constraints
         if 'SUM' in pattern_name.upper():
@@ -1086,7 +1089,7 @@ class PatternDialog(QDialog):
                 matches = self.engine.classify_simple(serial)
                 if pattern_name in matches:
                     print(f"[DEBUG] Generated sum pattern: {serial}")
-                    return serial
+                    return serial, None
 
         # Shuffle examples and try each one's structure
         random.shuffle(examples)
@@ -1109,7 +1112,7 @@ class PatternDialog(QDialog):
                 matches = self.engine.classify_simple(serial)
                 if pattern_name in matches:
                     print(f"[DEBUG] Generated matching serial: {serial} (example {example}, attempt {attempt + 1})")
-                    return serial
+                    return serial, None
 
             # This example's structure didn't work, try next example
             print(f"[DEBUG] Structure from {example} didn't produce matches, trying next...")
@@ -1124,13 +1127,13 @@ class PatternDialog(QDialog):
             matches = self.engine.classify_simple(serial)
             if pattern_name in matches:
                 print(f"[DEBUG] Using example directly: {serial}")
-                return serial
+                return serial, None
 
         # Last resort: return first example
         print(f"[DEBUG] No valid examples, using first anyway")
         prefix = random.choice(prefixes)
         suffix = random.choice(suffixes)
-        return f"{prefix}{examples[0]}{suffix}"
+        return f"{prefix}{examples[0]}{suffix}", None
 
     def _analyze_serial_structure(self, example: str) -> list:
         """Analyze which positions in the serial share the same digit.
