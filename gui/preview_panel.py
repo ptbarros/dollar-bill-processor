@@ -1559,6 +1559,7 @@ class PreviewPanel(QWidget):
                         'magenta': (255, 0, 255),   # Repeater
                         'yellow': (0, 255, 255),    # Solid/near-solid
                         'lime': (0, 255, 0),        # Ladder
+                        'green': (0, 128, 0),       # Alias for common AI usage
                         'teal': (128, 128, 0),      # Pairs
                         'red': (0, 0, 255),         # Broken/invalid
                         'gray': (128, 128, 128),    # Muted/prefix

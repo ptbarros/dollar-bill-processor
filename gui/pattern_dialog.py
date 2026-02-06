@@ -1953,6 +1953,7 @@ class DigitPreviewWidget(QWidget):
             'magenta': QColor("#E91E63"),
             'yellow': QColor("#FFEB3B"),
             'lime': QColor("#8BC34A"),
+            'green': QColor("#4CAF50"),  # Alias for common AI usage
             'teal': QColor("#009688"),
             'red': QColor("#F44336"),
             'gray': QColor("#9E9E9E"),
