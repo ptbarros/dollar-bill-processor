@@ -3155,10 +3155,10 @@ log("checking condition:", some_value)
         """Update the hint based on rule type."""
         rule = self.rule_type.currentText()
         hints = {
-            "contains": "Matches if serial contains this value anywhere.\nExamples: '0704' matches July 4, '1990' matches birth year",
-            "starts_with": "Matches if serial starts with this value.\nExample: '000' matches low serial numbers",
-            "ends_with": "Matches if serial ends with this value.\nExample: '0000' matches round numbers",
-            "regex": "Advanced: Regular expression pattern.\nExample: '(\\d)\\1{3}' matches 4 repeated digits",
+            "contains": "Matches if serial contains this exact value anywhere.\nSingle value only. Use 'regex' with | for multiple values.\nExamples: '0704' matches July 4, '1990' matches birth year",
+            "starts_with": "Matches if serial starts with this exact value.\nSingle value only. Example: '000' matches low serial numbers",
+            "ends_with": "Matches if serial ends with this exact value.\nSingle value only. Example: '0000' matches round numbers",
+            "regex": "Regular expression pattern. Use | for OR logic.\nExamples: '0704|1225' matches July 4 or Christmas,\n'(\\d)\\1{3}' matches 4 repeated digits",
             "baseline_variance_min": "Matches if baseline variance >= this value.\nUsed for gas pump detection.",
             "baseline_variance_max": "Matches if baseline variance <= this value."
         }
