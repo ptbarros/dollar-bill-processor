@@ -1977,6 +1977,10 @@ class PreviewPanel(QWidget):
         # Clear preserved zoom/pan state
         self.clear_preserved_state()
 
+    def reload_pattern_engine(self):
+        """Reload the pattern engine to pick up changes from Pattern Manager."""
+        self.pattern_engine.reload()
+
     def _format_pattern_with_library(self, name: str) -> str:
         """Format a pattern name as 'Display Name (library)'."""
         info = self.pattern_engine.get_pattern_info(name)

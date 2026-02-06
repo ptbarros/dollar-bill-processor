@@ -680,6 +680,10 @@ class MainWindow(QMainWindow):
         dialog = PatternDialog(self)
         dialog.exec()
 
+        # Reload preview panel's pattern engine if patterns were modified
+        if dialog.patterns_were_modified():
+            self.preview_panel.reload_pattern_engine()
+
     def _on_crop_manager(self):
         """Open eBay crop manager dialog."""
         import yaml

@@ -112,12 +112,17 @@ class PatternDialog(QDialog):
         super().__init__(parent)
         self.engine = PatternEngine()
         self.settings = get_settings()
+        self._patterns_modified = False  # Track if patterns were changed
 
         self.setWindowTitle("Pattern Manager")
         self.setMinimumSize(900, 600)
         self._setup_ui()
         self._load_patterns()
         self._restore_window_geometry()
+
+    def patterns_were_modified(self) -> bool:
+        """Return True if patterns were created, deleted, or modified during this session."""
+        return self._patterns_modified
 
     def _setup_ui(self):
         """Setup the dialog UI."""
@@ -249,6 +254,13 @@ class PatternDialog(QDialog):
         self.view_script_btn.setToolTip("View the Lua source code (can be copied as a template)")
         self.view_script_btn.clicked.connect(self._view_lua_script)
         self.lua_script_layout.addWidget(self.view_script_btn)
+
+        self.delete_pattern_btn = QPushButton("Delete")
+        self.delete_pattern_btn.setToolTip("Delete this user pattern")
+        self.delete_pattern_btn.setStyleSheet("QPushButton { color: #d32f2f; }")
+        self.delete_pattern_btn.clicked.connect(self._delete_user_pattern)
+        self.lua_script_layout.addWidget(self.delete_pattern_btn)
+
         self.generate_serial_btn = QPushButton("Generate Random")
         self.generate_serial_btn.setToolTip("Generate a random matching serial")
         self.generate_serial_btn.clicked.connect(self._generate_test_serial)
@@ -268,6 +280,7 @@ class PatternDialog(QDialog):
         # Initially hidden
         self.lua_script_label.hide()
         self.view_script_btn.hide()
+        self.delete_pattern_btn.hide()
         self.generate_serial_btn.hide()
         self.test_serial_edit.hide()
         self._current_lua_pattern = None
@@ -618,6 +631,24 @@ class PatternDialog(QDialog):
                     self.engine.set_pattern_enabled(data['name'], enabled)
         self.pattern_tree.blockSignals(False)
 
+    def _select_pattern_by_name(self, pattern_name: str):
+        """Find and select a pattern in the tree by name."""
+        if not pattern_name:
+            return
+
+        # Iterate through all library items
+        for i in range(self.pattern_tree.topLevelItemCount()):
+            lib_item = self.pattern_tree.topLevelItem(i)
+            # Iterate through patterns in this library
+            for j in range(lib_item.childCount()):
+                pattern_item = lib_item.child(j)
+                data = pattern_item.data(0, Qt.UserRole)
+                if data and data.get('name') == pattern_name:
+                    # Found it - expand parent and select
+                    lib_item.setExpanded(True)
+                    self.pattern_tree.setCurrentItem(pattern_item)
+                    return
+
     def _on_item_double_click(self, item, column):
         """Handle double-click on color or catalog column."""
         data = item.data(0, Qt.UserRole)
@@ -815,14 +846,17 @@ class PatternDialog(QDialog):
             if self._current_lua_editable:
                 self.view_script_btn.setText("Edit Script")
                 self.view_script_btn.setToolTip("Edit this Lua pattern script")
+                self.delete_pattern_btn.show()
             else:
                 self.view_script_btn.setText("View Script")
                 self.view_script_btn.setToolTip("View the Lua source code (core patterns are read-only)")
+                self.delete_pattern_btn.hide()
         else:
             self._current_lua_pattern = None
             self._current_lua_editable = False
             self.lua_script_label.hide()
             self.view_script_btn.hide()
+            self.delete_pattern_btn.hide()
             self.generate_serial_btn.hide()
             self.test_serial_edit.hide()
 
@@ -1183,6 +1217,63 @@ class PatternDialog(QDialog):
 
         QMessageBox.information(self, "Saved", f"Threshold for {name} set to {value}")
 
+    def _delete_user_pattern(self):
+        """Delete the currently selected user pattern after confirmation."""
+        if not self._current_lua_pattern or not self._current_lua_editable:
+            return
+
+        pattern_name = self._current_lua_pattern
+
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self,
+            "Delete Pattern",
+            f"Are you sure you want to delete the pattern '{pattern_name}'?\n\n"
+            "This will permanently delete the Lua file and cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        # Delete the pattern
+        if self.engine.delete_user_pattern(pattern_name):
+            QMessageBox.information(self, "Deleted", f"Pattern '{pattern_name}' has been deleted.")
+            # Mark that patterns were modified
+            self._patterns_modified = True
+            # Reload engine to get clean state
+            self.engine.reload()
+            # Clear selection state
+            self._current_lua_pattern = None
+            self._current_lua_editable = False
+            # Hide pattern action buttons
+            self.lua_script_label.hide()
+            self.view_script_btn.hide()
+            self.delete_pattern_btn.hide()
+            self.generate_serial_btn.hide()
+            self.test_serial_edit.hide()
+            # Clear details panel
+            self.pattern_name_label.setText("Select a pattern")
+            self.pattern_desc_label.setText("")
+            self.pattern_tier_label.setText("Tier: -")
+            self.pattern_odds_label.setText("Odds: -")
+            self.pattern_price_label.setText("Price: -")
+            self.pattern_examples_label.setText("Examples: -")
+            self.pattern_preview.set_serial("--------")
+            self.pattern_preview.set_highlights([], [])
+            self.pattern_preview.set_group_boxes([])
+            self.match_message_label.setText("")
+            # Refresh the pattern list
+            self._populate_tree()
+        else:
+            QMessageBox.warning(
+                self,
+                "Delete Failed",
+                f"Could not delete pattern '{pattern_name}'.\n"
+                "It may be a core pattern or the file may be protected."
+            )
+
     def _view_lua_script(self):
         """View or edit the Lua script for the selected pattern."""
         if not self._current_lua_pattern:
@@ -1310,9 +1401,18 @@ class PatternDialog(QDialog):
             status_label.setText("✓ Saved successfully!")
             status_label.setStyleSheet("color: green;")
 
+            # Mark that patterns were modified
+            self._patterns_modified = True
+
+            # Remember the pattern name to re-select after reload
+            pattern_name = self._current_lua_pattern
+
             # Reload the engine to pick up changes
             self.engine.reload()
             self._load_patterns()
+
+            # Re-select the pattern in the tree
+            self._select_pattern_by_name(pattern_name)
 
             QMessageBox.information(
                 dialog, "Saved",
@@ -1363,6 +1463,9 @@ class PatternDialog(QDialog):
                     )
                 else:
                     self.engine.add_custom_pattern(name, defn)
+
+                # Mark that patterns were modified
+                self._patterns_modified = True
 
                 # Reload patterns
                 self.engine.reload()
@@ -1654,6 +1757,9 @@ highlight(positions, color), connector(from, to, color, style)
                 else:
                     # Save as YAML rule pattern (legacy)
                     self.engine.add_custom_pattern(name, defn)
+
+                # Mark that patterns were modified
+                self._patterns_modified = True
 
                 # Reload patterns to show the new one
                 self.engine.reload()
