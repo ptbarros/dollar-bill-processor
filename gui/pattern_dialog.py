@@ -2718,17 +2718,72 @@ class CustomPatternDialog(QDialog):
                 )
 
     def _on_ai_use_code(self):
-        """Copy generated code to Lua Script tab."""
+        """Copy generated code to Lua Script tab and prefill Pattern Info from header."""
         if hasattr(self, '_ai_generated_code') and self._ai_generated_code:
-            self.script_edit.setPlainText(self._ai_generated_code)
+            code = self._ai_generated_code
+
+            # Parse header and prefill Pattern Info fields
+            self._prefill_from_header(code)
+
+            # Copy code to script editor
+            self.script_edit.setPlainText(code)
+
             # Switch to Lua Script tab (index 3, after AI Generate)
             self.tab_widget.setCurrentIndex(3)
             self.ai_status_label.setText("Code copied to Lua Script tab")
 
+    def _prefill_from_header(self, code: str):
+        """Parse Lua script header and prefill Pattern Info fields."""
+        # Extract header block
+        if '--[[' not in code or '--]]' not in code:
+            return
+
+        header_start = code.find('--[[')
+        header_end = code.find('--]]')
+        if header_start < 0 or header_end < 0:
+            return
+
+        header = code[header_start:header_end]
+
+        # Parse Pattern name
+        pattern_match = re.search(r'Pattern:\s*(.+)', header)
+        if pattern_match:
+            pattern_name = pattern_match.group(1).strip()
+            # Only set if the field is empty or has placeholder
+            if not self.name_edit.text().strip():
+                self.name_edit.setText(pattern_name)
+
+        # Parse DisplayName
+        display_match = re.search(r'DisplayName:\s*(.+)', header)
+        if display_match:
+            display_name = display_match.group(1).strip()
+            self.display_name_edit.setText(display_name)
+
+        # Parse Description
+        desc_match = re.search(r'Description:\s*(.+)', header)
+        if desc_match:
+            description = desc_match.group(1).strip()
+            self.desc_edit.setText(description)
+
+        # Parse Tier
+        tier_match = re.search(r'Tier:\s*(\d+)', header)
+        if tier_match:
+            try:
+                tier = int(tier_match.group(1))
+                if 1 <= tier <= 10:
+                    self.tier_spin.setValue(tier)
+            except ValueError:
+                pass
+
     def _on_ai_test_code(self):
         """Copy code to Lua Script tab and switch to Test tab."""
         if hasattr(self, '_ai_generated_code') and self._ai_generated_code:
+            # Prefill Pattern Info from header
+            self._prefill_from_header(self._ai_generated_code)
+
+            # Copy to script editor
             self.script_edit.setPlainText(self._ai_generated_code)
+
             # Switch to Test tab (index 4)
             self.tab_widget.setCurrentIndex(4)
 
