@@ -132,7 +132,7 @@ The match function must return a table with:
 - `message`: optional string describing the match
 
 ### Available Colors
-purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red, gray
+purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, green, teal, red, gray
 
 ### Connector Styles
 arc, line, dashed, bracket, arrow
