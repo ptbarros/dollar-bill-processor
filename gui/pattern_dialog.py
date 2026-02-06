@@ -249,27 +249,34 @@ class PatternDialog(QDialog):
         self.view_script_btn.setToolTip("View the Lua source code (can be copied as a template)")
         self.view_script_btn.clicked.connect(self._view_lua_script)
         self.lua_script_layout.addWidget(self.view_script_btn)
+        self.generate_serial_btn = QPushButton("Generate Random")
+        self.generate_serial_btn.setToolTip("Generate a random matching serial")
+        self.generate_serial_btn.clicked.connect(self._generate_test_serial)
+        self.generate_serial_btn.setEnabled(False)
+        self.lua_script_layout.addWidget(self.generate_serial_btn)
+
+        # Test serial input
+        self.test_serial_edit = QLineEdit()
+        self.test_serial_edit.setPlaceholderText("Test serial (e.g., 12345678)")
+        self.test_serial_edit.setMaximumWidth(180)
+        self.test_serial_edit.textChanged.connect(self._on_test_serial_changed)
+        self.lua_script_layout.addWidget(self.test_serial_edit)
+
         self.lua_script_layout.addStretch()
         details_layout.addLayout(self.lua_script_layout)
 
         # Initially hidden
         self.lua_script_label.hide()
         self.view_script_btn.hide()
+        self.generate_serial_btn.hide()
+        self.test_serial_edit.hide()
         self._current_lua_pattern = None
         self._current_lua_editable = False  # True if pattern is not from 'core'
 
         # Pattern preview section
-        preview_layout = QHBoxLayout()
         self.pattern_preview = DigitPreviewWidget()
-        self.pattern_preview.setMinimumHeight(80)
-        preview_layout.addWidget(self.pattern_preview)
-
-        self.generate_serial_btn = QPushButton("Generate Random")
-        self.generate_serial_btn.setToolTip("Generate a random matching serial")
-        self.generate_serial_btn.clicked.connect(self._generate_test_serial)
-        self.generate_serial_btn.setEnabled(False)
-        preview_layout.addWidget(self.generate_serial_btn)
-        details_layout.addLayout(preview_layout)
+        self.pattern_preview.setMinimumHeight(100)
+        details_layout.addWidget(self.pattern_preview)
 
         self.match_message_label = QLabel("")
         self.match_message_label.setWordWrap(True)
@@ -277,49 +284,6 @@ class PatternDialog(QDialog):
         details_layout.addWidget(self.match_message_label)
 
         right_layout.addWidget(details_group)
-
-        # Serial tester
-        test_group = QGroupBox("Serial Tester")
-        test_layout = QVBoxLayout(test_group)
-
-        test_input_layout = QHBoxLayout()
-        self.test_edit = QLineEdit()
-        self.test_edit.setPlaceholderText("Enter serial number (e.g., A12345678B)")
-        self.test_edit.returnPressed.connect(self._test_serial)
-        test_input_layout.addWidget(self.test_edit)
-
-        test_btn = QPushButton("Test")
-        test_btn.clicked.connect(self._test_serial)
-        test_input_layout.addWidget(test_btn)
-
-        test_layout.addLayout(test_input_layout)
-
-        self.test_results = QTextEdit()
-        self.test_results.setReadOnly(True)
-        self.test_results.setMaximumHeight(150)
-        test_layout.addWidget(self.test_results)
-
-        right_layout.addWidget(test_group)
-
-        # Quick test examples
-        examples_group = QGroupBox("Quick Test Examples")
-        examples_layout = QHBoxLayout(examples_group)
-
-        examples = [
-            ("Radar", "A12344321B"),
-            ("Repeater", "A12341234B"),
-            ("Binary", "A10101010B"),
-            ("Ladder", "A12345678B"),
-            ("Star", "A12345678*"),
-        ]
-
-        for label, serial in examples:
-            btn = QPushButton(label)
-            btn.setToolTip(serial)
-            btn.clicked.connect(lambda checked, s=serial: self._quick_test(s))
-            examples_layout.addWidget(btn)
-
-        right_layout.addWidget(examples_group)
 
         # Actions section
         actions_group = QGroupBox("Actions")
@@ -842,6 +806,10 @@ class PatternDialog(QDialog):
 
             self.lua_script_label.show()
             self.view_script_btn.show()
+            self.generate_serial_btn.show()
+            self.generate_serial_btn.setEnabled(True)
+            self.test_serial_edit.show()
+            self.test_serial_edit.clear()
 
             # Update button text based on editability
             if self._current_lua_editable:
@@ -855,6 +823,8 @@ class PatternDialog(QDialog):
             self._current_lua_editable = False
             self.lua_script_label.hide()
             self.view_script_btn.hide()
+            self.generate_serial_btn.hide()
+            self.test_serial_edit.hide()
 
         # Update pattern preview
         self._update_pattern_preview(name, lua_info)
@@ -909,11 +879,70 @@ class PatternDialog(QDialog):
                 })
         return result
 
+    def _on_test_serial_changed(self, text: str):
+        """Handle manual serial input for testing against the selected pattern."""
+        # Get selected pattern
+        items = self.pattern_tree.selectedItems()
+        if not items:
+            return
+        data = items[0].data(0, Qt.UserRole)
+        if not data or data.get('is_library'):
+            return
+        name = data['name']
+
+        # Clean up input - extract just digits
+        digits = ''.join(c for c in text if c.isdigit())
+
+        if not digits:
+            # Empty input - show default example
+            lua_info = self.engine.lua_patterns.get(name)
+            self._update_pattern_preview(name, lua_info)
+            return
+
+        # Pad or truncate to 8 digits
+        if len(digits) < 8:
+            digits = digits.ljust(8, '-')
+        else:
+            digits = digits[:8]
+
+        # Build full serial
+        serial = f"A{digits}B"
+        self.pattern_preview.set_serial(serial)
+
+        # Check if it matches the pattern
+        if '-' not in digits:
+            matches = self.engine.classify_simple(serial)
+            if name in matches:
+                # It matches! Show highlights
+                viz = self.engine.get_digit_highlights(serial, [name])
+                highlights = self._flatten_highlights(viz.get('highlights', []))
+                self.pattern_preview.set_highlights(highlights, viz.get('connectors', []))
+                self.pattern_preview.set_group_boxes(viz.get('group_boxes', []))
+                self.match_message_label.setText(f"Matches {name}")
+                self.match_message_label.setStyleSheet("color: #2E7D32; font-style: italic; font-weight: bold;")
+            else:
+                # No match
+                self.pattern_preview.set_highlights([], [])
+                self.pattern_preview.set_group_boxes([])
+                self.match_message_label.setText("No match")
+                self.match_message_label.setStyleSheet("color: #666; font-style: italic;")
+        else:
+            # Incomplete serial
+            self.pattern_preview.set_highlights([], [])
+            self.pattern_preview.set_group_boxes([])
+            self.match_message_label.setText("")
+            self.match_message_label.setStyleSheet("color: #666; font-style: italic;")
+
     def _generate_test_serial(self):
         """Generate and display a random serial matching the selected pattern."""
         import random
 
         print("[DEBUG] _generate_test_serial called")
+
+        # Clear manual test input
+        self.test_serial_edit.blockSignals(True)
+        self.test_serial_edit.clear()
+        self.test_serial_edit.blockSignals(False)
 
         # Get selected pattern
         items = self.pattern_tree.selectedItems()
@@ -1347,43 +1376,6 @@ class PatternDialog(QDialog):
                 )
         self.engine.save_config()
 
-    def _test_serial(self):
-        """Test a serial number against all patterns."""
-        serial = self.test_edit.text().strip()
-        if not serial:
-            return
-
-        # Make sure it looks like a valid serial format
-        if len(serial) < 10:
-            # Pad with example format
-            if len(serial) == 8 and serial.isdigit():
-                serial = f"A{serial}B"
-
-        matches = self.engine.classify(serial)
-
-        if matches:
-            result_text = f"Serial: {serial}\n\n"
-            result_text += "Matches:\n"
-            for match in matches:
-                result_text += f"  - {match.name} (Tier {match.tier})\n"
-                result_text += f"    {match.description}\n"
-                # Get odds and price from pattern definition
-                pattern_info = self.engine.get_pattern_info(match.name)
-                if pattern_info:
-                    if 'odds' in pattern_info:
-                        result_text += f"    Odds: {pattern_info['odds']}\n"
-                    if 'price_range' in pattern_info:
-                        result_text += f"    Price: {pattern_info['price_range']}\n"
-        else:
-            result_text = f"Serial: {serial}\n\nNo patterns matched."
-
-        self.test_results.setText(result_text)
-
-    def _quick_test(self, serial: str):
-        """Quick test with a predefined serial."""
-        self.test_edit.setText(serial)
-        self._test_serial()
-
     def _enable_all(self):
         """Enable all patterns and libraries."""
         for i in range(self.pattern_tree.topLevelItemCount()):
@@ -1736,22 +1728,27 @@ class DigitPreviewWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.digits = "--------"
+        self.serial = "A--------B"  # Full serial with prefix/suffix
         self.highlights = []
         self.connectors = []
         self.group_boxes = []
-        self.setMinimumHeight(80)
-        self.setMinimumWidth(400)
+        self.setMinimumHeight(100)
+        self.setMinimumWidth(550)
 
     def set_serial(self, serial: str):
         """Set the serial number to display."""
-        # Keep dashes as placeholder, otherwise extract digits
+        # Keep dashes as placeholder
         if serial == "--------":
-            self.digits = serial
+            self.serial = "A--------B"
+        elif len(serial) == 8:
+            # Just digits, add default prefix/suffix
+            self.serial = f"A{serial}B"
+        elif len(serial) >= 10:
+            # Full serial with prefix/suffix
+            self.serial = serial[:10]
         else:
-            self.digits = ''.join(c for c in serial if c.isdigit())
-            if len(self.digits) != 8:
-                self.digits = self.digits[:8].ljust(8, '-')
+            # Pad to 10 characters
+            self.serial = serial.ljust(10, '-')[:10]
         self.update()
 
     def set_highlights(self, highlights: list, connectors: list):
@@ -1780,22 +1777,24 @@ class DigitPreviewWidget(QWidget):
         # Fill background with tan color
         painter.fillRect(self.rect(), bg_color)
 
-        # Calculate box dimensions
-        box_width = 40
-        box_height = 50
-        spacing = 8
-        total_width = 8 * box_width + 7 * spacing
+        # Calculate box dimensions - 1.5x size with tighter boxes
+        box_width = 48
+        box_height = 63
+        spacing = 9
+        num_chars = 10  # prefix + 8 digits + suffix
+        total_width = num_chars * box_width + (num_chars - 1) * spacing
         start_x = (self.width() - total_width) // 2
-        start_y = 20
+        start_y = 18
 
-        # Build color map for each position (from individual highlights)
+        # Build color map for each digit position (0-7 maps to character position 1-8)
         position_colors = {}
         for h in self.highlights:
             positions = h.get('positions', [])
             color = h.get('color', 'gray')
             for pos in positions:
                 if 0 <= pos < 8:
-                    position_colors[pos] = color
+                    # Offset by 1 for prefix letter
+                    position_colors[pos + 1] = color
 
         # Color mapping
         color_map = {
@@ -1814,36 +1813,41 @@ class DigitPreviewWidget(QWidget):
             'gray': QColor("#9E9E9E"),
         }
 
-        # Draw digit boxes
+        # Draw characters (prefix letter + 8 digits + suffix letter)
         font = painter.font()
-        font.setPointSize(16)
+        font.setPointSize(33)
         font.setBold(True)
         painter.setFont(font)
 
-        box_rects = []
-        for i, digit in enumerate(self.digits):
+        box_rects = []  # Only store digit box rects (indices 1-8)
+        for i, char in enumerate(self.serial):
             x = start_x + i * (box_width + spacing)
             rect = QRect(x, start_y, box_width, box_height)
-            box_rects.append(rect)
 
-            # Background and border for each digit box
-            if i in position_colors:
-                # Highlighted digit - use highlight color for border
-                hl_color = color_map.get(position_colors[i], QColor("#9E9E9E"))
-                painter.setBrush(QBrush(bg_color.lighter(105)))
-                painter.setPen(QPen(hl_color, 3))
+            is_letter = (i == 0 or i == 9)  # First and last are letters
+
+            if is_letter:
+                # Letters: no box, just draw the character
+                painter.setPen(QPen(digit_color))
+                painter.drawText(rect, Qt.AlignCenter, char)
+                box_rects.append(None)  # Placeholder for indexing
             else:
-                # Normal digit
-                painter.setBrush(QBrush(bg_color.lighter(105)))
-                painter.setPen(QPen(border_color, 2))
+                box_rects.append(rect)
 
-            painter.drawRoundedRect(rect, 5, 5)
+                # Background and border for each digit box
+                if i in position_colors:
+                    # Highlighted digit - use highlight color for border
+                    hl_color = color_map.get(position_colors[i], QColor("#9E9E9E"))
+                    painter.setBrush(QBrush(bg_color.lighter(105)))
+                    painter.setPen(QPen(hl_color, 3))
+                    painter.drawRoundedRect(rect, 5, 5)
 
-            # Draw digit in green
-            painter.setPen(QPen(digit_color))
-            painter.drawText(rect, Qt.AlignCenter, digit)
+                # Draw digit in green
+                painter.setPen(QPen(digit_color))
+                painter.drawText(rect, Qt.AlignCenter, char)
 
         # Draw group boxes (spans multiple digits with a single box)
+        # Note: digit positions 0-7 map to box_rects indices 1-8 (offset for prefix letter)
         for gb in self.group_boxes:
             from_pos = gb.get('from', 0)
             to_pos = gb.get('to', 0)
@@ -1851,24 +1855,26 @@ class DigitPreviewWidget(QWidget):
             thickness = gb.get('thickness', 3)
 
             if 0 <= from_pos < 8 and 0 <= to_pos < 8 and from_pos <= to_pos:
-                from_rect = box_rects[from_pos]
-                to_rect = box_rects[to_pos]
+                from_rect = box_rects[from_pos + 1]  # +1 for prefix letter offset
+                to_rect = box_rects[to_pos + 1]
 
-                # Create spanning rectangle with some padding
-                padding = 3
-                span_rect = QRect(
-                    from_rect.left() - padding,
-                    from_rect.top() - padding,
-                    to_rect.right() - from_rect.left() + 2 * padding,
-                    from_rect.height() + 2 * padding
-                )
+                if from_rect and to_rect:
+                    # Create spanning rectangle with some padding
+                    padding = 4
+                    span_rect = QRect(
+                        from_rect.left() - padding,
+                        from_rect.top() - padding,
+                        to_rect.right() - from_rect.left() + 2 * padding,
+                        from_rect.height() + 2 * padding
+                    )
 
-                pen = QPen(color_map.get(color, QColor("#FFD700")), thickness)
-                painter.setPen(pen)
-                painter.setBrush(Qt.NoBrush)
-                painter.drawRoundedRect(span_rect, 8, 8)
+                    pen = QPen(color_map.get(color, QColor("#FFD700")), thickness)
+                    painter.setPen(pen)
+                    painter.setBrush(Qt.NoBrush)
+                    painter.drawRoundedRect(span_rect, 8, 8)
 
         # Draw connectors (arcs above the boxes)
+        # Note: digit positions 0-7 map to box_rects indices 1-8 (offset for prefix letter)
         for conn in self.connectors:
             from_pos = conn.get('from', 0)
             to_pos = conn.get('to', 0)
@@ -1876,26 +1882,27 @@ class DigitPreviewWidget(QWidget):
             style = conn.get('style', 'arc')
 
             if 0 <= from_pos < 8 and 0 <= to_pos < 8:
-                from_rect = box_rects[from_pos]
-                to_rect = box_rects[to_pos]
+                from_rect = box_rects[from_pos + 1]  # +1 for prefix letter offset
+                to_rect = box_rects[to_pos + 1]
 
-                from_x = from_rect.center().x()
-                to_x = to_rect.center().x()
-                y = start_y - 5
+                if from_rect and to_rect:
+                    from_x = from_rect.center().x()
+                    to_x = to_rect.center().x()
+                    y = start_y - 5
 
-                pen = QPen(color_map.get(color, QColor("#9E9E9E")), 2)
-                if style == 'dashed':
-                    pen.setStyle(Qt.DashLine)
-                painter.setPen(pen)
+                    pen = QPen(color_map.get(color, QColor("#9E9E9E")), 2)
+                    if style == 'dashed':
+                        pen.setStyle(Qt.DashLine)
+                    painter.setPen(pen)
 
-                # Draw arc
-                mid_x = (from_x + to_x) // 2
-                arc_height = min(15, abs(to_pos - from_pos) * 4)
+                    # Draw arc
+                    mid_x = (from_x + to_x) // 2
+                    arc_height = min(20, abs(to_pos - from_pos) * 5)
 
-                path = QPainterPath()
-                path.moveTo(from_x, y)
-                path.quadTo(mid_x, y - arc_height, to_x, y)
-                painter.drawPath(path)
+                    path = QPainterPath()
+                    path.moveTo(from_x, y)
+                    path.quadTo(mid_x, y - arc_height, to_x, y)
+                    painter.drawPath(path)
 
         painter.end()
 
