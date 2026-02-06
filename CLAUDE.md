@@ -282,3 +282,27 @@ end
 - Logs appear inline with batch test results in the Test tab
 - Logs are included in "Copy for AI Debug" output
 - Zero overhead in production (debug mode only enabled during testing)
+
+## TODO: Batch Test Cases Layout Compression Issue
+
+In CustomPatternDialog's Test tab, the "Batch Test Cases" section gets squashed/compressed when the window is small, while other sections (Quick Test, Visual Preview, Test Results) maintain their size. The buttons and input fields overlap.
+
+**Location:** `gui/pattern_dialog.py`, `_create_test_tab()` method, around line 2283
+
+**Symptoms:**
+- "Should NOT Match:" label overlaps the input field above it
+- "Run All Tests" / "Export for AI" buttons get squashed into the input field above
+- Only affects Batch Test Cases section, not the other three sections
+
+**Attempted fixes that did NOT work:**
+- `setMinimumSize(700, 800)` on the dialog
+- `resize(700, 800)` after `_setup_ui()`
+- `QTimer.singleShot(0, lambda: self.resize(700, 800))` for delayed resize
+- `setMinimumHeight(25)` on QLineEdit inputs
+- `setMinimumHeight(28)` on QPushButton buttons
+- `addSpacing(8)` between elements
+- `setMinimumHeight(140)` on the batch_group QGroupBox
+- `setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)` on batch_group
+- Removing `layout.addStretch()` at end of test tab
+
+**Current state:** Usable after manual window resize. Low priority.

@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QSplitter, QHeaderView, QCheckBox, QListWidget,
     QListWidgetItem, QFormLayout, QComboBox, QMessageBox, QColorDialog,
     QTabWidget, QWidget, QSpinBox, QFrame, QApplication, QPlainTextEdit,
-    QInputDialog, QMenu
+    QInputDialog, QMenu, QSizePolicy
 )
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QFontMetrics
@@ -2047,7 +2047,7 @@ class CustomPatternDialog(QDialog):
     def __init__(self, parent=None, name: str = "", defn: dict = None, script: str = None):
         super().__init__(parent)
         self.setWindowTitle("Add Custom Pattern" if not name else "Edit Custom Pattern")
-        self.setMinimumSize(700, 600)
+        self.setMinimumSize(700, 800)
 
         self.original_name = name
         self.defn = defn or {}
@@ -2063,8 +2063,8 @@ class CustomPatternDialog(QDialog):
                 pass
 
         # Batch testing instance variables
-        self.should_match_edit: QPlainTextEdit = None
-        self.should_not_match_edit: QPlainTextEdit = None
+        self.should_match_edit: QLineEdit = None
+        self.should_not_match_edit: QLineEdit = None
         self.copy_debug_btn: QPushButton = None
         self._last_batch_results: list = []
         self._last_script: str = ""
@@ -2072,6 +2072,8 @@ class CustomPatternDialog(QDialog):
         self._setup_ui()
         if name:
             self._load_existing()
+        # Delay resize until after dialog is fully constructed
+        QTimer.singleShot(0, lambda: self.resize(700, 800))
 
     def _setup_ui(self):
         """Setup the dialog UI with tabs."""
@@ -2269,49 +2271,6 @@ end
         quick_layout.addLayout(input_layout)
         layout.addWidget(quick_group)
 
-        # Batch Test Cases group
-        batch_group = QGroupBox("Batch Test Cases")
-        batch_layout = QVBoxLayout(batch_group)
-
-        # Two-column layout for should match / should not match
-        cases_layout = QHBoxLayout()
-
-        # Should Match column
-        should_match_layout = QVBoxLayout()
-        should_match_layout.addWidget(QLabel("Should Match (one per line):"))
-        self.should_match_edit = QPlainTextEdit()
-        self.should_match_edit.setPlaceholderText("12344321\n11111111\n45677654")
-        self.should_match_edit.setMaximumHeight(100)
-        should_match_layout.addWidget(self.should_match_edit)
-        cases_layout.addLayout(should_match_layout)
-
-        # Should NOT Match column
-        should_not_match_layout = QVBoxLayout()
-        should_not_match_layout.addWidget(QLabel("Should NOT Match (one per line):"))
-        self.should_not_match_edit = QPlainTextEdit()
-        self.should_not_match_edit.setPlaceholderText("12345678\n12344322\n98765432")
-        self.should_not_match_edit.setMaximumHeight(100)
-        should_not_match_layout.addWidget(self.should_not_match_edit)
-        cases_layout.addLayout(should_not_match_layout)
-
-        batch_layout.addLayout(cases_layout)
-
-        # Batch buttons row
-        batch_btn_layout = QHBoxLayout()
-        run_batch_btn = QPushButton("Run All Tests")
-        run_batch_btn.clicked.connect(self._run_batch_tests)
-        batch_btn_layout.addWidget(run_batch_btn)
-
-        export_cases_btn = QPushButton("Export for AI")
-        export_cases_btn.setToolTip("Copy test cases formatted for AI prompts")
-        export_cases_btn.clicked.connect(self._export_test_cases)
-        batch_btn_layout.addWidget(export_cases_btn)
-
-        batch_btn_layout.addStretch()
-        batch_layout.addLayout(batch_btn_layout)
-
-        layout.addWidget(batch_group)
-
         # Preview widget
         preview_group = QGroupBox("Visual Preview")
         preview_layout = QVBoxLayout(preview_group)
@@ -2320,6 +2279,47 @@ end
         preview_layout.addWidget(self.digit_preview)
 
         layout.addWidget(preview_group)
+
+        # Batch Test Cases group
+        batch_group = QGroupBox("Batch Test Cases")
+        batch_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        batch_layout = QVBoxLayout(batch_group)
+
+        # Stacked layout for should match / should not match (comma-delimited)
+        # Labels above inputs for full width
+        batch_layout.addWidget(QLabel("Should Match:"))
+        self.should_match_edit = QLineEdit()
+        self.should_match_edit.setPlaceholderText("12344321, 11111111, 45677654")
+        self.should_match_edit.setMinimumHeight(25)
+        batch_layout.addWidget(self.should_match_edit)
+
+        batch_layout.addSpacing(8)
+
+        batch_layout.addWidget(QLabel("Should NOT Match:"))
+        self.should_not_match_edit = QLineEdit()
+        self.should_not_match_edit.setPlaceholderText("12345678, 12344322, 98765432")
+        self.should_not_match_edit.setMinimumHeight(25)
+        batch_layout.addWidget(self.should_not_match_edit)
+
+        batch_layout.addSpacing(8)
+
+        # Batch buttons row
+        batch_btn_layout = QHBoxLayout()
+        run_batch_btn = QPushButton("Run All Tests")
+        run_batch_btn.setMinimumHeight(28)
+        run_batch_btn.clicked.connect(self._run_batch_tests)
+        batch_btn_layout.addWidget(run_batch_btn)
+
+        export_cases_btn = QPushButton("Export for AI")
+        export_cases_btn.setMinimumHeight(28)
+        export_cases_btn.setToolTip("Copy test cases formatted for AI prompts")
+        export_cases_btn.clicked.connect(self._export_test_cases)
+        batch_btn_layout.addWidget(export_cases_btn)
+
+        batch_btn_layout.addStretch()
+        batch_layout.addLayout(batch_btn_layout)
+
+        layout.addWidget(batch_group)
 
         # Results
         results_group = QGroupBox("Test Results")
@@ -2341,8 +2341,6 @@ end
         results_layout.addLayout(debug_btn_layout)
 
         layout.addWidget(results_group)
-
-        layout.addStretch()
 
         return widget
 
@@ -2904,17 +2902,18 @@ purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, re
 arc, line, dashed, bracket, arrow'''
 
     def _parse_serials(self, text: str) -> list:
-        """Parse multiline text into list of 8-digit serials."""
+        """Parse comma-delimited text into list of 8-digit serials."""
         serials = []
-        for line in text.strip().split('\n'):
-            line = line.strip()
-            if not line:
+        # Split by comma, then process each entry
+        for entry in text.strip().split(','):
+            entry = entry.strip()
+            if not entry:
                 continue
             # Extract digits only
-            digits = ''.join(c for c in line if c.isdigit())
+            digits = ''.join(c for c in entry if c.isdigit())
             if len(digits) == 8:
                 serials.append(digits)
-            elif len(digits) == 10 and line[0].isalpha() and line[-1].isalpha():
+            elif len(digits) == 10 and entry[0].isalpha() and entry[-1].isalpha():
                 # Full serial like A12345678B
                 serials.append(digits)
         return serials
@@ -2965,8 +2964,8 @@ arc, line, dashed, bracket, arrow'''
         self._last_script = script
 
         # Parse test cases
-        should_match = self._parse_serials(self.should_match_edit.toPlainText())
-        should_not_match = self._parse_serials(self.should_not_match_edit.toPlainText())
+        should_match = self._parse_serials(self.should_match_edit.text())
+        should_not_match = self._parse_serials(self.should_not_match_edit.text())
 
         if not should_match and not should_not_match:
             self.test_results.setHtml("<span style='color: gray;'>Enter test serials above (one per line)</span>")
@@ -3049,8 +3048,8 @@ arc, line, dashed, bracket, arrow'''
 
     def _export_test_cases(self):
         """Copy test cases formatted for AI prompts."""
-        should_match = self._parse_serials(self.should_match_edit.toPlainText())
-        should_not_match = self._parse_serials(self.should_not_match_edit.toPlainText())
+        should_match = self._parse_serials(self.should_match_edit.text())
+        should_not_match = self._parse_serials(self.should_not_match_edit.text())
 
         if not should_match and not should_not_match:
             QMessageBox.information(self, "No Test Cases", "Enter test serials first.")
