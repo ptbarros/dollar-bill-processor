@@ -26,7 +26,7 @@ Pattern: PATTERN_NAME
 DisplayName: Friendly Name With Spaces
 Description: What it matches
 Tier: 1-10
-Examples: ["12345678"]
+Examples: ["12345678"]  -- REQUIRED for random preview generator!
 Odds: 1 in 10,000
 Price: $20-$100
 DataFile: optional_data.csv
@@ -98,9 +98,12 @@ The New/Edit Pattern dialog includes features to streamline pattern creation wit
 **Test Tab:**
 - Quick Test: Single serial input with live preview
 - Batch Test Cases: Two text areas for "Should Match" and "Should NOT Match" serials
-- "Run All Tests" - Execute all test cases, show pass/fail summary
+- "Run All Tests" - Execute all test cases, show pass/fail with debug logs inline
 - "Export for AI" - Copy test cases formatted for AI prompts
-- "Copy for AI Debug" - Enabled when tests fail; copies script + failures for debugging help
+- "Copy for AI Debug" - Enabled when tests fail; copies script + ctx contents + debug logs
+
+**Save Validation:**
+- Warning dialog if Examples field is missing (required for random preview generator)
 
 ### Key Files
 - `pattern_engine_v3.py`: Lua-only pattern engine
