@@ -110,7 +110,8 @@ class MonitorSettings:
 class AISettings:
     """AI-assisted pattern generation settings."""
     provider: str = ""  # "anthropic" or "openai"
-    api_key: str = ""  # API key (stored in plain text in user_settings.yaml)
+    anthropic_api_key: str = ""  # Anthropic API key
+    openai_api_key: str = ""  # OpenAI API key
     anthropic_model: str = "claude-sonnet-4-20250514"
     openai_model: str = "gpt-4o"
 
@@ -238,7 +239,16 @@ class SettingsManager:
         if 'ai' in data:
             ai = data['ai']
             self.ai.provider = ai.get('provider', '')
-            self.ai.api_key = ai.get('api_key', '')
+            self.ai.anthropic_api_key = ai.get('anthropic_api_key', '')
+            self.ai.openai_api_key = ai.get('openai_api_key', '')
+            # Migrate old single api_key to appropriate provider key
+            if not self.ai.anthropic_api_key and not self.ai.openai_api_key:
+                old_key = ai.get('api_key', '')
+                if old_key:
+                    if self.ai.provider == 'anthropic':
+                        self.ai.anthropic_api_key = old_key
+                    elif self.ai.provider == 'openai':
+                        self.ai.openai_api_key = old_key
             self.ai.anthropic_model = ai.get('anthropic_model', 'claude-sonnet-4-20250514')
             self.ai.openai_model = ai.get('openai_model', 'gpt-4o')
 
@@ -398,7 +408,8 @@ class SettingsManager:
             },
             'ai': {
                 'provider': self.ai.provider,
-                'api_key': self.ai.api_key,
+                'anthropic_api_key': self.ai.anthropic_api_key,
+                'openai_api_key': self.ai.openai_api_key,
                 'anthropic_model': self.ai.anthropic_model,
                 'openai_model': self.ai.openai_model,
             },

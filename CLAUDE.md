@@ -132,21 +132,27 @@ The "AI Generate" tab provides natural language to Lua code generation:
 **Workflow:**
 1. Describe pattern in plain English
 2. Optionally provide "Should match" / "Should NOT match" examples
-3. Click "Generate Pattern" - calls Anthropic or OpenAI API
-4. Review generated code in preview
-5. Click "Use This Code" to copy to Lua Script tab (auto-prefills Pattern Info from header)
-6. Test and save
+3. Select provider from dropdown (Anthropic or OpenAI)
+4. Click "Generate Pattern" - calls selected AI API
+5. Review generated code in preview
+6. Click "Use This Code" to copy to Lua Script tab (auto-prefills Pattern Info from header)
+7. Test and save
 
 **AI Prompt Features:**
 - Comprehensive helper function documentation with examples
-- Warnings for common gotchas (nil returns, pair spacing math, etc.)
+- Warnings for common gotchas (nil returns, pair spacing math, Lua built-in shadowing, etc.)
 - Automatic Examples injection if AI omits them
 
 **Configuration:** Settings → AI tab
-- Provider selection (Anthropic/OpenAI)
-- API key storage
+- Provider selection (default provider for new sessions)
+- Separate API keys for Anthropic and OpenAI (both can be configured)
 - Model selection (editable dropdowns)
 - Test Connection button
+
+**In-Tab Provider Selection:**
+- AI Generate tab has its own provider dropdown
+- Only shows providers with configured API keys
+- Switch providers without leaving the pattern dialog
 
 **Files:** `gui/ai_pattern_generator.py` (API client and prompt building)
 
@@ -269,7 +275,8 @@ library_colors:
   Nicks: '#ff6600'
 ai:
   provider: anthropic  # or "openai"
-  api_key: sk-...
+  anthropic_api_key: sk-ant-...
+  openai_api_key: sk-...
   anthropic_model: claude-sonnet-4-20250514
   openai_model: gpt-4o
 ```

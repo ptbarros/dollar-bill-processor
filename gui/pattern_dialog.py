@@ -2565,13 +2565,20 @@ class CustomPatternDialog(QDialog):
 
         layout.addWidget(examples_group)
 
-        # Generate button and status
+        # Generate button and provider selection
         generate_layout = QHBoxLayout()
 
         self.ai_generate_btn = QPushButton("Generate Pattern")
         self.ai_generate_btn.setMinimumHeight(35)
         self.ai_generate_btn.clicked.connect(self._on_ai_generate)
         generate_layout.addWidget(self.ai_generate_btn)
+
+        generate_layout.addWidget(QLabel("using"))
+
+        self.ai_provider_combo = QComboBox()
+        self.ai_provider_combo.setMinimumWidth(150)
+        self._populate_ai_provider_combo()
+        generate_layout.addWidget(self.ai_provider_combo)
 
         generate_layout.addStretch()
 
@@ -2614,11 +2621,38 @@ class CustomPatternDialog(QDialog):
         layout.addWidget(code_group)
 
         # Configuration hint
-        config_hint = QLabel("Configure your AI provider in Settings → AI tab")
+        config_hint = QLabel("Configure API keys in Settings → AI tab")
         config_hint.setStyleSheet("color: gray; font-size: 10px;")
         layout.addWidget(config_hint)
 
         return widget
+
+    def _populate_ai_provider_combo(self):
+        """Populate the AI provider combo with configured providers."""
+        from settings_manager import get_settings
+
+        settings = get_settings()
+        self.ai_provider_combo.clear()
+
+        # Add providers that have API keys configured
+        has_anthropic = bool(settings.ai.anthropic_api_key)
+        has_openai = bool(settings.ai.openai_api_key)
+
+        if has_anthropic:
+            self.ai_provider_combo.addItem("Anthropic (Claude)", "anthropic")
+        if has_openai:
+            self.ai_provider_combo.addItem("OpenAI (GPT)", "openai")
+
+        if not has_anthropic and not has_openai:
+            self.ai_provider_combo.addItem("(No API keys configured)", "")
+            self.ai_generate_btn.setEnabled(False)
+        else:
+            self.ai_generate_btn.setEnabled(True)
+            # Select the default provider from settings if available
+            if settings.ai.provider:
+                idx = self.ai_provider_combo.findData(settings.ai.provider)
+                if idx >= 0:
+                    self.ai_provider_combo.setCurrentIndex(idx)
 
     def _on_ai_generate(self):
         """Handle AI generate button click."""
@@ -2626,20 +2660,31 @@ class CustomPatternDialog(QDialog):
 
         settings = get_settings()
 
+        # Get selected provider from combo
+        provider = self.ai_provider_combo.currentData()
+
         # Check if AI is configured
-        if not settings.ai.provider:
+        if not provider:
             QMessageBox.warning(
                 self,
                 "AI Not Configured",
-                "Please configure your AI provider in Settings → AI tab first."
+                "Please configure at least one API key in Settings → AI tab first."
             )
             return
 
-        if not settings.ai.api_key:
+        # Get the API key for the selected provider
+        if provider == "anthropic":
+            api_key = settings.ai.anthropic_api_key
+        elif provider == "openai":
+            api_key = settings.ai.openai_api_key
+        else:
+            api_key = ""
+
+        if not api_key:
             QMessageBox.warning(
                 self,
                 "API Key Missing",
-                "Please enter your API key in Settings → AI tab."
+                f"Please enter your {provider.title()} API key in Settings → AI tab."
             )
             return
 
@@ -2660,15 +2705,15 @@ class CustomPatternDialog(QDialog):
         pattern_name = self.name_edit.text().strip().upper().replace(' ', '_')
 
         # Determine model
-        if settings.ai.provider == "anthropic":
+        if provider == "anthropic":
             model = settings.ai.anthropic_model
         else:
             model = settings.ai.openai_model
 
         # Create generator
         generator = AIPatternGenerator(
-            provider=settings.ai.provider,
-            api_key=settings.ai.api_key,
+            provider=provider,
+            api_key=api_key,
             model=model
         )
 
@@ -2775,6 +2820,29 @@ class CustomPatternDialog(QDialog):
                     self.tier_spin.setValue(tier)
             except ValueError:
                 pass
+
+    def _extract_examples_from_header(self, code: str) -> list:
+        """Extract Examples list from Lua script header."""
+        import json
+        import re
+
+        # Find header block
+        header_start = code.find('--[[')
+        header_end = code.find('--]]')
+        if header_start < 0 or header_end < 0:
+            return []
+
+        header = code[header_start:header_end]
+
+        # Look for Examples: line
+        examples_match = re.search(r'Examples:\s*(\[.+?\])', header)
+        if examples_match:
+            try:
+                return json.loads(examples_match.group(1))
+            except json.JSONDecodeError:
+                pass
+
+        return []
 
     def _on_ai_test_code(self):
         """Copy code to Lua Script tab and switch to Test tab."""
@@ -4139,7 +4207,8 @@ end
 
             # Store for get_pattern()
             self._wizard_generated_script = self._ai_generated_code
-            self._wizard_examples = []  # AI-generated code should have Examples in header
+            # Extract Examples from AI-generated code header
+            self._wizard_examples = self._extract_examples_from_header(self._ai_generated_code)
             self.is_lua_pattern = True
             self._is_wizard_pattern = True  # Reuse wizard pattern flow
 

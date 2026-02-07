@@ -227,6 +227,8 @@ arc, line, dashed, bracket, arrow
 
 6. **Pair/run spacing math:** Each pair occupies 2 positions. For pattern AAXBBXCC: pair1 at 0-1, separator at 2, pair2 at 3-4, separator at 5, pair3 at 6-7. So pairs[1].start=0, pairs[2].start=3, pairs[3].start=6. The gap between consecutive pairs with a separator is 3 positions, not 2.
 
+7. **NEVER shadow Lua built-ins:** Do NOT use variable names that shadow Lua's built-in functions. Avoid these names for variables: `pairs`, `ipairs`, `next`, `type`, `string`, `table`, `math`, `tonumber`, `tostring`, `print`, `error`, `select`, `unpack`. Use descriptive names like `pair_list`, `digit_pairs`, `found_pairs` instead of `pairs`.
+
 ## Your Task
 
 Create a complete Lua pattern script for the following:

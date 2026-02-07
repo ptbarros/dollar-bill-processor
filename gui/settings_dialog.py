@@ -586,27 +586,51 @@ class SettingsDialog(QDialog):
         self.ai_provider_combo.currentIndexChanged.connect(self._on_ai_provider_changed)
         provider_layout.addRow("Provider:", self.ai_provider_combo)
 
-        # API Key
-        self.ai_api_key_edit = QLineEdit()
-        self.ai_api_key_edit.setEchoMode(QLineEdit.Password)
-        self.ai_api_key_edit.setPlaceholderText("Enter your API key...")
-
-        key_layout = QHBoxLayout()
-        key_layout.addWidget(self.ai_api_key_edit)
-
-        self.show_key_btn = QPushButton("Show")
-        self.show_key_btn.setMaximumWidth(50)
-        self.show_key_btn.setCheckable(True)
-        self.show_key_btn.toggled.connect(self._toggle_api_key_visibility)
-        key_layout.addWidget(self.show_key_btn)
-
-        provider_layout.addRow("API Key:", key_layout)
-
-        key_hint = QLabel("Your API key is stored locally in user_settings.yaml")
-        key_hint.setStyleSheet("color: gray; font-size: 9px;")
-        provider_layout.addRow("", key_hint)
-
         layout.addWidget(provider_group)
+
+        # API Keys - separate fields for each provider
+        keys_group = QGroupBox("API Keys")
+        keys_layout = QFormLayout(keys_group)
+
+        # Anthropic API Key
+        self.anthropic_api_key_edit = QLineEdit()
+        self.anthropic_api_key_edit.setEchoMode(QLineEdit.Password)
+        self.anthropic_api_key_edit.setPlaceholderText("sk-ant-...")
+
+        anthropic_key_layout = QHBoxLayout()
+        anthropic_key_layout.addWidget(self.anthropic_api_key_edit)
+
+        self.show_anthropic_key_btn = QPushButton("Show")
+        self.show_anthropic_key_btn.setMaximumWidth(50)
+        self.show_anthropic_key_btn.setCheckable(True)
+        self.show_anthropic_key_btn.toggled.connect(
+            lambda checked: self._toggle_key_visibility(self.anthropic_api_key_edit, self.show_anthropic_key_btn, checked))
+        anthropic_key_layout.addWidget(self.show_anthropic_key_btn)
+
+        keys_layout.addRow("Anthropic:", anthropic_key_layout)
+
+        # OpenAI API Key
+        self.openai_api_key_edit = QLineEdit()
+        self.openai_api_key_edit.setEchoMode(QLineEdit.Password)
+        self.openai_api_key_edit.setPlaceholderText("sk-...")
+
+        openai_key_layout = QHBoxLayout()
+        openai_key_layout.addWidget(self.openai_api_key_edit)
+
+        self.show_openai_key_btn = QPushButton("Show")
+        self.show_openai_key_btn.setMaximumWidth(50)
+        self.show_openai_key_btn.setCheckable(True)
+        self.show_openai_key_btn.toggled.connect(
+            lambda checked: self._toggle_key_visibility(self.openai_api_key_edit, self.show_openai_key_btn, checked))
+        openai_key_layout.addWidget(self.show_openai_key_btn)
+
+        keys_layout.addRow("OpenAI:", openai_key_layout)
+
+        key_hint = QLabel("API keys are stored locally in user_settings.yaml")
+        key_hint.setStyleSheet("color: gray; font-size: 9px;")
+        keys_layout.addRow("", key_hint)
+
+        layout.addWidget(keys_group)
 
         # Model settings
         model_group = QGroupBox("Model Selection")
@@ -663,27 +687,34 @@ class SettingsDialog(QDialog):
         # For now, just clear test result
         self.ai_test_result.setText("")
 
-    def _toggle_api_key_visibility(self, checked: bool):
-        """Toggle API key visibility."""
+    def _toggle_key_visibility(self, edit: QLineEdit, btn: QPushButton, checked: bool):
+        """Toggle API key visibility for a specific field."""
         if checked:
-            self.ai_api_key_edit.setEchoMode(QLineEdit.Normal)
-            self.show_key_btn.setText("Hide")
+            edit.setEchoMode(QLineEdit.Normal)
+            btn.setText("Hide")
         else:
-            self.ai_api_key_edit.setEchoMode(QLineEdit.Password)
-            self.show_key_btn.setText("Show")
+            edit.setEchoMode(QLineEdit.Password)
+            btn.setText("Show")
 
     def _test_ai_connection(self):
         """Test the AI API connection."""
         provider = self.ai_provider_combo.currentData()
-        api_key = self.ai_api_key_edit.text().strip()
 
         if not provider:
             self.ai_test_result.setText("Please select a provider first.")
             self.ai_test_result.setStyleSheet("color: orange;")
             return
 
+        # Get the API key for the selected provider
+        if provider == "anthropic":
+            api_key = self.anthropic_api_key_edit.text().strip()
+        elif provider == "openai":
+            api_key = self.openai_api_key_edit.text().strip()
+        else:
+            api_key = ""
+
         if not api_key:
-            self.ai_test_result.setText("Please enter an API key.")
+            self.ai_test_result.setText(f"Please enter an API key for {provider}.")
             self.ai_test_result.setStyleSheet("color: orange;")
             return
 
@@ -806,7 +837,8 @@ class SettingsDialog(QDialog):
         idx = self.ai_provider_combo.findData(provider)
         if idx >= 0:
             self.ai_provider_combo.setCurrentIndex(idx)
-        self.ai_api_key_edit.setText(self.settings.ai.api_key)
+        self.anthropic_api_key_edit.setText(self.settings.ai.anthropic_api_key)
+        self.openai_api_key_edit.setText(self.settings.ai.openai_api_key)
         self.anthropic_model_combo.setCurrentText(self.settings.ai.anthropic_model)
         self.openai_model_combo.setCurrentText(self.settings.ai.openai_model)
 
@@ -865,7 +897,8 @@ class SettingsDialog(QDialog):
 
         # AI
         self.settings.ai.provider = self.ai_provider_combo.currentData() or ""
-        self.settings.ai.api_key = self.ai_api_key_edit.text()
+        self.settings.ai.anthropic_api_key = self.anthropic_api_key_edit.text()
+        self.settings.ai.openai_api_key = self.openai_api_key_edit.text()
         self.settings.ai.anthropic_model = self.anthropic_model_combo.currentText()
         self.settings.ai.openai_model = self.openai_model_combo.currentText()
 
