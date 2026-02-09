@@ -253,13 +253,20 @@ Optional feature (Settings → Processing → "Extract plate and series info"):
 **Keyboard shortcuts:**
 | Key | Action |
 |-----|--------|
-| Space | Toggle checked on selected bill(s) |
-| C | Generate crops |
+| Space | Queue bill for crop (toggle ✓ status) |
+| C | Batch crop all queued bills |
 | M | Plate magnifier popup |
 
 **Context menu (right-click):**
-- "Generate Crops" - Creates crop images using first matched pattern for label
-- "Generate Crops As..." - Submenu (single-select only, 2+ patterns) to choose which pattern name appears in `bill_labels.txt`
+- "Set Pattern..." - Choose which pattern appears in `bill_labels.txt` (stores override, no immediate crop)
+- "Set Note..." - Add a user note to the bill (appears in labels file)
+
+**Crop Workflow:**
+1. Review bills - press **Space** to queue keepers (shows ✓)
+2. Right-click → "Set Pattern..." to override label pattern (if multi-pattern bill)
+3. Right-click → "Set Note..." to add comment (e.g., "Birthday serial")
+4. Press **C** to batch crop all queued bills
+5. After crop: ✓ clears, C status appears
 
 ## User Settings Persistence
 

@@ -223,8 +223,8 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence(Qt.Key_Down), self, self._next_bill)
         QShortcut(QKeySequence(Qt.Key_Up), self, self._prev_bill)
 
-        # Crop shortcut
-        QShortcut(QKeySequence(Qt.Key_C), self, self._on_crop_current)
+        # Crop shortcut - batch crop all queued (checked) bills
+        QShortcut(QKeySequence(Qt.Key_C), self, self._on_batch_crop_queued)
 
         # Zoom controls
         QShortcut(QKeySequence(Qt.Key_Plus), self, self._zoom_in)
@@ -389,6 +389,14 @@ class MainWindow(QMainWindow):
 
         return img
 
+    def _on_batch_crop_queued(self):
+        """Generate crops for all queued (checked) bills."""
+        queued = [r for r in self.results_list.results if r.get('checked')]
+        if not queued:
+            self.statusBar().showMessage("No bills queued (Space to queue)", 3000)
+            return
+        self._on_crop_selected(queued)
+
     def _on_crop_current(self):
         """Generate crops for the currently displayed bill."""
         result = self.preview_panel.current_result
@@ -453,7 +461,7 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 print(f"Error cropping {result.get('serial', 'unknown')}: {e}")
 
-        # Update status cells for cropped results
+        # Update status cells for cropped results (mark_cropped also clears checked flag)
         cropped_results = [r for r in results if r.get('cropped')]
         if cropped_results:
             self.results_list.mark_cropped(cropped_results)
@@ -494,15 +502,22 @@ class MainWindow(QMainWindow):
                 if pattern_str and pattern_str != 'No Pattern':
                     catalog = self.settings.get_pattern_catalog(pattern_str, '')
 
+                # Get user note if present
+                note = result.get('note', '')
+
                 # Label 1: Without catalog (for reference)
                 f.write(f"Serial: {serial}\n")
                 f.write(f"Pattern: {pattern_str}\n")
+                if note:
+                    f.write(f"Note: {note}\n")
                 f.write(f"Series: {series}\n")
                 f.write("-" * 30 + "\n\n")
 
                 # Label 2: With catalog (to store with bill)
                 f.write(f"Serial: {serial}\n")
                 f.write(f"Pattern: {pattern_str}\n")
+                if note:
+                    f.write(f"Note: {note}\n")
                 f.write(f"Series: {series}\n")
                 f.write(f"Catalog: {catalog}  Pos: {position}\n")
                 f.write("=" * 30 + "\n\n")
@@ -831,7 +846,8 @@ class MainWindow(QMainWindow):
                 'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
                 'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped',
                 'series_year', 'front_plate', 'back_plate', 'potential_mule',
-                'viewed', 'cropped', 'sent_for_review', 'checked'
+                'viewed', 'cropped', 'sent_for_review', 'checked',
+                'note', 'pattern_override'
             ])
             writer.writeheader()
             writer.writerows(self.current_results)
@@ -1774,7 +1790,8 @@ class MainWindow(QMainWindow):
                 'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
                 'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped',
                 'series_year', 'front_plate', 'back_plate', 'potential_mule',
-                'viewed', 'cropped', 'sent_for_review', 'checked'
+                'viewed', 'cropped', 'sent_for_review', 'checked',
+                'note', 'pattern_override'
             ])
             writer.writeheader()
             writer.writerows(self.current_results)

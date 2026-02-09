@@ -11,10 +11,11 @@ from typing import Optional, Dict, List
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
-    QLabel, QLineEdit, QComboBox, QPushButton, QMenu, QHeaderView
+    QLabel, QLineEdit, QComboBox, QPushButton, QMenu, QHeaderView,
+    QInputDialog
 )
 from PySide6.QtCore import Qt, Signal, Slot, QSettings
-from PySide6.QtGui import QColor, QBrush, QAction
+from PySide6.QtGui import QColor, QBrush, QAction, QIcon
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -478,17 +479,17 @@ class ResultsList(QWidget):
         filtered = len(self.filtered_results)
         fancy = sum(1 for r in self.results if r.get('is_fancy'))
         review = sum(1 for r in self.results if r.get('needs_review'))
-        checked = sum(1 for r in self.results if r.get('checked'))
+        queued = sum(1 for r in self.results if r.get('checked'))
 
         if filtered == total:
             text = f"{total} bills | {fancy} fancy | {review} need review"
         else:
             text = f"{filtered}/{total} bills (filtered) | {fancy} fancy | {review} need review"
 
-        if checked:
-            text += f" | {checked}/{total} checked"
+        if queued:
+            text += f" | {queued} queued for crop"
 
-        text += "    Space=check  C=crop  M=magnifier"
+        text += "    Space=queue  C=crop queued  M=magnifier"
 
         self.summary_label.setText(text)
 
@@ -657,32 +658,41 @@ class ResultsList(QWidget):
         reclassify_action.triggered.connect(lambda: self._reclassify_selected(selected_results))
         menu.addAction(reclassify_action)
 
-        # Generate crops - works on all selected items
-        if is_multi_select:
-            crop_label = f"Generate Crops ({len(selected_results)} bills)"
-            crop_action = QAction(crop_label, self)
-            crop_action.triggered.connect(lambda: self.crop_requested.emit(selected_results))
-            menu.addAction(crop_action)
-        else:
-            # Single selection - check if bill has multiple patterns
+        # === Set Pattern / Set Note (for queue-based workflow) ===
+        if not is_multi_select:
+            # Single selection - show "Set Pattern..." submenu
             fancy_types = result.get('fancy_types', '')
             patterns = [p.strip() for p in fancy_types.split(',') if p.strip()]
+            current_override = result.get('pattern_override', '')
 
-            # Always add the default "Generate Crops" action
-            crop_action = QAction("Generate Crops", self)
-            crop_action.triggered.connect(lambda: self.crop_requested.emit(selected_results))
-            menu.addAction(crop_action)
+            if patterns:
+                pattern_menu = menu.addMenu("Set Pattern...")
 
-            # Add "Generate Crops As..." submenu if multiple patterns
-            if len(patterns) > 1:
-                crops_as_menu = menu.addMenu("Generate Crops As...")
+                # "(Auto)" option to clear override and use first pattern
+                auto_action = QAction("(Auto)", self)
+                if not current_override:
+                    auto_action.setCheckable(True)
+                    auto_action.setChecked(True)
+                auto_action.triggered.connect(lambda: self._set_pattern_override(result, None))
+                pattern_menu.addAction(auto_action)
+
+                pattern_menu.addSeparator()
+
+                # Add each available pattern
                 for pattern in patterns:
                     pattern_action = QAction(pattern, self)
-                    # Capture pattern in closure
+                    pattern_action.setCheckable(True)
+                    if current_override == pattern:
+                        pattern_action.setChecked(True)
                     pattern_action.triggered.connect(
-                        lambda checked, p=pattern: self._emit_crop_with_override(result, p)
+                        lambda checked, p=pattern: self._set_pattern_override(result, p)
                     )
-                    crops_as_menu.addAction(pattern_action)
+                    pattern_menu.addAction(pattern_action)
+
+            # "Set Note..." option
+            note_action = QAction("Set Note...", self)
+            note_action.triggered.connect(lambda: self._set_note(result))
+            menu.addAction(note_action)
 
         menu.addSeparator()
 
@@ -717,12 +727,79 @@ class ResultsList(QWidget):
 
         menu.exec(self.tree.viewport().mapToGlobal(pos))
 
-    def _emit_crop_with_override(self, result: dict, pattern: str):
-        """Emit crop request with a specific pattern override."""
-        # Create a copy with the pattern override
-        result_with_override = result.copy()
-        result_with_override['pattern_override'] = pattern
-        self.crop_requested.emit([result_with_override])
+    def _set_pattern_override(self, result: dict, pattern: Optional[str]):
+        """Set or clear the pattern override for a result.
+
+        This stores the override in the result dict for use during crop generation.
+        The override is persisted via session recovery.
+        """
+        front_file = result.get('front_file')
+        if not front_file:
+            return
+
+        # Update the authoritative results list
+        for r in self.results:
+            if r.get('front_file') == front_file:
+                if pattern:
+                    r['pattern_override'] = pattern
+                elif 'pattern_override' in r:
+                    del r['pattern_override']
+                break
+
+        # Update the tree item data
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            item_result = item.data(0, Qt.UserRole)
+            if item_result and item_result.get('front_file') == front_file:
+                if pattern:
+                    item_result['pattern_override'] = pattern
+                elif 'pattern_override' in item_result:
+                    del item_result['pattern_override']
+                item.setData(0, Qt.UserRole, item_result)
+                break
+
+        # Emit status_changed to trigger autosave
+        self.status_changed.emit()
+
+    def _set_note(self, result: dict):
+        """Open dialog to set or edit a note for a result."""
+        current_note = result.get('note', '')
+        note, ok = QInputDialog.getText(
+            self, "Set Note",
+            "Enter a note for this bill:",
+            text=current_note
+        )
+
+        if not ok:
+            return
+
+        front_file = result.get('front_file')
+        if not front_file:
+            return
+
+        # Update the authoritative results list
+        for r in self.results:
+            if r.get('front_file') == front_file:
+                if note:
+                    r['note'] = note
+                elif 'note' in r:
+                    del r['note']
+                break
+
+        # Update the tree item data
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            item_result = item.data(0, Qt.UserRole)
+            if item_result and item_result.get('front_file') == front_file:
+                if note:
+                    item_result['note'] = note
+                elif 'note' in item_result:
+                    del item_result['note']
+                item.setData(0, Qt.UserRole, item_result)
+                break
+
+        # Emit status_changed to trigger autosave
+        self.status_changed.emit()
 
     def _open_correction_dialog(self, result: dict):
         """Open the correction dialog for a result."""
@@ -886,15 +963,18 @@ class ResultsList(QWidget):
         self._update_summary()
 
     def mark_cropped(self, results: list):
-        """Mark given results as cropped and update their status cells."""
+        """Mark given results as cropped and clear checked flag."""
         cropped_files = {r.get('front_file') for r in results}
         for i in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(i)
             item_result = item.data(0, Qt.UserRole)
             if item_result and item_result.get('front_file') in cropped_files:
                 item_result['cropped'] = True
+                item_result['checked'] = False  # Clear queue status after crop
                 self._sync_result_field(item_result, 'cropped', True)
+                self._sync_result_field(item_result, 'checked', False)
                 self._update_status_cell(item, item_result)
+        self._update_summary()  # Update queued count
 
     def select_by_filename(self, filename: str) -> bool:
         """Select an item by its front_file. Returns True if found."""
@@ -1024,6 +1104,19 @@ class ResultsList(QWidget):
                     result['sent_for_review'] = result.get('sent_for_review', '').lower() == 'true'
                     result['checked'] = result.get('checked', '').lower() == 'true'
 
+                    # User fields (backward compatible - missing columns default to empty)
+                    note = result.get('note', '')
+                    if note:
+                        result['note'] = note
+                    elif 'note' in result:
+                        del result['note']
+
+                    pattern_override = result.get('pattern_override', '')
+                    if pattern_override:
+                        result['pattern_override'] = pattern_override
+                    elif 'pattern_override' in result:
+                        del result['pattern_override']
+
                     # Update file paths to point to archive location
                     front_file = result.get('front_file', '')
                     if front_file:
@@ -1066,7 +1159,8 @@ class ResultsList(QWidget):
                     'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
                     'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped',
                     'series_year', 'front_plate', 'back_plate', 'potential_mule',
-                    'viewed', 'cropped', 'sent_for_review', 'checked'
+                    'viewed', 'cropped', 'sent_for_review', 'checked',
+                    'note', 'pattern_override'
                 ])
                 writer.writeheader()
 
