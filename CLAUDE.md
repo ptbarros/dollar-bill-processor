@@ -257,6 +257,10 @@ Optional feature (Settings → Processing → "Extract plate and series info"):
 | C | Generate crops |
 | M | Plate magnifier popup |
 
+**Context menu (right-click):**
+- "Generate Crops" - Creates crop images using first matched pattern for label
+- "Generate Crops As..." - Submenu (single-select only, 2+ patterns) to choose which pattern name appears in `bill_labels.txt`
+
 ## User Settings Persistence
 
 All user customizations stored in `user_settings.yaml` (gitignored):

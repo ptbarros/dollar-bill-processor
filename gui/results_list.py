@@ -660,11 +660,29 @@ class ResultsList(QWidget):
         # Generate crops - works on all selected items
         if is_multi_select:
             crop_label = f"Generate Crops ({len(selected_results)} bills)"
+            crop_action = QAction(crop_label, self)
+            crop_action.triggered.connect(lambda: self.crop_requested.emit(selected_results))
+            menu.addAction(crop_action)
         else:
-            crop_label = "Generate Crops"
-        crop_action = QAction(crop_label, self)
-        crop_action.triggered.connect(lambda: self.crop_requested.emit(selected_results))
-        menu.addAction(crop_action)
+            # Single selection - check if bill has multiple patterns
+            fancy_types = result.get('fancy_types', '')
+            patterns = [p.strip() for p in fancy_types.split(',') if p.strip()]
+
+            # Always add the default "Generate Crops" action
+            crop_action = QAction("Generate Crops", self)
+            crop_action.triggered.connect(lambda: self.crop_requested.emit(selected_results))
+            menu.addAction(crop_action)
+
+            # Add "Generate Crops As..." submenu if multiple patterns
+            if len(patterns) > 1:
+                crops_as_menu = menu.addMenu("Generate Crops As...")
+                for pattern in patterns:
+                    pattern_action = QAction(pattern, self)
+                    # Capture pattern in closure
+                    pattern_action.triggered.connect(
+                        lambda checked, p=pattern: self._emit_crop_with_override(result, p)
+                    )
+                    crops_as_menu.addAction(pattern_action)
 
         menu.addSeparator()
 
@@ -698,6 +716,13 @@ class ResultsList(QWidget):
         menu.addAction(copy_action)
 
         menu.exec(self.tree.viewport().mapToGlobal(pos))
+
+    def _emit_crop_with_override(self, result: dict, pattern: str):
+        """Emit crop request with a specific pattern override."""
+        # Create a copy with the pattern override
+        result_with_override = result.copy()
+        result_with_override['pattern_override'] = pattern
+        self.crop_requested.emit([result_with_override])
 
     def _open_correction_dialog(self, result: dict):
         """Open the correction dialog for a result."""

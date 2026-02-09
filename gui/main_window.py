@@ -479,15 +479,20 @@ class MainWindow(QMainWindow):
                 serial = result.get('serial', 'Unknown')
                 fancy_types = result.get('fancy_types', '')
                 position = result.get('position', '')
-                # Get first pattern from comma-separated list
-                patterns = [p.strip() for p in fancy_types.split(',') if p.strip()]
-                pattern_str = patterns[0] if patterns else 'No Pattern'
                 series = result.get('series_year', '')
 
-                # Get catalog for the first matched pattern
+                # Check for user override, otherwise use first pattern
+                pattern_override = result.get('pattern_override')
+                if pattern_override:
+                    pattern_str = pattern_override
+                else:
+                    patterns = [p.strip() for p in fancy_types.split(',') if p.strip()]
+                    pattern_str = patterns[0] if patterns else 'No Pattern'
+
+                # Get catalog for the selected pattern
                 catalog = ''
-                if patterns:
-                    catalog = self.settings.get_pattern_catalog(patterns[0], '')
+                if pattern_str and pattern_str != 'No Pattern':
+                    catalog = self.settings.get_pattern_catalog(pattern_str, '')
 
                 # Label 1: Without catalog (for reference)
                 f.write(f"Serial: {serial}\n")
