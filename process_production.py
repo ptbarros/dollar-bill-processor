@@ -23,6 +23,7 @@ import numpy as np
 import easyocr
 import re
 import json
+import math
 from pathlib import Path
 from ultralytics import YOLO
 import csv
@@ -216,6 +217,9 @@ class BillPair:
     review_reason: Optional[str] = None
     is_upside_down: bool = False  # True if bill was scanned upside-down
     baseline_variance: float = 0.0  # Normalized vertical misalignment for gas pump detection
+    seal_shift_x: float = 0.0  # Overprint X shift deviation from baseline (%)
+    seal_shift_y: float = 0.0  # Overprint Y shift deviation from baseline (%)
+    seal_shift_refs: int = 0   # Number of reference elements used for shift calculation
     star_detected: bool = False  # True if star symbol visually detected by YOLO
     # Cached alignment info to avoid redundant YOLO calls in generate_crops()
     front_align_angle: float = 0.0  # Rotation angle from YOLO alignment
@@ -2303,6 +2307,105 @@ class ProductionProcessor:
 
         return float(max_deviation)
 
+    def _calculate_seal_shift(self, img: np.ndarray) -> tuple:
+        """Calculate overprint shift using pairwise median method.
+
+        Dollar bills are printed in 3 passes with separate plates:
+        - Overprint (letterpress): seal_t, seal_f, serial_number
+        - Intaglio face (earlier pass): front_plate, series_year, denomination
+
+        Instead of comparing average positions, we compute 9 pairwise distances
+        (3 overprint × 3 intaglio classes), then take the median deviation from
+        expected. This is more robust because:
+        1. Within-image differencing cancels per-image systematic bias
+        2. Median of 9 pairs is robust to noisy individual detections
+
+        Args:
+            img: Aligned front image of the bill
+
+        Returns:
+            tuple: (shift_x_pct, shift_y_pct, n_pairs) where:
+                   - shift_x_pct: Median X deviation from expected (positive = right)
+                   - shift_y_pct: Median Y deviation from expected (positive = down)
+                   - n_pairs: Number of valid class pairs used (max 9)
+                   Normal bills: ~0% deviation from expected pair distances
+        """
+        import statistics
+
+        if img is None or img.size == 0:
+            return (0.0, 0.0, 0)
+
+        # Expected pair distances calibrated from 10 reference bills in canon/
+        # Format: (overprint_class_id, intaglio_class_id): (expected_dx, expected_dy)
+        # Class IDs: seal_f=5, seal_t=6, serial_number=7, denomination=3, front_plate=4, series_year=8
+        EXPECTED_PAIR_DISTANCES = {
+            (5, 3): (16.1788, 23.5241),    # seal_f vs denomination
+            (5, 4): (-61.1580, -18.3492),  # seal_f vs front_plate
+            (5, 8): (-40.7820, -28.4867),  # seal_f vs series_year
+            (6, 3): (64.4764, 31.6387),    # seal_t vs denomination
+            (6, 4): (-12.6970, -10.3124),  # seal_t vs front_plate
+            (6, 8): (7.5330, -20.5299),    # seal_t vs series_year
+            (7, 3): (39.3343, 23.4173),    # serial_number vs denomination
+            (7, 4): (-37.8311, -18.5696),  # serial_number vs front_plate
+            (7, 8): (-17.6118, -28.4774),  # serial_number vs series_year
+        }
+
+        # Confidence thresholds per class
+        CONF_THRESHOLDS = {5: 0.3, 6: 0.3, 7: 0.5, 3: 0.3, 4: 0.3, 8: 0.3}
+
+        # Map class names to IDs
+        CLASS_NAME_TO_ID = {
+            'seal_f': 5, 'seal_t': 6, 'serial_number': 7,
+            'denomination': 3, 'front_plate': 4, 'series_year': 8
+        }
+
+        # Use lower conf threshold to catch more reference elements
+        detections = self._detect_all_objects(img, conf=0.1)
+
+        # Image dimensions for normalization
+        img_height, img_width = img.shape[:2]
+        if img_width <= 0 or img_height <= 0:
+            return (0.0, 0.0, 0)
+
+        # Collect boxes by class ID, filter by confidence
+        by_class = {}
+        for name, class_id in CLASS_NAME_TO_ID.items():
+            positions = []
+            for box in detections.get(name, []):
+                if box[4] >= CONF_THRESHOLDS[class_id]:
+                    cx = (box[0] + box[2]) / 2 / img_width * 100
+                    cy = (box[1] + box[3]) / 2 / img_height * 100
+                    positions.append((cx, cy))
+            if positions:
+                by_class[class_id] = positions
+
+        # Compute centroid for each class
+        class_positions = {}
+        for cls_id, positions in by_class.items():
+            class_positions[cls_id] = (
+                sum(p[0] for p in positions) / len(positions),
+                sum(p[1] for p in positions) / len(positions),
+            )
+
+        # Compute deviation from expected for each pair
+        pair_deviations = []
+        for (o_cls, i_cls), (exp_dx, exp_dy) in EXPECTED_PAIR_DISTANCES.items():
+            if o_cls in class_positions and i_cls in class_positions:
+                ox, oy = class_positions[o_cls]
+                ix, iy = class_positions[i_cls]
+                actual_dx = ox - ix
+                actual_dy = oy - iy
+                pair_deviations.append((actual_dx - exp_dx, actual_dy - exp_dy))
+
+        if not pair_deviations:
+            return (0.0, 0.0, 0)
+
+        # Median deviation = robust shift estimate
+        shift_x = statistics.median([d[0] for d in pair_deviations])
+        shift_y = statistics.median([d[1] for d in pair_deviations])
+
+        return (round(shift_x, 3), round(shift_y, 3), len(pair_deviations))
+
     def analyze_gas_pump_digits(self, serial_crop: np.ndarray, offset_x: int = 0, offset_y: int = 0) -> dict:
         """Analyze gas pump serial and return digit boxes with deviation info.
 
@@ -2913,6 +3016,15 @@ class ProductionProcessor:
             pair.front_align_angle = align_info.get('angle', 0.0)
             pair.front_align_flipped = align_info.get('flipped', False)
 
+            # Calculate overprint shift from aligned front image
+            aligned_front = align_info.get('aligned_image')
+            if aligned_front is None:
+                aligned_front = cv2.imread(str(pair.front_path))
+            shift_x, shift_y, n_refs = self._calculate_seal_shift(aligned_front)
+            pair.seal_shift_x = shift_x
+            pair.seal_shift_y = shift_y
+            pair.seal_shift_refs = n_refs
+
             # If star symbol visually detected but OCR missed it, append '*' to serial
             if serial and star_detected and not serial.endswith('*'):
                 serial = serial[:-1] + '*' if len(serial) == 10 else serial + '*'
@@ -2932,9 +3044,11 @@ class ProductionProcessor:
                     pair.fancy_types = ["ALL"]
                     pair.is_fancy = True
                 else:
-                    # Pass baseline_variance and plate info for pattern detection
+                    # Pass baseline_variance, seal position, and plate info for pattern detection
                     metadata = {
                         'baseline_variance': pair.baseline_variance,
+                        'seal_x': pair.seal_shift_x,
+                        'seal_y': pair.seal_shift_y,
                         'series_year': pair.series_year,
                         'front_plate': pair.front_plate,
                         'back_plate': pair.back_plate,
@@ -2975,6 +3089,8 @@ class ProductionProcessor:
                 'fancy_types': ", ".join(pair.fancy_types),
                 'confidence': f"{confidence:.2f}",
                 'baseline_variance': f"{pair.baseline_variance:.4f}",
+                'seal_x': f"{pair.seal_shift_x:.1f}",
+                'seal_y': f"{pair.seal_shift_y:.1f}",
                 'star_detected': pair.star_detected,
                 'is_fancy': pair.is_fancy,
                 'needs_review': pair.needs_review,
@@ -3040,8 +3156,9 @@ class ProductionProcessor:
         with open(csv_path, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=[
                 'position', 'front_file', 'back_file', 'serial',
-                'fancy_types', 'confidence', 'baseline_variance', 'star_detected',
-                'is_fancy', 'needs_review', 'error',
+                'fancy_types', 'confidence', 'baseline_variance',
+                'seal_x', 'seal_y',
+                'star_detected', 'is_fancy', 'needs_review', 'error',
                 'series_year', 'front_plate', 'back_plate', 'potential_mule'
             ])
             writer.writeheader()

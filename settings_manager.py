@@ -520,6 +520,51 @@ class SettingsManager:
         """
         self.set_pattern_override('GAS_PUMP', 'baseline_variance_min', threshold)
 
+    def get_high_seal_threshold(self, default: float = -2.0) -> float:
+        """Get the HIGH_SEAL Y deviation threshold (percentage).
+
+        High seal triggers when seal_y < this value (negative = shifted up).
+        Default -2.0% corresponds to ~4mm upward shift.
+        """
+        return float(self.get_pattern_override('HIGH_SEAL', 'seal_y_max', default))
+
+    def set_high_seal_threshold(self, threshold: float):
+        """Set the HIGH_SEAL Y deviation threshold (percentage).
+
+        High seal triggers when seal_y < this value (negative = shifted up).
+        """
+        self.set_pattern_override('HIGH_SEAL', 'seal_y_max', threshold)
+
+    def get_low_seal_threshold(self, default: float = 2.0) -> float:
+        """Get the LOW_SEAL Y deviation threshold (percentage).
+
+        Low seal triggers when seal_y > this value (positive = shifted down).
+        Default 2.0% corresponds to ~4mm downward shift.
+        """
+        return float(self.get_pattern_override('LOW_SEAL', 'seal_y_min', default))
+
+    def set_low_seal_threshold(self, threshold: float):
+        """Set the LOW_SEAL Y deviation threshold (percentage).
+
+        Low seal triggers when seal_y > this value (positive = shifted down).
+        """
+        self.set_pattern_override('LOW_SEAL', 'seal_y_min', threshold)
+
+    def get_seal_shift_threshold(self, default: float = 1.5) -> float:
+        """Get the SEAL_SHIFT Y deviation threshold (percentage).
+
+        Seal shift triggers when |Y deviation| > this value (any direction).
+        Default 1.5% corresponds to ~3mm shift.
+        """
+        return float(self.get_pattern_override('SEAL_SHIFT', 'seal_shift_y_threshold', default))
+
+    def set_seal_shift_threshold(self, threshold: float):
+        """Set the SEAL_SHIFT Y deviation threshold (percentage).
+
+        Seal shift triggers when |Y deviation| > this value (any direction).
+        """
+        self.set_pattern_override('SEAL_SHIFT', 'seal_shift_y_threshold', threshold)
+
     def get_custom_pattern(self, pattern_name: str) -> Optional[Dict]:
         """Get a custom YAML pattern definition."""
         return self.custom_patterns.get(pattern_name)

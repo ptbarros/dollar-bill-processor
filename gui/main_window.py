@@ -843,8 +843,9 @@ class MainWindow(QMainWindow):
         with open(path, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=[
                 'position', 'front_file', 'back_file', 'serial', 'fancy_types',
-                'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
-                'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped',
+                'confidence', 'baseline_variance', 'seal_x', 'seal_y',
+                'is_fancy', 'needs_review', 'serial_region_path', 'error',
+                'front_align_angle', 'front_align_flipped',
                 'series_year', 'front_plate', 'back_plate', 'potential_mule',
                 'viewed', 'cropped', 'sent_for_review', 'checked',
                 'note', 'pattern_override'
@@ -1787,8 +1788,9 @@ class MainWindow(QMainWindow):
         with open(csv_path, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=[
                 'position', 'front_file', 'back_file', 'serial', 'fancy_types',
-                'confidence', 'baseline_variance', 'is_fancy', 'needs_review',
-                'serial_region_path', 'error', 'front_align_angle', 'front_align_flipped',
+                'confidence', 'baseline_variance', 'seal_x', 'seal_y',
+                'is_fancy', 'needs_review', 'serial_region_path', 'error',
+                'front_align_angle', 'front_align_flipped',
                 'series_year', 'front_plate', 'back_plate', 'potential_mule',
                 'viewed', 'cropped', 'sent_for_review', 'checked',
                 'note', 'pattern_override'

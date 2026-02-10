@@ -38,7 +38,7 @@ function match(ctx)
     -- ctx.digit_list: {1,2,3,4,5,6,7,8} as integers
     -- ctx.data: loaded from DataFile (if specified)
     -- ctx.data_by_key: dict keyed by first CSV column
-    -- ctx.metadata: {series_year, front_plate, back_plate}
+    -- ctx.metadata: {baseline_variance, seal_x, seal_y, series_year, front_plate, back_plate}
 
     return {
         matched = true,
@@ -243,6 +243,54 @@ Optional feature (Settings → Processing → "Extract plate and series info"):
 
 **Keyboard:** Press 'M' to show plate magnifier popup (200% zoom comparison)
 
+## Overprint Shift Detection (Seal Shift)
+
+Detects overprint misalignment by comparing elements printed in different plate passes:
+
+### Plate Groups
+Dollar bills are printed in 3 passes. Shift detection compares:
+- **Overprint (letterpress)**: seal_t, seal_f, serial_number (class IDs 5, 6, 7)
+- **Intaglio face (earlier pass)**: front_plate, series_year, denomination (class IDs 3, 4, 8)
+
+### Algorithm (Pairwise Median Method)
+Uses 9 pairwise distances (3 overprint × 3 intaglio classes) for robust shift estimation:
+
+1. Run YOLO inference at conf=0.1 to detect plate elements
+2. Compute per-class centroid positions (X%, Y%) normalized to image
+3. For each of 9 overprint-intaglio class pairs:
+   - Compute actual distance: `(overprint_cx - intaglio_cx, overprint_cy - intaglio_cy)`
+   - Compute deviation from expected: `actual - expected_pair_distance`
+4. Return median of all 9 pair deviations as the shift estimate
+
+**Why pairwise median?**
+- Within-image differencing cancels per-image systematic bias
+- Median of 9 pairs is robust to noisy individual detections
+- Tighter std dev (0.81%) vs group mean approach (0.87%)
+
+**Expected pair distances** calibrated from 10 reference bills in `canon/` directory.
+
+### Metrics
+- `seal_x`: Median X deviation from expected pair distances (% of image width)
+- `seal_y`: Median Y deviation from expected pair distances (% of image height)
+  - Positive = overprint shifted DOWN relative to intaglio
+  - Negative = overprint shifted UP relative to intaglio
+
+### Patterns
+- `SEAL_SHIFT`: Triggers when |seal_y| > 1.5% (any direction)
+- `HIGH_SEAL`: Triggers when seal_y < -1.7% (shifted up)
+- `LOW_SEAL`: Triggers when seal_y > +1.3% (shifted down)
+
+**CSV output:** `seal_x`, `seal_y` columns (percentage deviation)
+
+**GUI display:** "Shift Y%" column shows signed percentage deviation
+
+**Lua metadata:** Access via `ctx.metadata.seal_y` (percentage deviation)
+
+**Debug tool:**
+```bash
+./venv/bin/python tools/debug_seal_detection.py ~/Pictures/Dollar/seal_test/
+```
+
 ## Session Recovery & Autosave
 
 - Periodic autosave to `.session_recovery.json` (configurable interval)
@@ -296,7 +344,10 @@ Access via SettingsManager:
 ```python
 settings.get_pattern_override('GAS_PUMP', 'baseline_variance_min', default=3.5)
 settings.set_pattern_override('GAS_PUMP', 'baseline_variance_min', 3.6)
-settings.get_gas_pump_threshold()  # convenience method
+settings.get_gas_pump_threshold()   # convenience method (3.5 default)
+settings.get_seal_shift_threshold() # radial threshold (2.5 default)
+settings.get_high_seal_threshold()  # Y threshold (-2.0 default)
+settings.get_low_seal_threshold()   # Y threshold (2.0 default)
 ```
 
 ## Synthetic Test Bill Generator
@@ -308,7 +359,7 @@ python tools/create_test_bill.py --pattern RADAR --count 5 --results archive/*/r
 python tools/create_test_bill.py --all-patterns --results archive/*/results.csv --output-dir test_bills/
 ```
 
-Composites character glyphs from real scanned bills. Skipped patterns: GAS_PUMP, STAR, LOW_RUN_*, KNOWN_SERIALS (require metadata or special images).
+Composites character glyphs from real scanned bills. Skipped patterns: GAS_PUMP, STAR, LOW_RUN_*, KNOWN_SERIALS, SEAL_SHIFT, HIGH_SEAL, LOW_SEAL (require metadata or special images).
 
 ## Notes
 

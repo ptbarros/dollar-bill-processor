@@ -3,6 +3,7 @@ Processing Thread - Background processing for the GUI.
 """
 
 import sys
+import cv2
 from pathlib import Path
 from typing import Optional
 
@@ -156,6 +157,15 @@ class ProcessingThread(QThread):
                 pair.front_align_angle = align_info.get('angle', 0.0)
                 pair.front_align_flipped = align_info.get('flipped', False)
 
+                # Calculate overprint shift from aligned front image
+                aligned_front = align_info.get('aligned_image')
+                if aligned_front is None:
+                    aligned_front = cv2.imread(str(pair.front_path))
+                shift_x, shift_y, n_refs = self.processor._calculate_seal_shift(aligned_front)
+                pair.seal_shift_x = shift_x
+                pair.seal_shift_y = shift_y
+                pair.seal_shift_refs = n_refs
+
                 # Extract plate info if setting enabled
                 plate_info = {'series_year': '', 'front_plate': '', 'back_plate': '', 'potential_mule': False}
                 if self.extract_plate_info and serial:
@@ -180,9 +190,11 @@ class ProcessingThread(QThread):
                         pair.fancy_types = ["ALL"]
                         pair.is_fancy = True
                     else:
-                        # Pass baseline_variance and plate info in metadata
+                        # Pass baseline_variance, seal position, and plate info in metadata
                         metadata = {
                             'baseline_variance': pair.baseline_variance,
+                            'seal_x': pair.seal_shift_x,
+                            'seal_y': pair.seal_shift_y,
                             'series_year': pair.series_year,
                             'front_plate': pair.front_plate,
                             'back_plate': pair.back_plate,
@@ -214,6 +226,8 @@ class ProcessingThread(QThread):
                         'fancy_types': ', '.join(pair.fancy_types),
                         'confidence': f"{confidence:.2f}",
                         'baseline_variance': f"{pair.baseline_variance:.1f}",
+                        'seal_x': f"{pair.seal_shift_x:.1f}",
+                        'seal_y': f"{pair.seal_shift_y:.1f}",
                         'is_fancy': pair.is_fancy,
                         'needs_review': needs_review,
                         'serial_region_path': serial_region_path,
@@ -240,6 +254,8 @@ class ProcessingThread(QThread):
                         'fancy_types': '',
                         'confidence': f"{confidence:.2f}",
                         'baseline_variance': f"{pair.baseline_variance:.1f}",
+                        'seal_x': f"{pair.seal_shift_x:.1f}",
+                        'seal_y': f"{pair.seal_shift_y:.1f}",
                         'is_fancy': False,
                         'needs_review': True,
                         'serial_region_path': serial_region_path,
@@ -266,6 +282,8 @@ class ProcessingThread(QThread):
                         'fancy_types': '',
                         'confidence': '0.00',
                         'baseline_variance': f"{pair.baseline_variance:.1f}",
+                        'seal_x': f"{pair.seal_shift_x:.1f}",
+                        'seal_y': f"{pair.seal_shift_y:.1f}",
                         'is_fancy': False,
                         'needs_review': True,
                         'serial_region_path': serial_region_path,
