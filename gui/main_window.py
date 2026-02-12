@@ -1070,9 +1070,8 @@ class MainWindow(QMainWindow):
 
     def _apply_settings(self):
         """Apply changed settings to the UI."""
-        # Apply font size
-        font_size = self.settings.ui.font_size
-        self._apply_font_size(font_size)
+        # Apply theme and font size together (they share a stylesheet)
+        self._apply_theme_and_font()
 
         # Update autosave timer in case interval changed
         self._update_autosave_timer()
@@ -1086,66 +1085,20 @@ class MainWindow(QMainWindow):
             auto_archive_enabled=self.settings.processing.auto_archive
         )
 
-    def _apply_font_size(self, size: int):
-        """Apply font size to the application."""
-        # Create stylesheet with the specified font size
-        stylesheet = f"""
-            QWidget {{
-                font-size: {size}pt;
-            }}
-            QTreeWidget {{
-                font-size: {size}pt;
-            }}
-            QTreeWidget::item {{
-                padding: {max(2, size // 4)}px;
-            }}
-            QListWidget {{
-                font-size: {size}pt;
-            }}
-            QTableWidget {{
-                font-size: {size}pt;
-            }}
-            QPushButton {{
-                font-size: {size}pt;
-                padding: {max(4, size // 3)}px {max(8, size // 2)}px;
-            }}
-            QLabel {{
-                font-size: {size}pt;
-            }}
-            QLineEdit {{
-                font-size: {size}pt;
-                padding: {max(2, size // 4)}px;
-            }}
-            QComboBox {{
-                font-size: {size}pt;
-            }}
-            QSpinBox, QDoubleSpinBox {{
-                font-size: {size}pt;
-            }}
-            QGroupBox {{
-                font-size: {size}pt;
-            }}
-            QGroupBox::title {{
-                font-size: {size}pt;
-            }}
-            QTabWidget::tab-bar {{
-                font-size: {size}pt;
-            }}
-            QTabBar::tab {{
-                font-size: {size}pt;
-                padding: {max(4, size // 3)}px {max(8, size // 2)}px;
-            }}
-            QMenuBar {{
-                font-size: {size}pt;
-            }}
-            QMenu {{
-                font-size: {size}pt;
-            }}
-            QStatusBar {{
-                font-size: {size}pt;
-            }}
-        """
-        QApplication.instance().setStyleSheet(stylesheet)
+    def _apply_theme_and_font(self):
+        """Apply theme and font size to the application."""
+        from .theme_manager import apply_theme, get_combined_stylesheet
+
+        app = QApplication.instance()
+        theme = self.settings.ui.theme
+        font_size = self.settings.ui.font_size
+
+        # Apply palette (handles most color changes)
+        apply_theme(app, theme)
+
+        # Apply combined stylesheet (font sizes + dark mode polish)
+        stylesheet = get_combined_stylesheet(theme, font_size)
+        app.setStyleSheet(stylesheet)
 
     # =========================================================================
     # Lazy Processor Creation
@@ -1833,6 +1786,13 @@ def run_gui():
     app = QApplication(sys.argv)
     app.setApplicationName("Dollar Bill Processor")
     app.setOrganizationName("DollarBillProcessor")
+
+    # Apply theme and font size from settings
+    from .theme_manager import apply_theme, get_combined_stylesheet
+    settings = get_settings()
+    apply_theme(app, settings.ui.theme)
+    stylesheet = get_combined_stylesheet(settings.ui.theme, settings.ui.font_size)
+    app.setStyleSheet(stylesheet)
 
     window = MainWindow()
     window.show()
