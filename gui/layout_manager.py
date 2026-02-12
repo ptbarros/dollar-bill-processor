@@ -57,6 +57,9 @@ class LayoutManager:
         # Track extracted widgets for details_right layout
         self._details_container = None
 
+        # Keep old containers to avoid deletion issues during reparenting
+        self._old_containers = []
+
     def set_widgets(self, results_list, preview_panel, processing_panel):
         """
         Set the widget references to be managed.
@@ -96,9 +99,12 @@ class LayoutManager:
         self.preview_panel.setParent(None)
 
         # Remove old content widget from layout
+        # Don't delete it immediately - just hide and keep reference to avoid
+        # memory corruption during widget reparenting
         if self._current_content:
             self.parent_layout.removeWidget(self._current_content)
-            self._current_content.deleteLater()
+            self._current_content.hide()
+            self._old_containers.append(self._current_content)
             self._current_content = None
 
         self._details_container = None
