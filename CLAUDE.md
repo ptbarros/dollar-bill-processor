@@ -338,10 +338,41 @@ Uses standard X/Y coordinates: +x = right, -x = left, +y = up, -y = down
 4. Press **C** to batch crop all queued bills
 5. After crop: ✓ clears, C status appears
 
+## Layout Modes
+
+Switchable panel layouts via **View > Layout** menu. Preference saved to `user_settings.yaml`.
+
+**Available layouts:**
+
+| Layout | Description |
+|--------|-------------|
+| **Classic** (default) | Results list on left, Preview + Serial + Details stacked on right |
+| **Wide Preview** | Preview + Serial on top (full width), Results list below |
+| **Details Right** | Preview + Serial on top, Results + Details side-by-side below |
+
+**Details Right layout:**
+```
++-------------------------------------------+
+|         ProcessingPanel                   |
++-------------------------------------------+
+|          Bill Preview                     |
+|          + Serial Region                  |
++-------------------+-----------------------+
+|   Results List    |    Bill Details       |
++-------------------+-----------------------+
+```
+The divider between Results and Details is adjustable.
+
+**Files:**
+- `gui/layout_manager.py`: LayoutManager class, layout constants
+- `settings_manager.py`: `UISettings.layout_mode` field
+
 ## User Settings Persistence
 
 All user customizations stored in `user_settings.yaml` (gitignored):
 ```yaml
+ui:
+  layout_mode: classic  # or "wide_preview", "details_right"
 pattern_overrides:
   GAS_PUMP:
     baseline_variance_min: 3.6

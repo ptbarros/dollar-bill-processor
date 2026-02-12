@@ -67,6 +67,8 @@ class UISettings:
     serial_bbox_color: str = "#00ff00"  # Green default
     # Gas pump overlay
     gas_pump_overlay_enabled: bool = False
+    # Layout mode: "classic", "wide_preview", "details_right"
+    layout_mode: str = "classic"
 
 
 @dataclass
@@ -196,6 +198,7 @@ class SettingsManager:
             self.ui.crosshair_thickness = ui.get('crosshair_thickness', 1)
             self.ui.serial_bbox_color = ui.get('serial_bbox_color', '#00ff00')
             self.ui.gas_pump_overlay_enabled = ui.get('gas_pump_overlay_enabled', False)
+            self.ui.layout_mode = ui.get('layout_mode', 'classic')
 
         # Load export settings
         if 'export' in data:
@@ -375,6 +378,7 @@ class SettingsManager:
                 'crosshair_thickness': self.ui.crosshair_thickness,
                 'serial_bbox_color': self.ui.serial_bbox_color,
                 'gas_pump_overlay_enabled': self.ui.gas_pump_overlay_enabled,
+                'layout_mode': self.ui.layout_mode,
             },
             'export': {
                 'default_format': self.export.default_format,

@@ -22,6 +22,10 @@ from PySide6.QtGui import QAction, QKeySequence, QShortcut, QPixmap, QImage
 from .processing_panel import ProcessingPanel
 from .results_list import ResultsList
 from .preview_panel import PreviewPanel
+from .layout_manager import (
+    LayoutManager, LAYOUT_CLASSIC, LAYOUT_WIDE_PREVIEW,
+    LAYOUT_DETAILS_RIGHT, LAYOUT_NAMES
+)
 
 # Import backend
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -77,9 +81,9 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(8, 8, 8, 8)
-        main_layout.setSpacing(8)
+        self.main_layout = QVBoxLayout(central_widget)
+        self.main_layout.setContentsMargins(8, 8, 8, 8)
+        self.main_layout.setSpacing(8)
 
         # Top toolbar area
         self.processing_panel = ProcessingPanel()
@@ -89,20 +93,15 @@ class MainWindow(QMainWindow):
         self.processing_panel.monitor_stop_requested.connect(self._stop_monitoring)
         self.processing_panel.monitor_check.toggled.connect(self._on_monitor_mode_changed)
         self.processing_panel.archive_requested.connect(self._on_archive_requested)
-        main_layout.addWidget(self.processing_panel)
+        self.main_layout.addWidget(self.processing_panel)
 
-        # Main content area (splitter)
-        splitter = QSplitter(Qt.Horizontal)
-
-        # Left panel - Results list
+        # Create panels (not added to layout yet - LayoutManager will do that)
         self.results_list = ResultsList()
         self.results_list.item_selected.connect(self._on_result_selected)
         self.results_list.correction_applied.connect(self._on_correction_applied)
         self.results_list.batch_changed.connect(self._on_batch_changed)
         self.results_list.status_changed.connect(self._mark_session_dirty)
-        splitter.addWidget(self.results_list)
 
-        # Right panel - Preview
         self.preview_panel = PreviewPanel()
         self.preview_panel.prev_requested.connect(self._prev_bill)
         self.preview_panel.next_requested.connect(self._next_bill)
@@ -113,14 +112,17 @@ class MainWindow(QMainWindow):
         # Apply saved visibility settings
         self.preview_panel.set_serial_region_visible(self.settings.ui.show_serial_region)
         self.preview_panel.set_details_visible(self.settings.ui.show_bill_details)
-        splitter.addWidget(self.preview_panel)
 
-        # Set splitter sizes (40% list, 60% preview)
-        splitter.setSizes([400, 600])
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
+        # Initialize layout manager and apply saved layout
+        self.layout_manager = LayoutManager(central_widget)
+        self.layout_manager.set_widgets(self.results_list, self.preview_panel, self.processing_panel)
+        self.layout_manager.set_parent_layout(self.main_layout)
 
-        main_layout.addWidget(splitter, 1)
+        # Apply the saved layout (or default to classic)
+        saved_layout = self.settings.ui.layout_mode
+        if saved_layout not in (LAYOUT_CLASSIC, LAYOUT_WIDE_PREVIEW, LAYOUT_DETAILS_RIGHT):
+            saved_layout = LAYOUT_CLASSIC
+        self.layout_manager.apply_layout(saved_layout)
 
     def _setup_menus(self):
         """Setup the menu bar."""
@@ -198,6 +200,20 @@ class MainWindow(QMainWindow):
         self.show_details_action.setChecked(self.settings.ui.show_bill_details)
         self.show_details_action.triggered.connect(self._toggle_details)
         view_menu.addAction(self.show_details_action)
+
+        view_menu.addSeparator()
+
+        # Layout submenu
+        layout_menu = view_menu.addMenu("&Layout")
+        self.layout_actions = {}
+        current_layout = self.settings.ui.layout_mode
+
+        for layout_id, layout_name in LAYOUT_NAMES.items():
+            action = QAction(layout_name, self, checkable=True)
+            action.setChecked(layout_id == current_layout)
+            action.triggered.connect(lambda checked, lid=layout_id: self._on_layout_changed(lid))
+            layout_menu.addAction(action)
+            self.layout_actions[layout_id] = action
 
         view_menu.addSeparator()
 
@@ -746,6 +762,19 @@ class MainWindow(QMainWindow):
         """Toggle bill details panel visibility."""
         self.preview_panel.set_details_visible(checked)
         self.settings.ui.show_bill_details = checked
+        self.settings.save()
+
+    def _on_layout_changed(self, layout_id: str):
+        """Handle layout selection from menu."""
+        # Update menu checkmarks
+        for lid, action in self.layout_actions.items():
+            action.setChecked(lid == layout_id)
+
+        # Apply the layout
+        self.layout_manager.apply_layout(layout_id)
+
+        # Save preference
+        self.settings.ui.layout_mode = layout_id
         self.settings.save()
 
     def _refresh_view(self):
