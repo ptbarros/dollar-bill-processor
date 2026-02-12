@@ -560,7 +560,7 @@ class ResultsList(QWidget):
             auto += 'R'
         if auto:
             status_parts.append(auto)
-        item.setText(11, ' '.join(status_parts))
+        item.setText(13, ' '.join(status_parts))  # Column 13 = Status
         # Store the modified dict back (PySide6 copies on setData)
         item.setData(0, Qt.UserRole, result)
 
