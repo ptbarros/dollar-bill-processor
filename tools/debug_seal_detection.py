@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Debug script to visualize pairwise median seal shift detection."""
+"""Debug script to visualize seal vs ONE_hashed shift detection."""
 
 import cv2
-import statistics
 import sys
 from pathlib import Path
 
@@ -14,34 +13,9 @@ script_dir = Path(__file__).parent.parent
 model_path = script_dir / "best.pt"
 processor = ProductionProcessor(model_path)
 
-# Expected pair distances calibrated from 10 reference bills in canon/
-# Format: (overprint_class_id, intaglio_class_id): (expected_dx, expected_dy)
-EXPECTED_PAIR_DISTANCES = {
-    (5, 3): (16.1788, 23.5241),    # seal_f vs denomination
-    (5, 4): (-61.1580, -18.3492),  # seal_f vs front_plate
-    (5, 8): (-40.7820, -28.4867),  # seal_f vs series_year
-    (6, 3): (64.4764, 31.6387),    # seal_t vs denomination
-    (6, 4): (-12.6970, -10.3124),  # seal_t vs front_plate
-    (6, 8): (7.5330, -20.5299),    # seal_t vs series_year
-    (7, 3): (39.3343, 23.4173),    # serial_number vs denomination
-    (7, 4): (-37.8311, -18.5696),  # serial_number vs front_plate
-    (7, 8): (-17.6118, -28.4774),  # serial_number vs series_year
-}
 
-# Class IDs and names
-CLASS_NAME_TO_ID = {
-    'seal_f': 5, 'seal_t': 6, 'serial_number': 7,
-    'denomination': 3, 'front_plate': 4, 'series_year': 8
-}
-CLASS_ID_TO_NAME = {v: k for k, v in CLASS_NAME_TO_ID.items()}
-
-CONF_THRESHOLDS = {5: 0.3, 6: 0.3, 7: 0.5, 3: 0.3, 4: 0.3, 8: 0.3}
-OVERPRINT_IDS = {5, 6, 7}   # seal_f, seal_t, serial_number
-INTAGLIO_IDS = {3, 4, 8}    # denomination, front_plate, series_year
-
-
-def debug_overprint_shift(image_path: str):
-    """Show pairwise median shift calculation with visual output."""
+def debug_seal_shift(image_path: str):
+    """Show seal vs ONE_hashed shift calculation with visual output."""
     global processor
 
     img = cv2.imread(image_path)
@@ -54,91 +28,85 @@ def debug_overprint_shift(image_path: str):
     print(f"{Path(image_path).name}: {w}x{h}")
     print(f"{'='*60}")
 
-    # Use lower conf to get more detections (same as _calculate_seal_shift)
+    # Get detections (same as _calculate_seal_shift)
     detections = processor._detect_all_objects(img, conf=0.1)
 
-    # Collect boxes by class ID, filter by confidence
-    by_class = {}
-    for name, class_id in CLASS_NAME_TO_ID.items():
-        positions = []
-        boxes = []
-        for box in detections.get(name, []):
-            if box[4] >= CONF_THRESHOLDS[class_id]:
-                cx = (box[0] + box[2]) / 2 / w * 100
-                cy = (box[1] + box[3]) / 2 / h * 100
-                positions.append((cx, cy))
-                boxes.append(box)
-        if positions:
-            by_class[class_id] = {'positions': positions, 'boxes': boxes}
+    # Get seal_t and ONE_hashed boxes
+    seal_boxes = [b for b in detections.get('seal_t', []) if b[4] >= 0.3]
+    one_boxes = [b for b in detections.get('ONE_hashed', []) if b[4] >= 0.3]
 
-    # Compute centroid for each class
-    class_positions = {}
-    for cls_id, data in by_class.items():
-        positions = data['positions']
-        class_positions[cls_id] = (
-            sum(p[0] for p in positions) / len(positions),
-            sum(p[1] for p in positions) / len(positions),
-        )
+    print(f"\nDETECTIONS:")
+    print(f"  seal_t:      {len(seal_boxes)} box(es)")
+    for i, b in enumerate(seal_boxes):
+        print(f"    [{i}] conf={b[4]:.3f}  box=({int(b[0])}, {int(b[1])}) - ({int(b[2])}, {int(b[3])})")
+    print(f"  ONE_hashed:  {len(one_boxes)} box(es)")
+    for i, b in enumerate(one_boxes):
+        print(f"    [{i}] conf={b[4]:.3f}  box=({int(b[0])}, {int(b[1])}) - ({int(b[2])}, {int(b[3])})")
 
-    # Print per-class centroids
-    print(f"\nPER-CLASS CENTROIDS:")
-    print(f"  OVERPRINT (letterpress):")
-    for cls_id in sorted(OVERPRINT_IDS):
-        if cls_id in class_positions:
-            cx, cy = class_positions[cls_id]
-            n = len(by_class[cls_id]['positions'])
-            print(f"    {CLASS_ID_TO_NAME[cls_id]:15s}: ({cx:6.2f}%, {cy:6.2f}%)  [{n} detection(s)]")
-        else:
-            print(f"    {CLASS_ID_TO_NAME[cls_id]:15s}: NOT DETECTED")
-
-    print(f"  INTAGLIO (face plate):")
-    for cls_id in sorted(INTAGLIO_IDS):
-        if cls_id in class_positions:
-            cx, cy = class_positions[cls_id]
-            n = len(by_class[cls_id]['positions'])
-            print(f"    {CLASS_ID_TO_NAME[cls_id]:15s}: ({cx:6.2f}%, {cy:6.2f}%)  [{n} detection(s)]")
-        else:
-            print(f"    {CLASS_ID_TO_NAME[cls_id]:15s}: NOT DETECTED")
-
-    # Compute deviation from expected for each pair
-    print(f"\nPAIRWISE DEVIATIONS (actual - expected):")
-    pair_deviations = []
-    for (o_cls, i_cls), (exp_dx, exp_dy) in sorted(EXPECTED_PAIR_DISTANCES.items()):
-        o_name = CLASS_ID_TO_NAME[o_cls]
-        i_name = CLASS_ID_TO_NAME[i_cls]
-        pair_label = f"{o_name} vs {i_name}"
-
-        if o_cls in class_positions and i_cls in class_positions:
-            ox, oy = class_positions[o_cls]
-            ix, iy = class_positions[i_cls]
-            actual_dx = ox - ix
-            actual_dy = oy - iy
-            dev_x = actual_dx - exp_dx
-            dev_y = actual_dy - exp_dy
-            pair_deviations.append((dev_x, dev_y))
-            print(f"  {pair_label:30s}: dX={dev_x:+6.3f}%  dY={dev_y:+6.3f}%")
-        else:
-            print(f"  {pair_label:30s}: MISSING DETECTION")
-
-    if not pair_deviations:
-        print(f"\n*** Insufficient detections for shift calculation ***")
+    if not seal_boxes or not one_boxes:
+        print(f"\n*** Missing detections - cannot calculate shift ***")
         return
 
-    # Median deviation = robust shift estimate
-    shift_x = statistics.median([d[0] for d in pair_deviations])
-    shift_y = statistics.median([d[1] for d in pair_deviations])
+    # Use highest confidence detection for each
+    seal = max(seal_boxes, key=lambda b: b[4])
+    one = max(one_boxes, key=lambda b: b[4])
 
-    print(f"\nMEDIAN SHIFT (from {len(pair_deviations)} pairs):")
-    print(f"  X: {shift_x:+.3f}%")
-    print(f"  Y: {shift_y:+.3f}%")
+    # ONE_hashed dimensions
+    one_w = one[2] - one[0]
+    one_h = one[3] - one[1]
 
-    # Flag if deviation exceeds thresholds
+    # Centers
+    one_cx = (one[0] + one[2]) / 2
+    one_cy = (one[1] + one[3]) / 2
+    seal_cx = (seal[0] + seal[2]) / 2
+    seal_cy = (seal[1] + seal[3]) / 2
+
+    print(f"\nBOX ANALYSIS:")
+    print(f"  ONE_hashed:  center=({one_cx:.1f}, {one_cy:.1f})  size=({one_w:.1f} x {one_h:.1f})")
+    print(f"  seal_t:      center=({seal_cx:.1f}, {seal_cy:.1f})")
+
+    # Center-to-center offset as % of ONE dimensions
+    # Standard coordinates: +x is right, +y is UP (negate image y)
+    dx_pct = (seal_cx - one_cx) / one_w * 100
+    dy_pct = -(seal_cy - one_cy) / one_h * 100  # Negate so +y = up, -y = down
+
+    print(f"\nCENTER-TO-CENTER OFFSET:")
+    print(f"  dX: {dx_pct:+.2f}% of ONE width")
+    print(f"  dY: {dy_pct:+.2f}% of ONE height")
+
+    # Containment calculation
+    inter_x1 = max(seal[0], one[0])
+    inter_y1 = max(seal[1], one[1])
+    inter_x2 = min(seal[2], one[2])
+    inter_y2 = min(seal[3], one[3])
+
+    seal_area = (seal[2] - seal[0]) * (seal[3] - seal[1])
+    if inter_x2 > inter_x1 and inter_y2 > inter_y1 and seal_area > 0:
+        inter_area = (inter_x2 - inter_x1) * (inter_y2 - inter_y1)
+        containment = inter_area / seal_area * 100
+    else:
+        inter_area = 0
+        containment = 0.0
+
+    print(f"\nCONTAINMENT:")
+    print(f"  Seal area:         {seal_area:.0f} px²")
+    print(f"  Intersection area: {inter_area:.0f} px²")
+    print(f"  Containment:       {containment:.1f}%")
+
+    # Overflow per side
+    print(f"\nOVERFLOW (seal extending beyond ONE bbox):")
+    overflow_left = max(0, one[0] - seal[0])
+    overflow_right = max(0, seal[2] - one[2])
+    overflow_top = max(0, one[1] - seal[1])
+    overflow_bottom = max(0, seal[3] - one[3])
+    print(f"  Left:   {overflow_left:.1f} px")
+    print(f"  Right:  {overflow_right:.1f} px")
+    print(f"  Top:    {overflow_top:.1f} px")
+    print(f"  Bottom: {overflow_bottom:.1f} px")
+
+    # Flag if containment below threshold (single threshold approach)
     flags = []
-    if shift_y < -1.7:
-        flags.append("HIGH_SEAL")
-    if shift_y > 1.3:
-        flags.append("LOW_SEAL")
-    if abs(shift_y) > 1.5:
+    if containment < 97:
         flags.append("SEAL_SHIFT")
 
     if flags:
@@ -147,28 +115,32 @@ def debug_overprint_shift(image_path: str):
         print(f"\n(No shift flags - within normal range)")
 
     # Draw visualization
-    # Overprint boxes in RED, Intaglio boxes in GREEN
-    for cls_id in OVERPRINT_IDS:
-        if cls_id in by_class:
-            for box in by_class[cls_id]['boxes']:
-                x1, y1, x2, y2, conf = box
-                cx = int((x1 + x2) / 2)
-                cy = int((y1 + y2) / 2)
-                cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 2)
-                cv2.putText(img, f"{CLASS_ID_TO_NAME[cls_id]} {conf:.2f}",
-                           (int(x1), int(y1)-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-                cv2.circle(img, (cx, cy), 5, (0, 0, 255), -1)
+    # ONE_hashed box in GREEN
+    cv2.rectangle(img, (int(one[0]), int(one[1])), (int(one[2]), int(one[3])), (0, 255, 0), 2)
+    cv2.putText(img, f"ONE_hashed {one[4]:.2f}",
+               (int(one[0]), int(one[1])-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+    cv2.circle(img, (int(one_cx), int(one_cy)), 5, (0, 255, 0), -1)
 
-    for cls_id in INTAGLIO_IDS:
-        if cls_id in by_class:
-            for box in by_class[cls_id]['boxes']:
-                x1, y1, x2, y2, conf = box
-                cx = int((x1 + x2) / 2)
-                cy = int((y1 + y2) / 2)
-                cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-                cv2.putText(img, f"{CLASS_ID_TO_NAME[cls_id]} {conf:.2f}",
-                           (int(x1), int(y1)-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-                cv2.circle(img, (cx, cy), 5, (0, 255, 0), -1)
+    # seal_t box in RED
+    cv2.rectangle(img, (int(seal[0]), int(seal[1])), (int(seal[2]), int(seal[3])), (0, 0, 255), 2)
+    cv2.putText(img, f"seal_t {seal[4]:.2f}",
+               (int(seal[0]), int(seal[1])-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+    cv2.circle(img, (int(seal_cx), int(seal_cy)), 5, (0, 0, 255), -1)
+
+    # Draw line between centers
+    cv2.line(img, (int(one_cx), int(one_cy)), (int(seal_cx), int(seal_cy)), (255, 255, 0), 2)
+
+    # Add text overlay with results
+    y_pos = 30
+    cv2.putText(img, f"dX: {dx_pct:+.2f}%  dY: {dy_pct:+.2f}%", (10, y_pos),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    y_pos += 25
+    cv2.putText(img, f"Containment: {containment:.1f}%", (10, y_pos),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    if flags:
+        y_pos += 25
+        cv2.putText(img, f"FLAGS: {', '.join(flags)}", (10, y_pos),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
     # Save debug image
     out_path = Path(image_path).stem + "_debug.jpg"
@@ -185,9 +157,9 @@ if __name__ == "__main__":
                 # Process all images in directory
                 for ext in ['*.jpg', '*.jpeg', '*.png']:
                     for f in sorted(path.glob(ext)):
-                        debug_overprint_shift(str(f))
+                        debug_seal_shift(str(f))
             elif path.exists():
-                debug_overprint_shift(str(path))
+                debug_seal_shift(str(path))
             else:
                 print(f"Not found: {arg}")
     else:
@@ -199,7 +171,7 @@ if __name__ == "__main__":
         ]
         for f in test_files:
             if Path(f).exists():
-                debug_overprint_shift(f)
+                debug_seal_shift(f)
             else:
                 print(f"Test file not found: {f}")
         print("\nUsage: python tools/debug_seal_detection.py <image_or_directory> ...")

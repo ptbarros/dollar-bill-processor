@@ -1,7 +1,7 @@
 --[[
 Pattern: SEAL_SHIFT
 DisplayName: Seal Shift
-Description: Overprint elements shifted from normal position (any direction)
+Description: Overprint elements shifted from normal position
 Tier: 5
 Examples: []
 Odds: Rare - printing variance
@@ -14,30 +14,29 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- seal_y is deviation percentage from expected overprint vs intaglio shift
-    -- Compares overprint (seal, serials) to intaglio (plate, series year)
-    local seal_y = metadata.seal_y
-    if not seal_y then
+    -- seal_x/seal_y are center-to-center offset as % of ONE_hashed dimensions
+    -- Standard coordinates: +x = right, +y = up
+    local seal_x = metadata.seal_x or 0
+    local seal_y = metadata.seal_y or 0
+    local containment = metadata.seal_containment or 100
+
+    -- Single threshold: containment < 97% means seal has drifted outside ONE bbox
+    if containment >= 97 then
         return {matched = false}
     end
 
-    -- Threshold: |deviation| > 1.5% (pairwise median method)
-    -- Based on std dev ~0.81%, this catches shifts ~2 std devs from normal
-    local abs_deviation = math.abs(seal_y)
-    if abs_deviation <= 1.5 then
-        return {matched = false}
-    end
-
-    -- Determine direction
+    -- Build direction message from Y shift
     local direction
-    if seal_y < 0 then
-        direction = string.format("%.1f%% up", -seal_y)
+    if seal_y > 0 then
+        direction = string.format("%.1f%% up", seal_y)
+    elseif seal_y < 0 then
+        direction = string.format("%.1f%% down", -seal_y)
     else
-        direction = string.format("%.1f%% down", seal_y)
+        direction = "shifted"
     end
 
     return {
         matched = true,
-        message = string.format("Overprint shift (%s)", direction)
+        message = string.format("Seal shift (%s, %.0f%% contained)", direction, containment)
     }
 end

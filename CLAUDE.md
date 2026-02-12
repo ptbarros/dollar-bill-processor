@@ -245,46 +245,68 @@ Optional feature (Settings → Processing → "Extract plate and series info"):
 
 ## Overprint Shift Detection (Seal Shift)
 
-Detects overprint misalignment by comparing elements printed in different plate passes:
+Detects overprint misalignment by comparing the treasury seal to the spelled-out "ONE" text underneath it.
 
-### Plate Groups
-Dollar bills are printed in 3 passes. Shift detection compares:
-- **Overprint (letterpress)**: seal_t, seal_f, serial_number (class IDs 5, 6, 7)
-- **Intaglio face (earlier pass)**: front_plate, series_year, denomination (class IDs 3, 4, 8)
+### YOLO Model v9 Classes
+The v9 model adds `ONE_hashed` class, causing all class IDs to shift +1:
+```
+ID  Name
+--  ----
+ 0  ONE_hashed      ← NEW (spelled-out "ONE" under treasury seal)
+ 1  back_plate
+ 2  bill_back
+ 3  bill_front
+ 4  denomination
+ 5  front_plate
+ 6  seal_f
+ 7  seal_t
+ 8  serial_number
+ 9  series_year
+10  star_symbol
+```
 
-### Algorithm (Pairwise Median Method)
-Uses 9 pairwise distances (3 overprint × 3 intaglio classes) for robust shift estimation:
+### Algorithm (Seal vs ONE_hashed)
+The treasury seal is physically printed on top of the "ONE" text. When the overprint plate shifts, the seal drifts outside the ONE bounding box.
 
-1. Run YOLO inference at conf=0.1 to detect plate elements
-2. Compute per-class centroid positions (X%, Y%) normalized to image
-3. For each of 9 overprint-intaglio class pairs:
-   - Compute actual distance: `(overprint_cx - intaglio_cx, overprint_cy - intaglio_cy)`
-   - Compute deviation from expected: `actual - expected_pair_distance`
-4. Return median of all 9 pair deviations as the shift estimate
+1. Run YOLO inference at conf=0.1 to detect `seal_t` and `ONE_hashed`
+2. Compute center-to-center offset as % of ONE_hashed dimensions:
+   ```python
+   dx_pct = (seal_cx - one_cx) / one_w * 100
+   dy_pct = (seal_cy - one_cy) / one_h * 100
+   ```
+3. Compute containment (% of seal area inside ONE bbox):
+   ```python
+   containment = intersection_area / seal_area * 100
+   ```
 
-**Why pairwise median?**
-- Within-image differencing cancels per-image systematic bias
-- Median of 9 pairs is robust to noisy individual detections
-- Tighter std dev (0.81%) vs group mean approach (0.87%)
+**Why seal vs ONE?**
+- Zero extra YOLO calls - both classes from same inference pass
+- Pure box arithmetic (microseconds)
+- Per-image measurement - no cross-image baseline needed
+- Direct geometric relationship - seal is physically on top of "ONE"
 
-**Expected pair distances** calibrated from 10 reference bills in `canon/` directory.
+### Metrics (Standard Coordinate System)
+Uses standard X/Y coordinates: +x = right, -x = left, +y = up, -y = down
 
-### Metrics
-- `seal_x`: Median X deviation from expected pair distances (% of image width)
-- `seal_y`: Median Y deviation from expected pair distances (% of image height)
-  - Positive = overprint shifted DOWN relative to intaglio
-  - Negative = overprint shifted UP relative to intaglio
+- `seal_x`: X offset as % of ONE_hashed width (+x = right, -x = left)
+- `seal_y`: Y offset as % of ONE_hashed height (+y = up, -y = down)
+- `seal_containment`: % of seal area inside ONE bbox (100% = normal)
 
-### Patterns
-- `SEAL_SHIFT`: Triggers when |seal_y| > 1.5% (any direction)
-- `HIGH_SEAL`: Triggers when seal_y < -1.7% (shifted up)
-- `LOW_SEAL`: Triggers when seal_y > +1.3% (shifted down)
+**Normal range:** dy from -1.0% to +1.6%, containment 100%
+**Shifted bills:** dy -6.87% (down) or +8.51% (up), containment ~94%
 
-**CSV output:** `seal_x`, `seal_y` columns (percentage deviation)
+### Pattern
+- `SEAL_SHIFT`: Triggers when **containment < 97%** (single threshold)
+  - Message includes direction from Y value: "Seal shift (6.6% down, 95% contained)"
 
-**GUI display:** "Shift Y%" column shows signed percentage deviation
+**CSV output:** `seal_x`, `seal_y`, `seal_containment` columns
 
-**Lua metadata:** Access via `ctx.metadata.seal_y` (percentage deviation)
+**GUI display:**
+- "Shift X%" - horizontal offset (%)
+- "Shift Y%" - vertical offset (%, +up/-down)
+- "Seal %" - containment (100% = normal, <97% = shifted)
+
+**Lua metadata:** Access via `ctx.metadata.seal_y` and `ctx.metadata.seal_containment`
 
 **Debug tool:**
 ```bash
@@ -345,9 +367,6 @@ Access via SettingsManager:
 settings.get_pattern_override('GAS_PUMP', 'baseline_variance_min', default=3.5)
 settings.set_pattern_override('GAS_PUMP', 'baseline_variance_min', 3.6)
 settings.get_gas_pump_threshold()   # convenience method (3.5 default)
-settings.get_seal_shift_threshold() # radial threshold (2.5 default)
-settings.get_high_seal_threshold()  # Y threshold (-2.0 default)
-settings.get_low_seal_threshold()   # Y threshold (2.0 default)
 ```
 
 ## Synthetic Test Bill Generator

@@ -217,9 +217,9 @@ class BillPair:
     review_reason: Optional[str] = None
     is_upside_down: bool = False  # True if bill was scanned upside-down
     baseline_variance: float = 0.0  # Normalized vertical misalignment for gas pump detection
-    seal_shift_x: float = 0.0  # Overprint X shift deviation from baseline (%)
-    seal_shift_y: float = 0.0  # Overprint Y shift deviation from baseline (%)
-    seal_shift_refs: int = 0   # Number of reference elements used for shift calculation
+    seal_shift_x: float = 0.0  # Overprint X offset as % of ONE_hashed width
+    seal_shift_y: float = 0.0  # Overprint Y offset as % of ONE_hashed height
+    seal_containment: float = 100.0  # % of seal area inside ONE_hashed bbox
     star_detected: bool = False  # True if star symbol visually detected by YOLO
     # Cached alignment info to avoid redundant YOLO calls in generate_crops()
     front_align_angle: float = 0.0  # Rotation angle from YOLO alignment
@@ -421,12 +421,12 @@ class BillAligner:
 class YOLOBillAligner:
     """Aligns scanned bills using YOLO detection for more accurate results."""
 
-    # YOLO class indices
+    # YOLO class indices (v9 model - ONE_hashed added, all IDs shifted +1)
     YOLO_CLASSES = {
-        'bill_front': 2,
-        'bill_back': 1,
-        'seal_t': 6,  # Treasury seal (right side on correct orientation)
-        'seal_f': 5,  # Federal Reserve seal (left side on correct orientation)
+        'bill_front': 3,
+        'bill_back': 2,
+        'seal_t': 7,  # Treasury seal (right side on correct orientation)
+        'seal_f': 6,  # Federal Reserve seal (left side on correct orientation)
     }
 
     def __init__(self, yolo_model):
@@ -726,19 +726,20 @@ class ProductionProcessor:
     # Valid Federal Reserve codes (A-L)
     VALID_FED_CODES = set('ABCDEFGHIJKL')
 
-    # YOLO class indices for Dollar Detective model (10 classes)
-    # Set to None to use all classes (backward compatible with single-class model)
+    # YOLO class indices for Dollar Detective model v9 (11 classes)
+    # ONE_hashed added in v9, causing all IDs to shift +1 due to alphabetical sort
     YOLO_CLASSES = {
-        'back_plate': 0,
-        'bill_back': 1,
-        'bill_front': 2,
-        'denomination': 3,
-        'front_plate': 4,
-        'seal_f': 5,       # Federal Reserve Bank seal
-        'seal_t': 6,       # Treasury seal
-        'serial_number': 7,
-        'series_year': 8,
-        'star_symbol': 9,
+        'ONE_hashed': 0,   # Spelled-out "ONE" text under treasury seal
+        'back_plate': 1,
+        'bill_back': 2,
+        'bill_front': 3,
+        'denomination': 4,
+        'front_plate': 5,
+        'seal_f': 6,       # Federal Reserve Bank seal
+        'seal_t': 7,       # Treasury seal
+        'serial_number': 8,
+        'series_year': 9,
+        'star_symbol': 10,
     }
 
     def __init__(self, yolo_model_path: Path, use_gpu: bool = False, cfg: Optional[Config] = None,
@@ -2308,103 +2309,67 @@ class ProductionProcessor:
         return float(max_deviation)
 
     def _calculate_seal_shift(self, img: np.ndarray) -> tuple:
-        """Calculate overprint shift using pairwise median method.
+        """Calculate overprint shift by comparing seal_t to ONE_hashed.
 
-        Dollar bills are printed in 3 passes with separate plates:
-        - Overprint (letterpress): seal_t, seal_f, serial_number
-        - Intaglio face (earlier pass): front_plate, series_year, denomination
-
-        Instead of comparing average positions, we compute 9 pairwise distances
-        (3 overprint × 3 intaglio classes), then take the median deviation from
-        expected. This is more robust because:
-        1. Within-image differencing cancels per-image systematic bias
-        2. Median of 9 pairs is robust to noisy individual detections
+        The treasury seal is printed on top of the spelled-out "ONE" text.
+        When the overprint plate shifts, the seal drifts outside the ONE bbox.
 
         Args:
             img: Aligned front image of the bill
 
         Returns:
-            tuple: (shift_x_pct, shift_y_pct, n_pairs) where:
-                   - shift_x_pct: Median X deviation from expected (positive = right)
-                   - shift_y_pct: Median Y deviation from expected (positive = down)
-                   - n_pairs: Number of valid class pairs used (max 9)
-                   Normal bills: ~0% deviation from expected pair distances
+            tuple: (dx_pct, dy_pct, containment) where:
+                   - dx_pct: X offset as % of ONE_hashed width (positive = right)
+                   - dy_pct: Y offset as % of ONE_hashed height (positive = down)
+                   - containment: % of seal area inside ONE bbox (100 = normal)
         """
-        import statistics
-
         if img is None or img.size == 0:
-            return (0.0, 0.0, 0)
+            return (0.0, 0.0, 100.0)
 
-        # Expected pair distances calibrated from 10 reference bills in canon/
-        # Format: (overprint_class_id, intaglio_class_id): (expected_dx, expected_dy)
-        # Class IDs: seal_f=5, seal_t=6, serial_number=7, denomination=3, front_plate=4, series_year=8
-        EXPECTED_PAIR_DISTANCES = {
-            (5, 3): (16.1788, 23.5241),    # seal_f vs denomination
-            (5, 4): (-61.1580, -18.3492),  # seal_f vs front_plate
-            (5, 8): (-40.7820, -28.4867),  # seal_f vs series_year
-            (6, 3): (64.4764, 31.6387),    # seal_t vs denomination
-            (6, 4): (-12.6970, -10.3124),  # seal_t vs front_plate
-            (6, 8): (7.5330, -20.5299),    # seal_t vs series_year
-            (7, 3): (39.3343, 23.4173),    # serial_number vs denomination
-            (7, 4): (-37.8311, -18.5696),  # serial_number vs front_plate
-            (7, 8): (-17.6118, -28.4774),  # serial_number vs series_year
-        }
-
-        # Confidence thresholds per class
-        CONF_THRESHOLDS = {5: 0.3, 6: 0.3, 7: 0.5, 3: 0.3, 4: 0.3, 8: 0.3}
-
-        # Map class names to IDs
-        CLASS_NAME_TO_ID = {
-            'seal_f': 5, 'seal_t': 6, 'serial_number': 7,
-            'denomination': 3, 'front_plate': 4, 'series_year': 8
-        }
-
-        # Use lower conf threshold to catch more reference elements
         detections = self._detect_all_objects(img, conf=0.1)
 
-        # Image dimensions for normalization
-        img_height, img_width = img.shape[:2]
-        if img_width <= 0 or img_height <= 0:
-            return (0.0, 0.0, 0)
+        # Get seal_t and ONE_hashed boxes
+        seal_boxes = [b for b in detections.get('seal_t', []) if b[4] >= 0.3]
+        one_boxes = [b for b in detections.get('ONE_hashed', []) if b[4] >= 0.3]
 
-        # Collect boxes by class ID, filter by confidence
-        by_class = {}
-        for name, class_id in CLASS_NAME_TO_ID.items():
-            positions = []
-            for box in detections.get(name, []):
-                if box[4] >= CONF_THRESHOLDS[class_id]:
-                    cx = (box[0] + box[2]) / 2 / img_width * 100
-                    cy = (box[1] + box[3]) / 2 / img_height * 100
-                    positions.append((cx, cy))
-            if positions:
-                by_class[class_id] = positions
+        if not seal_boxes or not one_boxes:
+            return (0.0, 0.0, 100.0)
 
-        # Compute centroid for each class
-        class_positions = {}
-        for cls_id, positions in by_class.items():
-            class_positions[cls_id] = (
-                sum(p[0] for p in positions) / len(positions),
-                sum(p[1] for p in positions) / len(positions),
-            )
+        # Use highest confidence detection for each
+        seal = max(seal_boxes, key=lambda b: b[4])
+        one = max(one_boxes, key=lambda b: b[4])
 
-        # Compute deviation from expected for each pair
-        pair_deviations = []
-        for (o_cls, i_cls), (exp_dx, exp_dy) in EXPECTED_PAIR_DISTANCES.items():
-            if o_cls in class_positions and i_cls in class_positions:
-                ox, oy = class_positions[o_cls]
-                ix, iy = class_positions[i_cls]
-                actual_dx = ox - ix
-                actual_dy = oy - iy
-                pair_deviations.append((actual_dx - exp_dx, actual_dy - exp_dy))
+        # ONE_hashed dimensions
+        one_w = one[2] - one[0]
+        one_h = one[3] - one[1]
+        if one_w <= 0 or one_h <= 0:
+            return (0.0, 0.0, 100.0)
 
-        if not pair_deviations:
-            return (0.0, 0.0, 0)
+        # Centers
+        one_cx = (one[0] + one[2]) / 2
+        one_cy = (one[1] + one[3]) / 2
+        seal_cx = (seal[0] + seal[2]) / 2
+        seal_cy = (seal[1] + seal[3]) / 2
 
-        # Median deviation = robust shift estimate
-        shift_x = statistics.median([d[0] for d in pair_deviations])
-        shift_y = statistics.median([d[1] for d in pair_deviations])
+        # Center-to-center offset as % of ONE dimensions
+        # Use standard coordinate system: +x is right, +y is UP (negate image y)
+        dx_pct = (seal_cx - one_cx) / one_w * 100
+        dy_pct = -(seal_cy - one_cy) / one_h * 100  # Negate so +y = up, -y = down
 
-        return (round(shift_x, 3), round(shift_y, 3), len(pair_deviations))
+        # Containment: % of seal area inside ONE bbox
+        inter_x1 = max(seal[0], one[0])
+        inter_y1 = max(seal[1], one[1])
+        inter_x2 = min(seal[2], one[2])
+        inter_y2 = min(seal[3], one[3])
+
+        seal_area = (seal[2] - seal[0]) * (seal[3] - seal[1])
+        if inter_x2 > inter_x1 and inter_y2 > inter_y1 and seal_area > 0:
+            inter_area = (inter_x2 - inter_x1) * (inter_y2 - inter_y1)
+            containment = inter_area / seal_area * 100
+        else:
+            containment = 0.0
+
+        return (round(dx_pct, 2), round(dy_pct, 2), round(containment, 1))
 
     def analyze_gas_pump_digits(self, serial_crop: np.ndarray, offset_x: int = 0, offset_y: int = 0) -> dict:
         """Analyze gas pump serial and return digit boxes with deviation info.
@@ -3020,10 +2985,10 @@ class ProductionProcessor:
             aligned_front = align_info.get('aligned_image')
             if aligned_front is None:
                 aligned_front = cv2.imread(str(pair.front_path))
-            shift_x, shift_y, n_refs = self._calculate_seal_shift(aligned_front)
+            shift_x, shift_y, containment = self._calculate_seal_shift(aligned_front)
             pair.seal_shift_x = shift_x
             pair.seal_shift_y = shift_y
-            pair.seal_shift_refs = n_refs
+            pair.seal_containment = containment
 
             # If star symbol visually detected but OCR missed it, append '*' to serial
             if serial and star_detected and not serial.endswith('*'):
@@ -3049,6 +3014,7 @@ class ProductionProcessor:
                         'baseline_variance': pair.baseline_variance,
                         'seal_x': pair.seal_shift_x,
                         'seal_y': pair.seal_shift_y,
+                        'seal_containment': pair.seal_containment,
                         'series_year': pair.series_year,
                         'front_plate': pair.front_plate,
                         'back_plate': pair.back_plate,

@@ -27,13 +27,19 @@ from gui.correction_dialog import CorrectionDialog, ReviewNoteDialog
 
 
 class NumericTreeWidgetItem(QTreeWidgetItem):
-    """TreeWidgetItem that sorts numerically for the first column."""
+    """TreeWidgetItem that sorts numerically for specific columns."""
+
+    # Columns that should be sorted numerically (by index)
+    NUMERIC_COLUMNS = {0, 4, 5, 6, 7}  # Position, Px Dev, Shift X%, Shift Y%, Seal %
 
     def __lt__(self, other):
         column = self.treeWidget().sortColumn() if self.treeWidget() else 0
-        if column == 0:  # Position column - sort numerically
+        if column in self.NUMERIC_COLUMNS:
             try:
-                return int(self.text(0)) < int(other.text(0))
+                # Handle signed numbers like "+5.2" or "-3.1"
+                self_val = float(self.text(column).replace('+', ''))
+                other_val = float(other.text(column).replace('+', ''))
+                return self_val < other_val
             except ValueError:
                 pass
         # Fall back to string comparison (avoid super().__lt__ which can recurse)
@@ -128,7 +134,7 @@ class ResultsList(QWidget):
 
         # Results tree
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Px Dev", "Shift Y%", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule?", "Status"])
+        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Px Dev", "Shift X%", "Shift Y%", "Seal %", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule?", "Status"])
         self.tree.setAlternatingRowColors(True)
         self.tree.setRootIsDecorated(False)
         self.tree.setSortingEnabled(True)
@@ -145,17 +151,19 @@ class ResultsList(QWidget):
         header.setSectionResizeMode(2, QHeaderView.Interactive)  # Patterns
         header.setSectionResizeMode(3, QHeaderView.Interactive)  # Conf
         header.setSectionResizeMode(4, QHeaderView.Interactive)  # Px Dev
-        header.setSectionResizeMode(5, QHeaderView.Interactive)  # Seal
-        header.setSectionResizeMode(6, QHeaderView.Interactive)  # Est. Price
-        header.setSectionResizeMode(7, QHeaderView.Interactive)  # Series
-        header.setSectionResizeMode(8, QHeaderView.Interactive)  # Front Plate
-        header.setSectionResizeMode(9, QHeaderView.Interactive)  # Back Plate
-        header.setSectionResizeMode(10, QHeaderView.Interactive)  # Mule?
-        header.setSectionResizeMode(11, QHeaderView.Interactive)  # Status
+        header.setSectionResizeMode(5, QHeaderView.Interactive)  # Shift X%
+        header.setSectionResizeMode(6, QHeaderView.Interactive)  # Shift Y%
+        header.setSectionResizeMode(7, QHeaderView.Interactive)  # Seal %
+        header.setSectionResizeMode(8, QHeaderView.Interactive)  # Est. Price
+        header.setSectionResizeMode(9, QHeaderView.Interactive)  # Series
+        header.setSectionResizeMode(10, QHeaderView.Interactive)  # Front Plate
+        header.setSectionResizeMode(11, QHeaderView.Interactive)  # Back Plate
+        header.setSectionResizeMode(12, QHeaderView.Interactive)  # Mule?
+        header.setSectionResizeMode(13, QHeaderView.Interactive)  # Status
         header.setMinimumSectionSize(30)  # Minimum for any column
 
-        # Move Status column (logical 11) to visual position 1 (between # and Serial)
-        header.moveSection(11, 1)
+        # Move Status column (logical 13) to visual position 1 (between # and Serial)
+        header.moveSection(13, 1)
 
         # Load saved column widths or use defaults
         self._load_column_widths()
@@ -172,10 +180,10 @@ class ResultsList(QWidget):
     def _load_column_widths(self):
         """Load saved column widths from QSettings, or use defaults."""
         settings = QSettings("DollarBillProcessor", "ResultsList")
-        # Default widths: #, Serial, Patterns, Conf, Px Dev, Seal, Est. Price, Series, Front Plate, Back Plate, Mule?, Status
-        defaults = [35, 130, 150, 50, 55, 45, 100, 60, 70, 60, 45, 50]
+        # Default widths: #, Serial, Patterns, Conf, Px Dev, Shift X%, Shift Y%, Seal %, Est. Price, Series, Front Plate, Back Plate, Mule?, Status
+        defaults = [35, 130, 150, 50, 55, 50, 50, 45, 100, 60, 70, 60, 45, 50]
 
-        for i in range(12):
+        for i in range(14):
             width = settings.value(f"column_{i}_width", defaults[i], type=int)
             self.tree.setColumnWidth(i, width)
 
@@ -352,14 +360,31 @@ class ResultsList(QWidget):
             except (ValueError, TypeError):
                 item.setText(4, str(baseline_variance))
 
-            # Overprint shift Y (percentage deviation from baseline)
+            # Overprint shift X (percentage offset)
+            seal_x = result.get('seal_x', '0.0')
+            try:
+                seal_x_val = float(seal_x)
+                # Show sign for shift direction (+/- offset)
+                item.setText(5, f"{seal_x_val:+.1f}" if seal_x_val != 0 else "0.0")
+            except (ValueError, TypeError):
+                item.setText(5, str(seal_x))
+
+            # Overprint shift Y (percentage offset, +y = up, -y = down)
             seal_y = result.get('seal_y', '0.0')
             try:
                 seal_y_val = float(seal_y)
-                # Show sign for shift direction (+/- deviation)
-                item.setText(5, f"{seal_y_val:+.1f}" if seal_y_val != 0 else "0.0")
+                # Show sign for shift direction (+/- offset)
+                item.setText(6, f"{seal_y_val:+.1f}" if seal_y_val != 0 else "0.0")
             except (ValueError, TypeError):
-                item.setText(5, str(seal_y))
+                item.setText(6, str(seal_y))
+
+            # Seal containment (% of seal inside ONE_hashed bbox)
+            seal_containment = result.get('seal_containment', '100.0')
+            try:
+                seal_cont_val = float(seal_containment)
+                item.setText(7, f"{seal_cont_val:.0f}")
+            except (ValueError, TypeError):
+                item.setText(7, str(seal_containment))
 
             # Est. Price - get from first matched pattern
             price_text = ""
@@ -369,19 +394,19 @@ class ResultsList(QWidget):
                     if info and 'price_range' in info:
                         price_text = info['price_range']
                         break  # Use first pattern's price
-            item.setText(6, price_text)
+            item.setText(8, price_text)
 
             # Series Year, Front Plate, Back Plate columns
-            item.setText(7, result.get('series_year', ''))
-            item.setText(8, result.get('front_plate', ''))
-            item.setText(9, result.get('back_plate', ''))
+            item.setText(9, result.get('series_year', ''))
+            item.setText(10, result.get('front_plate', ''))
+            item.setText(11, result.get('back_plate', ''))
 
             # Mule detection column
             potential_mule = result.get('potential_mule', False)
             if potential_mule:
-                item.setText(10, "Yes")
+                item.setText(12, "Yes")
             else:
-                item.setText(10, "")
+                item.setText(12, "")
 
             # Status column (review tracking)
             status_parts = []
@@ -396,7 +421,7 @@ class ResultsList(QWidget):
                 auto += 'R'
             if auto:
                 status_parts.append(auto)
-            item.setText(11, ' '.join(status_parts))
+            item.setText(13, ' '.join(status_parts))
 
             # Build comprehensive row tooltip with all bill details
             tooltip_lines = [f"Serial: {serial}"]
@@ -411,7 +436,7 @@ class ResultsList(QWidget):
                         tooltip_lines.append(f"  {display_name}: {odds}")
             tooltip_lines.append(f"Confidence: {conf}")
             tooltip_lines.append(f"Pixel Dev: {baseline_variance} px (gas pump threshold)")
-            tooltip_lines.append(f"Shift Y: {seal_y}% (overprint vs intaglio deviation)")
+            tooltip_lines.append(f"Seal shift: X={seal_x}%, Y={seal_y}%, Containment={seal_containment}%")
             if price_text:
                 tooltip_lines.append(f"Est. Price: {price_text}")
             # Add filename
@@ -420,7 +445,7 @@ class ResultsList(QWidget):
                 tooltip_lines.append(f"File: {Path(front_file).name}")
 
             row_tooltip = '\n'.join(tooltip_lines)
-            for col in range(12):
+            for col in range(14):
                 item.setToolTip(col, row_tooltip)
 
             # Color coding with explicit text color for contrast
@@ -1167,7 +1192,7 @@ class ResultsList(QWidget):
             with open(csv_path, 'w', newline='') as f:
                 writer = csv.DictWriter(f, fieldnames=[
                     'position', 'front_file', 'back_file', 'serial', 'fancy_types',
-                    'confidence', 'baseline_variance', 'seal_x', 'seal_y',
+                    'confidence', 'baseline_variance', 'seal_x', 'seal_y', 'seal_containment',
                     'is_fancy', 'needs_review', 'serial_region_path', 'error',
                     'front_align_angle', 'front_align_flipped',
                     'series_year', 'front_plate', 'back_plate', 'potential_mule',

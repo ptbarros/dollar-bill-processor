@@ -161,10 +161,10 @@ class ProcessingThread(QThread):
                 aligned_front = align_info.get('aligned_image')
                 if aligned_front is None:
                     aligned_front = cv2.imread(str(pair.front_path))
-                shift_x, shift_y, n_refs = self.processor._calculate_seal_shift(aligned_front)
+                shift_x, shift_y, containment = self.processor._calculate_seal_shift(aligned_front)
                 pair.seal_shift_x = shift_x
                 pair.seal_shift_y = shift_y
-                pair.seal_shift_refs = n_refs
+                pair.seal_containment = containment
 
                 # Extract plate info if setting enabled
                 plate_info = {'series_year': '', 'front_plate': '', 'back_plate': '', 'potential_mule': False}
@@ -195,6 +195,7 @@ class ProcessingThread(QThread):
                             'baseline_variance': pair.baseline_variance,
                             'seal_x': pair.seal_shift_x,
                             'seal_y': pair.seal_shift_y,
+                            'seal_containment': pair.seal_containment,
                             'series_year': pair.series_year,
                             'front_plate': pair.front_plate,
                             'back_plate': pair.back_plate,
@@ -228,6 +229,7 @@ class ProcessingThread(QThread):
                         'baseline_variance': f"{pair.baseline_variance:.1f}",
                         'seal_x': f"{pair.seal_shift_x:.1f}",
                         'seal_y': f"{pair.seal_shift_y:.1f}",
+                        'seal_containment': f"{pair.seal_containment:.1f}",
                         'is_fancy': pair.is_fancy,
                         'needs_review': needs_review,
                         'serial_region_path': serial_region_path,
@@ -256,6 +258,7 @@ class ProcessingThread(QThread):
                         'baseline_variance': f"{pair.baseline_variance:.1f}",
                         'seal_x': f"{pair.seal_shift_x:.1f}",
                         'seal_y': f"{pair.seal_shift_y:.1f}",
+                        'seal_containment': f"{pair.seal_containment:.1f}",
                         'is_fancy': False,
                         'needs_review': True,
                         'serial_region_path': serial_region_path,
@@ -284,6 +287,7 @@ class ProcessingThread(QThread):
                         'baseline_variance': f"{pair.baseline_variance:.1f}",
                         'seal_x': f"{pair.seal_shift_x:.1f}",
                         'seal_y': f"{pair.seal_shift_y:.1f}",
+                        'seal_containment': f"{pair.seal_containment:.1f}",
                         'is_fancy': False,
                         'needs_review': True,
                         'serial_region_path': serial_region_path,
