@@ -30,7 +30,7 @@ class NumericTreeWidgetItem(QTreeWidgetItem):
     """TreeWidgetItem that sorts numerically for specific columns."""
 
     # Columns that should be sorted numerically (by index)
-    NUMERIC_COLUMNS = {0, 4, 5, 6, 7}  # Position, Px Dev, Shift X%, Shift Y%, Seal %
+    NUMERIC_COLUMNS = {0, 4, 5, 6, 7}  # Position, GPT, Shift X%, Shift Y%, Seal %
 
     def __lt__(self, other):
         column = self.treeWidget().sortColumn() if self.treeWidget() else 0
@@ -134,7 +134,7 @@ class ResultsList(QWidget):
 
         # Results tree
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "Px Dev", "Shift X%", "Shift Y%", "Seal %", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule?", "Status"])
+        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "GPT", "Shift X%", "Shift Y%", "Seal %", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule?", "Status"])
         self.tree.setAlternatingRowColors(True)
         self.tree.setRootIsDecorated(False)
         self.tree.setSortingEnabled(True)
@@ -143,6 +143,25 @@ class ResultsList(QWidget):
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
 
+        # Column header tooltips explaining what each column means
+        self._column_tooltips = {
+            0: "Row number in the current list",
+            1: "Full serial number (prefix + 8 digits + suffix)",
+            2: "Matched fancy serial patterns",
+            3: "OCR confidence score (0-100%)",
+            4: "Gas Pump Threshold - character baseline variance (lower = more aligned, high = possible gas pump bill)",
+            5: "Seal X shift - horizontal offset of treasury seal vs ONE text (%)",
+            6: "Seal Y shift - vertical offset of treasury seal vs ONE text (%)",
+            7: "Seal containment - % of seal inside ONE bounding box (100% normal, <97% = shifted)",
+            8: "Estimated collector price range",
+            9: "Bill series year (e.g., 2017A)",
+            10: "Front plate number",
+            11: "Back plate number",
+            12: "Potential mule bill (mismatched front/back plates)",
+            13: "Status flags: ✓=queued, V=viewed, C=cropped, R=sent for review",
+        }
+        self._setup_header_tooltips()
+
         # Set column widths - all interactive for user resizing
         header = self.tree.header()
         header.setStretchLastSection(True)
@@ -150,7 +169,7 @@ class ResultsList(QWidget):
         header.setSectionResizeMode(1, QHeaderView.Interactive)  # Serial
         header.setSectionResizeMode(2, QHeaderView.Interactive)  # Patterns
         header.setSectionResizeMode(3, QHeaderView.Interactive)  # Conf
-        header.setSectionResizeMode(4, QHeaderView.Interactive)  # Px Dev
+        header.setSectionResizeMode(4, QHeaderView.Interactive)  # GPT
         header.setSectionResizeMode(5, QHeaderView.Interactive)  # Shift X%
         header.setSectionResizeMode(6, QHeaderView.Interactive)  # Shift Y%
         header.setSectionResizeMode(7, QHeaderView.Interactive)  # Seal %
@@ -165,8 +184,18 @@ class ResultsList(QWidget):
         # Move Status column (logical 13) to visual position 1 (between # and Serial)
         header.moveSection(13, 1)
 
+        # Enable right-click context menu on header to hide columns
+        header.setContextMenuPolicy(Qt.CustomContextMenu)
+        header.customContextMenuRequested.connect(self._show_header_context_menu)
+
+        # Callback for notifying main window when column visibility changes
+        self._on_column_visibility_changed = None
+
         # Load saved column widths or use defaults
         self._load_column_widths()
+
+        # Load saved column visibility
+        self._load_column_visibility()
 
         # Save column widths when user resizes them
         header.sectionResized.connect(self._save_column_widths)
@@ -180,7 +209,7 @@ class ResultsList(QWidget):
     def _load_column_widths(self):
         """Load saved column widths from QSettings, or use defaults."""
         settings = QSettings("DollarBillProcessor", "ResultsList")
-        # Default widths: #, Serial, Patterns, Conf, Px Dev, Shift X%, Shift Y%, Seal %, Est. Price, Series, Front Plate, Back Plate, Mule?, Status
+        # Default widths: #, Serial, Patterns, Conf, GPT, Shift X%, Shift Y%, Seal %, Est. Price, Series, Front Plate, Back Plate, Mule?, Status
         defaults = [35, 130, 150, 50, 55, 50, 50, 45, 100, 60, 70, 60, 45, 50]
 
         for i in range(14):
@@ -191,6 +220,90 @@ class ResultsList(QWidget):
         """Save column widths when user resizes them."""
         settings = QSettings("DollarBillProcessor", "ResultsList")
         settings.setValue(f"column_{logical_index}_width", new_size)
+
+    def _setup_header_tooltips(self):
+        """Set tooltips on column headers to explain what each column means."""
+        header_item = self.tree.headerItem()
+        if header_item:
+            for col, tooltip in self._column_tooltips.items():
+                header_item.setToolTip(col, tooltip)
+
+    def _show_header_context_menu(self, pos):
+        """Show context menu when right-clicking on column header."""
+        header = self.tree.header()
+        logical_index = header.logicalIndexAt(pos)
+        if logical_index < 0:
+            return
+
+        header_item = self.tree.headerItem()
+        col_name = header_item.text(logical_index) if header_item else f"Column {logical_index}"
+
+        menu = QMenu(self)
+        hide_action = QAction(f"Hide \"{col_name}\"", self)
+        hide_action.triggered.connect(lambda: self._hide_column_from_header(logical_index))
+        menu.addAction(hide_action)
+
+        menu.addSeparator()
+        restore_hint = QAction("(Use View > Columns to restore)", self)
+        restore_hint.setEnabled(False)
+        menu.addAction(restore_hint)
+
+        menu.exec(header.mapToGlobal(pos))
+
+    def _hide_column_from_header(self, column: int):
+        """Hide a column via header context menu and notify main window."""
+        self.set_column_visible(column, False)
+        # Notify main window to update its menu checkmarks
+        if self._on_column_visibility_changed:
+            self._on_column_visibility_changed(column, False)
+
+    def set_column_visibility_callback(self, callback):
+        """Set callback to notify when column visibility changes from header menu.
+
+        Args:
+            callback: Function(column: int, visible: bool) to call on visibility change
+        """
+        self._on_column_visibility_changed = callback
+
+    def get_column_info(self) -> list:
+        """Return list of (index, name, tooltip, visible) for all columns.
+
+        Used by main window to build the Columns submenu.
+        """
+        header_item = self.tree.headerItem()
+        header = self.tree.header()
+        columns = []
+        for i in range(self.tree.columnCount()):
+            name = header_item.text(i) if header_item else f"Column {i}"
+            tooltip = self._column_tooltips.get(i, "")
+            visible = not header.isSectionHidden(i)
+            columns.append((i, name, tooltip, visible))
+        return columns
+
+    def set_column_visible(self, column: int, visible: bool):
+        """Show or hide a column by index."""
+        self.tree.header().setSectionHidden(column, not visible)
+        self._save_column_visibility()
+
+    def is_column_visible(self, column: int) -> bool:
+        """Check if a column is visible."""
+        return not self.tree.header().isSectionHidden(column)
+
+    def _load_column_visibility(self):
+        """Load saved column visibility from QSettings."""
+        settings = QSettings("DollarBillProcessor", "ResultsList")
+        header = self.tree.header()
+        for i in range(self.tree.columnCount()):
+            # Default: all columns visible
+            hidden = settings.value(f"column_{i}_hidden", False, type=bool)
+            header.setSectionHidden(i, hidden)
+
+    def _save_column_visibility(self):
+        """Save column visibility to QSettings."""
+        settings = QSettings("DollarBillProcessor", "ResultsList")
+        header = self.tree.header()
+        for i in range(self.tree.columnCount()):
+            settings.setValue(f"column_{i}_hidden", header.isSectionHidden(i))
 
     def _get_display_name(self, pattern_name: str) -> str:
         """Get the display name for a pattern."""
@@ -1223,7 +1336,7 @@ class ResultsList(QWidget):
                 f"Failed to save CSV:\n{e}")
 
     def update_px_dev(self, position: int, px_dev: float):
-        """Update the Px Dev column for a specific result by position.
+        """Update the GPT (Gas Pump Threshold) column for a specific result by position.
 
         Called when viewing a bill to show the fresh calculated deviation
         instead of the value from processing time.

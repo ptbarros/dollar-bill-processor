@@ -748,11 +748,26 @@ class SyncedSplitViewer(QWidget):
         self.back_pane.set_crosshair_enabled(enabled)
 
 
+class ClickableLabel(QLabel):
+    """A QLabel that emits a signal when clicked."""
+
+    clicked = Signal()
+
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+
 class ImageLabel(QLabel):
     """Simple label for small images like serial region.
-    Left-click: rotate 180°
-    Right-click: cycle through pattern overlays
-    Right-click hold: show menu
+    Left-click: cycle through pattern overlays
+    Left-click hold: show pattern selection menu
+    Right-click: rotate 180°
     """
 
     # Signal emitted when user selects/cycles a pattern
@@ -768,7 +783,7 @@ class ImageLabel(QLabel):
         self.original_pixmap = None
         self.is_rotated = False
         self.setCursor(Qt.PointingHandCursor)
-        self.setToolTip("Left-click: flip 180° | Right-click: cycle overlays | Hold right-click: menu")
+        self.setToolTip("Left-click: cycle overlays | Hold left-click: menu | Right-click: flip 180°")
         self._matched_patterns = []  # List of (internal_name, display_name) tuples
         self._current_pattern_index = 0  # For cycling: 0=gas_pump, 1+=patterns, last=none
 
@@ -786,7 +801,12 @@ class ImageLabel(QLabel):
         Args:
             patterns: List of (internal_name, display_name) tuples
         """
-        self._matched_patterns = patterns or []
+        # Filter out GAS_PUMP pattern since __gas_pump__ already provides that functionality
+        # with the interactive threshold slider
+        self._matched_patterns = [
+            (name, display) for name, display in (patterns or [])
+            if name != "GAS_PUMP"
+        ]
         self._current_pattern_index = 0  # Reset to gas pump when patterns change
 
     def _get_cycle_options(self):
@@ -1085,20 +1105,25 @@ class PreviewPanel(QWidget):
         self.serial_image_1.pattern_selected.connect(self._on_pattern_overlay_selected)
         serial_images_layout.addWidget(self.serial_image_1, 1)
 
-        # Pattern mode label (between the two serial images)
-        self.pattern_mode_label = QLabel("Gas Pump")
+        # Pattern mode label (between the two serial images) - clickable to cycle
+        self.pattern_mode_label = ClickableLabel("Gas Pump")
         self.pattern_mode_label.setAlignment(Qt.AlignCenter)
         self.pattern_mode_label.setStyleSheet("""
             QLabel {
-                color: #888;
+                color: #000;
                 font-size: 9pt;
                 padding: 2px 4px;
                 background: #f0f0f0;
                 border-radius: 3px;
             }
+            QLabel:hover {
+                background: #e0e0e0;
+            }
         """)
         self.pattern_mode_label.setMinimumWidth(80)
         self.pattern_mode_label.setMaximumWidth(120)
+        self.pattern_mode_label.setToolTip("Click to cycle through pattern overlays")
+        self.pattern_mode_label.clicked.connect(self._cycle_pattern_overlay)
         serial_images_layout.addWidget(self.pattern_mode_label)
 
         self.serial_image_2 = ImageLabel()
@@ -2515,6 +2540,21 @@ class PreviewPanel(QWidget):
             if len(serial_crops) >= 2:
                 self.serial_image_2.set_pixmap(serial_crops[1])
 
+    def _cycle_pattern_overlay(self):
+        """Cycle to the next pattern overlay option (called when clicking pattern mode label)."""
+        # Get current options and index from serial_image_1
+        options = self.serial_image_1._get_cycle_options()
+        if not options:
+            return
+
+        # Get current index and advance to next
+        current_idx = self.serial_image_1._current_pattern_index
+        next_idx = (current_idx + 1) % len(options)
+        next_pattern = options[next_idx]
+
+        # Apply the selection (this will update indices and refresh display)
+        self._on_pattern_overlay_selected(next_pattern)
+
     def _on_pattern_overlay_selected(self, pattern_filter: str):
         """Handle pattern selection from cycling or context menu."""
         self._pattern_overlay_filter = pattern_filter
@@ -2523,12 +2563,14 @@ class PreviewPanel(QWidget):
         if pattern_filter == "__gas_pump__":
             self.pattern_mode_label.setText("Gas Pump")
             self.pattern_mode_label.setStyleSheet("""
-                QLabel { color: #888; font-size: 9pt; padding: 2px 4px; background: #f0f0f0; border-radius: 3px; }
+                QLabel { color: #000; font-size: 9pt; padding: 2px 4px; background: #f0f0f0; border-radius: 3px; }
+                QLabel:hover { background: #e0e0e0; }
             """)
         elif pattern_filter == "__none__":
             self.pattern_mode_label.setText("No Overlay")
             self.pattern_mode_label.setStyleSheet("""
                 QLabel { color: #aaa; font-size: 9pt; padding: 2px 4px; background: #e8e8e8; border-radius: 3px; }
+                QLabel:hover { background: #d8d8d8; }
             """)
         else:
             # Specific pattern - show display name with highlight
@@ -2537,6 +2579,7 @@ class PreviewPanel(QWidget):
             self.pattern_mode_label.setText(display_name)
             self.pattern_mode_label.setStyleSheet("""
                 QLabel { color: #2a6; font-size: 9pt; font-weight: bold; padding: 2px 4px; background: #e8f5e9; border-radius: 3px; }
+                QLabel:hover { background: #d8ead8; }
             """)
 
         # Sync the cycle index between both serial images

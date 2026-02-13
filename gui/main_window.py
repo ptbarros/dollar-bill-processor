@@ -215,12 +215,20 @@ class MainWindow(QMainWindow):
             layout_menu.addAction(action)
             self.layout_actions[layout_id] = action
 
+        # Columns submenu - toggle visibility of table columns
+        columns_menu = view_menu.addMenu("&Columns")
+        self.column_actions = {}
+        self._setup_columns_menu(columns_menu)
+
         view_menu.addSeparator()
 
         refresh_action = QAction("&Refresh", self)
         refresh_action.setShortcut(QKeySequence.Refresh)
         refresh_action.triggered.connect(self._refresh_view)
         view_menu.addAction(refresh_action)
+
+        # Connect callback to sync column menu when hiding via header right-click
+        self.results_list.set_column_visibility_callback(self._on_column_hidden_from_header)
 
         # Help menu
         help_menu = menubar.addMenu("&Help")
@@ -820,6 +828,32 @@ class MainWindow(QMainWindow):
         # Save preference
         self.settings.ui.layout_mode = layout_id
         self.settings.save()
+
+    def _setup_columns_menu(self, menu: QMenu):
+        """Populate the Columns submenu with toggle actions for each column."""
+        columns = self.results_list.get_column_info()
+        for col_idx, col_name, col_tooltip, visible in columns:
+            action = QAction(col_name, self, checkable=True)
+            action.setChecked(visible)
+            if col_tooltip:
+                action.setToolTip(col_tooltip)
+            action.triggered.connect(
+                lambda checked, idx=col_idx: self._toggle_column_visibility(idx, checked)
+            )
+            menu.addAction(action)
+            self.column_actions[col_idx] = action
+
+    def _toggle_column_visibility(self, column: int, visible: bool):
+        """Toggle visibility of a results list column."""
+        self.results_list.set_column_visible(column, visible)
+
+    def _on_column_hidden_from_header(self, column: int, visible: bool):
+        """Called when a column is hidden via header right-click menu.
+
+        Updates the View > Columns menu to reflect the change.
+        """
+        if column in self.column_actions:
+            self.column_actions[column].setChecked(visible)
 
     def _refresh_view(self):
         """Refresh the current view."""
