@@ -475,6 +475,7 @@ class YOLOBillAligner:
                     if bill_box is None or conf > bill_box[4]:
                         bill_box = (x1, y1, x2, y2, conf)
                         info['bill_detected'] = True
+                        info['is_back'] = True
                 elif cls_id == self.YOLO_CLASSES['seal_t']:
                     if seal_t_box is None or conf > seal_t_box[4]:
                         seal_t_box = (x1, y1, x2, y2, conf)

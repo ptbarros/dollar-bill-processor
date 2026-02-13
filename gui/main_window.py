@@ -351,10 +351,10 @@ class MainWindow(QMainWindow):
                     if front_flipped:
                         status_msg += ", flipped 180°"
 
-            # Align back using the SAME transformation as the front
-            # (front and back are from the same scan, so they have the same orientation)
+            # Align back using OPPOSITE rotation from the front
+            # Physical flip mirrors the skew: if front is +2° CW, back appears -2° CCW
             if back_path and Path(back_path).exists():
-                aligned_back = self._apply_cached_alignment(Path(back_path), front_angle, front_flipped)
+                aligned_back = self._apply_cached_alignment(Path(back_path), -front_angle, front_flipped)
                 if aligned_back is not None:
                     back_pixmap = self._cv2_to_pixmap(aligned_back)
 
