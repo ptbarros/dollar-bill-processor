@@ -88,6 +88,7 @@ class MainWindow(QMainWindow):
         # Top toolbar area
         self.processing_panel = ProcessingPanel()
         self.processing_panel.process_requested.connect(self._on_process_requested)
+        self.processing_panel.organize_requested.connect(self._on_organize_requested)
         self.processing_panel.stop_requested.connect(self._on_stop_requested)
         self.processing_panel.monitor_requested.connect(self._start_monitoring)
         self.processing_panel.monitor_stop_requested.connect(self._stop_monitoring)
@@ -671,6 +672,13 @@ class MainWindow(QMainWindow):
                 self.processing_thread.processor = None
             self.processing_thread = None
 
+        # Wait for organize thread to finish
+        if hasattr(self, 'organize_thread') and self.organize_thread:
+            if self.organize_thread.isRunning():
+                self.organize_thread.request_stop()
+                self.organize_thread.wait(3000)
+            self.organize_thread = None
+
         # Wait for monitor thread to finish
         if hasattr(self, 'monitor_thread') and self.monitor_thread:
             if self.monitor_thread.isRunning():
@@ -706,6 +714,73 @@ class MainWindow(QMainWindow):
 
         # Start processing in background thread
         self._start_processing(input_dir, output_dir)
+
+    @Slot(str)
+    def _on_organize_requested(self, input_dir: str):
+        """Handle organize request from processing panel."""
+        from .processing_thread import OrganizeThread
+
+        self.is_processing = True
+        self.status_label.setText(f"Organizing: {input_dir}")
+        self.processing_panel.set_processing(True)
+
+        # Create and start organize thread
+        self.organize_thread = OrganizeThread(
+            input_dir,
+            use_gpu=self.settings.processing.use_gpu
+        )
+        self.organize_thread.progress_updated.connect(self._on_organize_progress)
+        self.organize_thread.organize_complete.connect(self._on_organize_complete)
+        self.organize_thread.error_occurred.connect(self._on_organize_error)
+        self.organize_thread.start()
+
+    @Slot(int, int, str)
+    def _on_organize_progress(self, current: int, total: int, message: str):
+        """Handle organize progress update."""
+        if total > 0:
+            self.processing_panel.progress_bar.setMaximum(total)
+            self.processing_panel.progress_bar.setValue(current)
+        self.status_label.setText(message)
+
+    @Slot(dict)
+    def _on_organize_complete(self, result: dict):
+        """Handle organize completion."""
+        self.is_processing = False
+        self.processing_panel.set_processing(False)
+        self.processing_panel.progress_bar.setValue(0)
+
+        pairs = result.get('pairs_organized', 0)
+        corrected = result.get('images_corrected', 0)
+        elapsed = result.get('time_taken', 0)
+
+        self.status_label.setText(
+            f"Organized {pairs} pairs ({corrected} corrected) in {elapsed:.1f}s - "
+            f"Files renamed to Dollar_001.jpg format"
+        )
+
+        # Show info dialog
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self,
+            "Organize Complete",
+            f"Folder organized successfully!\n\n"
+            f"Pairs organized: {pairs}\n"
+            f"Images corrected: {corrected}\n"
+            f"Time taken: {elapsed:.1f}s\n\n"
+            f"Files renamed to Dollar_001.jpg through Dollar_{pairs*2:03d}.jpg\n\n"
+            f"The folder is now ready for faster processing."
+        )
+
+    @Slot(str)
+    def _on_organize_error(self, error: str):
+        """Handle organize error."""
+        self.is_processing = False
+        self.processing_panel.set_processing(False)
+        self.processing_panel.progress_bar.setValue(0)
+        self.status_label.setText(f"Error: {error}")
+
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.critical(self, "Organize Error", error)
 
     @Slot()
     def _on_stop_requested(self):

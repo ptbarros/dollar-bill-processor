@@ -230,6 +230,9 @@ class BillPair:
     front_plate: str = ''
     back_plate: str = ''
     potential_mule: bool = False  # True if likely a mule note (small font back plate)
+    # Cached YOLO detection results to avoid redundant calls
+    front_cache: Optional[Dict] = None  # Cached detections from verify stage
+    back_cache: Optional[Dict] = None   # Cached detections from verify stage
 
 
 @dataclass
@@ -434,13 +437,16 @@ class YOLOBillAligner:
         self.yolo_model = yolo_model
         self.contour_aligner = BillAligner()
 
-    def align_image(self, image_path: Path, check_flip: bool = True) -> tuple[Optional[np.ndarray], dict]:
+    def align_image(self, image_path: Path, check_flip: bool = True,
+                    cached_detections: Optional[dict] = None) -> tuple[Optional[np.ndarray], dict]:
         """
         Align a bill image using YOLO detection.
 
         Args:
             image_path: Path to the image file
             check_flip: Whether to check and correct upside-down orientation
+            cached_detections: Optional dict with pre-extracted detection data from verify stage.
+                Keys: 'bill_box', 'seal_t_box', 'seal_f_box', 'orientation', 'img_shape'
 
         Returns:
             tuple: (aligned_image, info_dict)
@@ -453,35 +459,54 @@ class YOLOBillAligner:
         h, w = img.shape[:2]
         info = {'angle': 0.0, 'flipped': False, 'bill_detected': False}
 
-        # Run YOLO detection
-        get_timing().add_yolo_call()
-        results = self.yolo_model(img, verbose=False, conf=0.3)
+        # Use cached detections if available, otherwise run YOLO
+        if cached_detections:
+            bill_box = cached_detections.get('bill_box')
+            seal_t_box = cached_detections.get('seal_t_box')
+            seal_f_box = cached_detections.get('seal_f_box')
+            if bill_box:
+                info['bill_detected'] = True
+                if cached_detections.get('is_back'):
+                    info['is_back'] = True
+        else:
+            # Run YOLO detection
+            get_timing().add_yolo_call()
+            results = self.yolo_model(img, verbose=False, conf=0.3)
 
-        bill_box = None
-        seal_t_box = None
-        seal_f_box = None
+            bill_box = None
+            seal_t_box = None
+            seal_f_box = None
 
-        for result in results:
-            for box in result.boxes:
-                cls_id = int(box.cls[0])
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                conf = float(box.conf[0])
+            for result in results:
+                for box in result.boxes:
+                    cls_id = int(box.cls[0])
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    conf = float(box.conf[0])
 
-                if cls_id == self.YOLO_CLASSES['bill_front']:
-                    if bill_box is None or conf > bill_box[4]:
-                        bill_box = (x1, y1, x2, y2, conf)
-                        info['bill_detected'] = True
-                elif cls_id == self.YOLO_CLASSES['bill_back']:
-                    if bill_box is None or conf > bill_box[4]:
-                        bill_box = (x1, y1, x2, y2, conf)
-                        info['bill_detected'] = True
-                        info['is_back'] = True
-                elif cls_id == self.YOLO_CLASSES['seal_t']:
-                    if seal_t_box is None or conf > seal_t_box[4]:
-                        seal_t_box = (x1, y1, x2, y2, conf)
-                elif cls_id == self.YOLO_CLASSES['seal_f']:
-                    if seal_f_box is None or conf > seal_f_box[4]:
-                        seal_f_box = (x1, y1, x2, y2, conf)
+                    if cls_id == self.YOLO_CLASSES['bill_front']:
+                        if bill_box is None or conf > bill_box[4]:
+                            bill_box = (x1, y1, x2, y2, conf)
+                            info['bill_detected'] = True
+                    elif cls_id == self.YOLO_CLASSES['bill_back']:
+                        if bill_box is None or conf > bill_box[4]:
+                            bill_box = (x1, y1, x2, y2, conf)
+                            info['bill_detected'] = True
+                            info['is_back'] = True
+                    elif cls_id == self.YOLO_CLASSES['seal_t']:
+                        if seal_t_box is None or conf > seal_t_box[4]:
+                            seal_t_box = (x1, y1, x2, y2, conf)
+                    elif cls_id == self.YOLO_CLASSES['seal_f']:
+                        if seal_f_box is None or conf > seal_f_box[4]:
+                            seal_f_box = (x1, y1, x2, y2, conf)
+
+            # Store detection data in info for potential caching by caller
+            info['_detections'] = {
+                'bill_box': bill_box,
+                'seal_t_box': seal_t_box,
+                'seal_f_box': seal_f_box,
+                'is_back': info.get('is_back', False),
+                'img_shape': (h, w),
+            }
 
         # Calculate rotation angle using bill region (or full image if no bill detected)
         angle = 0.0
@@ -578,13 +603,29 @@ class YOLOBillAligner:
 class ScannerFormatDetector:
     """Detects scanner naming conventions and pairs front/back images."""
 
+    # Pattern for pre-organized Dollar_NNN.jpg files (odd=front, even=back)
+    DOLLAR_PATTERN = re.compile(r'^Dollar_(\d+)\.(jpg|jpeg)$', re.IGNORECASE)
+
     @staticmethod
     def detect_format(image_folder: Path) -> str:
         """
         Detect the scanner naming format.
-        Returns: 'suffix' (has _b files) or 'sequential' (numbered pairs)
+        Returns:
+            'dollar_sequential': Pre-organized Dollar_NNN.jpg (odd=front, even=back)
+            'suffix': Has _b suffix files (e.g., 0001.jpg + 0001_b.jpg)
+            'sequential': Alternating numbered pairs
         """
         files = list(image_folder.glob("*.jpg")) + list(image_folder.glob("*.jpeg"))
+
+        # Check for Dollar_NNN.jpg pattern (pre-organized from bill wizard)
+        dollar_files = [f for f in files if ScannerFormatDetector.DOLLAR_PATTERN.match(f.name)]
+        if len(dollar_files) >= 2:
+            # Verify it looks like a complete set (should have consecutive pairs)
+            numbers = sorted([int(ScannerFormatDetector.DOLLAR_PATTERN.match(f.name).group(1))
+                            for f in dollar_files])
+            # Check if numbers are mostly consecutive odd-even pairs
+            if numbers[0] <= 2 and len(numbers) >= 2:
+                return 'dollar_sequential'
 
         # Check for _b suffix pattern
         for f in files:
@@ -671,6 +712,43 @@ class ScannerFormatDetector:
 
         return pairs
 
+    @staticmethod
+    def find_pairs_dollar_sequential(image_folder: Path) -> list[BillPair]:
+        """
+        Find front/back pairs using Dollar_NNN.jpg naming convention.
+        Pre-organized by bill wizard: odd numbers are fronts, even are backs.
+        Example: Dollar_001.jpg (front) + Dollar_002.jpg (back) = pair 1
+
+        These files are already verified and oriented, so no YOLO verification needed.
+        """
+        files = list(image_folder.glob("Dollar_*.jpg")) + list(image_folder.glob("Dollar_*.jpeg"))
+
+        # Parse numbers and group
+        file_map = {}
+        for f in files:
+            match = ScannerFormatDetector.DOLLAR_PATTERN.match(f.name)
+            if match:
+                num = int(match.group(1))
+                file_map[num] = f
+
+        pairs = []
+        # Find all odd numbers (fronts) and pair with even (backs)
+        odd_numbers = sorted([n for n in file_map.keys() if n % 2 == 1])
+
+        for odd_num in odd_numbers:
+            even_num = odd_num + 1
+            front_path = file_map.get(odd_num)
+            back_path = file_map.get(even_num)
+
+            if front_path:
+                pairs.append(BillPair(
+                    front_path=front_path,
+                    back_path=back_path,
+                    stack_position=len(pairs) + 1
+                ))
+
+        return pairs
+
     @classmethod
     def find_pairs(cls, image_folder: Path) -> tuple[str, list[BillPair]]:
         """
@@ -679,7 +757,9 @@ class ScannerFormatDetector:
         """
         fmt = cls.detect_format(image_folder)
 
-        if fmt == 'suffix':
+        if fmt == 'dollar_sequential':
+            pairs = cls.find_pairs_dollar_sequential(image_folder)
+        elif fmt == 'suffix':
             pairs = cls.find_pairs_suffix(image_folder)
         else:
             pairs = cls.find_pairs_sequential(image_folder)
@@ -962,48 +1042,120 @@ class ProductionProcessor:
                         count += 1
         return count
 
-    def is_front_image(self, image_path: Path) -> bool:
-        """Determine if an image is a front (has serial numbers).
+    def classify_and_cache_image(self, image_path: Path) -> dict:
+        """Single YOLO pass extracts classification, seal positions, and orientation.
 
-        Uses both serial_number count and bill_front/bill_back detection.
+        This caches all useful detection data for downstream use in alignment,
+        reducing duplicate YOLO calls.
+
+        Returns:
+            dict with keys: is_front, front_conf, back_conf, bill_box, seal_t_box,
+            seal_f_box, serial_boxes, orientation, img_shape
         """
         img = cv2.imread(str(image_path))
         if img is None:
-            return False
+            return {'is_front': False, 'error': 'Failed to load image'}
 
-        results = self.yolo_model(img, verbose=False, conf=0.3)
+        h, w = img.shape[:2]
+        get_timing().add_yolo_call()
+        results = self.yolo_model(img, verbose=False, conf=0.1)  # Lower threshold like organize_bills.py
 
-        serial_count = 0
-        front_conf = 0.0
-        back_conf = 0.0
+        data = {
+            'is_front': False,
+            'front_conf': 0.0,
+            'back_conf': 0.0,
+            'bill_box': None,
+            'seal_t_box': None,
+            'seal_f_box': None,
+            'serial_boxes': [],
+            'orientation': 'normal',
+            'is_back': False,
+            'img_shape': (h, w),
+        }
 
-        serial_class_id = self.YOLO_CLASSES.get('serial_number', 7)
-        front_class_id = self.YOLO_CLASSES.get('bill_front', 2)
-        back_class_id = self.YOLO_CLASSES.get('bill_back', 1)
+        serial_class_id = self.YOLO_CLASSES.get('serial_number', 8)
+        front_class_id = self.YOLO_CLASSES.get('bill_front', 3)
+        back_class_id = self.YOLO_CLASSES.get('bill_back', 2)
+        seal_t_class_id = self.YOLO_CLASSES.get('seal_t', 7)
+        seal_f_class_id = self.YOLO_CLASSES.get('seal_f', 6)
 
         for result in results:
             for box in result.boxes:
-                if hasattr(box, 'cls') and box.cls is not None:
-                    cls_id = int(box.cls[0])
-                    conf = float(box.conf[0])
-                    if cls_id == serial_class_id:
-                        serial_count += 1
-                    elif cls_id == front_class_id:
-                        front_conf = max(front_conf, conf)
-                    elif cls_id == back_class_id:
-                        back_conf = max(back_conf, conf)
+                if not hasattr(box, 'cls') or box.cls is None:
+                    continue
+                cls_id = int(box.cls[0])
+                conf = float(box.conf[0])
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                box_tuple = (x1, y1, x2, y2, conf)
 
-        # Front if: has serial numbers OR bill_front confidence > bill_back confidence
+                if cls_id == serial_class_id:
+                    data['serial_boxes'].append(box_tuple)
+                elif cls_id == front_class_id:
+                    data['front_conf'] = max(data['front_conf'], conf)
+                    if data['bill_box'] is None or conf > data['bill_box'][4]:
+                        data['bill_box'] = box_tuple
+                elif cls_id == back_class_id:
+                    data['back_conf'] = max(data['back_conf'], conf)
+                    if data['bill_box'] is None or conf > data['bill_box'][4]:
+                        data['bill_box'] = box_tuple
+                        data['is_back'] = True
+                elif cls_id == seal_t_class_id:
+                    if data['seal_t_box'] is None or conf > data['seal_t_box'][4]:
+                        data['seal_t_box'] = box_tuple
+                elif cls_id == seal_f_class_id:
+                    if data['seal_f_box'] is None or conf > data['seal_f_box'][4]:
+                        data['seal_f_box'] = box_tuple
+
+        # Determine if front based on serials OR bill_front confidence
+        serial_count = len(data['serial_boxes'])
         if serial_count >= 1:
-            return True
-        if front_conf > back_conf and front_conf > 0.3:
-            return True
-        return False
+            data['is_front'] = True
+        elif data['front_conf'] > data['back_conf'] and data['front_conf'] > 0.3:
+            data['is_front'] = True
+
+        # Determine orientation from seal positions (same logic as organize_bills.py)
+        seal_f_box = data['seal_f_box']
+        seal_t_box = data['seal_t_box']
+        if seal_f_box and seal_t_box:
+            seal_f_cx = (seal_f_box[0] + seal_f_box[2]) / 2
+            seal_t_cx = (seal_t_box[0] + seal_t_box[2]) / 2
+            if seal_f_cx > seal_t_cx:
+                data['orientation'] = 'upside_down'
+        elif seal_f_box:
+            mid_x = w / 2
+            seal_f_cx = (seal_f_box[0] + seal_f_box[2]) / 2
+            if seal_f_cx > mid_x:
+                data['orientation'] = 'upside_down'
+        elif seal_t_box:
+            mid_x = w / 2
+            seal_t_cx = (seal_t_box[0] + seal_t_box[2]) / 2
+            if seal_t_cx < mid_x:
+                data['orientation'] = 'upside_down'
+
+        return data
+
+    def is_front_image(self, image_path: Path, cached_data: Optional[dict] = None) -> bool:
+        """Determine if an image is a front (has serial numbers).
+
+        Uses both serial_number count and bill_front/bill_back detection.
+
+        Args:
+            image_path: Path to the image file
+            cached_data: Optional cached detection data from classify_and_cache_image()
+        """
+        if cached_data:
+            return cached_data.get('is_front', False)
+
+        # Fall back to running classification
+        data = self.classify_and_cache_image(image_path)
+        return data.get('is_front', False)
 
     def verify_and_swap_pairs(self, pairs: list[BillPair], progress_callback=None) -> list[BillPair]:
         """
-        Verify front/back assignments and swap if needed.
-        Front images have serial numbers, backs don't.
+        Verify front/back assignments, swap if needed, and cache YOLO detections.
+
+        This performs one YOLO call per image and caches the results for later
+        use in alignment, reducing total YOLO calls by ~50%.
 
         Args:
             pairs: List of BillPair objects to verify
@@ -1015,18 +1167,352 @@ class ProductionProcessor:
             if progress_callback:
                 progress_callback(i + 1, total)
 
-            front_is_front = self.is_front_image(pair.front_path)
-            back_is_front = pair.back_path and self.is_front_image(pair.back_path)
+            # Classify and cache both images in one pass each
+            front_cache = self.classify_and_cache_image(pair.front_path)
+            back_cache = None
+            if pair.back_path:
+                back_cache = self.classify_and_cache_image(pair.back_path)
+
+            front_is_front = front_cache.get('is_front', False)
+            back_is_front = back_cache.get('is_front', False) if back_cache else False
 
             # Swap if needed
             if not front_is_front and back_is_front:
                 pair.front_path, pair.back_path = pair.back_path, pair.front_path
+                pair.front_cache = back_cache
+                pair.back_cache = front_cache
+                pair.swapped = True
             elif not front_is_front and not back_is_front:
                 # Neither has serials - might be two backs, mark as error
                 pair.error = "No serial detected in either image"
+                pair.front_cache = front_cache
+                pair.back_cache = back_cache
+            else:
+                pair.front_cache = front_cache
+                pair.back_cache = back_cache
 
             verified.append(pair)
         return verified
+
+    def organize_folder(self, input_dir: Path, progress_callback=None) -> dict:
+        """
+        Organize a folder of scanned bills: classify, fix orientation, deskew, rename.
+
+        This pre-processes images so subsequent processing is faster:
+        - Classifies front/back using YOLO
+        - Fixes upside-down orientation
+        - Corrects skew angle
+        - Renames to Dollar_NNN.jpg format (odd=front, even=back)
+
+        Args:
+            input_dir: Directory containing scanned bill images
+            progress_callback: Optional callback(current, total, message) for progress
+
+        Returns:
+            dict with 'pairs_organized', 'images_corrected', 'time_taken'
+        """
+        import time
+        start_time = time.time()
+
+        # Skew correction threshold (degrees)
+        SKEW_THRESHOLD = 0.8
+
+        # Find all images
+        files = sorted(
+            list(input_dir.glob("*.jpg")) + list(input_dir.glob("*.jpeg")),
+            key=lambda p: ScannerFormatDetector._natural_sort_key(p)
+        )
+
+        if not files:
+            return {'error': 'No images found', 'pairs_organized': 0, 'images_corrected': 0}
+
+        total_files = len(files)
+        if progress_callback:
+            progress_callback(0, total_files, "Analyzing images...")
+
+        # Phase 1: YOLO inference on all images
+        image_data = {}
+        for i, filepath in enumerate(files):
+            if progress_callback:
+                progress_callback(i + 1, total_files, f"Analyzing {filepath.name}...")
+
+            cache = self.classify_and_cache_image(filepath)
+            image_data[filepath.name] = {
+                'path': filepath,
+                'cache': cache,
+                'classification': 'FRONT' if cache.get('is_front') else 'BACK',
+                'confidence': max(cache.get('front_conf', 0), cache.get('back_conf', 0)),
+            }
+
+        # Phase 2: Pair matching
+        # Try to detect existing pairing from filenames
+        pairs = []
+        used_files = set()
+
+        # Check for suffix pattern (0001.jpg + 0001_b.jpg)
+        for fname, data in image_data.items():
+            if fname in used_files:
+                continue
+            if '_b.' in fname.lower():
+                continue  # Skip back images in first pass
+
+            base = data['path'].stem
+            suffix = data['path'].suffix
+
+            # Look for matching back
+            back_candidates = [
+                f"{base}_b{suffix}",
+                f"{base}_B{suffix}",
+            ]
+            back_file = None
+            for bc in back_candidates:
+                if bc in image_data and bc not in used_files:
+                    back_file = bc
+                    break
+
+            if back_file:
+                # Found a pair by naming
+                front_data = data
+                back_data = image_data[back_file]
+
+                # Verify/swap based on classification
+                if front_data['classification'] == 'BACK' and back_data['classification'] == 'FRONT':
+                    front_data, back_data = back_data, front_data
+
+                pairs.append({
+                    'front': front_data,
+                    'back': back_data,
+                })
+                used_files.add(fname)
+                used_files.add(back_file)
+
+        # Handle remaining files as sequential pairs
+        remaining = [f for f in files if f.name not in used_files]
+        remaining_sorted = sorted(remaining, key=lambda p: ScannerFormatDetector._natural_sort_key(p))
+
+        i = 0
+        while i < len(remaining_sorted):
+            file_a = remaining_sorted[i]
+            file_b = remaining_sorted[i + 1] if i + 1 < len(remaining_sorted) else None
+
+            data_a = image_data[file_a.name]
+            data_b = image_data[file_b.name] if file_b else None
+
+            # Determine front/back
+            if data_b:
+                cls_a = data_a['classification']
+                cls_b = data_b['classification']
+
+                if cls_a == 'FRONT' and cls_b == 'BACK':
+                    front_data, back_data = data_a, data_b
+                elif cls_a == 'BACK' and cls_b == 'FRONT':
+                    front_data, back_data = data_b, data_a
+                else:
+                    # Same classification - use confidence
+                    if data_a['confidence'] >= data_b['confidence']:
+                        front_data, back_data = data_a, data_b
+                    else:
+                        front_data, back_data = data_b, data_a
+
+                pairs.append({'front': front_data, 'back': back_data})
+                i += 2
+            else:
+                # Single file - treat as front
+                pairs.append({'front': data_a, 'back': None})
+                i += 1
+
+        # Phase 3: Correct and rename
+        total_pairs = len(pairs)
+        images_corrected = 0
+
+        if progress_callback:
+            progress_callback(0, total_pairs, "Correcting images...")
+
+        for n, pair in enumerate(pairs, 1):
+            if progress_callback:
+                progress_callback(n, total_pairs, f"Processing pair {n}/{total_pairs}...")
+
+            front_data = pair['front']
+            back_data = pair['back']
+
+            # Process front
+            front_cache = front_data['cache']
+            front_path = front_data['path']
+            front_img = cv2.imread(str(front_path))
+
+            if front_img is not None:
+                orientation = front_cache.get('orientation', 'normal')
+
+                # Calculate skew from serial boxes
+                skew = 0.0
+                serial_boxes = front_cache.get('serial_boxes', [])
+                if serial_boxes:
+                    skew = self._calculate_skew_from_boxes(front_img, serial_boxes)
+
+                # Apply corrections
+                needs_correction = (orientation == 'upside_down') or (abs(skew) > SKEW_THRESHOLD and abs(skew) < 15.0)
+                if needs_correction:
+                    corrected = self._correct_image(front_img, orientation, skew)
+                    front_img = corrected
+                    images_corrected += 1
+
+                # Save with new name
+                new_front_path = input_dir / f"Dollar_{2*n-1:03d}.jpg"
+                cv2.imwrite(str(new_front_path), front_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+
+                # Delete original if different path
+                if front_path != new_front_path and front_path.exists():
+                    front_path.unlink()
+
+            # Process back
+            if back_data:
+                back_cache = back_data['cache']
+                back_path = back_data['path']
+                back_img = cv2.imread(str(back_path))
+
+                if back_img is not None:
+                    # Back uses same orientation as front, but negated skew
+                    orientation = front_cache.get('orientation', 'normal')
+                    back_skew = -skew if 'skew' in dir() else 0.0
+
+                    needs_correction = (orientation == 'upside_down') or (abs(back_skew) > SKEW_THRESHOLD and abs(back_skew) < 15.0)
+                    if needs_correction:
+                        corrected = self._correct_image(back_img, orientation, back_skew)
+                        back_img = corrected
+                        images_corrected += 1
+
+                    # Save with new name
+                    new_back_path = input_dir / f"Dollar_{2*n:03d}.jpg"
+                    cv2.imwrite(str(new_back_path), back_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+
+                    # Delete original if different path
+                    if back_path != new_back_path and back_path.exists():
+                        back_path.unlink()
+
+        elapsed = time.time() - start_time
+        return {
+            'pairs_organized': len(pairs),
+            'images_corrected': images_corrected,
+            'time_taken': elapsed,
+            'total_images': total_files,
+        }
+
+    def _calculate_skew_from_boxes(self, img: np.ndarray, serial_boxes: list) -> float:
+        """Calculate skew angle from serial number character positions."""
+        if not serial_boxes:
+            return 0.0
+
+        # Get the largest serial box
+        sorted_boxes = sorted(serial_boxes, key=lambda b: (b[2]-b[0]) * (b[3]-b[1]), reverse=True)
+        box = sorted_boxes[0]
+        x1, y1, x2, y2 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+
+        # Crop with padding
+        pad = 5
+        y1_pad = max(0, y1 - pad)
+        y2_pad = min(img.shape[0], y2 + pad)
+        x1_pad = max(0, x1 - pad)
+        x2_pad = min(img.shape[1], x2 + pad)
+
+        crop = img[y1_pad:y2_pad, x1_pad:x2_pad]
+        if crop.size == 0:
+            return 0.0
+
+        h, w = crop.shape[:2]
+
+        # Convert to binary
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY) if len(crop.shape) == 3 else crop
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+        # Vertical projection to find character bounds
+        v_proj = np.sum(binary, axis=0)
+        proj_thresh = np.max(v_proj) * 0.1
+
+        in_char = False
+        char_bounds = []
+        start = 0
+
+        for x in range(w):
+            if v_proj[x] > proj_thresh and not in_char:
+                start = x
+                in_char = True
+            elif v_proj[x] <= proj_thresh and in_char:
+                if x - start > 5:
+                    char_bounds.append((start, x))
+                in_char = False
+        if in_char:
+            char_bounds.append((start, w - 1))
+
+        if len(char_bounds) < 3:
+            return 0.0
+
+        # Find character tops
+        char_tops = []
+        for cx1, cx2 in char_bounds:
+            col_strip = binary[:, cx1:cx2]
+            h_proj = np.sum(col_strip, axis=1)
+            ink_rows = np.where(h_proj > 0)[0]
+            if len(ink_rows) > 0:
+                center_x = (cx1 + cx2) / 2
+                char_tops.append((center_x, ink_rows[0]))
+
+        if len(char_tops) < 3:
+            return 0.0
+
+        # Linear regression on character tops
+        x_coords = np.array([p[0] for p in char_tops])
+        y_coords = np.array([p[1] for p in char_tops])
+
+        # MAD outlier rejection
+        median_y = np.median(y_coords)
+        mad = np.median(np.abs(y_coords - median_y))
+        if mad < 1:
+            mad = max(1, h * 0.05)
+
+        threshold = 2.5 * mad
+        mask = np.abs(y_coords - median_y) <= threshold
+        x_coords = x_coords[mask]
+        y_coords = y_coords[mask]
+
+        if len(x_coords) < 3:
+            return 0.0
+
+        # Calculate slope
+        n = len(x_coords)
+        sum_x = np.sum(x_coords)
+        sum_y = np.sum(y_coords)
+        sum_xy = np.sum(x_coords * y_coords)
+        sum_xx = np.sum(x_coords * x_coords)
+
+        denominator = n * sum_xx - sum_x * sum_x
+        if abs(denominator) < 1e-10:
+            return 0.0
+
+        slope = (n * sum_xy - sum_x * sum_y) / denominator
+        angle = math.degrees(math.atan(slope))
+
+        return -angle
+
+    def _correct_image(self, img: np.ndarray, orientation: str, skew_angle: float) -> np.ndarray:
+        """Apply rotation for orientation and skew correction."""
+        result = img.copy()
+
+        if orientation == 'upside_down':
+            result = cv2.rotate(result, cv2.ROTATE_180)
+            skew_angle = -skew_angle
+
+        SKEW_THRESHOLD = 0.8
+        if abs(skew_angle) > SKEW_THRESHOLD and abs(skew_angle) < 15.0:
+            h, w = result.shape[:2]
+            center = (w // 2, h // 2)
+            matrix = cv2.getRotationMatrix2D(center, -skew_angle, 1.0)
+            result = cv2.warpAffine(
+                result, matrix, (w, h),
+                borderMode=cv2.BORDER_CONSTANT,
+                borderValue=(255, 255, 255)
+            )
+
+        return result
 
     def extract_serial_from_crop(self, crop_image, star_confirmed: bool = False) -> tuple[Optional[str], float]:
         r"""Extract serial number from a cropped region using OCR with expanded confusion matrix.
@@ -2551,9 +3037,15 @@ class ProductionProcessor:
 
         return serials_found
 
-    def extract_serial(self, image_path: Path) -> tuple[Optional[str], float, bool, float, bool, dict]:
+    def extract_serial(self, image_path: Path, cached_detections: Optional[dict] = None,
+                       pre_aligned: bool = False) -> tuple[Optional[str], float, bool, float, bool, dict]:
         """
         Extract serial number using multi-pass detection pipeline.
+
+        Args:
+            image_path: Path to the front image
+            cached_detections: Optional cached YOLO detections from verify stage
+            pre_aligned: If True, skip YOLO alignment (for pre-organized Dollar_NNN.jpg files)
 
         Returns:
             tuple: (serial, confidence, is_upside_down, baseline_variance, star_detected, align_info)
@@ -2566,7 +3058,28 @@ class ProductionProcessor:
         # Use YOLO-based alignment for more accurate straightening
         # This improves baseline variance accuracy for gas pump detection
         timing.start('align')
-        aligned_img, align_info = self.yolo_aligner.align_image(image_path)
+
+        if pre_aligned:
+            # Skip YOLO alignment for pre-organized files (already corrected)
+            aligned_img = cv2.imread(str(image_path))
+            if aligned_img is None:
+                timing.stop('align')
+                return None, 0, False, 0.0, False, {'angle': 0.0, 'flipped': False}
+            # Still do contour-based rotation detection for minor adjustments
+            gray = cv2.cvtColor(aligned_img, cv2.COLOR_BGR2GRAY)
+            angle = self.aligner.detect_rotation_angle(gray)
+            if abs(angle) >= 0.8:
+                h, w = aligned_img.shape[:2]
+                center = (w // 2, h // 2)
+                M = cv2.getRotationMatrix2D(center, angle, 1.0)
+                aligned_img = cv2.warpAffine(aligned_img, M, (w, h),
+                                             flags=cv2.INTER_CUBIC,
+                                             borderMode=cv2.BORDER_CONSTANT,
+                                             borderValue=(255, 255, 255))
+            align_info = {'angle': angle, 'flipped': False, 'pre_aligned': True}
+        else:
+            aligned_img, align_info = self.yolo_aligner.align_image(
+                image_path, cached_detections=cached_detections)
         if aligned_img is None:
             # Fallback to contour-based alignment if YOLO fails
             aligned_img = self.aligner.align_image(image_path)
@@ -2929,11 +3442,14 @@ class ProductionProcessor:
         print(f"Detected format: {scanner_format}")
         print(f"Found {len(pairs)} bill pairs\n")
 
-        # Verify front/back assignments if requested
-        if verify_pairs:
+        # Verify front/back assignments if requested, unless pre-organized format detected
+        # dollar_sequential files are already verified and oriented by bill wizard
+        if verify_pairs and scanner_format != 'dollar_sequential':
             print("Verifying front/back assignments...")
             pairs = self.verify_and_swap_pairs(pairs)
             print("Verification complete\n")
+        elif scanner_format == 'dollar_sequential':
+            print("Pre-organized format detected, skipping verification\n")
 
         # Create output directory
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -2972,8 +3488,9 @@ class ProductionProcessor:
                 print(timing.get_summary(f"#{pair.stack_position} ERROR"))
                 continue
 
-            # Extract serial using multi-pass detection
-            serial, confidence, is_upside_down, baseline_variance, star_detected, align_info = self.extract_serial(pair.front_path)
+            # Extract serial using multi-pass detection, using cached detections if available
+            serial, confidence, is_upside_down, baseline_variance, star_detected, align_info = self.extract_serial(
+                pair.front_path, cached_detections=pair.front_cache)
             pair.confidence = confidence
             pair.is_upside_down = is_upside_down
             pair.baseline_variance = baseline_variance

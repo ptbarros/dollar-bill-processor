@@ -21,6 +21,7 @@ class ProcessingPanel(QWidget):
 
     # Signals
     process_requested = Signal(str, str)  # input_dir, output_dir
+    organize_requested = Signal(str)  # input_dir - organize folder before processing
     stop_requested = Signal()
     monitor_requested = Signal()  # Start monitoring
     monitor_stop_requested = Signal()  # Stop monitoring
@@ -135,6 +136,31 @@ class ProcessingPanel(QWidget):
         """)
         self.process_btn.clicked.connect(self._on_process)
         layout.addWidget(self.process_btn)
+
+        # Organize button - pre-process folder for faster subsequent processing
+        self.organize_btn = QPushButton("Organize")
+        self.organize_btn.setMinimumWidth(80)
+        self.organize_btn.setToolTip(
+            "Pre-process folder: classify front/back, fix orientation, deskew, rename.\n"
+            "This makes subsequent processing faster."
+        )
+        self.organize_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                font-weight: bold;
+                padding: 8px 16px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+            }
+        """)
+        self.organize_btn.clicked.connect(self._on_organize)
+        layout.addWidget(self.organize_btn)
 
         self.stop_btn = QPushButton("Stop")
         self.stop_btn.setMinimumWidth(60)
@@ -279,6 +305,16 @@ class ProcessingPanel(QWidget):
             print(f"[ProcessingPanel] Emitting process_requested({input_dir}, {output_dir})")
             self.process_requested.emit(input_dir, output_dir)
 
+    def _on_organize(self):
+        """Handle organize button click."""
+        input_dir = self.input_edit.text().strip()
+
+        if not input_dir:
+            return
+
+        print(f"[ProcessingPanel] Emitting organize_requested({input_dir})")
+        self.organize_requested.emit(input_dir)
+
     def _on_stop(self):
         """Handle stop button click."""
         if self._monitor_mode:
@@ -299,6 +335,7 @@ class ProcessingPanel(QWidget):
     def set_processing(self, is_processing: bool):
         """Update UI for processing state."""
         self.process_btn.setEnabled(not is_processing)
+        self.organize_btn.setEnabled(not is_processing)
         self.stop_btn.setEnabled(is_processing)
         self.monitor_check.setEnabled(not is_processing)
 

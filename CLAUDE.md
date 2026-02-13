@@ -109,6 +109,31 @@ Settings → Processing → "Extract plate and series info"
 
 **Zoom:** Fit/+/- buttons, Ctrl+scroll, middle-mouse drag
 
+## Performance Optimization
+
+### Organize Folder (Orange Button)
+Pre-processes folder for faster subsequent processing:
+- Classifies front/back, fixes orientation, corrects skew
+- Renames to `Dollar_NNN.jpg` format (odd=front, even=back)
+- After organizing: verify is skipped, YOLO alignment is skipped
+
+### YOLO Caching
+- `verify_and_swap_pairs()` caches detections in `BillPair.front_cache/back_cache`
+- `classify_and_cache_image()` extracts all detection data in one YOLO call (conf=0.1)
+- Cached data reused by `align_image()` and `extract_serial()`
+
+### Format Detection
+- `dollar_sequential`: Pre-organized Dollar_NNN.jpg files (fastest path)
+- `suffix`: Files with `_b` suffix (e.g., 0001.jpg + 0001_b.jpg)
+- `sequential`: Alternating numbered pairs
+
+### Typical Performance (100 bills)
+| Mode | YOLO/bill | Time/bill | Total |
+|------|-----------|-----------|-------|
+| Verify OFF | 6-7 | ~1.9s | ~190s |
+| Verify ON | 4 | ~1.5s | ~180s |
+| **Organized** | 4 | ~1.4s | ~140s |
+
 ## Settings
 
 Stored in `user_settings.yaml` (gitignored):

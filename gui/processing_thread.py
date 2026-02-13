@@ -4,6 +4,7 @@ Processing Thread - Background processing for the GUI.
 
 import sys
 import cv2
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -90,13 +91,26 @@ class ProcessingThread(QThread):
             scanner_format, pairs = ScannerFormatDetector.find_pairs(self.input_dir)
 
             total = len(pairs)
-            self.progress_updated.emit(0, total, f"Found {total} bills")
+            self.progress_updated.emit(0, total, f"Found {total} bills ({scanner_format} format)")
 
-            # Verify pairs if requested
-            if self.verify_pairs:
+            # Batch timing
+            batch_start = time.time()
+            verify_time = 0.0
+            verify_yolo_calls = 0
+            total_yolo_calls = 0
+            total_ocr_calls = 0
+
+            # Verify pairs if requested, unless pre-organized format detected
+            # dollar_sequential files are already verified and oriented by bill wizard
+            if self.verify_pairs and scanner_format != 'dollar_sequential':
+                verify_start = time.time()
+                verify_yolo_start = get_timing().yolo_calls  # Track YOLO calls during verify
                 def verify_progress(current, verify_total):
                     self.progress_updated.emit(current, verify_total, f"Verifying pairs: {current}/{verify_total}")
                 pairs = self.processor.verify_and_swap_pairs(pairs, progress_callback=verify_progress)
+                verify_time = time.time() - verify_start
+                verify_yolo_calls = get_timing().yolo_calls - verify_yolo_start
+                print(f"[VERIFY] {total} pairs verified in {verify_time:.2f}s ({verify_yolo_calls} YOLO calls, {verify_time/total:.3f}s/pair)")
 
             # Process each pair
             fancy_count = 0
@@ -107,7 +121,7 @@ class ProcessingThread(QThread):
                     break
 
                 timing = get_timing()
-                timing.start_bill()
+                timing.start_bill()  # This resets yolo_calls/ocr_calls to 0
 
                 self.progress_updated.emit(i + 1, total, f"Processing {pair.front_path.name}...")
 
@@ -136,17 +150,22 @@ class ProcessingThread(QThread):
                     self.result_ready.emit(result)
                     continue
 
-                # Extract serial
-                serial, confidence, is_upside_down, baseline_variance, star_detected, align_info = self.processor.extract_serial(pair.front_path)
+                # Extract serial, using cached detections if available from verify stage
+                # For pre-organized dollar_sequential format, skip YOLO alignment
+                pre_aligned = (scanner_format == 'dollar_sequential')
+                serial, confidence, is_upside_down, baseline_variance, star_detected, align_info = self.processor.extract_serial(
+                    pair.front_path, cached_detections=pair.front_cache, pre_aligned=pre_aligned)
 
                 # Lazy detection: if no serial found and we have a back image, swap and retry
                 # This only runs when verify_pairs is disabled (otherwise pairs are pre-verified)
-                if not serial and pair.back_path and not self.verify_pairs:
+                if not serial and pair.back_path and not self.verify_pairs and not pre_aligned:
                     # Swap front and back
                     pair.front_path, pair.back_path = pair.back_path, pair.front_path
+                    pair.front_cache, pair.back_cache = pair.back_cache, pair.front_cache
                     pair.swapped = True
                     # Retry serial extraction on the swapped front
-                    serial, confidence, is_upside_down, baseline_variance, star_detected, align_info = self.processor.extract_serial(pair.front_path)
+                    serial, confidence, is_upside_down, baseline_variance, star_detected, align_info = self.processor.extract_serial(
+                        pair.front_path, cached_detections=pair.front_cache)
 
                 pair.serial = serial
                 pair.confidence = confidence
@@ -156,6 +175,10 @@ class ProcessingThread(QThread):
                 # Cache alignment info for reuse in generate_crops()
                 pair.front_align_angle = align_info.get('angle', 0.0)
                 pair.front_align_flipped = align_info.get('flipped', False)
+
+                # Cache detection data for later use (plate extraction) if not already cached
+                if pair.front_cache is None and '_detections' in align_info:
+                    pair.front_cache = align_info['_detections']
 
                 # Calculate overprint shift from aligned front image
                 aligned_front = align_info.get('aligned_image')
@@ -169,12 +192,14 @@ class ProcessingThread(QThread):
                 # Extract plate info if setting enabled
                 plate_info = {'series_year': '', 'front_plate': '', 'back_plate': '', 'potential_mule': False}
                 if self.extract_plate_info and serial:
-                    # Load and align front image
-                    front_aligned, _ = self.processor.yolo_aligner.align_image(pair.front_path)
+                    # Load and align front image, using cached detections if available
+                    front_aligned, _ = self.processor.yolo_aligner.align_image(
+                        pair.front_path, cached_detections=pair.front_cache)
                     # Load and align back image (for back_plate)
                     back_aligned = None
                     if pair.back_path:
-                        back_aligned, _ = self.processor.yolo_aligner.align_image(pair.back_path)
+                        back_aligned, _ = self.processor.yolo_aligner.align_image(
+                            pair.back_path, cached_detections=pair.back_cache)
                     plate_info = self.processor._extract_plate_info(front_aligned, back_aligned)
                 pair.series_year = plate_info['series_year']
                 pair.front_plate = plate_info['front_plate']
@@ -300,11 +325,26 @@ class ProcessingThread(QThread):
                         'potential_mule': pair.potential_mule,
                     }
 
-                # Print timing summary
+                # Print timing summary and accumulate totals
                 bill_id = f"#{pair.stack_position} {result.get('serial') or 'NO_SERIAL'}"
                 print(timing.get_summary(bill_id))
+                total_yolo_calls += timing.yolo_calls  # Already reset to 0 at start of each bill
+                total_ocr_calls += timing.ocr_calls
 
                 self.result_ready.emit(result)
+
+            # Print batch summary
+            batch_time = time.time() - batch_start
+            processing_time = batch_time - verify_time
+            avg_per_bill = processing_time / total if total > 0 else 0
+            all_yolo = verify_yolo_calls + total_yolo_calls
+            print(f"\n{'='*70}")
+            print(f"[BATCH SUMMARY]")
+            print(f"  Bills: {total} | Fancy: {fancy_count} | Review: {review_count}")
+            print(f"  Verify: {'ON' if self.verify_pairs else 'OFF'} ({verify_time:.2f}s, {verify_yolo_calls} YOLO)")
+            print(f"  Processing: {processing_time:.2f}s ({avg_per_bill:.2f}s/bill avg)")
+            print(f"  Total: {batch_time:.2f}s | YOLO: {all_yolo} | OCR: {total_ocr_calls}")
+            print(f"{'='*70}\n")
 
             # Save review queue
             if self.processor.review_queue:
@@ -353,3 +393,81 @@ class ProcessingThread(QThread):
                 f"Found {cropped_count} files matching cropped pattern (e.g., B12345678A_01.jpg).\n\n"
                 "Please select the original scanner output folder instead."
             )
+
+
+class OrganizeThread(QThread):
+    """
+    Background thread for organizing bill images.
+
+    Pre-processes images: classifies front/back, fixes orientation, deskews, renames.
+
+    Signals:
+        progress_updated(current, total, message): Progress update
+        organize_complete(result_dict): Organization complete
+        error_occurred(error_message): Error during organization
+    """
+
+    progress_updated = Signal(int, int, str)
+    organize_complete = Signal(dict)
+    error_occurred = Signal(str)
+
+    def __init__(self, input_dir: str, use_gpu: bool = False, parent=None):
+        super().__init__(parent)
+        self.input_dir = Path(input_dir)
+        self.use_gpu = use_gpu
+        self._stop_requested = False
+
+    def run(self):
+        """Main organization loop."""
+        try:
+            from process_production import ProductionProcessor, Config
+
+            # Find config and model
+            script_dir = Path(__file__).parent.parent
+            config_path = script_dir / "config.yaml"
+            patterns_dir = script_dir / "patterns"
+            model_path = script_dir / "best.pt"
+
+            if not model_path.exists():
+                self.error_occurred.emit(f"YOLO model not found: {model_path}")
+                return
+
+            # Initialize processor
+            self.progress_updated.emit(0, 0, "Loading models...")
+
+            cfg = Config(config_path if config_path.exists() else None)
+            processor = ProductionProcessor(
+                model_path,
+                use_gpu=self.use_gpu,
+                cfg=cfg,
+                patterns_dir=patterns_dir if patterns_dir.exists() else None
+            )
+
+            # Run organization
+            def progress_callback(current, total, message):
+                self.progress_updated.emit(current, total, message)
+
+            result = processor.organize_folder(self.input_dir, progress_callback=progress_callback)
+
+            if 'error' in result:
+                self.error_occurred.emit(result['error'])
+            else:
+                # Print summary
+                print(f"\n{'='*70}")
+                print(f"[ORGANIZE COMPLETE]")
+                print(f"  Pairs organized: {result['pairs_organized']}")
+                print(f"  Images corrected: {result['images_corrected']}")
+                print(f"  Time taken: {result['time_taken']:.2f}s")
+                print(f"  Output format: Dollar_001.jpg through Dollar_{result['pairs_organized']*2:03d}.jpg")
+                print(f"{'='*70}\n")
+
+                self.organize_complete.emit(result)
+
+        except Exception as e:
+            import traceback
+            error_msg = f"{str(e)}\n{traceback.format_exc()}"
+            self.error_occurred.emit(error_msg)
+
+    def request_stop(self):
+        """Request the thread to stop."""
+        self._stop_requested = True
