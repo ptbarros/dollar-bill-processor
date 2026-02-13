@@ -630,7 +630,51 @@ class MainWindow(QMainWindow):
         if self.current_results and self._session_dirty:
             self._trigger_autosave()
 
+        # Clean up resources to prevent memory corruption on exit
+        self._cleanup_resources()
+
         event.accept()
+
+    def _cleanup_resources(self):
+        """Clean up native resources (YOLO, EasyOCR, threads) before exit.
+
+        This prevents heap corruption caused by non-deterministic cleanup order
+        between Qt, Python GC, and native extensions.
+        """
+        import gc
+
+        # Stop autosave timer
+        if hasattr(self, '_autosave_timer') and self._autosave_timer:
+            self._autosave_timer.stop()
+
+        # Stop file watcher first
+        if self.file_watcher:
+            self.file_watcher.stop()
+            self.file_watcher.wait(1000)
+            self.file_watcher = None
+
+        # Wait for processing thread to finish
+        if hasattr(self, 'processing_thread') and self.processing_thread:
+            if self.processing_thread.isRunning():
+                self.processing_thread.request_stop()
+                self.processing_thread.wait(3000)  # Wait up to 3 seconds
+            # Clear processor reference in thread before releasing thread
+            if self.processing_thread.processor:
+                self.processing_thread.processor = None
+            self.processing_thread = None
+
+        # Wait for monitor thread to finish
+        if hasattr(self, 'monitor_thread') and self.monitor_thread:
+            if self.monitor_thread.isRunning():
+                self.monitor_thread.wait(1000)
+            self.monitor_thread = None
+
+        # Release the processor (holds YOLO model and EasyOCR)
+        if self.processor:
+            self.processor = None
+
+        # Force garbage collection before Qt cleanup
+        gc.collect()
 
     # Slots
     @Slot(str, str)

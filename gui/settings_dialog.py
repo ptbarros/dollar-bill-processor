@@ -102,11 +102,6 @@ class SettingsDialog(QDialog):
         self._setup_export_tab(export_tab)
         tabs.addTab(export_tab, "Export")
 
-        # Crop tab
-        crop_tab = QWidget()
-        self._setup_crop_tab(crop_tab)
-        tabs.addTab(crop_tab, "Crop Regions")
-
         # Monitor tab
         monitor_tab = QWidget()
         self._setup_monitor_tab(monitor_tab)
@@ -409,80 +404,6 @@ class SettingsDialog(QDialog):
         templates_layout.addRow("HTML template:", html_layout)
 
         layout.addWidget(templates_group)
-
-        layout.addStretch()
-
-    def _setup_crop_tab(self, tab: QWidget):
-        """Setup the crop region settings tab."""
-        layout = QVBoxLayout(tab)
-
-        # Help text
-        help_label = QLabel(
-            "Crop regions are percentages (0.0-1.0) of image dimensions.\n"
-            "X/Y = top-left corner, W/H = width/height of the region."
-        )
-        help_label.setWordWrap(True)
-        layout.addWidget(help_label)
-
-        # Front seal crop
-        front_group = QGroupBox("Front Seal Crop")
-        front_layout = QFormLayout(front_group)
-
-        self.front_seal_x = QDoubleSpinBox()
-        self.front_seal_x.setRange(0.0, 1.0)
-        self.front_seal_x.setSingleStep(0.01)
-        self.front_seal_x.setDecimals(3)
-        front_layout.addRow("X (left):", self.front_seal_x)
-
-        self.front_seal_y = QDoubleSpinBox()
-        self.front_seal_y.setRange(0.0, 1.0)
-        self.front_seal_y.setSingleStep(0.01)
-        self.front_seal_y.setDecimals(3)
-        front_layout.addRow("Y (top):", self.front_seal_y)
-
-        self.front_seal_w = QDoubleSpinBox()
-        self.front_seal_w.setRange(0.0, 1.0)
-        self.front_seal_w.setSingleStep(0.01)
-        self.front_seal_w.setDecimals(3)
-        front_layout.addRow("Width:", self.front_seal_w)
-
-        self.front_seal_h = QDoubleSpinBox()
-        self.front_seal_h.setRange(0.0, 1.0)
-        self.front_seal_h.setSingleStep(0.01)
-        self.front_seal_h.setDecimals(3)
-        front_layout.addRow("Height:", self.front_seal_h)
-
-        layout.addWidget(front_group)
-
-        # Back seal crop
-        back_group = QGroupBox("Back Seal Crop")
-        back_layout = QFormLayout(back_group)
-
-        self.back_seal_x = QDoubleSpinBox()
-        self.back_seal_x.setRange(0.0, 1.0)
-        self.back_seal_x.setSingleStep(0.01)
-        self.back_seal_x.setDecimals(3)
-        back_layout.addRow("X (left):", self.back_seal_x)
-
-        self.back_seal_y = QDoubleSpinBox()
-        self.back_seal_y.setRange(0.0, 1.0)
-        self.back_seal_y.setSingleStep(0.01)
-        self.back_seal_y.setDecimals(3)
-        back_layout.addRow("Y (top):", self.back_seal_y)
-
-        self.back_seal_w = QDoubleSpinBox()
-        self.back_seal_w.setRange(0.0, 1.0)
-        self.back_seal_w.setSingleStep(0.01)
-        self.back_seal_w.setDecimals(3)
-        back_layout.addRow("Width:", self.back_seal_w)
-
-        self.back_seal_h = QDoubleSpinBox()
-        self.back_seal_h.setRange(0.0, 1.0)
-        self.back_seal_h.setSingleStep(0.01)
-        self.back_seal_h.setDecimals(3)
-        back_layout.addRow("Height:", self.back_seal_h)
-
-        layout.addWidget(back_group)
 
         layout.addStretch()
 
@@ -814,16 +735,6 @@ class SettingsDialog(QDialog):
         self.auto_csv_check.setChecked(self.settings.export.auto_export_csv)
         self.auto_summary_check.setChecked(self.settings.export.auto_export_summary)
 
-        # Crop
-        self.front_seal_x.setValue(self.settings.crop.front_seal_x)
-        self.front_seal_y.setValue(self.settings.crop.front_seal_y)
-        self.front_seal_w.setValue(self.settings.crop.front_seal_w)
-        self.front_seal_h.setValue(self.settings.crop.front_seal_h)
-        self.back_seal_x.setValue(self.settings.crop.back_seal_x)
-        self.back_seal_y.setValue(self.settings.crop.back_seal_y)
-        self.back_seal_w.setValue(self.settings.crop.back_seal_w)
-        self.back_seal_h.setValue(self.settings.crop.back_seal_h)
-
         # Monitor
         self.watch_dir_edit.setText(self.settings.monitor.watch_directory)
         self.monitor_output_edit.setText(self.settings.monitor.output_directory)
@@ -877,16 +788,6 @@ class SettingsDialog(QDialog):
         self.settings.export.auto_export_csv = self.auto_csv_check.isChecked()
         self.settings.export.auto_export_summary = self.auto_summary_check.isChecked()
 
-        # Crop
-        self.settings.crop.front_seal_x = self.front_seal_x.value()
-        self.settings.crop.front_seal_y = self.front_seal_y.value()
-        self.settings.crop.front_seal_w = self.front_seal_w.value()
-        self.settings.crop.front_seal_h = self.front_seal_h.value()
-        self.settings.crop.back_seal_x = self.back_seal_x.value()
-        self.settings.crop.back_seal_y = self.back_seal_y.value()
-        self.settings.crop.back_seal_w = self.back_seal_w.value()
-        self.settings.crop.back_seal_h = self.back_seal_h.value()
-
         # Monitor
         self.settings.monitor.watch_directory = self.watch_dir_edit.text()
         self.settings.monitor.output_directory = self.monitor_output_edit.text()
@@ -909,13 +810,12 @@ class SettingsDialog(QDialog):
 
     def _restore_defaults(self):
         """Restore default settings."""
-        from settings_manager import ProcessingSettings, UISettings, ExportSettings, CropSettings, MonitorSettings, AutosaveSettings, AISettings
+        from settings_manager import ProcessingSettings, UISettings, ExportSettings, MonitorSettings, AutosaveSettings, AISettings
 
         # Reset to defaults
         self.settings.processing = ProcessingSettings()
         self.settings.ui = UISettings()
         self.settings.export = ExportSettings()
-        self.settings.crop = CropSettings()
         self.settings.monitor = MonitorSettings()
         self.settings.autosave = AutosaveSettings()
         self.settings.ai = AISettings()

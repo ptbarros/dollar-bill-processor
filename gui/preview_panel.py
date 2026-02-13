@@ -337,7 +337,7 @@ class ScrollableImageViewer(QWidget):
 
         layout.addWidget(self.scroll_area, 1)
 
-        # Zoom controls
+        # Zoom controls (compact - use Ctrl+scroll or middle-drag for smooth zoom)
         zoom_layout = QHBoxLayout()
 
         self.zoom_fit_btn = QPushButton("Fit")
@@ -348,15 +348,6 @@ class ScrollableImageViewer(QWidget):
         self.zoom_out_btn.clicked.connect(self._zoom_out)
         zoom_layout.addWidget(self.zoom_out_btn)
 
-        self.zoom_slider = QSlider(Qt.Horizontal)
-        self.zoom_slider.setMinimum(10)
-        self.zoom_slider.setMaximum(400)
-        self.zoom_slider.setValue(100)
-        self.zoom_slider.setTickPosition(QSlider.TicksBelow)
-        self.zoom_slider.setTickInterval(50)
-        self.zoom_slider.valueChanged.connect(self._on_slider_changed)
-        zoom_layout.addWidget(self.zoom_slider, 1)
-
         self.zoom_in_btn = QPushButton("+")
         self.zoom_in_btn.clicked.connect(self._zoom_in)
         zoom_layout.addWidget(self.zoom_in_btn)
@@ -364,6 +355,8 @@ class ScrollableImageViewer(QWidget):
         self.zoom_label = QLabel("100%")
         self.zoom_label.setMinimumWidth(45)
         zoom_layout.addWidget(self.zoom_label)
+
+        zoom_layout.addStretch()
 
         layout.addLayout(zoom_layout)
 
@@ -420,11 +413,6 @@ class ScrollableImageViewer(QWidget):
         percent = int(self.zoom_factor * 100)
         self.zoom_label.setText(f"{percent}%")
 
-        # Update slider without triggering signal
-        self.zoom_slider.blockSignals(True)
-        self.zoom_slider.setValue(percent)
-        self.zoom_slider.blockSignals(False)
-
         self.zoom_changed.emit(percent)
 
     def _zoom_fit(self):
@@ -450,11 +438,6 @@ class ScrollableImageViewer(QWidget):
     def _zoom_out(self):
         """Zoom out by 25%."""
         self.zoom_factor = max(0.1, self.zoom_factor / 1.25)
-        self._update_display()
-
-    def _on_slider_changed(self, value):
-        """Handle zoom slider change."""
-        self.zoom_factor = value / 100.0
         self._update_display()
 
     def set_zoom(self, factor: float):
@@ -669,7 +652,7 @@ class SyncedSplitViewer(QWidget):
 
         layout.addWidget(self.splitter, 1)
 
-        # Shared zoom controls
+        # Shared zoom controls (compact - use Ctrl+scroll or middle-drag for smooth zoom)
         zoom_layout = QHBoxLayout()
 
         self.zoom_fit_btn = QPushButton("Fit")
@@ -680,15 +663,6 @@ class SyncedSplitViewer(QWidget):
         self.zoom_out_btn.clicked.connect(self._zoom_out)
         zoom_layout.addWidget(self.zoom_out_btn)
 
-        self.zoom_slider = QSlider(Qt.Horizontal)
-        self.zoom_slider.setMinimum(10)
-        self.zoom_slider.setMaximum(400)
-        self.zoom_slider.setValue(100)
-        self.zoom_slider.setTickPosition(QSlider.TicksBelow)
-        self.zoom_slider.setTickInterval(50)
-        self.zoom_slider.valueChanged.connect(self._on_slider_changed)
-        zoom_layout.addWidget(self.zoom_slider, 1)
-
         self.zoom_in_btn = QPushButton("+")
         self.zoom_in_btn.clicked.connect(self._zoom_in)
         zoom_layout.addWidget(self.zoom_in_btn)
@@ -696,6 +670,8 @@ class SyncedSplitViewer(QWidget):
         self.zoom_label = QLabel("100%")
         self.zoom_label.setMinimumWidth(45)
         zoom_layout.addWidget(self.zoom_label)
+
+        zoom_layout.addStretch()
 
         layout.addLayout(zoom_layout)
 
@@ -724,9 +700,6 @@ class SyncedSplitViewer(QWidget):
         # Update UI
         percent = int(self.zoom_factor * 100)
         self.zoom_label.setText(f"{percent}%")
-        self.zoom_slider.blockSignals(True)
-        self.zoom_slider.setValue(percent)
-        self.zoom_slider.blockSignals(False)
 
     def _zoom_fit(self):
         """Fit both images to their viewports."""
@@ -747,11 +720,6 @@ class SyncedSplitViewer(QWidget):
     def _zoom_out(self):
         """Zoom out by 25%."""
         self.zoom_factor = max(0.1, self.zoom_factor / 1.25)
-        self._update_zoom()
-
-    def _on_slider_changed(self, value):
-        """Handle zoom slider change."""
-        self.zoom_factor = value / 100.0
         self._update_zoom()
 
     def wheelEvent(self, event: QWheelEvent):
