@@ -813,20 +813,20 @@ class ResultsList(QWidget):
             patterns = [p.strip() for p in fancy_types.split(',') if p.strip()]
             current_override = result.get('pattern_override', '')
 
+            pattern_menu = menu.addMenu("Set Pattern...")
+
+            # "(Auto)" option to clear override and use first pattern
+            auto_action = QAction("(Auto)" if patterns else "(None)", self)
+            if not current_override:
+                auto_action.setCheckable(True)
+                auto_action.setChecked(True)
+            auto_action.triggered.connect(lambda: self._set_pattern_override(result, None))
+            pattern_menu.addAction(auto_action)
+
             if patterns:
-                pattern_menu = menu.addMenu("Set Pattern...")
-
-                # "(Auto)" option to clear override and use first pattern
-                auto_action = QAction("(Auto)", self)
-                if not current_override:
-                    auto_action.setCheckable(True)
-                    auto_action.setChecked(True)
-                auto_action.triggered.connect(lambda: self._set_pattern_override(result, None))
-                pattern_menu.addAction(auto_action)
-
                 pattern_menu.addSeparator()
 
-                # Add each available pattern
+                # Add each detected pattern
                 for pattern in patterns:
                     pattern_action = QAction(pattern, self)
                     pattern_action.setCheckable(True)
@@ -836,6 +836,17 @@ class ResultsList(QWidget):
                         lambda checked, p=pattern: self._set_pattern_override(result, p)
                     )
                     pattern_menu.addAction(pattern_action)
+
+            pattern_menu.addSeparator()
+
+            # "Custom..." option to type a custom pattern name
+            custom_action = QAction("Custom...", self)
+            if current_override and current_override not in patterns:
+                custom_action.setCheckable(True)
+                custom_action.setChecked(True)
+                custom_action.setText(f"Custom: {current_override}")
+            custom_action.triggered.connect(lambda: self._set_custom_pattern(result))
+            pattern_menu.addAction(custom_action)
 
             # "Set Note..." option
             note_action = QAction("Set Note...", self)
@@ -908,6 +919,22 @@ class ResultsList(QWidget):
 
         # Emit status_changed to trigger autosave
         self.status_changed.emit()
+
+    def _set_custom_pattern(self, result: dict):
+        """Open dialog to type a custom pattern name for a result."""
+        current_override = result.get('pattern_override', '')
+        patterns = [p.strip() for p in result.get('fancy_types', '').split(',') if p.strip()]
+        # Pre-fill with current custom override if it's not from detected patterns
+        prefill = current_override if current_override and current_override not in patterns else ''
+
+        pattern, ok = QInputDialog.getText(
+            self, "Set Custom Pattern",
+            "Enter a pattern name for this bill:",
+            text=prefill
+        )
+
+        if ok and pattern and pattern.strip():
+            self._set_pattern_override(result, pattern.strip())
 
     def _set_note(self, result: dict):
         """Open dialog to set or edit a note for a result."""
