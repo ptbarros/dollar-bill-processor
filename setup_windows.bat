@@ -73,7 +73,30 @@ echo.
 echo Activating environment...
 call venv\Scripts\activate.bat
 
-echo.
+:: Check for NVIDIA GPU and install CUDA-enabled PyTorch if available
+echo Checking for NVIDIA GPU...
+nvidia-smi >nul 2>&1
+if errorlevel 1 (
+    echo   No NVIDIA GPU detected - will use CPU-only PyTorch.
+    echo.
+) else (
+    echo   NVIDIA GPU detected!
+    echo   Installing CUDA-enabled PyTorch (this may take a few minutes)...
+    echo.
+    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+    if errorlevel 1 (
+        echo.
+        echo WARNING: Failed to install CUDA PyTorch, falling back to CPU version.
+        echo You can try manually later with:
+        echo   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+        echo.
+    ) else (
+        echo.
+        echo   CUDA PyTorch installed successfully.
+        echo.
+    )
+)
+
 echo Installing dependencies (this may take a few minutes)...
 echo.
 pip install -r requirements.txt
@@ -85,7 +108,12 @@ if errorlevel 1 (
     exit /b 1
 )
 
+:: Verify GPU support
 echo.
+echo Checking GPU support...
+python -c "import torch; gpu=torch.cuda.is_available(); print(f'  PyTorch CUDA: {gpu}'); print(f'  Device: {torch.cuda.get_device_name(0)}' if gpu else '  (CPU-only mode)')"
+echo.
+
 echo ============================================
 echo   SETUP COMPLETE!
 echo ============================================
@@ -93,7 +121,5 @@ echo.
 echo You can now use:
 echo   - run_processor.bat  : Command-line processing
 echo   - run_gui.bat        : Graphical interface (recommended)
-echo.
-echo To edit patterns, open patterns_v2.yaml in Notepad.
 echo.
 pause

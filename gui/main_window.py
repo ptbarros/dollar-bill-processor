@@ -518,7 +518,7 @@ class MainWindow(QMainWindow):
         1. Without catalog (for reference/binder)
         2. With catalog (to store with the physical bill)
         """
-        labels_file = output_dir / "bill_labels.txt"
+        labels_file = output_dir / "zbill_labels.txt"
 
         with open(labels_file, 'a', encoding='utf-8') as f:
             for result in results:

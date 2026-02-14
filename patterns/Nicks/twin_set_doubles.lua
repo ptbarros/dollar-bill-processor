@@ -19,14 +19,11 @@ function match(ctx)
         matched = true,
         message = "Twin set doubles: " .. s:sub(1, 2) .. "×2 + " .. s:sub(5, 6) .. "×2",
         group_boxes = {
-            {from = 0, to = 3, color = "orange"},
-            {from = 4, to = 7, color = "cyan"}
+            {from = 0, to = 1, color = "red"},
+            {from = 2, to = 3, color = "red"},
+            {from = 4, to = 5, color = "blue"}, 
+            {from = 6, to = 7, color = "blue"}
         },
-        connectors = {
-            {from = 0, to = 2, color = "orange", style = "arc"},
-            {from = 1, to = 3, color = "orange", style = "arc"},
-            {from = 4, to = 6, color = "cyan", style = "arc"},
-            {from = 5, to = 7, color = "cyan", style = "arc"}
-        }
+        
     }
 end
