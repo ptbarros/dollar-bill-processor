@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QSizePolicy, QTabWidget, QSlider, QApplication, QStackedWidget,
     QComboBox, QSplitter, QMenu, QColorDialog, QCheckBox
 )
-from PySide6.QtCore import Qt, Signal, Slot, QPoint, QSize
+from PySide6.QtCore import Qt, Signal, Slot, QPoint, QSize, QEvent
 from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QPainter, QPen, QColor, QAction, QTransform
 
 # Add parent for imports
@@ -484,6 +484,7 @@ class ImagePane(QWidget):
     """Simple image pane without zoom controls, for use in synced split view."""
 
     pan_changed = Signal(float, float)  # Emits scroll position as fraction (0-1)
+    zoom_requested = Signal(object, str)  # Emits (self, 'in'|'out') for zoom delegation
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -605,19 +606,35 @@ class ImagePane(QWidget):
         else:
             super().wheelEvent(event)
 
+    def zoom_in(self):
+        """Delegate zoom in request to parent SyncedSplitViewer."""
+        self.zoom_requested.emit(self, 'in')
+
+    def zoom_out(self):
+        """Delegate zoom out request to parent SyncedSplitViewer."""
+        self.zoom_requested.emit(self, 'out')
+
     def set_crosshair_enabled(self, enabled: bool):
         """Enable or disable crosshair overlay."""
         self.image_label.set_crosshair_enabled(enabled)
 
 
 class SyncedSplitViewer(QWidget):
-    """Split view with two synced image panes and shared zoom controls."""
+    """Split view with two synced image panes and shared zoom controls.
+
+    Supports a sync lock toggle: when locked (default), pan and zoom are
+    synchronized between panes. When unlocked, each pane can be
+    independently panned/zoomed, with controls targeting the active pane.
+    """
 
     def __init__(self, orientation: Qt.Orientation = Qt.Vertical, parent=None):
         super().__init__(parent)
         self.orientation = orientation
         self.zoom_factor = 1.0
+        self._sync_locked = True
+        self._active_pane = None  # Set after panes are created
         self._setup_ui()
+        self._active_pane = self.front_pane
 
     def _setup_ui(self):
         """Setup the split viewer."""
@@ -640,12 +657,18 @@ class SyncedSplitViewer(QWidget):
         # Front pane (no labels - minimal gap)
         self.front_pane = ImagePane()
         self.front_pane.pan_changed.connect(self._sync_pan_from_front)
+        self.front_pane.zoom_requested.connect(self._on_pane_zoom_requested)
         self.splitter.addWidget(self.front_pane)
 
         # Back pane
         self.back_pane = ImagePane()
         self.back_pane.pan_changed.connect(self._sync_pan_from_back)
+        self.back_pane.zoom_requested.connect(self._on_pane_zoom_requested)
         self.splitter.addWidget(self.back_pane)
+
+        # Install event filter on panes for mouse-enter focus tracking
+        self.front_pane.installEventFilter(self)
+        self.back_pane.installEventFilter(self)
 
         # Equal split by default
         self.splitter.setSizes([100, 100])
@@ -671,9 +694,100 @@ class SyncedSplitViewer(QWidget):
         self.zoom_label.setMinimumWidth(45)
         zoom_layout.addWidget(self.zoom_label)
 
+        # Sync lock toggle button
+        self.sync_btn = QPushButton("Sync")
+        self.sync_btn.setCheckable(True)
+        self.sync_btn.setChecked(True)
+        self.sync_btn.setToolTip("Lock/unlock pan and zoom sync between panes")
+        self.sync_btn.toggled.connect(self._on_sync_toggled)
+        self._update_sync_btn_style()
+        zoom_layout.addWidget(self.sync_btn)
+
         zoom_layout.addStretch()
 
         layout.addLayout(zoom_layout)
+
+    def eventFilter(self, obj, event):
+        """Track mouse entering a pane to set it as active."""
+        if event.type() == QEvent.Enter:
+            if obj is self.front_pane or obj is self.back_pane:
+                self._set_active_pane(obj)
+        return super().eventFilter(obj, event)
+
+    def _set_active_pane(self, pane):
+        """Update the active pane and refresh visual indicators."""
+        if pane is self._active_pane:
+            return
+        self._active_pane = pane
+        self._update_pane_borders()
+        self._update_zoom_label()
+
+    def _update_pane_borders(self):
+        """Update pane border styling based on lock state and active pane."""
+        if self._sync_locked:
+            # No borders when locked (clean look)
+            self.front_pane.setStyleSheet("")
+            self.back_pane.setStyleSheet("")
+        else:
+            # Green border on active, subtle on inactive
+            active_style = "ImagePane { border: 2px solid #4CAF50; }"
+            inactive_style = "ImagePane { border: 1px solid #444; }"
+            if self._active_pane is self.front_pane:
+                self.front_pane.setStyleSheet(active_style)
+                self.back_pane.setStyleSheet(inactive_style)
+            else:
+                self.front_pane.setStyleSheet(inactive_style)
+                self.back_pane.setStyleSheet(active_style)
+
+    def _update_sync_btn_style(self):
+        """Update sync button appearance based on checked state."""
+        if self.sync_btn.isChecked():
+            self.sync_btn.setStyleSheet(
+                "QPushButton { background-color: #4CAF50; color: white; "
+                "border: 1px solid #388E3C; border-radius: 3px; padding: 2px 8px; }"
+                "QPushButton:hover { background-color: #66BB6A; }"
+            )
+        else:
+            self.sync_btn.setStyleSheet("")
+
+    def _update_zoom_label(self):
+        """Update the zoom label to reflect the active pane's zoom."""
+        if self._sync_locked:
+            percent = int(self.zoom_factor * 100)
+        else:
+            pane = self._active_pane or self.front_pane
+            percent = int(pane.zoom_factor * 100)
+        self.zoom_label.setText(f"{percent}%")
+
+    def _on_sync_toggled(self, checked):
+        """Handle sync button toggle."""
+        self._sync_locked = checked
+        self._update_sync_btn_style()
+        self._update_pane_borders()
+
+        if checked:
+            # Re-locking: sync the non-active pane to match the active pane
+            active = self._active_pane or self.front_pane
+            other = self.back_pane if active is self.front_pane else self.front_pane
+            self.zoom_factor = active.zoom_factor
+            other.set_zoom(self.zoom_factor)
+            # Sync pan position from active to other
+            h_bar = active.scroll_area.horizontalScrollBar()
+            v_bar = active.scroll_area.verticalScrollBar()
+            h_frac = h_bar.value() / max(1, h_bar.maximum()) if h_bar.maximum() > 0 else 0
+            v_frac = v_bar.value() / max(1, v_bar.maximum()) if v_bar.maximum() > 0 else 0
+            other.sync_pan_to(h_frac, v_frac)
+
+        self._update_zoom_label()
+
+    def _on_pane_zoom_requested(self, pane, direction):
+        """Handle zoom request from a pane (middle-mouse drag)."""
+        if not self._sync_locked:
+            self._set_active_pane(pane)
+        if direction == 'in':
+            self._zoom_in()
+        else:
+            self._zoom_out()
 
     def set_images(self, front_path: str, back_path: str, preserve_zoom: bool = False):
         """Set both images."""
@@ -686,53 +800,93 @@ class SyncedSplitViewer(QWidget):
 
     def _sync_pan_from_front(self, h_frac: float, v_frac: float):
         """Sync back pane to front pane's pan position."""
-        self.back_pane.sync_pan_to(h_frac, v_frac)
+        if self._sync_locked:
+            self.back_pane.sync_pan_to(h_frac, v_frac)
 
     def _sync_pan_from_back(self, h_frac: float, v_frac: float):
         """Sync front pane to back pane's pan position."""
-        self.front_pane.sync_pan_to(h_frac, v_frac)
+        if self._sync_locked:
+            self.front_pane.sync_pan_to(h_frac, v_frac)
 
     def _update_zoom(self):
-        """Apply current zoom to both panes."""
-        self.front_pane.set_zoom(self.zoom_factor)
-        self.back_pane.set_zoom(self.zoom_factor)
+        """Apply current zoom to panes based on lock state."""
+        if self._sync_locked:
+            self.front_pane.set_zoom(self.zoom_factor)
+            self.back_pane.set_zoom(self.zoom_factor)
+        else:
+            pane = self._active_pane or self.front_pane
+            pane.set_zoom(pane.zoom_factor)
 
-        # Update UI
-        percent = int(self.zoom_factor * 100)
-        self.zoom_label.setText(f"{percent}%")
+        self._update_zoom_label()
 
     def _zoom_fit(self):
-        """Fit both images to their viewports."""
-        # Get the smaller fit factor from both panes
-        front_factor = self.front_pane.zoom_fit()
-        back_factor = self.back_pane.zoom_fit()
-
-        # Use the smaller factor so both fit
-        self.zoom_factor = min(front_factor, back_factor) if front_factor and back_factor else 1.0
-
-        self._update_zoom()
+        """Fit images to viewport(s)."""
+        if self._sync_locked:
+            # Get the smaller fit factor from both panes
+            front_factor = self.front_pane.zoom_fit()
+            back_factor = self.back_pane.zoom_fit()
+            # Use the smaller factor so both fit
+            self.zoom_factor = min(front_factor, back_factor) if front_factor and back_factor else 1.0
+            self._update_zoom()
+        else:
+            pane = self._active_pane or self.front_pane
+            pane.zoom_fit()
+            self._update_zoom_label()
 
     def _zoom_in(self):
         """Zoom in by 25%."""
-        self.zoom_factor = min(4.0, self.zoom_factor * 1.25)
-        self._update_zoom()
+        if self._sync_locked:
+            self.zoom_factor = min(4.0, self.zoom_factor * 1.25)
+            self._update_zoom()
+        else:
+            pane = self._active_pane or self.front_pane
+            pane.zoom_factor = min(4.0, pane.zoom_factor * 1.25)
+            pane._update_display()
+            self._update_zoom_label()
 
     def _zoom_out(self):
         """Zoom out by 25%."""
-        self.zoom_factor = max(0.1, self.zoom_factor / 1.25)
-        self._update_zoom()
+        if self._sync_locked:
+            self.zoom_factor = max(0.1, self.zoom_factor / 1.25)
+            self._update_zoom()
+        else:
+            pane = self._active_pane or self.front_pane
+            pane.zoom_factor = max(0.1, pane.zoom_factor / 1.25)
+            pane._update_display()
+            self._update_zoom_label()
 
     def wheelEvent(self, event: QWheelEvent):
         """Handle Ctrl+wheel or middle button+wheel for zoom."""
         if event.modifiers() == Qt.ControlModifier or event.buttons() & Qt.MiddleButton:
+            # When unlocked, detect which pane the cursor is over
+            if not self._sync_locked:
+                pos = event.position().toPoint()
+                global_pos = self.mapToGlobal(pos)
+                for pane in (self.front_pane, self.back_pane):
+                    pane_rect = pane.rect()
+                    pane_topleft = pane.mapToGlobal(pane_rect.topLeft())
+                    pane_global_rect = pane_rect.translated(pane_topleft)
+                    if pane_global_rect.contains(global_pos):
+                        self._set_active_pane(pane)
+                        break
+
             delta = event.angleDelta().y()
             # Use smaller zoom steps for trackpoint
             if event.buttons() & Qt.MiddleButton:
-                if delta > 0:
-                    self.zoom_factor = min(4.0, self.zoom_factor * 1.05)
-                elif delta < 0:
-                    self.zoom_factor = max(0.1, self.zoom_factor / 1.05)
-                self._update_zoom()
+                if self._sync_locked:
+                    if delta > 0:
+                        self.zoom_factor = min(4.0, self.zoom_factor * 1.05)
+                    elif delta < 0:
+                        self.zoom_factor = max(0.1, self.zoom_factor / 1.05)
+                    self._update_zoom()
+                else:
+                    pane = self._active_pane or self.front_pane
+                    if delta > 0:
+                        pane.zoom_factor = min(4.0, pane.zoom_factor * 1.05)
+                    elif delta < 0:
+                        pane.zoom_factor = max(0.1, pane.zoom_factor / 1.05)
+                    pane._update_display()
+                    self._update_zoom_label()
             else:
                 if delta > 0:
                     self._zoom_in()
@@ -992,11 +1146,11 @@ class PreviewPanel(QWidget):
         # View mode buttons
         self.view_buttons = []
         view_modes = [
-            ("Front", "front", "View front of bill"),
-            ("Back", "back", "View back of bill"),
-            ("Stitched", "stitched", "View front and back stitched together"),
-            ("Split V", "split_v", "View front and back side by side vertically"),
-            ("Split H", "split_h", "View front and back side by side horizontally"),
+            ("Front (1)", "front", "View front of bill (1)"),
+            ("Back (2)", "back", "View back of bill (2)"),
+            ("Stitched (3)", "stitched", "View front and back stitched together (3)"),
+            ("Split V (4)", "split_v", "View front and back side by side vertically (4)"),
+            ("Split H (5)", "split_h", "View front and back side by side horizontally (5)"),
         ]
         for label, mode, tooltip in view_modes:
             btn = QPushButton(label)
@@ -1013,25 +1167,24 @@ class PreviewPanel(QWidget):
         header_layout.addSpacing(15)
 
         # Tool buttons
-        self.align_btn = QPushButton("Auto-Align")
-        self.align_btn.setToolTip("Toggle auto-alignment using YOLO bill detection")
+        self.align_btn = QPushButton("Auto-Align (A)")
+        self.align_btn.setToolTip("Toggle auto-alignment using YOLO bill detection (A)")
         self.align_btn.setCheckable(True)
         self.align_btn.setChecked(self._auto_align_enabled)
         self.align_btn.setStyleSheet("""
             QPushButton {
-                padding: 4px 8px;
+                font-weight: bold;
             }
             QPushButton:checked {
                 background-color: #4CAF50;
                 color: white;
-                font-weight: bold;
             }
         """)
         self.align_btn.clicked.connect(self._on_align_toggled)
         header_layout.addWidget(self.align_btn)
 
-        self.crosshair_btn = QPushButton("Crosshair")
-        self.crosshair_btn.setToolTip("Toggle crosshair overlay for alignment checking")
+        self.crosshair_btn = QPushButton("Crosshair (X)")
+        self.crosshair_btn.setToolTip("Toggle crosshair overlay for alignment checking (X)")
         self.crosshair_btn.setCheckable(True)
         self.crosshair_btn.clicked.connect(self._on_crosshair_toggled)
         header_layout.addWidget(self.crosshair_btn)
@@ -1042,6 +1195,11 @@ class PreviewPanel(QWidget):
         self.crop_btn.setToolTip("Generate crops for current bill (C)")
         self.crop_btn.clicked.connect(self.crop_requested.emit)
         header_layout.addWidget(self.crop_btn)
+
+        self.magnifier_btn = QPushButton("Plates (M)")
+        self.magnifier_btn.setToolTip("Toggle plate magnifier for mule comparison (M)")
+        self.magnifier_btn.clicked.connect(self.show_plate_magnifier)
+        header_layout.addWidget(self.magnifier_btn)
 
         header_layout.addStretch()
 
@@ -2342,10 +2500,16 @@ class PreviewPanel(QWidget):
         if viewer is None:
             return
 
-        # For split viewers, pan both panes
+        # For split viewers, respect sync lock state
         if hasattr(viewer, 'front_pane'):
-            h_bar = viewer.front_pane.scroll_area.horizontalScrollBar()
-            v_bar = viewer.front_pane.scroll_area.verticalScrollBar()
+            if hasattr(viewer, '_sync_locked') and not viewer._sync_locked:
+                # Unlocked: pan only the active pane
+                pane = viewer._active_pane or viewer.front_pane
+            else:
+                # Locked: pan front pane (sync will propagate to back)
+                pane = viewer.front_pane
+            h_bar = pane.scroll_area.horizontalScrollBar()
+            v_bar = pane.scroll_area.verticalScrollBar()
             h_bar.setValue(h_bar.value() + dx)
             v_bar.setValue(v_bar.value() + dy)
         elif hasattr(viewer, 'scroll_area'):

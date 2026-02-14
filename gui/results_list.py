@@ -84,7 +84,6 @@ class ResultsList(QWidget):
         batch_layout.addWidget(self.batch_combo, 1)
 
         self.refresh_batches_btn = QPushButton("Refresh")
-        self.refresh_batches_btn.setMaximumWidth(60)
         self.refresh_batches_btn.clicked.connect(self.refresh_batch_list)
         batch_layout.addWidget(self.refresh_batches_btn)
 
@@ -638,7 +637,7 @@ class ResultsList(QWidget):
         if queued:
             text += f" | {queued} queued for crop"
 
-        text += "    Space=queue  C=crop queued  M=magnifier"
+        text += "    Space=queue  C=crop queued"
 
         self.summary_label.setText(text)
 

@@ -271,6 +271,19 @@ class MainWindow(QMainWindow):
         # Plate magnifier (for mule comparison)
         QShortcut(QKeySequence(Qt.Key_M), self, self._show_plate_magnifier)
 
+        # Auto-Align toggle
+        QShortcut(QKeySequence(Qt.Key_A), self, self._toggle_auto_align)
+
+        # Crosshair toggle
+        QShortcut(QKeySequence(Qt.Key_X), self, self._toggle_crosshair)
+
+        # View mode shortcuts (1-5)
+        QShortcut(QKeySequence(Qt.Key_1), self, lambda: self._switch_view("front"))
+        QShortcut(QKeySequence(Qt.Key_2), self, lambda: self._switch_view("back"))
+        QShortcut(QKeySequence(Qt.Key_3), self, lambda: self._switch_view("stitched"))
+        QShortcut(QKeySequence(Qt.Key_4), self, lambda: self._switch_view("split_v"))
+        QShortcut(QKeySequence(Qt.Key_5), self, lambda: self._switch_view("split_h"))
+
     def _next_bill(self):
         """Navigate to next bill in results."""
         current = self.results_list.tree.currentItem()
@@ -583,6 +596,22 @@ class MainWindow(QMainWindow):
     def _show_plate_magnifier(self):
         """Show plate magnifier popup for mule comparison."""
         self.preview_panel.show_plate_magnifier()
+
+    def _toggle_auto_align(self):
+        """Toggle auto-align via keyboard shortcut."""
+        btn = self.preview_panel.align_btn
+        btn.setChecked(not btn.isChecked())
+        self.preview_panel._on_align_toggled(btn.isChecked())
+
+    def _toggle_crosshair(self):
+        """Toggle crosshair overlay via keyboard shortcut."""
+        btn = self.preview_panel.crosshair_btn
+        btn.setChecked(not btn.isChecked())
+        self.preview_panel._on_crosshair_toggled(btn.isChecked())
+
+    def _switch_view(self, mode: str):
+        """Switch preview view mode via keyboard shortcut."""
+        self.preview_panel._on_view_mode_clicked(mode)
 
     def _setup_statusbar(self):
         """Setup the status bar."""

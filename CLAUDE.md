@@ -99,15 +99,25 @@ Settings → Processing → "Extract plate and series info"
 **Keyboard:**
 | Key | Action |
 |-----|--------|
-| Space | Queue bill for crop (toggle ✓) |
+| 1-5 | View modes: Front, Back, Stitched, Split V, Split H |
+| A | Toggle auto-align |
+| X | Toggle crosshair overlay |
 | C | Batch crop all queued |
 | M | Plate magnifier |
+| P / Page Up | Previous bill |
+| N / Page Down | Next bill |
+| Space | Queue bill for crop (toggle ✓) |
+| F / 0 | Zoom fit |
+| + / - | Zoom in/out |
+| Shift+Arrows | Pan |
 
 **Context Menu:** "Set Pattern..." (override label), "Set Note..." (add comment)
 
 **Layouts:** View > Layout menu (Classic, Wide Preview, Details Right)
 
 **Zoom:** Fit/+/- buttons, Ctrl+scroll, middle-mouse drag
+
+**Split View Sync:** Split V/H views have a "Sync" toggle button. When locked (default, green), pan/zoom is synchronized. When unlocked, each pane can be independently panned/zoomed; hover sets the active pane (green border). Re-locking snaps the inactive pane to match the active one.
 
 ## Performance Optimization
 
