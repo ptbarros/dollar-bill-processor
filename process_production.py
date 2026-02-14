@@ -2685,116 +2685,6 @@ class ProductionProcessor:
 
         return None
 
-    def _calculate_baseline_variance(self, serial_crop: np.ndarray) -> float:
-        """Detect gas pump serial numbers by analyzing digit vertical alignment.
-
-        Gas pump serials have digits that are vertically misaligned (shifted up or down)
-        due to mechanical counter rollover during printing. This resembles old gas pump
-        digit displays when changing numbers.
-
-        Algorithm:
-        1. Convert to binary using Otsu's threshold
-        2. Use vertical projection to find character column boundaries
-        3. For each character, find the vertical center (midpoint of ink pixels)
-        4. Skip first and last characters (they're letters with different heights)
-        5. Calculate median center of all numeric digits as baseline
-        6. Return maximum deviation from median
-
-        Returns:
-            float: Maximum deviation in pixels from median baseline.
-                   Values >= 3.5 typically indicate gas pump effect.
-                   Normal bills usually show 0.5 - 2.5 pixel deviation.
-        """
-        if serial_crop is None or serial_crop.size == 0:
-            return 0.0
-
-        crop_h, crop_w = serial_crop.shape[:2]
-        if crop_h < 10 or crop_w < 20:
-            return 0.0
-
-        # Convert to grayscale
-        if len(serial_crop.shape) == 3:
-            gray = cv2.cvtColor(serial_crop, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = serial_crop
-
-        # Binary threshold using Otsu's method (inverted so digits are white)
-        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
-        # Find character columns using vertical projection
-        v_proj = np.sum(binary, axis=0)
-        proj_thresh = np.max(v_proj) * 0.1 if np.max(v_proj) > 0 else 0
-
-        in_char = False
-        char_bounds = []
-        start = 0
-
-        for x in range(crop_w):
-            if v_proj[x] > proj_thresh and not in_char:
-                start = x
-                in_char = True
-            elif v_proj[x] <= proj_thresh and in_char:
-                char_bounds.append((start, x))
-                in_char = False
-        if in_char:
-            char_bounds.append((start, crop_w - 1))
-
-        # Merge nearby character bounds (handles split "4" and serif fragments)
-        # If gap between two bounds is < 4 pixels, merge them
-        merged_bounds = []
-        for bound in char_bounds:
-            if merged_bounds and bound[0] - merged_bounds[-1][1] < 4:
-                # Merge with previous
-                merged_bounds[-1] = (merged_bounds[-1][0], bound[1])
-            else:
-                merged_bounds.append(bound)
-        char_bounds = merged_bounds
-
-        # Get vertical center of each character
-        chars = []
-        for cx1, cx2 in char_bounds:
-            col_strip = binary[:, cx1:cx2]
-            h_proj = np.sum(col_strip, axis=1)
-            ink_rows = np.where(h_proj > 0)[0]
-            if len(ink_rows) > 0:
-                chars.append({
-                    'x1': cx1, 'x2': cx2,
-                    'width': cx2 - cx1,
-                    'height': int(ink_rows[-1]) - int(ink_rows[0]),
-                    'top': int(ink_rows[0]),
-                    'bottom': int(ink_rows[-1]),
-                    'center': (ink_rows[0] + ink_rows[-1]) / 2
-                })
-
-        # Filter out fragments: too narrow (< 5px) or too short (< 50% median height)
-        if chars:
-            chars = [c for c in chars if c['width'] >= 5]
-        if chars:
-            heights = [c['height'] for c in chars]
-            median_height = np.median(heights)
-            chars = [c for c in chars if c['height'] >= median_height * 0.5]
-
-        # Need at least 8 characters (letter + 6+ digits + letter)
-        if len(chars) < 8:
-            return 0.0
-
-        # Focus on digits only (skip first and last characters - they're letters)
-        # Letters have different heights than digits and would skew the analysis
-        digits = chars[1:-1]
-        centers = [d['center'] for d in digits]
-
-        if len(centers) < 2:
-            return 0.0
-
-        # Calculate median center (baseline) - robust to outliers
-        median_center = np.median(centers)
-
-        # Find maximum deviation from baseline
-        deviations = [abs(c - median_center) for c in centers]
-        max_deviation = max(deviations)
-
-        return float(max_deviation)
-
     def _calculate_seal_shift(self, img: np.ndarray) -> tuple:
         """Calculate overprint shift by comparing seal_t to ONE_hashed.
 
@@ -3008,9 +2898,16 @@ class ProductionProcessor:
         serials_found = []
         h, w = img.shape[:2]
 
+        # First pass: compute gas pump deviation for ALL serial boxes
+        # The overlay analyzes all boxes and takes the max, so processing must too
+        max_gas_pump_deviation = 0.0
         for x1, y1, x2, y2, det_conf in boxes:
-            # Early exit: if we already have a high-confidence serial, skip remaining boxes
-            # This avoids redundant OCR calls on multiple detected regions
+            tight_crop = img[y1:y2, x1:x2]
+            gp_deviation = self.analyze_gas_pump_digits(tight_crop)['max_deviation']
+            max_gas_pump_deviation = max(max_gas_pump_deviation, gp_deviation)
+
+        # Second pass: OCR extraction (with early exit for performance)
+        for x1, y1, x2, y2, det_conf in boxes:
             if serials_found and max(conf for _, conf, _, _ in serials_found) >= 0.7:
                 break
 
@@ -3029,11 +2926,7 @@ class ProductionProcessor:
             serial, conf = self.extract_serial_from_crop(crop, star_confirmed=star_confirmed)
 
             if serial:
-                # Calculate baseline variance for gas pump detection
-                # Use the tight crop (not expanded) for better character detection
-                tight_crop = img[y1:y2, x1:x2]
-                baseline_variance = self._calculate_baseline_variance(tight_crop)
-                serials_found.append((serial, conf, det_conf, baseline_variance))
+                serials_found.append((serial, conf, det_conf, max_gas_pump_deviation))
 
         return serials_found
 
@@ -3530,6 +3423,7 @@ class ProductionProcessor:
                     # Pass baseline_variance, seal position, and plate info for pattern detection
                     metadata = {
                         'baseline_variance': pair.baseline_variance,
+                        'gas_pump_threshold': self.pattern_engine.get_gas_pump_threshold(),
                         'seal_x': pair.seal_shift_x,
                         'seal_y': pair.seal_shift_y,
                         'seal_containment': pair.seal_containment,

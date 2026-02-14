@@ -218,6 +218,7 @@ class ProcessingThread(QThread):
                         # Pass baseline_variance, seal position, and plate info in metadata
                         metadata = {
                             'baseline_variance': pair.baseline_variance,
+                            'gas_pump_threshold': self.processor.pattern_engine.get_gas_pump_threshold(),
                             'seal_x': pair.seal_shift_x,
                             'seal_y': pair.seal_shift_y,
                             'seal_containment': pair.seal_containment,

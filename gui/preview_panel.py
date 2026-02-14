@@ -2306,6 +2306,7 @@ class PreviewPanel(QWidget):
         # Re-classify using the pattern engine with plate metadata
         metadata = {
             'baseline_variance': float(self.current_result.get('baseline_variance', 0)),
+            'gas_pump_threshold': self.pattern_engine.get_gas_pump_threshold(),
             'seal_x': float(self.current_result.get('seal_x', 0)),
             'seal_y': float(self.current_result.get('seal_y', 0)),
             'series_year': self.current_result.get('series_year', ''),

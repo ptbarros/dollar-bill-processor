@@ -1467,6 +1467,7 @@ class ResultsList(QWidget):
         # Re-run pattern matching with plate metadata
         metadata = {
             'baseline_variance': float(result.get('baseline_variance', 0)),
+            'gas_pump_threshold': self.pattern_engine.get_gas_pump_threshold(),
             'series_year': result.get('series_year', ''),
             'front_plate': result.get('front_plate', ''),
             'back_plate': result.get('back_plate', ''),

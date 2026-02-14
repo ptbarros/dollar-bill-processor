@@ -19,8 +19,10 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Gas pump threshold: normal is 0.5-2.5px, gas pump is 3.5+
-    if variance < 3.5 then
+    -- Use threshold from settings (slider), default to 3.5px
+    local threshold = metadata.gas_pump_threshold or 3.5
+
+    if variance < threshold then
         return {matched = false}
     end
 

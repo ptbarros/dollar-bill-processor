@@ -269,6 +269,7 @@ class MonitorThread(QThread):
                 else:
                     metadata = {
                         'baseline_variance': pair.baseline_variance,
+                        'gas_pump_threshold': self.processor.pattern_engine.get_gas_pump_threshold(),
                         'series_year': pair.series_year,
                         'front_plate': pair.front_plate,
                         'back_plate': pair.back_plate,

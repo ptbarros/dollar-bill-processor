@@ -28,7 +28,7 @@ function match(ctx)
     -- ctx.full_serial: "A12345678B" (with prefix/suffix)
     -- ctx.digit_list: {1,2,3,4,5,6,7,8} as integers
     -- ctx.data: loaded from DataFile (if specified)
-    -- ctx.metadata: {baseline_variance, seal_x, seal_y, seal_containment, series_year, front_plate, back_plate}
+    -- ctx.metadata: {baseline_variance, gas_pump_threshold, seal_x, seal_y, seal_containment, series_year, front_plate, back_plate}
 
     return {
         matched = true,
@@ -74,6 +74,16 @@ end
 **String:** `starts_with`, `ends_with`, `contains`, `only_digits`, `is_bookended`
 
 **Visualization:** `highlight`, `highlight_range`, `connector`, `find_digit_positions`
+
+## Gas Pump Detection
+
+Detects vertically misaligned digits (mechanical counter rollover during printing).
+
+**Single method:** `analyze_gas_pump_digits()` in `process_production.py` — used by both processing and the overlay. Processing analyzes ALL serial boxes on the bill front and takes the max deviation to match what the overlay displays.
+
+**Threshold:** Controlled by the Gas Pump slider in the overlay panel. Stored in `user_settings.yaml` as `pattern_overrides.GAS_PUMP.baseline_variance_min`. Passed to the Lua pattern via `ctx.metadata.gas_pump_threshold` (default 3.5px). Changing the slider + Re-classify updates results.
+
+**GPT column:** Shows `max_deviation` (pixels) — the largest vertical offset of any digit from the median baseline, across all serial regions on the bill.
 
 ## Seal Shift Detection
 
