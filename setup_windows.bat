@@ -81,7 +81,7 @@ if errorlevel 1 goto :no_gpu
 echo   NVIDIA GPU detected!
 echo   Installing CUDA-enabled PyTorch...
 echo.
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+pip install torch torchvision --force-reinstall --index-url https://download.pytorch.org/whl/cu124
 if errorlevel 1 (
     echo.
     echo WARNING: Failed to install CUDA PyTorch, falling back to CPU version.
