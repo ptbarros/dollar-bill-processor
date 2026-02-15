@@ -2856,25 +2856,42 @@ class ProductionProcessor:
         centers = [d['center'] for d in digits]
         median_center = np.median(centers)
 
-        # Calculate deviation for each character and build digit_boxes
+        # First pass: compute deviations against initial median
         GAS_PUMP_THRESHOLD = 3.5
         max_deviation = 0.0
 
         for char in chars:
             if char['is_letter']:
-                deviation = 0.0  # Don't calculate deviation for letters
+                char['deviation'] = 0.0
             else:
-                deviation = abs(char['center'] - median_center)
-                max_deviation = max(max_deviation, deviation)
+                char['deviation'] = abs(char['center'] - median_center)
+                max_deviation = max(max_deviation, char['deviation'])
 
+        # Refined baseline: remove the most-deviated digit and recompute
+        # This gives a tighter "good digit" baseline, producing more accurate
+        # deviations when 2+ digits are shifted (gas pump effect)
+        if len(digits) >= 4 and max_deviation >= 1.0:
+            worst_digit = max(digits, key=lambda d: d['deviation'])
+            refined_centers = [d['center'] for d in digits if d is not worst_digit]
+            refined_median = np.median(refined_centers)
+            max_deviation = 0.0
+            for char in chars:
+                if char['is_letter']:
+                    char['deviation'] = 0.0
+                else:
+                    char['deviation'] = abs(char['center'] - refined_median)
+                    max_deviation = max(max_deviation, char['deviation'])
+
+        # Build digit_boxes from final deviations
+        for char in chars:
             result['digit_boxes'].append({
                 'x1': char['x1'] + offset_x,
                 'y1': char['top'] + offset_y,
                 'x2': char['x2'] + offset_x,
                 'y2': char['bottom'] + offset_y,
                 'is_letter': char['is_letter'],
-                'deviation': deviation,
-                'is_shifted': deviation >= GAS_PUMP_THRESHOLD
+                'deviation': char['deviation'],
+                'is_shifted': char['deviation'] >= GAS_PUMP_THRESHOLD
             })
 
         result['max_deviation'] = max_deviation
