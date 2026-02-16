@@ -79,10 +79,10 @@ nvidia-smi >nul 2>&1
 if errorlevel 1 goto :no_gpu
 
 echo   NVIDIA GPU detected!
-echo   Installing CUDA-enabled PyTorch...
+echo   Installing CUDA-enabled PyTorch (cu128 for RTX 50-series support)...
 echo.
 pip uninstall torch torchvision -y >nul 2>&1
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 if errorlevel 1 (
     echo.
     echo WARNING: Failed to install CUDA PyTorch, falling back to CPU version.
@@ -106,10 +106,10 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Verify GPU support
+:: Verify GPU support and check compute capability compatibility
 echo.
 echo Checking GPU support...
-python -c "import torch; gpu=torch.cuda.is_available(); print('  PyTorch CUDA:', gpu); print('  Device:', torch.cuda.get_device_name(0)) if gpu else print('  CPU-only mode')"
+python -c "import torch; gpu=torch.cuda.is_available(); print('  PyTorch CUDA:', gpu); exec('if gpu:\n try:\n  print(\"  Device:\", torch.cuda.get_device_name(0))\n  cap = torch.cuda.get_device_capability(0)\n  print(f\"  Compute capability: sm_{cap[0]}{cap[1]}\")\n  t = torch.randn(1, device=\"cuda\"); _ = t + t\n  print(\"  CUDA kernel test: PASSED\")\n except Exception as e:\n  print(f\"  WARNING: CUDA kernel test FAILED: {e}\")\n  print(\"  GPU will not be used. Processing will fall back to CPU.\")\n  print(\"  If using an RTX 50-series GPU, try reinstalling with:\")\n  print(\"    pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128\")\nelse:\n print(\"  CPU-only mode\")')"
 echo.
 
 echo ============================================

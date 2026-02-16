@@ -28,6 +28,7 @@ from pathlib import Path
 from ultralytics import YOLO
 import csv
 import time
+import torch
 from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
@@ -830,6 +831,31 @@ class ProductionProcessor:
 
         print(f"Loading YOLOv8 model: {yolo_model_path}")
         self.yolo_model = YOLO(str(yolo_model_path))
+
+        # Determine and set device explicitly
+        if use_gpu and torch.cuda.is_available():
+            try:
+                # Test actual CUDA kernel execution to catch GPU incompatibility
+                # (e.g. Blackwell sm_120 with older PyTorch that only supports up to sm_90)
+                t = torch.randn(1, 1, 3, 3, device='cuda')
+                _ = torch.nn.functional.conv2d(t, torch.randn(1, 1, 1, 1, device='cuda'))
+                del t, _
+                torch.cuda.empty_cache()
+                print(f"  Using GPU: {torch.cuda.get_device_name(0)}")
+            except Exception as e:
+                print(f"  WARNING: CUDA kernel execution failed: {e}")
+                print(f"  Your GPU may not be supported by this PyTorch version.")
+                print(f"  Try: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128")
+                print(f"  Falling back to CPU mode.")
+                self.yolo_model.to('cpu')
+                self.use_gpu = False
+                use_gpu = False
+        else:
+            self.yolo_model.to('cpu')
+            if use_gpu and not torch.cuda.is_available():
+                print(f"  WARNING: GPU requested but CUDA not available. Using CPU.")
+            else:
+                print(f"  Using CPU mode.")
 
         # Print model class names and find star class dynamically
         self.star_class_id = None
