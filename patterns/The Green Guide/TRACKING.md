@@ -4,7 +4,7 @@
 
 Last updated: 2026-02-21
 Implemented: 104 files (94 previous + 10 batch 6)
-Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
+Book total: ~134 CS-numbered patterns (CS-30 to CS-2350); 103 @CS~ tags confirmed in /tmp/tggfsn.txt
 
 ---
 
@@ -183,6 +183,7 @@ These require `ctx.metadata.series_year`, plate numbers, or complex calendar mat
 
 | CS# | Book Name | Reason Deferred |
 |-----|-----------|-----------------|
+| CS-1800 | CS-Stand Alone Date E.U. | dd/mm block surrounded by zeros; needs calendar validation (valid day/month pairs) |
 | CS-1830 | CS-Stand Alone U.S. Date Year | Needs calendar logic to verify year is a real US date year; deferred to metadata batch |
 | CS-540 | CS-Birthday Note | Requires series year match to a date |
 | CS-550 | CS-Anniversary Note | Calendar date math |
