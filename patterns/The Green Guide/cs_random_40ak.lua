@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_RANDOM_40AK
-DisplayName: CS-Random 40AK
+DisplayName: CS-Random 4OAK
 Description: Four of the same digit anywhere in the serial as long as it does not make a CS-Quad (no run of 4+). e.g., M 41442435 M or M 14442435 M.
 BookRef: CS-220
 Tier: 6

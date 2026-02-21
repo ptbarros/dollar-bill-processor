@@ -10,41 +10,31 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 
 ## Pending Work — DisplayName Audit
 
-**Status:** In progress. All 93 DisplayNames need to match the book exactly.
+**Status:** Batch 1 of fixes applied (2026-02-21). 15 DisplayNames corrected. See below for remaining items.
 
-### Confirmed changes needed (do these next session):
-- **All "X0AK" → "XOAK"** — "3OAK" = Three Of A Kind (user confirmed). Affects:
-  - cs_30ak.lua: "CS-30AK (Scattered Triple)" → "CS-3OAK"
-  - cs_40ak.lua: "CS-40AK (Scattered Quad)" → "CS-4OAK"
-  - cs_50ak.lua: "CS-50AK (Scattered Quint)" → "CS-5OAK"
-  - cs_60ak.lua: "CS-60AK (Scattered Sextup)" → "CS-6OAK"
-  - cs_70ak.lua: "CS-70AK (Scattered Seven)" → "CS-7OAK"
-  - cs_paired_30ak.lua: "CS-Paired 30AK" → "CS-Paired 3OAK"
-  - cs_random_40ak.lua: "CS-Random 40AK" → "CS-Random 4OAK"
-  - cs_double_40ak.lua: "CS-Double 40AK" → "CS-Random Double 4OAK"
-- **"(Random)" suffix → "CS-Random" prefix** (book always uses "CS-Random XXX"):
-  - cs_two_pairs.lua: "CS-Two Pairs (Random)" → "CS-Random Two Pairs"
-  - cs_tri_pairs.lua: "CS-Tri Pairs (Random)" → "CS-Random Tri Pairs"
-  - cs_quad_pairs.lua: "CS-Quad Pairs (Random)" → "CS-Random Quad Pairs"
-- **Other confirmed mismatches:**
-  - cs_grouped_quad_pairs.lua: "CS-Grouped Quad Pairs" → "CS-Quad Pairs"
-  - cs_solid.lua: "CS-Solid (CS-80AK)" → "CS-Solid"
+### Completed (applied 2026-02-21):
+- All X0AK → XOAK: cs_30ak, cs_40ak, cs_50ak, cs_60ak, cs_70ak, cs_paired_30ak, cs_random_40ak, cs_double_40ak
+- "(Random)" suffix → "CS-Random" prefix: cs_two_pairs, cs_tri_pairs, cs_quad_pairs
+- cs_grouped_quad_pairs: "CS-Grouped Quad Pairs" → "CS-Quad Pairs"
+- cs_solid: "CS-Solid (CS-80AK)" → "CS-Solid"
+- cs_looping_ladder_asc: "CS-Looping Ladder (Ascending)" → "CS-Ascending Looping Ladder"
+- cs_looping_ladder_desc: "CS-Looping Ladder (Descending)" → "CS-Descending Looping Ladder"
 
 ### Still need book verification (search /tmp/tggfsn.txt):
-- Bookend names: "CS-Tri Matched Bookend", "CS-Dual Matched Bookend" — does book say "Matched"?
-- Looping ladder names: "(Ascending)" suffix vs "Ascending" prefix?
-- Radar names: Lucky Seven, Split Six, Oscillating, Bookend Full, Wide, Quad Bookend
-- cs_triple_double_double.lua: hyphens vs spaces?
-- cs_triple_triple_pair.lua: hyphens vs spaces?
-- Count notes: "CS-Count by Ones/Tens" vs "CS-Count Ones/Tens"?
-- Mini repeater names: Mini 4/5/6/7 Repeater
-- Repeater family: Radar Repeater, Full Repeater, Super Repeater
-- Stand Alone family: all names (no @CS tags confirmed for most)
+- cs_triple_double_double.lua: "CS-Triple Double Double" — hyphens vs spaces in book?
+- cs_triple_triple_pair.lua: "CS-Triple Triple Pair" — same question
+- Count notes: "CS-Count Ones/Tens" vs "CS-Count by Ones/Tens" — verify exact phrasing
+- Repeater family: "CS-Full Repeater" — book uses "CS-Repeater" for ABCDABCD; verify CS-1480
+- Stand Alone family: confirm Stand Alone Ladder is correct (book says "CS-Stand Alone Mini Ladder" for ≤7-digit; verify if CS-1880 is full 8-digit which would differ)
 
 ### Naming conventions confirmed from book:
 - Book uses "CS-Random XXX" prefix, NOT "CS-XXX (Random)" suffix
 - "OAK" = Of A Kind: 2OAK, 3OAK, 4OAK, 5OAK, 6OAK, 7OAK, 8OAK
 - "CS-Quad Pairs" (grouped AABBCCDD) — no "Grouped" prefix
+- "CS-Ascending Looping Ladder" / "CS-Descending Looping Ladder" (adjective first)
+- Bookend names confirmed: CS-Dual Matched Bookend, CS-Tri Matched Bookend, CS-Dual Repeater Bookend, CS-Tri Repeated Bookend, CS-Tri Radar Bookend
+- Radar names confirmed: CS-Lucky Seven Radar, CS-Split Six Radar, CS-Oscillating Radar, CS-Bookend Full Radar, CS-Wide Radar, CS-Quad Bookend Radar
+- Mini Radar/Repeater names confirmed: CS-Mini 3–7 Radar, CS-Mini 4–7 Repeater
 - Source file to search: /tmp/tggfsn.txt
 
 ---
@@ -57,24 +47,24 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 | CS-50 | CS-Random Tri Pairs | ✅ | cs_tri_pairs.lua |
 | CS-60 (approx) | CS-Quad Pairs | ✅ | cs_grouped_quad_pairs.lua |
 | CS-70 | CS-Random Quad Pairs | ✅ | cs_quad_pairs.lua |
-| CS-100 | CS-30AK (Triple) | ✅ | cs_30ak.lua |
+| CS-100 | CS-3OAK | ✅ | cs_30ak.lua |
 | CS-110 | CS-Triple | ✅ | cs_triple.lua |
-| CS-120 | CS-Paired 30AK | ✅ | cs_paired_30ak.lua |
+| CS-120 | CS-Paired 3OAK | ✅ | cs_paired_30ak.lua |
 | CS-130 | CS-Triple Triple Pair | ✅ | cs_triple_triple_pair.lua |
 | CS-160 | CS-Double Triples | ✅ | cs_double_triples.lua |
 | CS-170 | CS-Triple Double Double | ✅ | cs_triple_double_double.lua |
 | CS-200 | CS-Quad (grouped) | ✅ | cs_quad.lua |
-| CS-210 | CS-40AK (scattered) | ✅ | cs_40ak.lua |
-| CS-220 | CS-Random 40AK | ✅ | cs_random_40ak.lua |
+| CS-210 | CS-4OAK | ✅ | cs_40ak.lua |
+| CS-220 | CS-Random 4OAK | ✅ | cs_random_40ak.lua |
 | CS-230 | CS-Double Quad | ✅ | cs_double_quad.lua |
-| CS-240 (approx) | CS-Random Double 40AK | ✅ | cs_double_40ak.lua |
+| CS-240 (approx) | CS-Random Double 4OAK | ✅ | cs_double_40ak.lua |
 | CS-250 | CS-Quad in Quad | ✅ | cs_quad_in_quad.lua |
 | CS-260 | CS-Quad in Triple | ✅ | cs_quad_in_triple.lua |
 | CS-270 | CS-Random Quad in Triple | ✅ | cs_random_quad_in_triple.lua |
 | CS-280 | CS-Double Double | ✅ | cs_double_double.lua |
 | CS-290 | CS-Triple in Quad | ✅ | cs_triple_in_quad.lua |
 | CS-310 | CS-Quad and Pairs | ✅ | cs_quad_and_pairs.lua |
-| CS-360 | CS-50AK | ✅ | cs_50ak.lua |
+| CS-360 | CS-5OAK | ✅ | cs_50ak.lua |
 | CS-370 | CS-Quint | ✅ | cs_quint.lua |
 | CS-380 | CS-Quint in a Pair | ✅ | cs_quint_in_pair.lua |
 | CS-400 | CS-Random Quint and Pair | ✅ | cs_random_quint_and_pair.lua |
@@ -84,7 +74,7 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 | CS-460 | CS-Pair in a Sextup | ✅ | cs_pair_in_sextup.lua |
 | CS-470 | CS-Random Pair in a Sextup | ✅ | cs_random_pair_in_sextup.lua |
 | CS-480 | CS-Seven | ✅ | cs_seven.lua |
-| CS-490 | CS-70AK | ✅ | cs_70ak.lua |
+| CS-490 | CS-7OAK | ✅ | cs_70ak.lua |
 | CS-500 | CS-Solid | ✅ | cs_solid.lua |
 | CS-710 | CS-Double Year | ✅ | double_year.lua |
 | CS-810 | CS-Count Ones | ✅ | cs_count_ones.lua |
@@ -104,8 +94,8 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 | CS-1160 | CS-Tetradic | ✅ | cs_tetradic.lua |
 | CS-1170 | CS-Ascending Ladder | ✅ | cs_ascending_ladder.lua |
 | CS-1180 | CS-Descending Ladder | ✅ | cs_descending_ladder.lua |
-| CS-1190 | CS-Looping Ladder Ascending | ✅ | cs_looping_ladder_asc.lua |
-| CS-1200 | CS-Looping Ladder Descending | ✅ | cs_looping_ladder_desc.lua |
+| CS-1190 | CS-Ascending Looping Ladder | ✅ | cs_looping_ladder_asc.lua |
+| CS-1200 | CS-Descending Looping Ladder | ✅ | cs_looping_ladder_desc.lua |
 | CS-1270 | CS-Full Radar | ✅ | cs_full_radar.lua |
 | CS-1280 | CS-Bookend Full Radar | ✅ | cs_bookend_full_radar.lua |
 | CS-1290 | CS-Wide Radar | ✅ | cs_wide_radar.lua |
@@ -144,7 +134,7 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 | CS-1970 | CS-High Notes | ✅ | cs_high_notes.lua |
 | CS-1980 | CS-Low Notes | ✅ | cs_low_notes.lua |
 | CS-1990 | CS-Million Note | ✅ | cs_million_note.lua |
-| (no CS#) | CS-60AK | ✅ | cs_60ak.lua |
+| (no CS#) | CS-6OAK | ✅ | cs_60ak.lua |
 | (no CS#) | CS-Super Radar | ✅ | cs_super_radar.lua |
 
 ---

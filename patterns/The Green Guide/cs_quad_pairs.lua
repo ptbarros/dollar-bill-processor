@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_QUAD_PAIRS
-DisplayName: CS-Quad Pairs (Random)
+DisplayName: CS-Random Quad Pairs
 Description: All 8 digits form four pairs of different digits, with at least one pair non-adjacent. e.g., M 12432314 M or M 44123231 M. Fully-grouped AABBCCDD is a different pattern.
 BookRef: CS-70
 Tier: 6

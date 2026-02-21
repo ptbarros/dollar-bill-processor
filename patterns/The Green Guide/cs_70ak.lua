@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_70AK
-DisplayName: CS-70AK (Scattered Seven)
+DisplayName: CS-7OAK
 Description: Seven of the same digit anywhere in the serial (one different digit somewhere), but not all seven in a row. Grouped version is CS-Seven (CS-500).
 BookRef: CS-490
 Tier: 2

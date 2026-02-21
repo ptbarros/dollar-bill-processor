@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_PAIRED_30AK
-DisplayName: CS-Paired 30AK
+DisplayName: CS-Paired 3OAK
 Description: Two CS-Pairs and a CS-30AK (three of same digit scattered) anywhere in the serial, plus one random digit. e.g., M 1132233x M.
 BookRef: CS-120
 Tier: 8

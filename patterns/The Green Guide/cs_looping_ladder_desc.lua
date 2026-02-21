@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_LOOPING_LADDER_DESC
-DisplayName: CS-Looping Ladder (Descending)
+DisplayName: CS-Descending Looping Ladder
 Description: A descending 8-digit ladder that wraps around modulo 10. e.g., 43210987 (4-3-2-1-0-9-8-7). Must not start at 9 (that would be a standard descending ladder 98765432).
 BookRef: CS-1200
 Tier: 1

@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TWO_PAIRS
-DisplayName: CS-Two Pairs (Random)
+DisplayName: CS-Random Two Pairs
 Description: Two different digits each appearing exactly twice, with at least one pair non-adjacent. e.g., M xx229x9x M or M 2x9x2xx9 M.
 BookRef: CS-30
 Tier: 7

@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_DOUBLE_40AK
-DisplayName: CS-Double 40AK
+DisplayName: CS-Random Double 4OAK
 Description: Exactly two distinct digits, each appearing 4 times, both scattered (no 4-run for either digit). Contrast: CS-250 has one digit in a 4-run; CS-280 has two digits in paired 2-runs.
 BookRef: CS-240
 Tier: 4

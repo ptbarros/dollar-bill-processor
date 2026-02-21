@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_40AK
-DisplayName: CS-40AK (Scattered Quad)
+DisplayName: CS-4OAK
 Description: Four of the same digit anywhere in the serial, with at least one separated from the others (no run of 4+). Grouped version is CS-Quad (CS-200).
 BookRef: CS-210
 Tier: 5

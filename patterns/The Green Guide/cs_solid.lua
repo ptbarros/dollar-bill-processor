@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_SOLID
-DisplayName: CS-Solid (CS-80AK)
+DisplayName: CS-Solid
 Description: All 8 digits identical (CS-80AK in book nomenclature). The rarest possible serial.
 BookRef: CS-500
 Tier: 1

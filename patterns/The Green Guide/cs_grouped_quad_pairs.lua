@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_GROUPED_QUAD_PAIRS
-DisplayName: CS-Grouped Quad Pairs
+DisplayName: CS-Quad Pairs
 Description: Four consecutive pairs (AABBCCDD) filling all 8 positions, with all four pair digits distinct. e.g., M 11223344 M or M 99887766 M.
 BookRef: CS-60
 Tier: 5

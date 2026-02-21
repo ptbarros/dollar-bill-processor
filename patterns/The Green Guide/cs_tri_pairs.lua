@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TRI_PAIRS
-DisplayName: CS-Tri Pairs (Random)
+DisplayName: CS-Random Tri Pairs
 Description: Three different digits each appearing exactly twice anywhere in the FSN. At least one pair must be non-adjacent. e.g., M 12313x2xx M or M 1x232x31 M.
 BookRef: CS-50
 Tier: 7

@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_LOOPING_LADDER_ASC
-DisplayName: CS-Looping Ladder (Ascending)
+DisplayName: CS-Ascending Looping Ladder
 Description: An ascending 8-digit ladder that wraps around modulo 10. e.g., 56781234 (5-6-7-8-1-2-3-4... wait that skips 9→0). Actually: consecutive mod 10, like 7890 1234 or 5678 9012.
 BookRef: CS-1190
 Tier: 1

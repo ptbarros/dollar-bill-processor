@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_50AK
-DisplayName: CS-50AK (Scattered Quint)
+DisplayName: CS-5OAK
 Description: Five of the same digit anywhere in the serial, with at least one separated from the others (no run of 5+). Grouped version is CS-Quint (CS-300).
 BookRef: CS-360
 Tier: 4

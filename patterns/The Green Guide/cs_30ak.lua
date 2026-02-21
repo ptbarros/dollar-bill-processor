@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_30AK
-DisplayName: CS-30AK (Scattered Triple)
+DisplayName: CS-3OAK
 Description: Three of the same digit anywhere in the serial, with at least one separated from the others (not all consecutive). Grouped version is CS-Triple (CS-100).
 BookRef: CS-110
 Tier: 6
