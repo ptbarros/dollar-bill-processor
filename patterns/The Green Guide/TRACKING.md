@@ -3,7 +3,7 @@
 **Legend:** ✅ Implemented | 🔲 Todo | ⏸ Deferred | ❌ Image-only
 
 Last updated: 2026-02-21
-Implemented: 93 files (82 previous + 11 batch 5)
+Implemented: 94 files (93 previous + 1 CS-160 fix)
 Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 
 ---
@@ -59,7 +59,7 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 | CS-110 | CS-Triple | ✅ | cs_triple.lua |
 | CS-120 | CS-Paired 3OAK | ✅ | cs_paired_30ak.lua |
 | CS-130 | CS-Triple Triple Pair | ✅ | cs_triple_triple_pair.lua |
-| CS-160 | CS-Double Triples (grouped) | ✅ | cs_double_triples.lua |
+| CS-160 | CS-Random Double Triples | ✅ | cs_random_double_triples.lua |
 | CS-170 | CS-Triple Double Double | ✅ | cs_triple_double_double.lua |
 | CS-200 | CS-Quad (grouped) | ✅ | cs_quad.lua |
 | CS-210 | CS-4OAK | ✅ | cs_40ak.lua |
@@ -142,6 +142,7 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 | CS-1970 | CS-High Notes | ✅ | cs_high_notes.lua |
 | CS-1980 | CS-Low Notes | ✅ | cs_low_notes.lua |
 | CS-1990 | CS-Million Note | ✅ | cs_million_note.lua |
+| (no CS#) | CS-Double Triples | ✅ | cs_double_triples.lua |
 | (no CS#) | CS-6OAK | ✅ | cs_60ak.lua |
 | (no CS#) | CS-Super Radar | ✅ | cs_super_radar.lua |
 
@@ -258,7 +259,7 @@ These require visual inspection of the physical note (printing errors, signature
 - CS-250 to CS-470 batch 4 patterns follow a "X inside/within Y" structure with binary or near-binary digit distributions
 - Todo descriptions for CS-250–CS-470 were speculative placeholders; actual implementations are named by their true structure
 - Batch 5 added bookend variants (CS-980/1000/1010), binary flipper (CS-1050), stand-alone triple/quad/mini-3-radar (CS-1670/1680/1730), centered zeros (CS-1950), quad pairs (CS-60 approx), random double 40AK (CS-240 approx), random quad in triple (CS-270)
-- CS-160 (cs_double_triples.lua): book's @CS~160 is actually "CS-Random Double Triples" (two scattered 3OAKs, e.g. M 757755xx M). Our file implements consecutive grouped triples via find_runs(), which matches the un-tagged "CS-Double Triples" numbered examples (#1–#6) that precede CS-160. BookRef may need correction to a lower CS number once the grouped variant's tag is identified.
+- CS-160 (cs_random_double_triples.lua): the un-tagged "CS-Double Triples" (grouped consecutive) examples (#1–#6) appear in the book just before CS-160 with no CS tag number; implemented as cs_double_triples.lua under (no CS#)
 - CS-40 (cs_grouped_tri_pairs.lua) was created but removed — book's @CS~40 is all three-pairs-anywhere (superset of CS-50), not the AABBCC-only block I implemented
 - CS-60 (cs_grouped_quad_pairs.lua): no @CS~60 tag found; CS number inferred from position between @CS~50 and @CS-70
 - CS-240 (cs_double_40ak.lua): no @CS~240 tag found; "CS-Random Double 40AK" described in book without a tag

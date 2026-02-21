@@ -1,8 +1,7 @@
 --[[
 Pattern: CS_DOUBLE_TRIPLES
 DisplayName: CS-Double Triples
-Description: Two separate CS-Triples (runs of 3+ identical digits) anywhere in the serial.
-BookRef: CS-160
+Description: Two consecutive triple runs (grouped), e.g. M 777555xx M. Distinct from CS-Random Double Triples (CS-160) which allows any positions.
 Tier: 5
 Examples: ["00011100", "11100222", "00033355"]
 Price: $10-$30
