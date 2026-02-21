@@ -8,6 +8,47 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 
 ---
 
+## Pending Work — DisplayName Audit
+
+**Status:** In progress. All 93 DisplayNames need to match the book exactly.
+
+### Confirmed changes needed (do these next session):
+- **All "X0AK" → "XOAK"** — "3OAK" = Three Of A Kind (user confirmed). Affects:
+  - cs_30ak.lua: "CS-30AK (Scattered Triple)" → "CS-3OAK"
+  - cs_40ak.lua: "CS-40AK (Scattered Quad)" → "CS-4OAK"
+  - cs_50ak.lua: "CS-50AK (Scattered Quint)" → "CS-5OAK"
+  - cs_60ak.lua: "CS-60AK (Scattered Sextup)" → "CS-6OAK"
+  - cs_70ak.lua: "CS-70AK (Scattered Seven)" → "CS-7OAK"
+  - cs_paired_30ak.lua: "CS-Paired 30AK" → "CS-Paired 3OAK"
+  - cs_random_40ak.lua: "CS-Random 40AK" → "CS-Random 4OAK"
+  - cs_double_40ak.lua: "CS-Double 40AK" → "CS-Random Double 4OAK"
+- **"(Random)" suffix → "CS-Random" prefix** (book always uses "CS-Random XXX"):
+  - cs_two_pairs.lua: "CS-Two Pairs (Random)" → "CS-Random Two Pairs"
+  - cs_tri_pairs.lua: "CS-Tri Pairs (Random)" → "CS-Random Tri Pairs"
+  - cs_quad_pairs.lua: "CS-Quad Pairs (Random)" → "CS-Random Quad Pairs"
+- **Other confirmed mismatches:**
+  - cs_grouped_quad_pairs.lua: "CS-Grouped Quad Pairs" → "CS-Quad Pairs"
+  - cs_solid.lua: "CS-Solid (CS-80AK)" → "CS-Solid"
+
+### Still need book verification (search /tmp/tggfsn.txt):
+- Bookend names: "CS-Tri Matched Bookend", "CS-Dual Matched Bookend" — does book say "Matched"?
+- Looping ladder names: "(Ascending)" suffix vs "Ascending" prefix?
+- Radar names: Lucky Seven, Split Six, Oscillating, Bookend Full, Wide, Quad Bookend
+- cs_triple_double_double.lua: hyphens vs spaces?
+- cs_triple_triple_pair.lua: hyphens vs spaces?
+- Count notes: "CS-Count by Ones/Tens" vs "CS-Count Ones/Tens"?
+- Mini repeater names: Mini 4/5/6/7 Repeater
+- Repeater family: Radar Repeater, Full Repeater, Super Repeater
+- Stand Alone family: all names (no @CS tags confirmed for most)
+
+### Naming conventions confirmed from book:
+- Book uses "CS-Random XXX" prefix, NOT "CS-XXX (Random)" suffix
+- "OAK" = Of A Kind: 2OAK, 3OAK, 4OAK, 5OAK, 6OAK, 7OAK, 8OAK
+- "CS-Quad Pairs" (grouped AABBCCDD) — no "Grouped" prefix
+- Source file to search: /tmp/tggfsn.txt
+
+---
+
 ## Implemented Patterns
 
 | CS# | Book Name | Status | File |

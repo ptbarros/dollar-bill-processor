@@ -182,3 +182,24 @@ print(engine.classify_simple('A12344321B'))
 - `engine.reload()` reloads all patterns
 - Low run patterns: LOW_RUN_6M (Tier 5), LOW_RUN_12M (Tier 6)
 - Debug logging: Use `log()` in Lua patterns during batch testing
+
+## Green Guide Pattern Library
+
+93 implemented patterns in `patterns/The Green Guide/`. Full status in `patterns/The Green Guide/TRACKING.md`.
+
+### Book source
+`/tmp/tggfsn.txt` — OCR scan of the Green Guide book. Use this to verify all pattern names and definitions. @CS~NNN) tags identify pattern numbers.
+
+### Naming conventions (IMPORTANT — must match book exactly)
+- **"OAK" = Of A Kind**: use `3OAK`, `4OAK`, `5OAK`, `6OAK`, `7OAK` — NOT `30AK`, `40AK` etc.
+- **"CS-Random XXX"** prefix — NOT "CS-XXX (Random)" suffix
+- **No invented qualifiers**: don't add "(Scattered)", "(Grouped)", "(CS-80AK)" etc. unless the book uses that exact wording
+- Pattern family example: "CS-Quad Pairs" (grouped AABBCCDD), "CS-Random Quad Pairs" (scattered)
+
+### Pending work (next session)
+**DisplayName audit in progress** — see TRACKING.md "Pending Work" section for full list. Short summary:
+1. Rename all X0AK → XOAK in DisplayName fields (cs_30ak, cs_40ak, cs_50ak, cs_60ak, cs_70ak, cs_paired_30ak, cs_random_40ak, cs_double_40ak)
+2. Fix "(Random)" suffix → "CS-Random" prefix (cs_two_pairs, cs_tri_pairs, cs_quad_pairs)
+3. cs_grouped_quad_pairs: "CS-Grouped Quad Pairs" → "CS-Quad Pairs"
+4. cs_solid: "CS-Solid (CS-80AK)" → "CS-Solid"
+5. Verify remaining names against book (bookend, radar, repeater, ladder, stand-alone family names)
