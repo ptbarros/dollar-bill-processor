@@ -18,8 +18,6 @@ function match(ctx)
         return {matched = false}
     end
 
-    local counts = count_digits(digits)
-
     -- Check for pattern where each digit appears in groups (2+ consecutive)
     -- Look for structured groupings like AAA BBB CC or AA BBB CCC
     local runs = find_runs(digits)

@@ -13,26 +13,32 @@ function match(ctx)
         return {matched = false}
     end
 
-    local counts = count_digits(digits)
+    -- Require consecutive runs: five = run of exactly 5, three = run of exactly 3
+    local runs = find_runs(digits)
+    local five_run = nil
+    local three_run = nil
 
-    -- Find digits with count 5 and count 3
-    local five_digit = nil
-    local three_digit = nil
-
-    for d, c in pairs(counts) do
-        if c == 5 then
-            five_digit = d
-        elseif c == 3 then
-            three_digit = d
+    for _, run in ipairs(runs) do
+        if run.length == 5 and not five_run then
+            five_run = run
+        elseif run.length == 3 and not three_run then
+            three_run = run
         end
     end
 
-    if not five_digit or not three_digit then
+    if not five_run or not three_run then
         return {matched = false}
     end
 
-    local five_pos = find_digit_positions(digits, five_digit)
-    local three_pos = find_digit_positions(digits, three_digit)
+    local five_pos = {}
+    for i = five_run.start, five_run.start + five_run.length - 1 do
+        table.insert(five_pos, i)
+    end
+
+    local three_pos = {}
+    for i = three_run.start, three_run.start + three_run.length - 1 do
+        table.insert(three_pos, i)
+    end
 
     return {
         matched = true,
@@ -41,6 +47,6 @@ function match(ctx)
             highlight(three_pos, "coral", "three of kind")
         },
         connectors = {},
-        message = "Full house: 5x" .. five_digit .. " + 3x" .. three_digit
+        message = "Full house: 5x" .. five_run.digit .. " + 3x" .. three_run.digit
     }
 end
