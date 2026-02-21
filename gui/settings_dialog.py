@@ -293,14 +293,6 @@ class SettingsDialog(QDialog):
         self.theme_combo.addItem("Dark", "dark")
         appearance_layout.addRow("Theme:", self.theme_combo)
 
-        self.thumbnails_check = QCheckBox("Show thumbnails in results")
-        appearance_layout.addRow(self.thumbnails_check)
-
-        self.thumbnail_size_spin = QSpinBox()
-        self.thumbnail_size_spin.setRange(100, 400)
-        self.thumbnail_size_spin.setSingleStep(50)
-        appearance_layout.addRow("Thumbnail size:", self.thumbnail_size_spin)
-
         # Font size for accessibility
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setRange(8, 24)
@@ -375,9 +367,6 @@ class SettingsDialog(QDialog):
         self.format_combo.addItem("Excel", "excel")
         self.format_combo.addItem("HTML Report", "html")
         format_layout.addRow("Format:", self.format_combo)
-
-        self.include_thumbs_check = QCheckBox("Include thumbnails in HTML export")
-        format_layout.addRow(self.include_thumbs_check)
 
         layout.addWidget(format_group)
 
@@ -718,8 +707,6 @@ class SettingsDialog(QDialog):
         idx = self.theme_combo.findData(self.settings.ui.theme)
         if idx >= 0:
             self.theme_combo.setCurrentIndex(idx)
-        self.thumbnails_check.setChecked(self.settings.ui.show_thumbnails)
-        self.thumbnail_size_spin.setValue(self.settings.ui.thumbnail_size)
         self.font_size_spin.setValue(self.settings.ui.font_size)
         self._fancy_color = self.settings.ui.default_fancy_color or "#2e7d32"
         self._update_fancy_color_button()
@@ -729,7 +716,6 @@ class SettingsDialog(QDialog):
         idx = self.format_combo.findData(self.settings.export.default_format)
         if idx >= 0:
             self.format_combo.setCurrentIndex(idx)
-        self.include_thumbs_check.setChecked(self.settings.export.include_thumbnails)
         self.excel_template_edit.setText(self.settings.export.excel_template)
         self.html_template_edit.setText(self.settings.export.html_template)
         self.auto_csv_check.setChecked(self.settings.export.auto_export_csv)
@@ -774,15 +760,12 @@ class SettingsDialog(QDialog):
 
         # UI
         self.settings.ui.theme = self.theme_combo.currentData()
-        self.settings.ui.show_thumbnails = self.thumbnails_check.isChecked()
-        self.settings.ui.thumbnail_size = self.thumbnail_size_spin.value()
         self.settings.ui.font_size = self.font_size_spin.value()
         self.settings.ui.default_fancy_color = self._fancy_color
         self.settings.ui.default_working_dir = self.working_dir_edit.text()
 
         # Export
         self.settings.export.default_format = self.format_combo.currentData()
-        self.settings.export.include_thumbnails = self.include_thumbs_check.isChecked()
         self.settings.export.excel_template = self.excel_template_edit.text()
         self.settings.export.html_template = self.html_template_edit.text()
         self.settings.export.auto_export_csv = self.auto_csv_check.isChecked()

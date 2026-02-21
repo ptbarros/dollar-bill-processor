@@ -52,8 +52,6 @@ class UISettings:
     window_y: int = 100
     results_sort_column: str = "position"
     results_sort_ascending: bool = True
-    show_thumbnails: bool = True
-    thumbnail_size: int = 200
     theme: str = "system"  # system, light, dark
     font_size: int = 10  # Base font size in points (default 10)
     default_fancy_color: str = "#2e7d32"  # Default green for fancy bills (user-customizable)
@@ -75,7 +73,6 @@ class UISettings:
 class ExportSettings:
     """Export-related settings."""
     default_format: str = "csv"  # csv, excel, html
-    include_thumbnails: bool = True
     excel_template: str = ""
     html_template: str = ""
     auto_export_csv: bool = True  # Auto-generate CSV after processing
@@ -187,8 +184,6 @@ class SettingsManager:
             self.ui.window_y = ui.get('window_y', 100)
             self.ui.results_sort_column = ui.get('results_sort_column', 'position')
             self.ui.results_sort_ascending = ui.get('results_sort_ascending', True)
-            self.ui.show_thumbnails = ui.get('show_thumbnails', True)
-            self.ui.thumbnail_size = ui.get('thumbnail_size', 200)
             self.ui.theme = ui.get('theme', 'system')
             self.ui.font_size = ui.get('font_size', 10)
             self.ui.default_fancy_color = ui.get('default_fancy_color', '#2e7d32')
@@ -204,7 +199,6 @@ class SettingsManager:
         if 'export' in data:
             exp = data['export']
             self.export.default_format = exp.get('default_format', 'csv')
-            self.export.include_thumbnails = exp.get('include_thumbnails', True)
             self.export.excel_template = exp.get('excel_template', '')
             self.export.html_template = exp.get('html_template', '')
             self.export.auto_export_csv = exp.get('auto_export_csv', True)
@@ -367,8 +361,6 @@ class SettingsManager:
                 'window_y': self.ui.window_y,
                 'results_sort_column': self.ui.results_sort_column,
                 'results_sort_ascending': self.ui.results_sort_ascending,
-                'show_thumbnails': self.ui.show_thumbnails,
-                'thumbnail_size': self.ui.thumbnail_size,
                 'theme': self.ui.theme,
                 'font_size': self.ui.font_size,
                 'default_fancy_color': self.ui.default_fancy_color,
@@ -382,7 +374,6 @@ class SettingsManager:
             },
             'export': {
                 'default_format': self.export.default_format,
-                'include_thumbnails': self.export.include_thumbnails,
                 'excel_template': self.export.excel_template,
                 'html_template': self.export.html_template,
                 'auto_export_csv': self.export.auto_export_csv,
@@ -679,7 +670,6 @@ if __name__ == "__main__":
         print()
         print("Export:")
         print(f"  Default format: {settings.export.default_format}")
-        print(f"  Include thumbnails: {settings.export.include_thumbnails}")
         print()
         print(f"Pattern states: {len(settings.pattern_states)} customized")
         print(f"Custom values: {len(settings.custom_values)} stored")
