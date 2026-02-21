@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_STAND_ALONE_LADDER
-DisplayName: CS-Stand Alone Ladder
+DisplayName: CS-Stand Alone Mini Ladder
 Description: A 4-7 digit ascending or descending ladder grouped and surrounded by zeros. e.g., M 04321000 M (down) or M 00123400 M (up).
 BookRef: CS-1880
 Tier: 4
@@ -65,6 +65,6 @@ function match(ctx)
         group_boxes = {
             {from = base, to = base + ladder_len - 1, color = "lime", thickness = 3}
         },
-        message = ladder_len .. "-digit " .. direction .. " ladder stand-alone (CS-Stand Alone Ladder)"
+        message = ladder_len .. "-digit " .. direction .. " ladder stand-alone (CS-Stand Alone Mini Ladder)"
     }
 end

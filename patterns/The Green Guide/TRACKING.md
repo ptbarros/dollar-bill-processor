@@ -10,9 +10,9 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 
 ## Pending Work — DisplayName Audit
 
-**Status:** Batch 1 of fixes applied (2026-02-21). 15 DisplayNames corrected. See below for remaining items.
+**Status:** Audit complete (2026-02-21). 17 DisplayNames corrected across two passes.
 
-### Completed (applied 2026-02-21):
+### Completed batch 1 (applied 2026-02-21):
 - All X0AK → XOAK: cs_30ak, cs_40ak, cs_50ak, cs_60ak, cs_70ak, cs_paired_30ak, cs_random_40ak, cs_double_40ak
 - "(Random)" suffix → "CS-Random" prefix: cs_two_pairs, cs_tri_pairs, cs_quad_pairs
 - cs_grouped_quad_pairs: "CS-Grouped Quad Pairs" → "CS-Quad Pairs"
@@ -20,12 +20,15 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 - cs_looping_ladder_asc: "CS-Looping Ladder (Ascending)" → "CS-Ascending Looping Ladder"
 - cs_looping_ladder_desc: "CS-Looping Ladder (Descending)" → "CS-Descending Looping Ladder"
 
-### Still need book verification (search /tmp/tggfsn.txt):
-- cs_triple_double_double.lua: "CS-Triple Double Double" — hyphens vs spaces in book?
-- cs_triple_triple_pair.lua: "CS-Triple Triple Pair" — same question
-- Count notes: "CS-Count Ones/Tens" vs "CS-Count by Ones/Tens" — verify exact phrasing
-- Repeater family: "CS-Full Repeater" — book uses "CS-Repeater" for ABCDABCD; verify CS-1480
-- Stand Alone family: confirm Stand Alone Ladder is correct (book says "CS-Stand Alone Mini Ladder" for ≤7-digit; verify if CS-1880 is full 8-digit which would differ)
+### Completed batch 2 (applied 2026-02-21):
+- cs_full_repeater: "CS-Full Repeater" → "CS-Paired Quad Repeater" (book @CS~1480)
+- cs_stand_alone_ladder: "CS-Stand Alone Ladder" → "CS-Stand Alone Mini Ladder" (book CS-1880)
+
+### Verified — no change needed:
+- cs_triple_double_double.lua: "CS-Triple Double Double" — confirmed correct in book
+- cs_triple_triple_pair.lua: "CS-Triple Triple Pair" — confirmed correct in book
+- cs_count_ones.lua: "CS-Count Ones" — confirmed correct (@CS~810)
+- cs_count_tens.lua: "CS-Count Tens" — confirmed correct (@CS~820)
 
 ### Naming conventions confirmed from book:
 - Book uses "CS-Random XXX" prefix, NOT "CS-XXX (Random)" suffix
@@ -108,7 +111,7 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 | CS-1390 | CS-Mini 5 Radar | ✅ | cs_mini_5_radar.lua |
 | CS-1400 | CS-Mini 6 Radar | ✅ | cs_mini_6_radar.lua |
 | CS-1410 | CS-Mini 7 Radar | ✅ | cs_mini_7_radar.lua |
-| CS-1480 | CS-Full Repeater | ✅ | cs_full_repeater.lua |
+| CS-1480 | CS-Paired Quad Repeater | ✅ | cs_full_repeater.lua |
 | CS-1520 | CS-Radar Repeater | ✅ | cs_radar_repeater.lua |
 | CS-1530 | CS-Super Repeater | ✅ | cs_super_repeater.lua |
 | CS-1550 | CS-Mini 4 Repeater (ABAB) | ✅ | cs_mini_4_repeater.lua |
@@ -127,7 +130,7 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350)
 | CS-1720 | CS-Stand Alone Tri Repeater | ✅ | cs_stand_alone_tri_repeater.lua |
 | CS-1730 | CS-Stand Alone Mini 3 Radar | ✅ | cs_stand_alone_mini_3_radar.lua |
 | CS-1740 | CS-Stand Alone Mini 4 Radar | ✅ | cs_stand_alone_mini_4_radar.lua |
-| CS-1880 | CS-Stand Alone Ladder | ✅ | cs_stand_alone_ladder.lua |
+| CS-1880 | CS-Stand Alone Mini Ladder | ✅ | cs_stand_alone_ladder.lua |
 | CS-1940 | CS-Leading Zeros | ✅ | cs_leading_zeros.lua |
 | CS-1950 | CS-Centered Zeros | ✅ | cs_centered_zeros.lua |
 | CS-1960 | CS-Trailing Zeros | ✅ | cs_trailing_zeros.lua |

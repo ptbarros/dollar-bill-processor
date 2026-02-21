@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_FULL_REPEATER
-DisplayName: CS-Full Repeater
+DisplayName: CS-Paired Quad Repeater
 Description: The first four digits are repeated exactly in positions 5-8 (ABCDABCD pattern).
 BookRef: CS-1480
 Tier: 3
@@ -36,6 +36,6 @@ function match(ctx)
             {from = 0, to = 4, color = "magenta", style = "arc"},
             {from = 3, to = 7, color = "magenta", style = "arc"}
         },
-        message = half .. " repeats (CS-Full Repeater)"
+        message = half .. " repeats (CS-Paired Quad Repeater)"
     }
 end
