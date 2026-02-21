@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_MILLION_NOTE
-DisplayName: CS-Million Note
+DisplayName: CS-Million Notes
 Description: Serial ends in 6 or 7 trailing zeros (the last 6-7 digits are all zeros). e.g., M x0000000 M or M xx000000 M.
 BookRef: CS-1990
 Tier: 3
@@ -48,6 +48,6 @@ function match(ctx)
         highlights = {
             {positions = zero_positions, color = "cyan"}
         },
-        message = trailing_zeros .. " trailing zeros (" .. label .. ") — CS-Million Note"
+        message = trailing_zeros .. " trailing zeros (" .. label .. ") — CS-Million Notes"
     }
 end

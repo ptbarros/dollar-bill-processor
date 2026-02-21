@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TRIPLE_DOUBLE_DOUBLE
-DisplayName: CS-Triple-Double-Double
+DisplayName: CS-Triple Double Double
 Description: One CS-Triple (run of 3+) plus two CS-Pairs (runs of 2), all as consecutive groups.
 BookRef: CS-170
 Tier: 5

@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_COUNT_ONES
-DisplayName: CS-Count by Ones
+DisplayName: CS-Count Ones
 Description: Serial counts sequentially by 1 in two-digit pairs: 01020304, 02030405, 12131415, etc. Four consecutive two-digit pairs increasing by 1.
 BookRef: CS-810
 Tier: 3

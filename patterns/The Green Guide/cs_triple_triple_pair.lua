@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TRIPLE_TRIPLE_PAIR
-DisplayName: CS-Triple-Triple-Pair
+DisplayName: CS-Triple Triple Pair
 Description: Two CS-Triples (runs of 3+) plus at least one CS-Pair (run of 2), all as consecutive groups.
 BookRef: CS-130
 Tier: 5

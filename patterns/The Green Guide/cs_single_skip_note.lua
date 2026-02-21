@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_SINGLE_SKIP_NOTE
-DisplayName: CS-Single Skip Note
+DisplayName: CS-Single Skip Notes
 Description: A CS-40AK that skips every other digit — the same digit at all 4 odd or all 4 even positions. The other 4 positions may not form another CS-40AK. e.g., M 1x1x1x1x M or M x2x2x2x2 M.
 BookRef: CS-1590
 Tier: 6
@@ -39,7 +39,7 @@ function match(ctx)
             highlights = {
                 {positions = {0, 2, 4, 6}, color = "gold"},
             },
-            message = skip_d .. " at every odd position (CS-Single Skip Note)"
+            message = skip_d .. " at every odd position (CS-Single Skip Notes)"
         }
     end
 
@@ -51,7 +51,7 @@ function match(ctx)
             highlights = {
                 {positions = {1, 3, 5, 7}, color = "gold"},
             },
-            message = skip_d .. " at every even position (CS-Single Skip Note)"
+            message = skip_d .. " at every even position (CS-Single Skip Notes)"
         }
     end
 

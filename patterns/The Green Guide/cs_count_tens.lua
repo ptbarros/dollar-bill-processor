@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_COUNT_TENS
-DisplayName: CS-Count by Tens
+DisplayName: CS-Count Tens
 Description: Serial counts by 10 in two-digit pairs: 10203040 or 40302010. The four pairs are 10, 20, 30, 40 (or reverse).
 BookRef: CS-820
 Tier: 3
