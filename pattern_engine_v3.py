@@ -53,6 +53,7 @@ class LuaPatternInfo:
     data_file: str = ""           # Relative path to external data file (CSV/JSON)
     data: Any = None              # Loaded data (list of dicts for CSV, any for JSON)
     data_by_key: dict = None      # Dict keyed by first column (CSV only)
+    book_ref: str = ""            # CS- reference number (e.g., "CS-100")
 
 
 class PatternEngineV3:
@@ -172,7 +173,8 @@ class PatternEngineV3:
                 display_name=metadata.get('displayname', ''),
                 examples=metadata.get('examples', []),
                 odds=metadata.get('odds', ''),
-                price=metadata.get('price', '')
+                price=metadata.get('price', ''),
+                book_ref=metadata.get('bookref', '')
             )
 
             # Load external data file if specified

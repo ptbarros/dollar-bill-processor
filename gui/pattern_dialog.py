@@ -232,6 +232,11 @@ class PatternDialog(QDialog):
         self.pattern_price_label.setStyleSheet("color: #2e7d32; font-weight: bold;")
         details_layout.addWidget(self.pattern_price_label)
 
+        self.pattern_book_ref_label = QLabel("")
+        self.pattern_book_ref_label.setStyleSheet("color: #795548; font-style: italic; font-size: 10px;")
+        self.pattern_book_ref_label.setVisible(False)
+        details_layout.addWidget(self.pattern_book_ref_label)
+
         # Threshold editor for height_ratio patterns (like GAS_PUMP)
         self.threshold_layout = QHBoxLayout()
         self.threshold_label = QLabel("Threshold:")
@@ -808,6 +813,14 @@ class PatternDialog(QDialog):
             self.pattern_price_label.setText(f"Price: {price}")
         else:
             self.pattern_price_label.setText("Price: -")
+
+        # Show Green Guide book reference if available
+        book_ref = lua_info.book_ref if lua_info else ""
+        if book_ref:
+            self.pattern_book_ref_label.setText(f"Green Guide: {book_ref}")
+            self.pattern_book_ref_label.setVisible(True)
+        else:
+            self.pattern_book_ref_label.setVisible(False)
 
         # Show threshold editor for height_ratio patterns
         rules = defn.get('rules', {})

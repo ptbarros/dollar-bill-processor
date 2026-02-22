@@ -13,26 +13,32 @@ function match(ctx)
         return {matched = false}
     end
 
-    local counts = count_digits(digits)
+    -- Require consecutive runs: quad = run of 4+, triple = run of exactly 3
+    local runs = find_runs(digits)
+    local quad_run = nil
+    local triple_run = nil
 
-    -- Find digits with count 4+ and count 3
-    local quad_digit = nil
-    local triple_digit = nil
-
-    for d, c in pairs(counts) do
-        if c >= 4 and not quad_digit then
-            quad_digit = d
-        elseif c == 3 then
-            triple_digit = d
+    for _, run in ipairs(runs) do
+        if run.length >= 4 and not quad_run then
+            quad_run = run
+        elseif run.length == 3 and not triple_run then
+            triple_run = run
         end
     end
 
-    if not quad_digit or not triple_digit then
+    if not quad_run or not triple_run then
         return {matched = false}
     end
 
-    local quad_pos = find_digit_positions(digits, quad_digit)
-    local triple_pos = find_digit_positions(digits, triple_digit)
+    local quad_pos = {}
+    for i = quad_run.start, quad_run.start + quad_run.length - 1 do
+        table.insert(quad_pos, i)
+    end
+
+    local triple_pos = {}
+    for i = triple_run.start, triple_run.start + triple_run.length - 1 do
+        table.insert(triple_pos, i)
+    end
 
     return {
         matched = true,
@@ -41,6 +47,6 @@ function match(ctx)
             highlight(triple_pos, "coral", "triple")
         },
         connectors = {},
-        message = "Triple + Quad: 3x" .. triple_digit .. " + 4x" .. quad_digit
+        message = "Triple + Quad: 3x" .. triple_run.digit .. " + " .. quad_run.length .. "x" .. quad_run.digit
     }
 end
