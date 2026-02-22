@@ -2,6 +2,7 @@
 Pattern: CS_SUPER_RADAR
 DisplayName: CS-Super Radar
 Description: A CS-Sextup (6 consecutive identical digits) wrapped by a CS-Pair (same digit at both ends). Structure: ABBBBBBA where A ≠ B.
+BookRef: CS-1260
 Tier: 2
 Examples: ["04444440", "19999991", "30000003"]
 Odds: 1 in 1,111,111

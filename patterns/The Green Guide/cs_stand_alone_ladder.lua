@@ -2,7 +2,7 @@
 Pattern: CS_STAND_ALONE_LADDER
 DisplayName: CS-Stand Alone Mini Ladder
 Description: A 4-7 digit ascending or descending ladder grouped and surrounded by zeros. e.g., M 04321000 M (down) or M 00123400 M (up).
-BookRef: CS-1880
+BookRef: CS-1860
 Tier: 4
 Examples: ["04321000", "00432100", "00123400"]
 Odds: 1 in 21

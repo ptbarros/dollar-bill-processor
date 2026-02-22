@@ -2,6 +2,7 @@
 Pattern: CS_60AK
 DisplayName: CS-6OAK
 Description: Six of the same digit anywhere in the serial, with at least one separated from the others (no run of 6+). Grouped version is CS-Sextup (CS-400).
+BookRef: CS-430
 Tier: 3
 Examples: ["11111211", "00000600", "11011111"]
 Price: $50-$200

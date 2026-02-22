@@ -2,7 +2,7 @@
 Pattern: CS_MINI_3_RADAR
 DisplayName: CS-Mini 3 Radar
 Description: A CS-20AK separated by one non-similar digit: 3-digit palindrome (AXA) anywhere. Also the CS-Mini 3 Repeater. e.g., M xx1x1xxx M.
-BookRef: CS-1340
+BookRef: CS-1370
 Tier: 8
 Examples: ["12132456", "11213456", "12345616"]
 Odds: 1 in ~100,000

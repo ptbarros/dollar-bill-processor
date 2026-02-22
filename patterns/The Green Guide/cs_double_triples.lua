@@ -2,6 +2,7 @@
 Pattern: CS_DOUBLE_TRIPLES
 DisplayName: CS-Double Triples
 Description: Two consecutive triple runs (grouped), e.g. M 777555xx M. Distinct from CS-Random Double Triples (CS-160) which allows any positions.
+BookRef: CS-150
 Tier: 5
 Examples: ["00011100", "11100222", "00033355"]
 Price: $10-$30

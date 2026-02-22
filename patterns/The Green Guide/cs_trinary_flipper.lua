@@ -2,6 +2,7 @@
 Pattern: CS_TRINARY_FLIPPER
 DisplayName: CS-Trinary Flipper
 Description: All 8 digits are from the flip set {0,1,6,8,9} and exactly 3 distinct digits are used. e.g., M 01810081 M.
+BookRef: CS-1060
 Tier: 7
 Examples: ["01810081", "08880000", "61916191"]
 Odds: 1 in 21

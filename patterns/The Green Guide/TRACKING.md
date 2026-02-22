@@ -2,9 +2,9 @@
 
 **Legend:** ✅ Implemented | 🔲 Todo | ⏸ Deferred | ❌ Image-only
 
-Last updated: 2026-02-21
-Implemented: 104 files (94 previous + 10 batch 6)
-Book total: ~134 CS-numbered patterns (CS-30 to CS-2350); 103 @CS~ tags confirmed in /tmp/tggfsn.txt
+Last updated: 2026-02-22
+Implemented: 104 files
+Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~/projects/tggfsn.ods
 
 ---
 
@@ -22,7 +22,7 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350); 103 @CS~ tags confirme
 
 ### Completed batch 2 (applied 2026-02-21):
 - cs_full_repeater: "CS-Full Repeater" → "CS-Paired Quad Repeater" (book @CS~1480)
-- cs_stand_alone_ladder: "CS-Stand Alone Ladder" → "CS-Stand Alone Mini Ladder" (book CS-1880)
+- cs_stand_alone_ladder: "CS-Stand Alone Ladder" → "CS-Stand Alone Mini Ladder" (book CS-1860)
 
 ### Completed batch 3 (applied 2026-02-21):
 - cs_count_ones: "CS-Count by Ones" → "CS-Count Ones" (book uses no "by")
@@ -33,7 +33,7 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350); 103 @CS~ tags confirme
 - cs_single_skip_note: "CS-Single Skip Note" → "CS-Single Skip Notes" (book uses plural)
 
 ### Verified — no change needed:
-- All other 81 implemented patterns confirmed against book
+- All other implemented patterns confirmed against book
 
 ### Naming conventions confirmed from book:
 - Book uses "CS-Random XXX" prefix, NOT "CS-XXX (Random)" suffix
@@ -44,6 +44,7 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350); 103 @CS~ tags confirme
 - Radar names confirmed: CS-Lucky Seven Radar, CS-Split Six Radar, CS-Oscillating Radar, CS-Bookend Full Radar, CS-Wide Radar, CS-Quad Bookend Radar
 - Mini Radar/Repeater names confirmed: CS-Mini 3–7 Radar, CS-Mini 4–7 Repeater
 - Source file to search: /tmp/tggfsn.txt
+- CS# verified against spreadsheet: ~/projects/tggfsn.ods
 
 ---
 
@@ -53,19 +54,20 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350); 103 @CS~ tags confirme
 |-----|-----------|--------|------|
 | CS-30 | CS-Random Two Pairs | ✅ | cs_two_pairs.lua |
 | CS-50 | CS-Random Tri Pairs | ✅ | cs_tri_pairs.lua |
-| CS-60 (approx) | CS-Quad Pairs | ✅ | cs_grouped_quad_pairs.lua |
+| CS-60 | CS-Quad Pairs | ✅ | cs_grouped_quad_pairs.lua |
 | CS-70 | CS-Random Quad Pairs | ✅ | cs_quad_pairs.lua |
-| CS-100 | CS-3OAK | ✅ | cs_30ak.lua |
-| CS-110 | CS-Triple | ✅ | cs_triple.lua |
+| CS-100 | CS-Triple | ✅ | cs_triple.lua |
+| CS-110 | CS-3OAK | ✅ | cs_30ak.lua |
 | CS-120 | CS-Paired 3OAK | ✅ | cs_paired_30ak.lua |
 | CS-130 | CS-Triple Triple Pair | ✅ | cs_triple_triple_pair.lua |
+| CS-150 | CS-Double Triples | ✅ | cs_double_triples.lua |
 | CS-160 | CS-Random Double Triples | ✅ | cs_random_double_triples.lua |
 | CS-170 | CS-Triple Double Double | ✅ | cs_triple_double_double.lua |
-| CS-200 | CS-Quad (grouped) | ✅ | cs_quad.lua |
-| CS-210 | CS-4OAK | ✅ | cs_40ak.lua |
-| CS-220 | CS-Random 4OAK | ✅ | cs_random_40ak.lua |
+| CS-190 | CS-4OAK | ✅ | cs_40ak.lua |
+| CS-200 | CS-Quad | ✅ | cs_quad.lua |
+| CS-210 | CS-Random 4OAK | ✅ | cs_random_40ak.lua |
 | CS-230 | CS-Double Quad | ✅ | cs_double_quad.lua |
-| CS-240 (approx) | CS-Random Double 4OAK | ✅ | cs_double_40ak.lua |
+| CS-240 | CS-Random Double 4OAK | ✅ | cs_double_40ak.lua |
 | CS-250 | CS-Quad in Quad | ✅ | cs_quad_in_quad.lua |
 | CS-260 | CS-Quad in Triple | ✅ | cs_quad_in_triple.lua |
 | CS-270 | CS-Random Quad in Triple | ✅ | cs_random_quad_in_triple.lua |
@@ -74,11 +76,12 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350); 103 @CS~ tags confirme
 | CS-310 | CS-Quad and Pairs | ✅ | cs_quad_and_pairs.lua |
 | CS-330 | CS-Pairs in Quad | ✅ | cs_pairs_in_quad.lua |
 | CS-360 | CS-5OAK | ✅ | cs_50ak.lua |
-| CS-370 | CS-Quint | ✅ | cs_quint.lua |
+| CS-370 | CS-Leading, Center, and Trailing Quints | ✅ | cs_quint.lua |
 | CS-380 | CS-Quint in a Pair | ✅ | cs_quint_in_pair.lua |
 | CS-400 | CS-Random Quint and Pair | ✅ | cs_random_quint_and_pair.lua |
 | CS-410 | CS-Quint in a Triple | ✅ | cs_quint_in_triple.lua |
 | CS-420 | CS-Triple in a Quint | ✅ | cs_triple_in_quint.lua |
+| CS-430 | CS-6OAK | ✅ | cs_60ak.lua |
 | CS-440 | CS-Sextup | ✅ | cs_sextup.lua |
 | CS-460 | CS-Pair in a Sextup | ✅ | cs_pair_in_sextup.lua |
 | CS-470 | CS-Random Pair in a Sextup | ✅ | cs_random_pair_in_sextup.lua |
@@ -101,6 +104,8 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350); 103 @CS~ tags confirme
 | CS-1010 | CS-Tri Radar Bookend | ✅ | cs_tri_radar_bookend.lua |
 | CS-1040 | CS-True Binary Flipper | ✅ | cs_true_binary_flipper.lua |
 | CS-1050 | CS-Binary Flipper | ✅ | cs_binary_flipper.lua |
+| CS-1060 | CS-Trinary Flipper | ✅ | cs_trinary_flipper.lua |
+| CS-1070 | CS-Quad Flipper | ✅ | cs_quad_flipper.lua |
 | CS-1090 | CS-Rotator | ✅ | cs_rotator.lua |
 | CS-1160 | CS-Tetradic | ✅ | cs_tetradic.lua |
 | CS-1170 | CS-Ascending Ladder | ✅ | cs_ascending_ladder.lua |
@@ -110,6 +115,7 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350); 103 @CS~ tags confirme
 | CS-1210 | CS-Scattered Ladder | ✅ | cs_scattered_ladder.lua |
 | CS-1230 | CS-Ascending Broken Ladder | ✅ | cs_ascending_broken_ladder.lua |
 | CS-1240 | CS-Descending Broken Ladder | ✅ | cs_descending_broken_ladder.lua |
+| CS-1260 | CS-Super Radar | ✅ | cs_super_radar.lua |
 | CS-1270 | CS-Full Radar | ✅ | cs_full_radar.lua |
 | CS-1280 | CS-Bookend Full Radar | ✅ | cs_bookend_full_radar.lua |
 | CS-1290 | CS-Wide Radar | ✅ | cs_wide_radar.lua |
@@ -117,8 +123,8 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350); 103 @CS~ tags confirme
 | CS-1310 | CS-Quad Bookend Radar | ✅ | cs_quad_bookend_radar.lua |
 | CS-1320 | CS-Pinpoint Radar | ✅ | cs_pinpoint_radar.lua |
 | CS-1330 | CS-Oscillating Radar | ✅ | cs_oscillating_radar.lua |
-| CS-1340 | CS-Mini 3 Radar / Mini 3 Repeater | ✅ | cs_mini_3_radar.lua |
 | CS-1350 | CS-Lucky Seven Radar | ✅ | cs_lucky_seven_radar.lua |
+| CS-1370 | CS-Mini 3 Radar | ✅ | cs_mini_3_radar.lua |
 | CS-1380 | CS-Mini 4 Radar | ✅ | cs_mini_4_radar.lua |
 | CS-1390 | CS-Mini 5 Radar | ✅ | cs_mini_5_radar.lua |
 | CS-1400 | CS-Mini 6 Radar | ✅ | cs_mini_6_radar.lua |
@@ -126,14 +132,14 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350); 103 @CS~ tags confirme
 | CS-1480 | CS-Paired Quad Repeater | ✅ | cs_full_repeater.lua |
 | CS-1520 | CS-Radar Repeater | ✅ | cs_radar_repeater.lua |
 | CS-1530 | CS-Super Repeater | ✅ | cs_super_repeater.lua |
-| CS-1550 | CS-Mini 4 Repeater (ABAB) | ✅ | cs_mini_4_repeater.lua |
-| CS-1560 | CS-Mini 5 Repeater (ABxAB) | ✅ | cs_mini_5_repeater.lua |
-| CS-1570 | CS-Mini 6 Repeater (ABCABC) | ✅ | cs_mini_6_repeater.lua |
-| CS-1580 | CS-Mini 7 Repeater (ABCxABC) | ✅ | cs_mini_7_repeater.lua |
-| CS-1590 | CS-Single Skip Note | ✅ | cs_single_skip_note.lua |
+| CS-1550 | CS-Mini 4 Repeater | ✅ | cs_mini_4_repeater.lua |
+| CS-1560 | CS-Mini 5 Repeater | ✅ | cs_mini_5_repeater.lua |
+| CS-1570 | CS-Mini 6 Repeater | ✅ | cs_mini_6_repeater.lua |
+| CS-1580 | CS-Mini 7 Repeater | ✅ | cs_mini_7_repeater.lua |
+| CS-1590 | CS-Single Skip Notes | ✅ | cs_single_skip_note.lua |
 | CS-1610 | CS-Skip Count Up Note | ✅ | cs_skip_count_up.lua |
 | CS-1620 | CS-Skip Count Down Note | ✅ | cs_skip_count_down.lua |
-| CS-1650 | CS-Stand Alone Single | ✅ | cs_stand_alone_single.lua |
+| CS-1650 | CS-Stand Alone Singles | ✅ | cs_stand_alone_single.lua |
 | CS-1660 | CS-Stand Alone Pair | ✅ | cs_stand_alone_pair.lua |
 | CS-1670 | CS-Stand Alone Triple | ✅ | cs_stand_alone_triple.lua |
 | CS-1680 | CS-Stand Alone Quad | ✅ | cs_stand_alone_quad.lua |
@@ -142,132 +148,196 @@ Book total: ~134 CS-numbered patterns (CS-30 to CS-2350); 103 @CS~ tags confirme
 | CS-1720 | CS-Stand Alone Tri Repeater | ✅ | cs_stand_alone_tri_repeater.lua |
 | CS-1730 | CS-Stand Alone Mini 3 Radar | ✅ | cs_stand_alone_mini_3_radar.lua |
 | CS-1740 | CS-Stand Alone Mini 4 Radar | ✅ | cs_stand_alone_mini_4_radar.lua |
-| CS-1880 | CS-Stand Alone Mini Ladder | ✅ | cs_stand_alone_ladder.lua |
+| CS-1810 | CS-Stand Alone Year | ✅ | cs_stand_alone_year.lua |
+| CS-1860 | CS-Stand Alone Mini Ladder | ✅ | cs_stand_alone_ladder.lua |
 | CS-1940 | CS-Leading Zeros | ✅ | cs_leading_zeros.lua |
 | CS-1950 | CS-Centered Zeros | ✅ | cs_centered_zeros.lua |
 | CS-1960 | CS-Trailing Zeros | ✅ | cs_trailing_zeros.lua |
 | CS-1970 | CS-High Notes | ✅ | cs_high_notes.lua |
 | CS-1980 | CS-Low Notes | ✅ | cs_low_notes.lua |
-| CS-1810 | CS-Stand Alone Year | ✅ | cs_stand_alone_year.lua |
-| CS-1990 | CS-Million Note | ✅ | cs_million_note.lua |
-| (no CS#) | CS-Double Triples | ✅ | cs_double_triples.lua |
-| (no CS#) | CS-6OAK | ✅ | cs_60ak.lua |
-| (no CS#) | CS-Super Radar | ✅ | cs_super_radar.lua |
-| (no CS#) | CS-Trinary Flipper | ✅ | cs_trinary_flipper.lua |
-| (no CS#) | CS-Quad Flipper | ✅ | cs_quad_flipper.lua |
+| CS-1990 | CS-Million Notes | ✅ | cs_million_note.lua |
 
 ---
 
 ## Todo — Future Batches
 
-Implementable with pure serial-number Lua logic.
+Implementable with pure serial-number Lua logic (no metadata required).
 
 | CS# | Book Name | Notes |
 |-----|-----------|-------|
+| CS-10 | CS-2OAKs | Any two matching digits anywhere in serial |
+| CS-20 | CS-Two Pairs | Verify definition vs CS-30 (Random Two Pairs) |
+| CS-40 | CS-Tri Pairs | Consecutive grouped pairs AABBCC; previously attempted, removed — needs book re-read |
+| CS-80 | CS-Pairs in Pairs | Needs book definition |
+| CS-90 | CS-Random Pairs in Pairs | Needs book definition |
+| CS-140 | CS-Random Triple Triple Pair | Scattered variant of CS-130 |
+| CS-180 | CS-Random Triple Double Double | Scattered variant of CS-170 |
+| CS-220 | CS-Leading, Center & Trailing Quads | Positional variants of CS-Quad; distinct from CS-210 (Random 4OAK) |
+| CS-300 | CS-Random Triple in Quad | Scattered triple within quad context |
+| CS-320 | CS-Random Quad and Pairs | Scattered variant of CS-310 |
+| CS-340 | CS-Quads and Triples | Quad + triple combination |
 | CS-350 | CS-Repeating Doubles | Needs further book research |
-| CS-960 | (Dual Radar Bookend) | 23xxxx32 mirror at each end — note: overlaps with CS-960 |
-| CS-1110 | CS-True Binary Rotator | Rotator subtype; may overlap CS-1040 (True Binary Flipper) — deferred pending clarification |
-| CS-1130 | CS-Trinary Rotator | Rotator subtype; needs rotator research |
-| CS-1140 | CS-Quad Rotator | Rotator subtype; needs rotator research |
-| CS-1220 | CS-Broken Ladder | Superset of CS-1230/CS-1240 (ascending + descending); skip until subtypes are stable |
+| CS-390 | CS-Pair in a Quint | Pair somewhere within quint context |
+| CS-450 | CS-Pair and a Sextup | Pair + sextup combination |
+| CS-830 | CS-Count Hundreds | Counting pattern variant |
+| CS-840 | CS-Count One Quads | Counting pattern variant |
+| CS-850 | CS-Count Ten Quads | Counting pattern variant |
+| CS-860 | CS-Count Hundred Quads | Counting pattern variant |
+| CS-870 | CS-Count Thousand Quad | Counting pattern variant |
+| CS-880 | CS-Double Quads Count Note | Counting pattern variant |
+| CS-890 | CS-Split Count | Counting pattern variant |
+| CS-970 | CS-Dual Radar Bookend | Palindrome bookend at both ends; distinct from CS-960 (Dual Matched Bookend) |
+| CS-1030 | CS-Unary Flipper | All 8 digits the same flip-valid digit |
+| CS-1080 | CS-Quinary Flipper | All 5 flip digits present {0,1,6,8,9} |
+| CS-1100 | CS-Unary Rotator | Needs rotator research |
+| CS-1110 | CS-True Binary Rotator | May overlap CS-1040 (True Binary Flipper) — deferred pending clarification |
+| CS-1120 | CS-Binary Rotator | Needs rotator research |
+| CS-1130 | CS-Trinary Rotator | Needs rotator research |
+| CS-1140 | CS-Quad Rotator | Needs rotator research |
+| CS-1150 | CS-Quinary Rotator | Needs rotator research |
+| CS-1220 | CS-Broken Ladder | Superset of CS-1230/CS-1240; skip until subtypes are stable |
 | CS-1250 | CS-Buildable Ladder | Complex definition; needs more book research |
-| CS-1600 | CS-Double Skip Note | Same as CS-Super Repeater (ABABABAB) — already covered by CS-1530 |
-| CS-2280 | CS-Mismatched Serial | Unusual serial letter/number combination |
-| CS-2290 | CS-Radar Serial Letters | Palindrome in prefix/suffix letters |
+| CS-1340 | CS-Shotgun Radar | Distinct from CS-Mini 3 Radar (CS-1370); needs book definition |
+| CS-1420 | CS-Ascending Laddered Radar | Ascending ladder embedded in radar structure |
+| CS-1430 | CS-Descending Laddered Radar | Descending ladder embedded in radar structure |
+| CS-1440 | CS-Repeater | General repeater (ABCDABCD); verify vs CS-1480 (Paired Quad Repeater) |
+| CS-1450 | CS-Single Bookend Repeater | Repeater with single bookend |
+| CS-1460 | CS-Dual Bookend Repeater | Repeater with dual bookend |
+| CS-1470 | CS-Tri Bookend Repeater | Repeater with tri bookend |
+| CS-1490 | CS-Random Quad Repeater | Scattered quad repeater variant |
+| CS-1500 | CS-Triple Repeater | Three-segment repeater |
+| CS-1510 | CS-Six Repeater in a Pair | Sextup repeater in pair context |
+| CS-1600 | CS-Double Skip Notes | Same as CS-Super Repeater (ABABABAB) — already covered by CS-1530 |
+| CS-1630 | CS-True Binary Skip Note | Binary variant of skip note |
+| CS-1700 | CS-Stand Alone Sextup | 6-digit run surrounded by zeros |
+| CS-1750 | CS-Stand Alone Mini 5 Radar | Mini 5-digit palindrome surrounded by zeros |
+| CS-1760 | CS-Stand Alone Tri Radar | Tri radar surrounded by zeros |
+| CS-1770 | CS-Stand Alone Quad Radar | Quad radar surrounded by zeros |
+| CS-1870 | CS-Stand Alone Mini Up Ladder 4 | 4-digit ascending ladder surrounded by zeros |
+| CS-1880 | CS-Stand Alone Mini Down Ladder 4 | 4-digit descending ladder surrounded by zeros |
+| CS-1890 | CS-Stand Alone Mini Up Ladder 5 | 5-digit ascending ladder surrounded by zeros |
+| CS-1900 | CS-Stand Alone Mini Down Ladder 5 | 5-digit descending ladder surrounded by zeros |
+| CS-1910 | CS-Stand Alone Mini Up Ladder 6 | 6-digit ascending ladder surrounded by zeros |
+| CS-1920 | CS-Stand Alone Mini Down Ladder 6 | 6-digit descending ladder surrounded by zeros |
+| CS-1930 | CS-Random Zeros | Zeros scattered throughout serial |
+| CS-2280 | CS-Zip Codes | Serial matches a US zip code format |
+| CS-2290 | CS-Prime Numbers | Serial number is mathematically prime |
+| CS-2300 | CS-Phone Notes | Serial matches phone number format |
+| CS-2380 | CS-Odds and Evens | Serial digits alternate or group odd/even |
+| CS-2390 | CS-Sequential Numbers | Serial forms a sequential numeric run |
 
 ---
 
-## Deferred — Date/Metadata Patterns
+## Deferred — Date/Calendar Patterns
 
-These require `ctx.metadata.series_year`, plate numbers, or complex calendar math. Save for a dedicated metadata batch.
+These require calendar validation (valid date math) or `ctx.metadata.series_year`. Save for a dedicated date batch.
 
 | CS# | Book Name | Reason Deferred |
 |-----|-----------|-----------------|
-| CS-1800 | CS-Stand Alone Date E.U. | dd/mm block surrounded by zeros; needs calendar validation (valid day/month pairs) |
-| CS-1830 | CS-Stand Alone U.S. Date Year | Needs calendar logic to verify year is a real US date year; deferred to metadata batch |
-| CS-540 | CS-Birthday Note | Requires series year match to a date |
-| CS-550 | CS-Anniversary Note | Calendar date math |
-| CS-560 | CS-Calendar Note | Date-based matching |
-| CS-610 | CS-Year Note | series_year in serial |
-| CS-620 | CS-Double Year Note | Year appears twice |
-| CS-630 | CS-Pair Year Note | Year as pair |
-| CS-650 | CS-Sequential Year | Year digits sequential in serial |
-| CS-660 | CS-Reverse Year | Year digits reversed in serial |
-| CS-670 | CS-Year Palindrome | Year forms palindrome |
-| CS-690 | CS-Decade Note | Serial matches a decade |
-| CS-700 | CS-Century Note | Serial matches a century year |
-| CS-720 | CS-Double Year (variant) | Similar to CS-710 — verify overlap |
-| CS-730 | CS-Near Year | Serial close to series year |
-| CS-740 | CS-Year Ladder | Year digits form a ladder |
-| CS-750 | CS-Year Bookend | Year bookends serial |
-| CS-760 | CS-Year Repeater | Year repeats in serial |
-| CS-780 | CS-Year Radar | Year forms palindrome in serial |
-| CS-790 | CS-Year Serial Match | Full serial matches year |
-| CS-800 | CS-Plate Match | Serial digits match plate number |
-| CS-830 | CS-Birthday Ladder | Birthday date forms ladder |
-| CS-840 | CS-Birthday Palindrome | Birthday forms palindrome |
-| CS-850 | CS-Holiday Note | Serial matches a holiday date |
-| CS-860 | CS-Tax Day Note | Serial = 04151040 or similar |
-| CS-870 | CS-Pi Note | Serial approximates π |
-| CS-880 | CS-Fibonacci Note | Serial digits follow Fibonacci |
-| CS-890 | CS-Prime Note | Serial is a prime number |
+| CS-1780 | CS-Stand Alone Date | Section header; encompasses CS-1790 and CS-1800 |
+| CS-1790 | CS-Stand Alone Date US & INTL | mm/dd block surrounded by zeros; needs valid date validation |
+| CS-1800 | CS-Stand Alone Date E.U. | dd/mm block surrounded by zeros; needs valid date validation |
+| CS-1820 | CS-Stand Alone Date Year | Date + 2-digit year block; needs date+year validation |
+| CS-1830 | CS-Stand Alone US Date Year | Needs calendar logic to verify year is a real US date year |
+| CS-1840 | CS-Stand Alone EU Date Year | EU date + year; needs date validation |
+| CS-1850 | CS-Stand Alone INTL Date Year | INTL date + year; needs date validation |
+| CS-540 | CS-US Birthday Note | Requires series year match to a date |
+| CS-550 | CS-US Leap Year History Note | Calendar date + leap year math |
+| CS-560 | CS-US Future Date Note | Date must be in the future relative to series year |
+| CS-570 | CS-EU Birthday Note | EU date format calendar match |
+| CS-580 | CS-EU Leap Year Birthday Note | EU date + leap year |
+| CS-590 | CS-EU History Note | EU date calendar match |
+| CS-600 | CS-EU Leap Year History Note | EU date + leap year |
+| CS-610 | CS-EU Future Date Note | EU date in future |
+| CS-620 | CS-INTL Birthday Note | INTL date format calendar match |
+| CS-630 | CS-INTL Leap Year Birthday Note | INTL date + leap year |
+| CS-640 | CS-INTL History Note | INTL date calendar match |
+| CS-650 | CS-INTL Future Date Note | INTL date in future |
+| CS-660 | CS-INTL Leap Year History Note | INTL date + leap year |
+| CS-670 | CS-True Year Note | series_year in serial |
+| CS-680 | CS-Numbered Year Note | Year appears in serial as a numbered reference |
+| CS-690 | CS-Random Year Note | Year scattered in serial |
+| CS-700 | CS-Year Notes | Section header for year-based patterns |
+| CS-720 | CS-Triple Year Note | Year appears three times |
+| CS-730 | CS-Quad Year Note | Year appears four times |
+| CS-740 | CS-Quint Year Note | Year appears five times |
+| CS-750 | CS-Day Notes | Section header; serial forms a day pattern |
+| CS-760 | CS-True Day Note | Serial digits form exact day |
+| CS-770 | CS-US & INTL True Day Notes | US/INTL format day match |
+| CS-780 | CS-EU True Day Notes | EU format day match |
+| CS-790 | CS-Numbered Day Note | Day appears as numbered reference |
+| CS-800 | CS-Random Day Month Note | Random day/month combination |
 
 ---
 
 ## Image-Only — Not Implementable via Serial Analysis
 
-These require visual inspection of the physical note (printing errors, signatures, stamps).
+These require visual inspection of the physical note (printing errors, stamps, etc.).
 
 | CS# | Book Name | Reason |
 |-----|-----------|--------|
-| CS-2020 | CS-Ink Smear | Printing error — visual |
-| CS-2030 | CS-Digit Offset | Printing error — visual |
-| CS-2080 | CS-Double Print | Printing error — visual |
-| CS-2090 | CS-Missing Print | Printing error — visual |
-| CS-2110 | CS-Ink Bleed | Printing error — visual |
-| CS-2120 | CS-Alignment Error | Printing error — visual |
-| CS-2150 | CS-Partial Print | Printing error — visual |
-| CS-2160 | CS-Butterfly Note | Visual ink fold |
-| CS-2170 | CS-Gutter Fold | Printing error — visual |
-| CS-2180 | CS-Obstruction Error | Printing error — visual |
-| CS-2220 | CS-Signature Note | Celebrity/political signature — visual |
-| CS-2230 | CS-Stamp Note | Postal/political stamp — visual |
-| CS-2250 | CS-Graffiti Note | Markings — visual |
-| CS-2260 | CS-Political Stamp | Political overprint — visual |
-| CS-2320 | CS-Web Press Error | Production error — visual |
-| CS-2330 | CS-Sheet Cutting Error | Production error — visual |
-| CS-2340 | CS-Radical Shift | Major misalignment — visual |
-| CS-2350 | CS-Experimental Note | Special production notes — visual |
+| CS-2000 | CS-Web Notes | Web press identification — visual |
+| CS-2010 | CS-Gas Pumps | Vertical misalignment — handled separately via image analysis |
+| CS-2020 | CS-Over Inked | Printing error — visual |
+| CS-2030 | CS-Off Center Printing | Printing error — visual |
+| CS-2040 | CS-Ink Smears | Printing error — visual |
+| CS-2050 | CS-Ink Splatter | Printing error — visual |
+| CS-2060 | CS-Ink Transfer | Printing error — visual |
+| CS-2070 | CS-Off Center Cuts | Printing error — visual |
+| CS-2080 | CS-Wet Sheet Transfer | Printing error — visual |
+| CS-2090 | CS-Insufficient Ink | Printing error — visual |
+| CS-2100 | CS-Wrong Back Plate & CS-Wrong Front Plate | Plate error — visual |
+| CS-2110 | CS-Fold Over or CS-Gutter Fold | Printing error — visual |
+| CS-2120 | CS-Doubling | Printing error — visual |
+| CS-2130 | CS-Inverted Back | Printing error — visual |
+| CS-2140 | CS-Blank Reverse & CS-Blank Obverse | Printing error — visual |
+| CS-2150 | CS-Obstructed Printings | Printing error — visual |
+| CS-2160 | CS-Offset Transfer | Printing error — visual |
+| CS-2170 | CS-Reverse Overprints | Printing error — visual |
+| CS-2180 | CS-Misaligned Overprints | Printing error — visual |
+| CS-2190 | CS-Missing Overprint | Printing error — visual |
+| CS-2200 | CS-Missing Front Printing | Printing error — visual |
+| CS-2210 | CS-Mismatched Serial Numbers | Serial mismatch — visual comparison |
+| CS-2220 | CS-Zegers/Winograd Project | Special project — visual |
+| CS-2230 | CS-106 Error | Production error — visual |
+| CS-2240 | CS-7273 Error | Production error — visual |
+| CS-2250 | CS-129 Error | Production error — visual |
+| CS-2260 | CS-295 Error | Production error — visual |
+| CS-2270 | CS-905 Error | Production error — visual |
+| CS-2310 | CS-Personalized Stamps | Stamps — visual |
+| CS-2320 | CS-Bank Stamps | Stamps — visual |
+| CS-2330 | CS-Where's George Stamps | Stamps — visual |
+| CS-2340 | CS-Political Stamps | Stamps — visual |
+| CS-2350 | CS-Signatures (Celebrity) | Signatures — visual |
+| CS-2360 | CS-Bank Dye Packs | Dye pack evidence — visual |
+| CS-2370 | CS-Star Notes | Star replacement notes — detected separately |
 
 ---
 
 ## Notes
 
-- CS-227: Appears in book but classification unclear — may be image-only
-- CS-60AK (cs_60ak.lua) and CS-Super Radar (cs_super_radar.lua) have no confirmed CS# in the book
-- CS-710 (double_year.lua): Verify this is CS-710 vs CS-720 — book may number differently
-- CS-810 (cs_count_ones.lua): Verify CS-810 exists in book — agent note from prior batch
-- CS-220 and CS-210: Both implement "scattered 40AK" logic; CS-210 (cs_40ak.lua) may actually be CS-190 per book
-- Mini Radars (CS-1380–CS-1410) are implemented as palindrome substrings of length 4–7 respectively
-- CS-1340 = CS-Mini 3 Radar = CS-Mini 3 Repeater (same pattern, one file)
-- CS-1600 (Double Skip Note) = CS-Super Repeater (already implemented as CS-1530)
-- CS-1610/1620 are Skip Count notes, NOT ladder variants (TRACKING.md was wrong before batch 3)
-- CS-1660 is Stand Alone Pair, NOT Quad Repeater (corrected in batch 3)
-- CS-1670/CS-1680 (Stand Alone Triple/Quad) have no confirmed CS# — approximate numbers shown
+- CS-100 = CS-Triple (consecutive 3-in-a-row); CS-110 = CS-3OAK (scattered) — these are different patterns; previous TRACKING.md had the row labels swapped but the files (BookRef CS-100/CS-110) were already correct
+- CS-190 = CS-4OAK (scattered); CS-200 = CS-Quad (consecutive grouped); CS-210 = CS-Random 4OAK — files corrected 2026-02-22
+- CS-220 = CS-Leading, Center & Trailing Quads — this is NOT the same as CS-Random 4OAK; it is a positional pattern (quad at start, center, or end)
+- CS-370 = CS-Leading, Center, and Trailing Quints (implemented as cs_quint.lua — any consecutive 5-of-a-kind)
+- CS-430 = CS-6OAK; CS-440 = CS-Sextup (consecutive grouped) — separate patterns
+- CS-500 = CS-Solid (CS-8OAK, all 8 digits the same)
+- CS-710 (double_year.lua): verify this is CS-710 vs CS-720 — book may number differently
+- CS-1060 = CS-Trinary Flipper (3 distinct flip digits); CS-1070 = CS-Quad Flipper (4 distinct flip digits) — confirmed CS# from book appendix; previously listed as "(no CS#)"
+- CS-1090 = CS-Rotator (general); CS-1100–CS-1150 are specific rotator subtypes (Unary, Binary, Trinary, Quad, Quinary)
+- CS-1260 = CS-Super Radar (ABBBBBBA structure) — confirmed CS# from book appendix
+- CS-1340 = CS-Shotgun Radar (not yet implemented); previously mislabeled in TRACKING.md as CS-Mini 3 Radar
+- CS-1370 = CS-Mini 3 Radar (cs_mini_3_radar.lua) — BookRef corrected from CS-1340 to CS-1370
+- CS-1860 = CS-Stand Alone Mini Ladder (the general cs_stand_alone_ladder.lua pattern); CS-1870–CS-1920 are specific directional/length subtypes not yet implemented
+- CS-1890 (CS-Stand Alone Mini Up Ladder 5) remains in Todo — it is a specific subtype; the note that it was "covered by CS-1880" was incorrect since CS-1880 is CS-Stand Alone Mini Down Ladder 4
 - Batch 3 added Stand Alone patterns (CS-1650–CS-1740 range)
-- Batch 4 added nested/combined group patterns (CS-120, CS-250–CS-470 range) and CS-1880, CS-1990
-- CS-250 to CS-470 batch 4 patterns follow a "X inside/within Y" structure with binary or near-binary digit distributions
-- Todo descriptions for CS-250–CS-470 were speculative placeholders; actual implementations are named by their true structure
-- Batch 5 added bookend variants (CS-980/1000/1010), binary flipper (CS-1050), stand-alone triple/quad/mini-3-radar (CS-1670/1680/1730), centered zeros (CS-1950), quad pairs (CS-60 approx), random double 40AK (CS-240 approx), random quad in triple (CS-270)
-- CS-160 (cs_random_double_triples.lua): the un-tagged "CS-Double Triples" (grouped consecutive) examples (#1–#6) appear in the book just before CS-160 with no CS tag number; implemented as cs_double_triples.lua under (no CS#)
-- CS-40 (cs_grouped_tri_pairs.lua) was created but removed — book's @CS~40 is all three-pairs-anywhere (superset of CS-50), not the AABBCC-only block I implemented
-- CS-60 (cs_grouped_quad_pairs.lua): no @CS~60 tag found; CS number inferred from position between @CS~50 and @CS-70
-- CS-240 (cs_double_40ak.lua): no @CS~240 tag found; "CS-Random Double 40AK" described in book without a tag
-- CS-1050 = CS-Binary Flipper (2 distinct flip-valid digits); Trinary/Quad Flippers appear later in the book with no @CS tags — implemented in batch 6
-- CS-1670/CS-1680 (Stand Alone Triple/Quad) and CS-1730 (Stand Alone Mini 3 Radar) have no @CS tags; numbers are approximate from index listing
-- Batch 6 added 10 patterns: CS-Trinary Flipper, CS-Quad Flipper, CS-True Double Quad Binary (CS-920), CS-Random Double Quad Binary (CS-930), CS-Scattered Ladder (CS-1210), CS-Ascending Broken Ladder (CS-1230), CS-Descending Broken Ladder (CS-1240), CS-Pinpoint Radar (CS-1320), CS-Pairs in Quad (CS-330), CS-Stand Alone Year (CS-1810)
-- CS-1110/CS-1130/CS-1140 are Rotator subtypes (CS-True Binary Rotator / CS-Trinary Rotator / CS-Quad Rotator); CS-1110 may overlap CS-1040 (True Binary Flipper) since both use flip_string(d)==d — deferred pending book clarification
-- CS-1220 (CS-Broken Ladder) is a superset of CS-1230 (Ascending) and CS-1240 (Descending); deferred until subtypes are stable
-- CS-1250 (CS-Buildable Ladder) is complex and requires more book research
-- CS-1830 (CS-Stand Alone U.S. Date Year) requires calendar logic; moved to Deferred
-- CS-1890 (formerly "CS-Near Staircase") was removed from Todo — book research shows this is CS-Stand Alone Mini Up Ladder 5, already covered by CS-1880 (cs_stand_alone_ladder.lua matches ladders of 4-7 digits, including length 5)
+- Batch 4 added nested/combined group patterns (CS-120, CS-250–CS-470 range) and CS-1860, CS-1990
+- Batch 5 added bookend variants (CS-980/1000/1010), binary flipper (CS-1050), stand-alone triple/quad/mini-3-radar (CS-1670/1680/1730), centered zeros (CS-1950), quad pairs (CS-60), random double 40AK (CS-240), random quad in triple (CS-270)
+- Batch 6 added: CS-Trinary Flipper (CS-1060), CS-Quad Flipper (CS-1070), CS-True Double Quad Binary (CS-920), CS-Random Double Quad Binary (CS-930), CS-Scattered Ladder (CS-1210), CS-Ascending Broken Ladder (CS-1230), CS-Descending Broken Ladder (CS-1240), CS-Pinpoint Radar (CS-1320), CS-Pairs in Quad (CS-330), CS-Stand Alone Year (CS-1810)
+- CS-150 = CS-Double Triples (grouped consecutive triples); CS-160 = CS-Random Double Triples (scattered) — both implemented; CS-150 BookRef was missing, added 2026-02-22
+- CS-1480 = CS-Paired Quad Repeater (ABCDABCD); file is cs_full_repeater.lua
+- CS-1600 (Double Skip Note) = CS-Super Repeater (already implemented as CS-1530)
+- CS-1610/1620 are Skip Count notes, NOT ladder variants
+- CS-2280 = CS-Zip Codes (previously mislabeled "CS-Mismatched Serial" in TRACKING.md)
+- CS-2290 = CS-Prime Numbers (previously mislabeled "CS-Radar Serial Letters" in TRACKING.md)
+- CS# verified 2026-02-22 against ~/projects/tggfsn.ods spreadsheet (book appendix page numbers and CS# confirmed accurate)

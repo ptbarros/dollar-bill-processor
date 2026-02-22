@@ -2,7 +2,7 @@
 Pattern: CS_RANDOM_40AK
 DisplayName: CS-Random 4OAK
 Description: Four of the same digit anywhere in the serial as long as it does not make a CS-Quad (no run of 4+). e.g., M 41442435 M or M 14442435 M.
-BookRef: CS-220
+BookRef: CS-210
 Tier: 6
 Examples: ["41442435", "14442435", "44144144"]
 Odds: 1 in 2,044
