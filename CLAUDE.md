@@ -185,21 +185,48 @@ print(engine.classify_simple('A12344321B'))
 
 ## Green Guide Pattern Library
 
-93 implemented patterns in `patterns/The Green Guide/`. Full status in `patterns/The Green Guide/TRACKING.md`.
+**104 implemented patterns** in `patterns/The Green Guide/`. Full status in `patterns/The Green Guide/TRACKING.md`.
 
-### Book source
-`/tmp/tggfsn.txt` — OCR scan of the Green Guide book. Use this to verify all pattern names and definitions. @CS~NNN) tags identify pattern numbers.
+### Book sources
+- `/tmp/tggfsn.txt` — OCR scan of the Green Guide book. @CS~NNN tags identify pattern numbers.
+- `~/projects/tggfsn.ods` — Spreadsheet of all book patterns with accurate CS#, page numbers, chapter. **Use this as the authoritative CS# reference** — it was verified against the book appendix and corrected many wrong CS# assignments that were in previous sessions.
+
+### CS# verified state (2026-02-22)
+All 104 implemented pattern files have correct `BookRef:` fields verified against the spreadsheet. Key corrections made:
+- CS-100 = CS-Triple, CS-110 = CS-3OAK (not swapped)
+- CS-190 = CS-4OAK, CS-200 = CS-Quad, CS-210 = CS-Random 4OAK
+- CS-1060 = CS-Trinary Flipper, CS-1070 = CS-Quad Flipper
+- CS-1260 = CS-Super Radar, CS-1370 = CS-Mini 3 Radar (not CS-1340)
+- CS-1860 = CS-Stand Alone Mini Ladder (not CS-1880)
+- CS-1340 = CS-Shotgun Radar (not yet implemented)
+- CS-2280 = CS-Zip Codes, CS-2290 = CS-Prime Numbers
 
 ### Naming conventions (IMPORTANT — must match book exactly)
 - **"OAK" = Of A Kind**: use `3OAK`, `4OAK`, `5OAK`, `6OAK`, `7OAK` — NOT `30AK`, `40AK` etc.
 - **"CS-Random XXX"** prefix — NOT "CS-XXX (Random)" suffix
 - **No invented qualifiers**: don't add "(Scattered)", "(Grouped)", "(CS-80AK)" etc. unless the book uses that exact wording
 - Pattern family example: "CS-Quad Pairs" (grouped AABBCCDD), "CS-Random Quad Pairs" (scattered)
+- DisplayName audit is **complete** — all 104 files verified
 
 ### Pending work (next session)
-**DisplayName audit in progress** — see TRACKING.md "Pending Work" section for full list. Short summary:
-1. Rename all X0AK → XOAK in DisplayName fields (cs_30ak, cs_40ak, cs_50ak, cs_60ak, cs_70ak, cs_paired_30ak, cs_random_40ak, cs_double_40ak)
-2. Fix "(Random)" suffix → "CS-Random" prefix (cs_two_pairs, cs_tri_pairs, cs_quad_pairs)
-3. cs_grouped_quad_pairs: "CS-Grouped Quad Pairs" → "CS-Quad Pairs"
-4. cs_solid: "CS-Solid (CS-80AK)" → "CS-Solid"
-5. Verify remaining names against book (bookend, radar, repeater, ladder, stand-alone family names)
+See TRACKING.md Todo section (57 entries) for the full list. Top priorities by batch readiness:
+
+**Easy wins — simple group/pair patterns:**
+- CS-10 (CS-2OAKs), CS-20 (CS-Two Pairs), CS-80 (CS-Pairs in Pairs), CS-90 (CS-Random Pairs in Pairs)
+- CS-140 (CS-Random Triple Triple Pair), CS-180 (CS-Random Triple Double Double)
+- CS-300 (CS-Random Triple in Quad), CS-320 (CS-Random Quad and Pairs), CS-340 (CS-Quads and Triples)
+- CS-390 (CS-Pair in a Quint), CS-450 (CS-Pair and a Sextup)
+
+**Count patterns (CS-830–CS-890):** 7 patterns, all variations of digit counting sequences
+
+**Stand Alone sub-types:**
+- CS-1700 (Sextup), CS-1750–CS-1770 (Mini 5/Tri/Quad Radar)
+- CS-1870–CS-1920 (Mini Up/Down Ladders 4/5/6 — specific direction+length variants of CS-1860)
+
+**Repeater sub-types (CS-1440–CS-1510):** 7 patterns (Repeater, Single/Dual/Tri Bookend Repeater, Random Quad, Triple, Six-in-Pair)
+
+**Radar sub-types:** CS-1340 (Shotgun Radar), CS-1420/CS-1430 (Ascending/Descending Laddered Radar)
+
+**Rotator family (CS-1100–CS-1150):** Needs rotator definition from book before implementing; CS-1110 may overlap CS-1040
+
+**Date batch (deferred):** CS-1790/1800/1820/1830/1840/1850 — Stand Alone Date variants; pure calendar math, no metadata needed but kept together for one focused batch
