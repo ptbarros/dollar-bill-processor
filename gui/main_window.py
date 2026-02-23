@@ -1057,7 +1057,7 @@ class MainWindow(QMainWindow):
                 'confidence', 'baseline_variance', 'seal_x', 'seal_y', 'seal_containment',
                 'is_fancy', 'needs_review', 'serial_region_path', 'error',
                 'front_align_angle', 'front_align_flipped',
-                'series_year', 'front_plate', 'back_plate', 'potential_mule',
+                'series_year', 'front_plate', 'back_plate', 'potential_mule', 'serial_mismatch',
                 'viewed', 'cropped', 'sent_for_review', 'checked',
                 'note', 'pattern_override'
             ], extrasaction='ignore')
@@ -1955,7 +1955,7 @@ class MainWindow(QMainWindow):
                 'confidence', 'baseline_variance', 'seal_x', 'seal_y', 'seal_containment',
                 'is_fancy', 'needs_review', 'serial_region_path', 'error',
                 'front_align_angle', 'front_align_flipped',
-                'series_year', 'front_plate', 'back_plate', 'potential_mule',
+                'series_year', 'front_plate', 'back_plate', 'potential_mule', 'serial_mismatch',
                 'viewed', 'cropped', 'sent_for_review', 'checked',
                 'note', 'pattern_override'
             ], extrasaction='ignore')

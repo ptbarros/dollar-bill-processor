@@ -242,6 +242,7 @@ class MonitorThread(QThread):
             # Cache alignment info for reuse in generate_crops()
             pair.front_align_angle = align_info.get('angle', 0.0)
             pair.front_align_flipped = align_info.get('flipped', False)
+            pair.serial_mismatch = align_info.get('serial_mismatch', False)
 
             # Extract plate info if setting enabled
             plate_info = {'series_year': '', 'front_plate': '', 'back_plate': '', 'potential_mule': False}
@@ -278,7 +279,7 @@ class MonitorThread(QThread):
                     pair.fancy_types = fancy_types
                     pair.is_fancy = len(fancy_types) > 0
 
-                needs_review = confidence < 0.5
+                needs_review = confidence < 0.5 or pair.serial_mismatch
 
                 if pair.is_fancy:
                     self.fancy_count += 1
@@ -287,7 +288,11 @@ class MonitorThread(QThread):
                 serial_region_path = ''
                 if needs_review:
                     self.review_count += 1
-                    self.processor._add_to_review_queue(pair, f"Low confidence: {confidence:.2f}", self.output_dir)
+                    if pair.serial_mismatch:
+                        review_reason = "Mismatched serial numbers"
+                    else:
+                        review_reason = f"Low confidence: {confidence:.2f}"
+                    self.processor._add_to_review_queue(pair, review_reason, self.output_dir)
                     if self.processor.review_queue:
                         serial_region_path = self.processor.review_queue[-1].serial_region_path or ''
 
@@ -309,6 +314,7 @@ class MonitorThread(QThread):
                     'front_plate': pair.front_plate,
                     'back_plate': pair.back_plate,
                     'potential_mule': pair.potential_mule,
+                    'serial_mismatch': pair.serial_mismatch,
                 }
 
             elif serial and not is_valid:
@@ -336,6 +342,7 @@ class MonitorThread(QThread):
                     'front_plate': pair.front_plate,
                     'back_plate': pair.back_plate,
                     'potential_mule': pair.potential_mule,
+                    'serial_mismatch': pair.serial_mismatch,
                 }
 
             else:
@@ -363,6 +370,7 @@ class MonitorThread(QThread):
                     'front_plate': pair.front_plate,
                     'back_plate': pair.back_plate,
                     'potential_mule': pair.potential_mule,
+                    'serial_mismatch': pair.serial_mismatch,
                 }
 
             # Mark files as processed

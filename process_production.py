@@ -231,6 +231,7 @@ class BillPair:
     front_plate: str = ''
     back_plate: str = ''
     potential_mule: bool = False  # True if likely a mule note (small font back plate)
+    serial_mismatch: bool = False  # True if both front serial numbers differ
     # Cached YOLO detection results to avoid redundant calls
     front_cache: Optional[Dict] = None  # Cached detections from verify stage
     back_cache: Optional[Dict] = None   # Cached detections from verify stage
@@ -2949,11 +2950,8 @@ class ProductionProcessor:
             gp_deviation = self.analyze_gas_pump_digits(tight_crop)['max_deviation']
             max_gas_pump_deviation = max(max_gas_pump_deviation, gp_deviation)
 
-        # Second pass: OCR extraction (with early exit for performance)
+        # Second pass: OCR extraction (all boxes processed for mismatch detection)
         for x1, y1, x2, y2, det_conf in boxes:
-            if serials_found and max(conf for _, conf, _, _ in serials_found) >= 0.7:
-                break
-
             # Expand bounding box (40% to catch edge letters)
             box_width = x2 - x1
             box_height = y2 - y1
@@ -3065,6 +3063,16 @@ class ProductionProcessor:
                 # Check for star in OCR result (fallback if YOLO missed it)
                 if not star_detected and result[0] and result[0].endswith('*'):
                     star_detected = True
+
+                # Check for serial mismatch (two serial regions with different digit sequences)
+                if len(serials) >= 2 and not high_conf_star:
+                    import re as _re
+                    digits_1 = _re.search(r'\d{8}', serials[0][0] or '')
+                    digits_2 = _re.search(r'\d{8}', serials[1][0] or '')
+                    conf1, conf2 = serials[0][1], serials[1][1]
+                    if digits_1 and digits_2 and conf1 >= 0.5 and conf2 >= 0.5:
+                        if digits_1.group() != digits_2.group():
+                            align_info['serial_mismatch'] = True
 
                 # Early exit conditions:
                 # 1. Good confidence (>= 0.5) - normal case

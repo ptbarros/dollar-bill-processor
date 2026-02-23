@@ -89,8 +89,6 @@ Detects vertically misaligned digits (mechanical counter rollover during printin
 
 Detects overprint misalignment by comparing treasury seal to "ONE" text underneath.
 
-**YOLO v9 Classes:** `ONE_hashed`(0), `back_plate`(1), `bill_back`(2), `bill_front`(3), `denomination`(4), `front_plate`(5), `seal_f`(6), `seal_t`(7), `serial_number`(8), `series_year`(9), `star_symbol`(10)
-
 **Metrics:**
 - `seal_x/seal_y`: Offset as % of ONE_hashed dimensions
 - `seal_containment`: % of seal inside ONE bbox (100% = normal, <97% = shifted)
@@ -103,31 +101,6 @@ Settings → Processing → "Extract plate and series info"
 - Extracts series_year, front_plate, back_plate
 - Mule detection: 1988+ series with back_plate height ≤14px
 - Press **M** for plate magnifier popup
-
-## GUI Features
-
-**Keyboard:**
-| Key | Action |
-|-----|--------|
-| 1-5 | View modes: Front, Back, Stitched, Split V, Split H |
-| A | Toggle auto-align |
-| X | Toggle crosshair overlay |
-| C | Batch crop all queued |
-| M | Plate magnifier |
-| P / Page Up | Previous bill |
-| N / Page Down | Next bill |
-| Space | Queue bill for crop (toggle ✓) |
-| F / 0 | Zoom fit |
-| + / - | Zoom in/out |
-| Shift+Arrows | Pan |
-
-**Context Menu:** "Set Pattern..." (override label), "Set Note..." (add comment)
-
-**Layouts:** View > Layout menu (Classic, Wide Preview, Details Right)
-
-**Zoom:** Fit/+/- buttons, Ctrl+scroll, middle-mouse drag
-
-**Split View Sync:** Split V/H views have a "Sync" toggle button. When locked (default, green), pan/zoom is synchronized. When unlocked, each pane can be independently panned/zoomed; hover sets the active pane (green border). Re-locking snaps the inactive pane to match the active one.
 
 ## Performance Optimization
 
@@ -146,21 +119,6 @@ Pre-processes folder for faster subsequent processing:
 - `dollar_sequential`: Pre-organized Dollar_NNN.jpg files (fastest path)
 - `suffix`: Files with `_b` suffix (e.g., 0001.jpg + 0001_b.jpg)
 - `sequential`: Alternating numbered pairs
-
-### Typical Performance (100 bills)
-| Mode | YOLO/bill | Time/bill | Total |
-|------|-----------|-----------|-------|
-| Verify OFF | 6-7 | ~1.9s | ~190s |
-| Verify ON | 4 | ~1.5s | ~180s |
-| **Organized** | 4 | ~1.4s | ~140s |
-
-## Settings
-
-Stored in `user_settings.yaml` (gitignored):
-- UI: theme, layout_mode, font_size, default_fancy_color
-- Pattern states/colors, library states/colors
-- AI: provider, API keys, models
-- Processing, export, monitor settings
 
 ## Testing
 
@@ -191,8 +149,21 @@ print(engine.classify_simple('A12344321B'))
 - `/tmp/tggfsn.txt` — OCR scan of the Green Guide book. @CS~NNN tags identify pattern numbers.
 - `~/projects/tggfsn.ods` — Spreadsheet of all book patterns with accurate CS#, page numbers, chapter. **Use this as the authoritative CS# reference** — it was verified against the book appendix and corrected many wrong CS# assignments that were in previous sessions.
 
-### CS# verified state (2026-02-22)
-All 104 implemented pattern files have correct `BookRef:` fields verified against the spreadsheet. Key corrections made:
+### ODS column layout (tggfsn.ods, col 0-based)
+| Col | Header | Notes |
+|-----|--------|-------|
+| 0 | Page # | |
+| 1 | Chapter | |
+| 2 | Original order | |
+| 3 | Skip | x = do not implement |
+| 4 | Pattern Created | x = implemented as Lua |
+| 5 | CS-# | authoritative CS number |
+| 6 | Name | display name matching book |
+| 7 | Examples | positional variant serials from book (M xx M format) |
+| 8 | Description | book prose definition (manually verified) |
+
+### CS# verified state (2026-02-23)
+All 104 implemented pattern files have correct `BookRef:` fields verified against the spreadsheet. All ODS Description (col 8) and Examples (col 7) fields are now manually verified and complete for all implementable patterns. Key corrections made:
 - CS-100 = CS-Triple, CS-110 = CS-3OAK (not swapped)
 - CS-190 = CS-4OAK, CS-200 = CS-Quad, CS-210 = CS-Random 4OAK
 - CS-1060 = CS-Trinary Flipper, CS-1070 = CS-Quad Flipper
@@ -208,25 +179,5 @@ All 104 implemented pattern files have correct `BookRef:` fields verified agains
 - Pattern family example: "CS-Quad Pairs" (grouped AABBCCDD), "CS-Random Quad Pairs" (scattered)
 - DisplayName audit is **complete** — all 104 files verified
 
-### Pending work (next session)
-See TRACKING.md Todo section (57 entries) for the full list. Top priorities by batch readiness:
-
-**Easy wins — simple group/pair patterns:**
-- CS-10 (CS-2OAKs), CS-20 (CS-Two Pairs), CS-80 (CS-Pairs in Pairs), CS-90 (CS-Random Pairs in Pairs)
-- CS-140 (CS-Random Triple Triple Pair), CS-180 (CS-Random Triple Double Double)
-- CS-300 (CS-Random Triple in Quad), CS-320 (CS-Random Quad and Pairs), CS-340 (CS-Quads and Triples)
-- CS-390 (CS-Pair in a Quint), CS-450 (CS-Pair and a Sextup)
-
-**Count patterns (CS-830–CS-890):** 7 patterns, all variations of digit counting sequences
-
-**Stand Alone sub-types:**
-- CS-1700 (Sextup), CS-1750–CS-1770 (Mini 5/Tri/Quad Radar)
-- CS-1870–CS-1920 (Mini Up/Down Ladders 4/5/6 — specific direction+length variants of CS-1860)
-
-**Repeater sub-types (CS-1440–CS-1510):** 7 patterns (Repeater, Single/Dual/Tri Bookend Repeater, Random Quad, Triple, Six-in-Pair)
-
-**Radar sub-types:** CS-1340 (Shotgun Radar), CS-1420/CS-1430 (Ascending/Descending Laddered Radar)
-
-**Rotator family (CS-1100–CS-1150):** Needs rotator definition from book before implementing; CS-1110 may overlap CS-1040
-
-**Date batch (deferred):** CS-1790/1800/1820/1830/1840/1850 — Stand Alone Date variants; pure calendar math, no metadata needed but kept together for one focused batch
+### Pending work
+See `patterns/The Green Guide/TRACKING.md` Todo section for the full list.

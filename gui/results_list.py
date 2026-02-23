@@ -133,7 +133,7 @@ class ResultsList(QWidget):
 
         # Results tree
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "GPT", "Shift X%", "Shift Y%", "Seal %", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule?", "Status"])
+        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "GPT", "Shift X%", "Shift Y%", "Seal %", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule?", "Mismatch?", "Status"])
         self.tree.setAlternatingRowColors(True)
         self.tree.setRootIsDecorated(False)
         self.tree.setSortingEnabled(True)
@@ -157,7 +157,8 @@ class ResultsList(QWidget):
             10: "Front plate number",
             11: "Back plate number",
             12: "Potential mule bill (mismatched front/back plates)",
-            13: "Status flags: ✓=queued, V=viewed, C=cropped, R=sent for review",
+            13: "Mismatched serial numbers (two different serials detected on front)",
+            14: "Status flags: ✓=queued, V=viewed, C=cropped, R=sent for review",
         }
         self._setup_header_tooltips()
 
@@ -177,11 +178,12 @@ class ResultsList(QWidget):
         header.setSectionResizeMode(10, QHeaderView.Interactive)  # Front Plate
         header.setSectionResizeMode(11, QHeaderView.Interactive)  # Back Plate
         header.setSectionResizeMode(12, QHeaderView.Interactive)  # Mule?
-        header.setSectionResizeMode(13, QHeaderView.Interactive)  # Status
+        header.setSectionResizeMode(13, QHeaderView.Interactive)  # Mismatch?
+        header.setSectionResizeMode(14, QHeaderView.Interactive)  # Status
         header.setMinimumSectionSize(30)  # Minimum for any column
 
-        # Move Status column (logical 13) to visual position 1 (between # and Serial)
-        header.moveSection(13, 1)
+        # Move Status column (logical 14) to visual position 1 (between # and Serial)
+        header.moveSection(14, 1)
 
         # Enable right-click context menu on header to hide columns
         header.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -520,6 +522,12 @@ class ResultsList(QWidget):
             else:
                 item.setText(12, "")
 
+            # Mismatch detection column
+            if result.get('serial_mismatch', False):
+                item.setText(13, "Yes")
+            else:
+                item.setText(13, "")
+
             # Status column (review tracking)
             status_parts = []
             if result.get('checked'):
@@ -533,7 +541,7 @@ class ResultsList(QWidget):
                 auto += 'R'
             if auto:
                 status_parts.append(auto)
-            item.setText(13, ' '.join(status_parts))
+            item.setText(14, ' '.join(status_parts))
 
             # Build comprehensive row tooltip with all bill details
             tooltip_lines = [f"Serial: {serial}"]
@@ -557,7 +565,7 @@ class ResultsList(QWidget):
                 tooltip_lines.append(f"File: {Path(front_file).name}")
 
             row_tooltip = '\n'.join(tooltip_lines)
-            for col in range(14):
+            for col in range(15):
                 item.setToolTip(col, row_tooltip)
 
             # Color coding with explicit text color for contrast
@@ -672,7 +680,7 @@ class ResultsList(QWidget):
             auto += 'R'
         if auto:
             status_parts.append(auto)
-        item.setText(13, ' '.join(status_parts))  # Column 13 = Status
+        item.setText(14, ' '.join(status_parts))  # Column 14 = Status
         # Store the modified dict back (PySide6 copies on setData)
         item.setData(0, Qt.UserRole, result)
 
@@ -1272,6 +1280,7 @@ class ResultsList(QWidget):
                     result['front_plate'] = result.get('front_plate', '')
                     result['back_plate'] = result.get('back_plate', '')
                     result['potential_mule'] = result.get('potential_mule', '').lower() == 'true'
+                    result['serial_mismatch'] = result.get('serial_mismatch', '').lower() == 'true'
 
                     # Review status fields (backward compatible - missing columns default to False)
                     result['viewed'] = result.get('viewed', '').lower() == 'true'
@@ -1334,7 +1343,7 @@ class ResultsList(QWidget):
                     'confidence', 'baseline_variance', 'seal_x', 'seal_y', 'seal_containment',
                     'is_fancy', 'needs_review', 'serial_region_path', 'error',
                     'front_align_angle', 'front_align_flipped',
-                    'series_year', 'front_plate', 'back_plate', 'potential_mule',
+                    'series_year', 'front_plate', 'back_plate', 'potential_mule', 'serial_mismatch',
                     'viewed', 'cropped', 'sent_for_review', 'checked',
                     'note', 'pattern_override'
                 ])
