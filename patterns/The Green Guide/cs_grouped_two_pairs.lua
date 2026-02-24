@@ -4,7 +4,7 @@ DisplayName: CS-Two Pairs
 Description: Two CS-Pairs (each pair grouped consecutively) of different digits anywhere in the serial. Both pairs must be adjacent (grouped). e.g., M xx2299xx M or M 22xxxx99 M. Distinguished from CS-30 (Random Two Pairs) where at least one pair is split.
 BookRef: CS-20
 Tier: 7
-Examples: ["11223456", "12341122", "99123456"]
+Examples: ["11223456", "22334567", "99881234"]
 Odds: 1 in 2,520
 Price: $0
 --]]

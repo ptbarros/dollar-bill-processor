@@ -4,7 +4,7 @@ DisplayName: CS-Quint in a Pair
 Description: A CS-Quint (5 consecutive) within a CS-20AK (pair of another digit surrounding it), plus one random digit. e.g., M 2555552x M.
 BookRef: CS-380
 Tier: 4
-Examples: ["25555524", "52555520", "05555521"]
+Examples: ["25555524", "05555501", "20555552"]
 Odds: 1 in 720
 Price: $0.25
 --]]

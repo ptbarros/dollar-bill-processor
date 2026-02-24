@@ -1,10 +1,10 @@
 --[[
 Pattern: CS_LOOPING_LADDER_ASC
 DisplayName: CS-Ascending Looping Ladder
-Description: An ascending 8-digit ladder that wraps around modulo 10. e.g., 56781234 (5-6-7-8-1-2-3-4... wait that skips 9→0). Actually: consecutive mod 10, like 7890 1234 or 5678 9012.
+Description: A cyclic rotation of 8 consecutive mod-10 digits in ascending order, where the sequence does not start at its natural first element (that would be CS-Ascending Ladder). e.g., M 78123456 M (digits 1-8 rotated to start at 7).
 BookRef: CS-1190
 Tier: 1
-Examples: ["56789012", "67890123", "78901234"]
+Examples: ["78123456", "45678923", "78903456"]
 Odds: 1 in 6,944,444
 Price: $250-$1,000
 --]]
@@ -13,48 +13,51 @@ function match(ctx)
     local d = ctx.digits
     if #d ~= 8 then return {matched = false} end
 
-    -- Must NOT be a standard ascending ladder (that's CS-1170)
-    if is_ascending(d) then
-        return {matched = false}
+    -- All 8 digits must be unique
+    local counts = {}
+    for i = 1, 8 do
+        local dig = d:sub(i, i)
+        counts[dig] = (counts[dig] or 0) + 1
+        if counts[dig] > 1 then return {matched = false} end
     end
 
-    -- Check if digits form a modulo-10 ascending sequence
-    -- i.e., each digit = (first + offset) % 10
-    local first = tonumber(d:sub(1, 1))
-    local is_loop_asc = true
-    for i = 2, 8 do
-        local expected = (first + (i - 1)) % 10
-        if tonumber(d:sub(i, i)) ~= expected then
-            is_loop_asc = false
-            break
+    -- Find k: the natural start of the 8-consecutive-mod-10 set.
+    -- k is the unique value whose predecessor (k-1 mod 10) is NOT in the set.
+    local k = nil
+    for candidate = 0, 9 do
+        local prev = tostring((candidate - 1 + 10) % 10)
+        if not counts[prev] then
+            local valid = true
+            for j = 0, 7 do
+                if not counts[tostring((candidate + j) % 10)] then
+                    valid = false
+                    break
+                end
+            end
+            if valid then
+                k = candidate
+                break
+            end
         end
     end
+    if k == nil then return {matched = false} end
 
-    if not is_loop_asc then
-        return {matched = false}
-    end
+    -- Non-trivial rotation: first digit must NOT equal k (that is CS-Ascending Ladder)
+    local first = tonumber(d:sub(1, 1))
+    if first == k then return {matched = false} end
 
-    -- Must start at 2 or higher (otherwise it would be caught by CS-1170 or start at 0)
-    -- But we already excluded is_ascending (which only catches 0123... 1234... etc without wrap)
-    -- Verify there's actually a wrap: max digit > min digit somewhere in sequence
-    local wrap_found = false
+    -- Check cyclic ascending order: each consecutive pair advances by +1 within the set,
+    -- except after the last element (k+7)%10 which wraps back to k.
+    local end_val = (k + 7) % 10
     for i = 1, 7 do
         local curr = tonumber(d:sub(i, i))
-        local nxt = tonumber(d:sub(i + 1, i + 1))
-        if nxt < curr then
-            wrap_found = true
-            break
-        end
-    end
-
-    if not wrap_found then
-        return {matched = false}
+        local nxt  = tonumber(d:sub(i + 1, i + 1))
+        local expected = (curr == end_val) and k or (curr + 1) % 10
+        if nxt ~= expected then return {matched = false} end
     end
 
     local positions = {}
-    for i = 0, 7 do
-        table.insert(positions, i)
-    end
+    for i = 0, 7 do table.insert(positions, i) end
 
     local connectors = {}
     for i = 0, 6 do
@@ -65,6 +68,6 @@ function match(ctx)
         matched = true,
         highlights = {{positions = positions, color = "lime"}},
         connectors = connectors,
-        message = "Ascending looping ladder starting at " .. d:sub(1,1) .. " (CS-1190)"
+        message = "Ascending looping ladder (k=" .. k .. ", starting at " .. d:sub(1,1) .. ") (CS-1190)"
     }
 end

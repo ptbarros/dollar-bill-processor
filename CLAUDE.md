@@ -162,8 +162,8 @@ print(engine.classify_simple('A12344321B'))
 | 7 | Examples | positional variant serials from book (M xx M format) |
 | 8 | Description | book prose definition (manually verified) |
 
-### CS# verified state (2026-02-23)
-All 123 implemented pattern files have correct `BookRef:` fields verified against the spreadsheet. Original 104 patterns: ODS Description (col 8) and Examples (col 7) fields manually verified. Batch 7 (19 new patterns): CS# verified from ODS. Key corrections made:
+### CS# verified state (2026-02-24)
+All 123 implemented pattern files have correct `BookRef:` fields verified against the spreadsheet. `tools/verify_patterns.py` passes **123/123** with zero failures (as of 2026-02-24). Original 104 patterns: ODS Description (col 8) and Examples (col 7) fields manually verified. Batch 7 (19 new patterns): CS# verified from ODS. Key corrections made:
 - CS-100 = CS-Triple, CS-110 = CS-3OAK (not swapped)
 - CS-190 = CS-4OAK, CS-200 = CS-Quad, CS-210 = CS-Random 4OAK
 - CS-1060 = CS-Trinary Flipper, CS-1070 = CS-Quad Flipper

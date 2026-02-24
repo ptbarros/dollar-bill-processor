@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_DOUBLE_TRIPLES
 DisplayName: CS-Random Double Triples
-Description: Two distinct digits each appearing 3+ times anywhere in the serial.
+Description: Two distinct digits each appearing 3+ times anywhere in the serial, in any arrangement (grouped or scattered).
 BookRef: CS-160
 Tier: 6
 Examples: ["75775511", "12312321", "77755500"]
@@ -24,21 +24,6 @@ function match(ctx)
 
     if #triple_digits < 2 then
         return {matched = false}
-    end
-
-    -- Verify each triple is scattered (CS-3OAK): max consecutive run < 3 per digit
-    -- A fully-grouped triple is CS-Triple territory (CS-100/CS-150), not CS-3OAK
-    local runs = find_runs(d)
-    for _, digit in ipairs(triple_digits) do
-        local max_run = 0
-        for _, run in ipairs(runs) do
-            if run.digit == digit and run.length > max_run then
-                max_run = run.length
-            end
-        end
-        if max_run >= 3 then
-            return {matched = false}
-        end
     end
 
     local colors = {"gold", "coral", "cyan", "lime", "orange", "magenta"}

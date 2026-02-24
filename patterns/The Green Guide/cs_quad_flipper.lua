@@ -4,7 +4,7 @@ DisplayName: CS-Quad Flipper
 Description: All 8 digits are from the flip set {0,1,6,8,9} and exactly 4 distinct digits are used. e.g., M 01899901 M.
 BookRef: CS-1070
 Tier: 7
-Examples: ["01899901", "01689610", "18906690"]
+Examples: ["01899901", "10899810", "10688601"]
 Odds: 1 in 7
 Price: $0-$5
 --]]

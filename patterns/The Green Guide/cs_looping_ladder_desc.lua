@@ -1,10 +1,10 @@
 --[[
 Pattern: CS_LOOPING_LADDER_DESC
 DisplayName: CS-Descending Looping Ladder
-Description: A descending 8-digit ladder that wraps around modulo 10. e.g., 43210987 (4-3-2-1-0-9-8-7). Must not start at 9 (that would be a standard descending ladder 98765432).
+Description: A cyclic rotation of 8 consecutive mod-10 digits in descending order, where the sequence does not start at its natural first element (that would be CS-Descending Ladder). e.g., M 32987654 M (digits 2-9 rotated to start at 3).
 BookRef: CS-1200
 Tier: 1
-Examples: ["43210987", "32109876", "21098765"]
+Examples: ["32987654", "43218765", "18765432"]
 Odds: 1 in 6,944,444
 Price: $250-$1,000
 --]]
@@ -13,45 +13,51 @@ function match(ctx)
     local d = ctx.digits
     if #d ~= 8 then return {matched = false} end
 
-    -- Must NOT be a standard descending ladder (that's CS-1180)
-    if is_descending(d) then
-        return {matched = false}
+    -- All 8 digits must be unique
+    local counts = {}
+    for i = 1, 8 do
+        local dig = d:sub(i, i)
+        counts[dig] = (counts[dig] or 0) + 1
+        if counts[dig] > 1 then return {matched = false} end
     end
 
-    -- Check if digits form a modulo-10 descending sequence
-    local first = tonumber(d:sub(1, 1))
-    local is_loop_desc = true
-    for i = 2, 8 do
-        local expected = (first - (i - 1)) % 10
-        if tonumber(d:sub(i, i)) ~= expected then
-            is_loop_desc = false
-            break
+    -- Find k_desc: the natural start of the descending sequence.
+    -- k_desc is the unique value whose successor (k_desc+1 mod 10) is NOT in the set.
+    local k = nil
+    for candidate = 9, 0, -1 do
+        local succ = tostring((candidate + 1) % 10)
+        if not counts[succ] then
+            local valid = true
+            for j = 0, 7 do
+                if not counts[tostring((candidate - j + 100) % 10)] then
+                    valid = false
+                    break
+                end
+            end
+            if valid then
+                k = candidate
+                break
+            end
         end
     end
+    if k == nil then return {matched = false} end
 
-    if not is_loop_desc then
-        return {matched = false}
-    end
+    -- Non-trivial rotation: first digit must NOT equal k (that is CS-Descending Ladder)
+    local first = tonumber(d:sub(1, 1))
+    if first == k then return {matched = false} end
 
-    -- Must have an actual wrap (a step up from 0 to 9)
-    local wrap_found = false
+    -- Check cyclic descending order: each consecutive pair decreases by 1 within the set,
+    -- except after the last element (k-7)%10 which wraps back to k.
+    local end_val = (k - 7 + 100) % 10
     for i = 1, 7 do
         local curr = tonumber(d:sub(i, i))
-        local nxt = tonumber(d:sub(i + 1, i + 1))
-        if nxt > curr then
-            wrap_found = true
-            break
-        end
-    end
-
-    if not wrap_found then
-        return {matched = false}
+        local nxt  = tonumber(d:sub(i + 1, i + 1))
+        local expected = (curr == end_val) and k or (curr - 1 + 10) % 10
+        if nxt ~= expected then return {matched = false} end
     end
 
     local positions = {}
-    for i = 0, 7 do
-        table.insert(positions, i)
-    end
+    for i = 0, 7 do table.insert(positions, i) end
 
     local connectors = {}
     for i = 0, 6 do
@@ -62,6 +68,6 @@ function match(ctx)
         matched = true,
         highlights = {{positions = positions, color = "coral"}},
         connectors = connectors,
-        message = "Descending looping ladder starting at " .. d:sub(1,1) .. " (CS-1200)"
+        message = "Descending looping ladder (k=" .. k .. ", starting at " .. d:sub(1,1) .. ") (CS-1200)"
     }
 end

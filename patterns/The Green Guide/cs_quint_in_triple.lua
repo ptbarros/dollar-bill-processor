@@ -4,7 +4,7 @@ DisplayName: CS-Quint in a Triple
 Description: A CS-Quint (5 consecutive) within a CS-30AK (3 of another digit surrounding it). Exactly two digits using all 8 positions. Also a CS-Binary. e.g., M 35555533 M or M 33555553 M.
 BookRef: CS-410
 Tier: 3
-Examples: ["35555533", "33555553", "53555535"]
+Examples: ["35555533", "33555553", "15555511"]
 Odds: 1 in 90
 Price: $25-$500
 --]]

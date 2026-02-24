@@ -2,7 +2,7 @@
 
 **Legend:** ✅ Implemented | 🔲 Todo | ⏸ Deferred | ❌ Image-only
 
-Last updated: 2026-02-23
+Last updated: 2026-02-24
 Implemented: 123 files
 Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~/projects/tggfsn.ods
 
@@ -334,7 +334,7 @@ These require visual inspection of the physical note (printing errors, stamps, e
 - Batch 4 added nested/combined group patterns (CS-120, CS-250–CS-470 range) and CS-1860, CS-1990
 - Batch 5 added bookend variants (CS-980/1000/1010), binary flipper (CS-1050), stand-alone triple/quad/mini-3-radar (CS-1670/1680/1730), centered zeros (CS-1950), quad pairs (CS-60), random double 40AK (CS-240), random quad in triple (CS-270)
 - Batch 6 added: CS-Trinary Flipper (CS-1060), CS-Quad Flipper (CS-1070), CS-True Double Quad Binary (CS-920), CS-Random Double Quad Binary (CS-930), CS-Scattered Ladder (CS-1210), CS-Ascending Broken Ladder (CS-1230), CS-Descending Broken Ladder (CS-1240), CS-Pinpoint Radar (CS-1320), CS-Pairs in Quad (CS-330), CS-Stand Alone Year (CS-1810)
-- CS-150 = CS-Double Triples (grouped consecutive triples); CS-160 = CS-Random Double Triples (scattered) — both implemented; CS-150 BookRef was missing, added 2026-02-22
+- CS-150 = CS-Double Triples (grouped consecutive triples); CS-160 = CS-Random Double Triples (any arrangement) — both implemented; CS-150 BookRef was missing, added 2026-02-22
 - CS-1480 = CS-Paired Quad Repeater (ABCDABCD); file is cs_full_repeater.lua
 - CS-1600 (Double Skip Note) = CS-Super Repeater (already implemented as CS-1530)
 - CS-1610/1620 are Skip Count notes, NOT ladder variants
@@ -348,3 +348,12 @@ These require visual inspection of the physical note (printing errors, stamps, e
 - CS-220 (Leading, Center & Trailing Quads): same serials as CS-200 (CS-Quad), adds positional labeling (Leading/Center/Trailing)
 - CS-1030 (Unary Flipper): subset of CS-Solid (CS-500); only digits {1,6,8,9} qualify, not 0
 - CS-1440/1450/1460/1470/1490: covered by existing bookend/repeater patterns (CS-950/980/1000/1480)
+- Logic & example audit (2026-02-24): verify_patterns.py now 123/123 PASS. Key logic fixes:
+  - CS-1170/CS-1180 (Ascending/Descending Ladder): now accept mod-10 wrap (e.g. 34567890, 09876543)
+  - CS-1190/CS-1200 (Looping Ladders): rewritten as cyclic-rotation of 8 consecutive mod-10 digits; non-trivial rotation only
+  - CS-1210 (Scattered Ladder): extended to all 10 mod-10 consecutive sets; excludes cyclic ascending/descending rotations
+  - CS-1280 (Bookend Full Radar): removed erroneous inner-pair check; only outer pair + palindrome required
+  - CS-1710 (Stand Alone Double Repeater): now handles ABAB (2×) and ABABAB (3×) blocks
+  - CS-1860 (Stand Alone Mini Ladder): minimum ladder length lowered from 4 to 2 digits
+  - CS-160 (Random Double Triples): removed consecutive-run restriction; any arrangement matches
+  - 27 wrong example serials corrected across 21 files

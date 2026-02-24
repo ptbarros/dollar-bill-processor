@@ -4,7 +4,7 @@ DisplayName: CS-Random Quint and Pair
 Description: A CS-50AK (5 scattered, no 5-run) and a CS-20AK (pair) anywhere in the serial, plus one random digit. e.g., M 5552525x M.
 BookRef: CS-400
 Tier: 6
-Examples: ["55525251", "52555201", "15252553"]
+Examples: ["55525251", "55050515", "51553551"]
 Odds: 1 in 120,960
 Price: $0.25
 --]]

@@ -4,7 +4,7 @@ DisplayName: CS-Random Pairs in Pairs
 Description: Two CS-2OAKs where one is inside the other — one 2OAK digit appears on both sides of the other 2OAK digit. Neither pair needs to be grouped (both can be scattered). e.g., M xx2x2xxx M with 5s on either side of the 2s.
 BookRef: CS-90
 Tier: 7
-Examples: ["52302352", "29002293", "83133831"]
+Examples: ["52302352", "29002293", "12355321"]
 Odds: 1 in 1,680
 Price: $0
 --]]

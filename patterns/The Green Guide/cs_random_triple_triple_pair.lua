@@ -4,7 +4,7 @@ DisplayName: CS-Random Triple Triple Pair
 Description: Two 3OAKs (two different digits each appearing 3 times) and one 2OAK (a third digit appearing twice), in any position (scattered). e.g., M 12332112 M. These are also a CS-Trinary.
 BookRef: CS-140
 Tier: 5
-Examples: ["12332112", "33344452", "11122355"]
+Examples: ["12332112", "11233212", "22133231"]
 Odds: 1 in 5,040
 Price: $0
 --]]

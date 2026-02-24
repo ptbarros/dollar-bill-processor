@@ -1,10 +1,10 @@
 --[[
 Pattern: CS_DESCENDING_LADDER
 DisplayName: CS-Descending Ladder
-Description: All 8 digits form a consecutive descending sequence (e.g., 87654321 or 98765432).
+Description: All 8 digits form a consecutive descending sequence (mod-10), e.g., 98765432, 87654321, 09876543. The sequence may cross the 0→9 boundary.
 BookRef: CS-1180
 Tier: 3
-Examples: ["87654321", "98765432", "76543210"]
+Examples: ["87654321", "09876543", "76543210"]
 Odds: 1 in 6,944,444
 Price: $1,000-$5,000
 --]]
@@ -15,8 +15,12 @@ function match(ctx)
         return {matched = false}
     end
 
-    if not is_descending(d) then
-        return {matched = false}
+    -- Allow mod-10 wrap: each digit must be (first - offset) % 10
+    local first = tonumber(d:sub(1, 1))
+    for i = 2, 8 do
+        if tonumber(d:sub(i, i)) ~= (first - (i - 1) + 100) % 10 then
+            return {matched = false}
+        end
     end
 
     local positions = {}

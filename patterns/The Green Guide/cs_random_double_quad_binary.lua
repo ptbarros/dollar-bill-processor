@@ -4,7 +4,7 @@ DisplayName: CS-Random Double Quad Binary
 Description: Two CS-4OAKs of any two digits, scattered (non-consecutive). e.g., M 41114414 M.
 BookRef: CS-930
 Tier: 5
-Examples: ["41114414", "44441111", "22227777"]
+Examples: ["41114414", "11441144", "41414141"]
 Odds: 1 in 17,500
 Price: $5-$20
 --]]

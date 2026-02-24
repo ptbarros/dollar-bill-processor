@@ -4,7 +4,7 @@ DisplayName: CS-Paired 3OAK
 Description: Two CS-Pairs and a CS-3OAK (three of the same digit scattered — not all consecutive) anywhere in the serial, plus one remaining digit.
 BookRef: CS-120
 Tier: 8
-Examples: ["11322334", "32231134", "11223312"]
+Examples: ["11322334", "32231134", "33112230"]
 Odds: 1 in 4,173,120
 Price: $0
 --]]

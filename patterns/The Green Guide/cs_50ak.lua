@@ -4,7 +4,7 @@ DisplayName: CS-5OAK
 Description: Five of the same digit anywhere in the serial, with at least one separated from the others (no run of 5+). Grouped version is CS-Quint (CS-300).
 BookRef: CS-360
 Tier: 4
-Examples: ["11112111", "00005000", "10101010"]
+Examples: ["11112111", "00005000", "11011011"]
 Price: $20-$60
 --]]
 

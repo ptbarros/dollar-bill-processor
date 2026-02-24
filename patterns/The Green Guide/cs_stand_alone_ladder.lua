@@ -1,10 +1,10 @@
 --[[
 Pattern: CS_STAND_ALONE_LADDER
 DisplayName: CS-Stand Alone Mini Ladder
-Description: A 4-7 digit ascending or descending ladder grouped and surrounded by zeros. e.g., M 04321000 M (down) or M 00123400 M (up).
+Description: An ascending or descending ladder of 2+ grouped digits surrounded by zeros. e.g., M 01200000 M (2-up), M 00012300 M (3-up), M 04321000 M (4-down).
 BookRef: CS-1860
 Tier: 4
-Examples: ["04321000", "00432100", "00123400"]
+Examples: ["01200000", "00012300", "04321000"]
 Odds: 1 in 21
 Price: $0
 --]]
@@ -40,7 +40,7 @@ function match(ctx)
     if start_pos == nil then return {matched = false} end  -- all zeros
 
     local ladder_len = end_pos - start_pos + 1
-    if ladder_len < 4 then return {matched = false} end  -- must be 4+ digits
+    if ladder_len < 2 then return {matched = false} end  -- must be 2+ digits
 
     -- Check if the non-zero block forms an ascending or descending ladder
     local sub = d:sub(start_pos, end_pos)

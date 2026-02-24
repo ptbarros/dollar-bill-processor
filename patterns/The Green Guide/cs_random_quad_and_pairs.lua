@@ -4,7 +4,7 @@ DisplayName: CS-Random Quad and Pairs
 Description: Any CS-4OAK (four of one digit, scattered — no consecutive run of 4) plus any two CS-2OAKs (two different digits each appearing twice), all in any position. e.g., M 41142424 M.
 BookRef: CS-320
 Tier: 5
-Examples: ["41142424", "24141424", "14421224"]
+Examples: ["41142424", "24141424", "14241424"]
 Odds: 1 in 2,160
 Price: $0
 --]]

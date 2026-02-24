@@ -4,7 +4,7 @@ DisplayName: CS-Quad in Triple
 Description: A CS-Quad (4 consecutive) within a CS-30AK (3 of another digit surrounding it), plus one random digit. e.g., M x3344443 M or M 3444433x M.
 BookRef: CS-260
 Tier: 6
-Examples: ["13444433", "34444331", "03444432"]
+Examples: ["13444433", "34444331", "34444330"]
 Odds: 1 in 720
 Price: $0
 --]]

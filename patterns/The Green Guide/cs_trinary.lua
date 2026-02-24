@@ -4,7 +4,7 @@ DisplayName: CS-Trinary
 Description: The serial contains exactly three unique digits.
 BookRef: CS-940
 Tier: 5
-Examples: ["01201201", "11220033", "00112233"]
+Examples: ["01201201", "11220011", "00011122"]
 Price: $5-$25
 --]]
 

@@ -4,7 +4,7 @@ DisplayName: CS-Mini 5 Radar
 Description: A CS-20AK separated by one digit with another CS-20AK outside: 5-digit palindrome (ABCBA) anywhere in the serial. e.g., M 24x42xxx M or M xxx24x42 M.
 BookRef: CS-1390
 Tier: 5
-Examples: ["24342000", "00024342", "00002434"]
+Examples: ["24342000", "00024342", "02434200"]
 Odds: 1 in 729,000
 Price: $0
 --]]

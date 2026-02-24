@@ -4,7 +4,7 @@ DisplayName: CS-Tri Pairs
 Description: Three different digits each appearing exactly twice, where all three pairs are internally grouped (adjacent). The three pairs do not need to be adjacent to each other. e.g., M 112233xx M or M x22x3311 M. Distinguished from CS-50 (Random Tri Pairs) where at least one pair is split.
 BookRef: CS-40
 Tier: 7
-Examples: ["11223456", "22334411", "55667788"]
+Examples: ["11224500", "11992276", "66778900"]
 Odds: 1 in 15,120
 Price: $0
 --]]
