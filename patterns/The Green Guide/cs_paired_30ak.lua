@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_PAIRED_30AK
 DisplayName: CS-Paired 3OAK
-Description: Two CS-Pairs and a CS-30AK (three of same digit scattered) anywhere in the serial, plus one random digit. e.g., M 1132233x M.
+Description: Two CS-Pairs and a CS-3OAK (three of the same digit scattered — not all consecutive) anywhere in the serial, plus one remaining digit.
 BookRef: CS-120
 Tier: 8
 Examples: ["11322334", "32231134", "11223312"]
@@ -33,6 +33,26 @@ function match(ctx)
         return {matched = false}
     end
 
+    -- Verify the triple is scattered (CS-3OAK): max consecutive run < 3
+    local max_run = 0
+    local runs = find_runs(d)
+    for _, run in ipairs(runs) do
+        if run.digit == triple_digit and run.length > max_run then
+            max_run = run.length
+        end
+    end
+    if max_run >= 3 then
+        return {matched = false}
+    end
+
+    -- Verify both pairs are grouped (CS-Pair = adjacent): positions must be consecutive
+    for _, pd in ipairs(pair_digits) do
+        local pos = find_digit_positions(d, pd)
+        if pos[2] - pos[1] ~= 1 then
+            return {matched = false}
+        end
+    end
+
     -- Build highlights
     table.sort(pair_digits)
     local triple_positions = find_digit_positions(d, triple_digit)
@@ -48,6 +68,6 @@ function match(ctx)
             {positions = pair2_positions, color = "cyan"},
             {positions = single_positions, color = "gray"}
         },
-        message = "30AK of " .. triple_digit .. " + pairs of " .. pair_digits[1] .. "," .. pair_digits[2] .. " (CS-Paired 30AK)"
+        message = "3OAK of " .. triple_digit .. " + pairs of " .. pair_digits[1] .. "," .. pair_digits[2] .. " (CS-Paired 3OAK)"
     }
 end

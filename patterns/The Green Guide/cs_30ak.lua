@@ -29,7 +29,7 @@ function match(ctx)
                 return {
                     matched = true,
                     highlights = {{positions = positions, color = "orange"}},
-                    message = cnt .. " scattered " .. digit .. "s (CS-30AK)"
+                    message = cnt .. " scattered " .. digit .. "s (CS-3OAK)"
                 }
             end
         end

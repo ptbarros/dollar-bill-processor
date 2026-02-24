@@ -2,8 +2,8 @@
 
 **Legend:** ✅ Implemented | 🔲 Todo | ⏸ Deferred | ❌ Image-only
 
-Last updated: 2026-02-22
-Implemented: 104 files
+Last updated: 2026-02-23
+Implemented: 123 files
 Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~/projects/tggfsn.ods
 
 ---
@@ -52,20 +52,28 @@ Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~
 
 | CS# | Book Name | Status | File |
 |-----|-----------|--------|------|
+| CS-10 | CS-2OAKs | ✅ | cs_2oaks.lua |
+| CS-20 | CS-Two Pairs | ✅ | cs_grouped_two_pairs.lua |
 | CS-30 | CS-Random Two Pairs | ✅ | cs_two_pairs.lua |
+| CS-40 | CS-Tri Pairs | ✅ | cs_tri_pairs_grouped.lua |
 | CS-50 | CS-Random Tri Pairs | ✅ | cs_tri_pairs.lua |
 | CS-60 | CS-Quad Pairs | ✅ | cs_grouped_quad_pairs.lua |
 | CS-70 | CS-Random Quad Pairs | ✅ | cs_quad_pairs.lua |
+| CS-80 | CS-Pairs in Pairs | ✅ | cs_pairs_in_pairs.lua |
+| CS-90 | CS-Random Pairs in Pairs | ✅ | cs_random_pairs_in_pairs.lua |
 | CS-100 | CS-Triple | ✅ | cs_triple.lua |
 | CS-110 | CS-3OAK | ✅ | cs_30ak.lua |
 | CS-120 | CS-Paired 3OAK | ✅ | cs_paired_30ak.lua |
 | CS-130 | CS-Triple Triple Pair | ✅ | cs_triple_triple_pair.lua |
+| CS-140 | CS-Random Triple Triple Pair | ✅ | cs_random_triple_triple_pair.lua |
 | CS-150 | CS-Double Triples | ✅ | cs_double_triples.lua |
 | CS-160 | CS-Random Double Triples | ✅ | cs_random_double_triples.lua |
 | CS-170 | CS-Triple Double Double | ✅ | cs_triple_double_double.lua |
+| CS-180 | CS-Random Triple Double Double | ✅ | cs_random_triple_double_double.lua |
 | CS-190 | CS-4OAK | ✅ | cs_40ak.lua |
 | CS-200 | CS-Quad | ✅ | cs_quad.lua |
 | CS-210 | CS-Random 4OAK | ✅ | cs_random_40ak.lua |
+| CS-220 | CS-Leading, Center & Trailing Quads | ✅ | cs_leading_center_trailing_quads.lua |
 | CS-230 | CS-Double Quad | ✅ | cs_double_quad.lua |
 | CS-240 | CS-Random Double 4OAK | ✅ | cs_double_40ak.lua |
 | CS-250 | CS-Quad in Quad | ✅ | cs_quad_in_quad.lua |
@@ -73,16 +81,22 @@ Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~
 | CS-270 | CS-Random Quad in Triple | ✅ | cs_random_quad_in_triple.lua |
 | CS-280 | CS-Double Double | ✅ | cs_double_double.lua |
 | CS-290 | CS-Triple in Quad | ✅ | cs_triple_in_quad.lua |
+| CS-300 | CS-Random Triple in Quad | ✅ | cs_random_triple_in_quad.lua |
 | CS-310 | CS-Quad and Pairs | ✅ | cs_quad_and_pairs.lua |
+| CS-320 | CS-Random Quad and Pairs | ✅ | cs_random_quad_and_pairs.lua |
 | CS-330 | CS-Pairs in Quad | ✅ | cs_pairs_in_quad.lua |
+| CS-340 | CS-Quads and Triples | ✅ | cs_quads_and_triples.lua |
+| CS-350 | CS-Repeating Doubles | ✅ | cs_repeating_doubles.lua |
 | CS-360 | CS-5OAK | ✅ | cs_50ak.lua |
 | CS-370 | CS-Leading, Center, and Trailing Quints | ✅ | cs_quint.lua |
 | CS-380 | CS-Quint in a Pair | ✅ | cs_quint_in_pair.lua |
+| CS-390 | CS-Pair in a Quint | ✅ | cs_pair_in_quint.lua |
 | CS-400 | CS-Random Quint and Pair | ✅ | cs_random_quint_and_pair.lua |
 | CS-410 | CS-Quint in a Triple | ✅ | cs_quint_in_triple.lua |
 | CS-420 | CS-Triple in a Quint | ✅ | cs_triple_in_quint.lua |
 | CS-430 | CS-6OAK | ✅ | cs_60ak.lua |
 | CS-440 | CS-Sextup | ✅ | cs_sextup.lua |
+| CS-450 | CS-Pair and a Sextup | ✅ | cs_pair_and_sextup.lua |
 | CS-460 | CS-Pair in a Sextup | ✅ | cs_pair_in_sextup.lua |
 | CS-470 | CS-Random Pair in a Sextup | ✅ | cs_random_pair_in_sextup.lua |
 | CS-480 | CS-Seven | ✅ | cs_seven.lua |
@@ -98,14 +112,17 @@ Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~
 | CS-940 | CS-Trinary | ✅ | cs_trinary.lua |
 | CS-950 | CS-Single Bookend | ✅ | cs_single_bookend.lua |
 | CS-960 | CS-Dual Matched Bookend | ✅ | cs_dual_bookend.lua |
+| CS-970 | CS-Dual Radar Bookend | ✅ | cs_dual_radar_bookend.lua |
 | CS-980 | CS-Dual Repeater Bookend | ✅ | cs_dual_repeater_bookend.lua |
 | CS-990 | CS-Tri Matched Bookend | ✅ | cs_tri_bookend.lua |
 | CS-1000 | CS-Tri Repeated Bookend | ✅ | cs_tri_repeated_bookend.lua |
 | CS-1010 | CS-Tri Radar Bookend | ✅ | cs_tri_radar_bookend.lua |
+| CS-1030 | CS-Unary Flipper | ✅ | cs_unary_flipper.lua |
 | CS-1040 | CS-True Binary Flipper | ✅ | cs_true_binary_flipper.lua |
 | CS-1050 | CS-Binary Flipper | ✅ | cs_binary_flipper.lua |
 | CS-1060 | CS-Trinary Flipper | ✅ | cs_trinary_flipper.lua |
 | CS-1070 | CS-Quad Flipper | ✅ | cs_quad_flipper.lua |
+| CS-1080 | CS-Quinary Flipper | ✅ | cs_quinary_flipper.lua |
 | CS-1090 | CS-Rotator | ✅ | cs_rotator.lua |
 | CS-1160 | CS-Tetradic | ✅ | cs_tetradic.lua |
 | CS-1170 | CS-Ascending Ladder | ✅ | cs_ascending_ladder.lua |
@@ -130,6 +147,8 @@ Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~
 | CS-1400 | CS-Mini 6 Radar | ✅ | cs_mini_6_radar.lua |
 | CS-1410 | CS-Mini 7 Radar | ✅ | cs_mini_7_radar.lua |
 | CS-1480 | CS-Paired Quad Repeater | ✅ | cs_full_repeater.lua |
+| CS-1500 | CS-Triple Repeater | ✅ | cs_triple_repeater.lua |
+| CS-1510 | CS-Six Repeater in a Pair | ✅ | cs_six_repeater_in_pair.lua |
 | CS-1520 | CS-Radar Repeater | ✅ | cs_radar_repeater.lua |
 | CS-1530 | CS-Super Repeater | ✅ | cs_super_repeater.lua |
 | CS-1550 | CS-Mini 4 Repeater | ✅ | cs_mini_4_repeater.lua |
@@ -165,20 +184,6 @@ Implementable with pure serial-number Lua logic (no metadata required).
 
 | CS# | Book Name | Notes |
 |-----|-----------|-------|
-| CS-10 | CS-2OAKs | Any two matching digits anywhere in serial |
-| CS-20 | CS-Two Pairs | Verify definition vs CS-30 (Random Two Pairs) |
-| CS-40 | CS-Tri Pairs | Consecutive grouped pairs AABBCC; previously attempted, removed — needs book re-read |
-| CS-80 | CS-Pairs in Pairs | Needs book definition |
-| CS-90 | CS-Random Pairs in Pairs | Needs book definition |
-| CS-140 | CS-Random Triple Triple Pair | Scattered variant of CS-130 |
-| CS-180 | CS-Random Triple Double Double | Scattered variant of CS-170 |
-| CS-220 | CS-Leading, Center & Trailing Quads | Positional variants of CS-Quad; distinct from CS-210 (Random 4OAK) |
-| CS-300 | CS-Random Triple in Quad | Scattered triple within quad context |
-| CS-320 | CS-Random Quad and Pairs | Scattered variant of CS-310 |
-| CS-340 | CS-Quads and Triples | Quad + triple combination |
-| CS-350 | CS-Repeating Doubles | Needs further book research |
-| CS-390 | CS-Pair in a Quint | Pair somewhere within quint context |
-| CS-450 | CS-Pair and a Sextup | Pair + sextup combination |
 | CS-830 | CS-Count Hundreds | Counting pattern variant |
 | CS-840 | CS-Count One Quads | Counting pattern variant |
 | CS-850 | CS-Count Ten Quads | Counting pattern variant |
@@ -186,9 +191,6 @@ Implementable with pure serial-number Lua logic (no metadata required).
 | CS-870 | CS-Count Thousand Quad | Counting pattern variant |
 | CS-880 | CS-Double Quads Count Note | Counting pattern variant |
 | CS-890 | CS-Split Count | Counting pattern variant |
-| CS-970 | CS-Dual Radar Bookend | Palindrome bookend at both ends; distinct from CS-960 (Dual Matched Bookend) |
-| CS-1030 | CS-Unary Flipper | All 8 digits the same flip-valid digit |
-| CS-1080 | CS-Quinary Flipper | All 5 flip digits present {0,1,6,8,9} |
 | CS-1100 | CS-Unary Rotator | Needs rotator research |
 | CS-1110 | CS-True Binary Rotator | May overlap CS-1040 (True Binary Flipper) — deferred pending clarification |
 | CS-1120 | CS-Binary Rotator | Needs rotator research |
@@ -200,13 +202,11 @@ Implementable with pure serial-number Lua logic (no metadata required).
 | CS-1340 | CS-Shotgun Radar | Distinct from CS-Mini 3 Radar (CS-1370); needs book definition |
 | CS-1420 | CS-Ascending Laddered Radar | Ascending ladder embedded in radar structure |
 | CS-1430 | CS-Descending Laddered Radar | Descending ladder embedded in radar structure |
-| CS-1440 | CS-Repeater | General repeater (ABCDABCD); verify vs CS-1480 (Paired Quad Repeater) |
-| CS-1450 | CS-Single Bookend Repeater | Repeater with single bookend |
-| CS-1460 | CS-Dual Bookend Repeater | Repeater with dual bookend |
-| CS-1470 | CS-Tri Bookend Repeater | Repeater with tri bookend |
-| CS-1490 | CS-Random Quad Repeater | Scattered quad repeater variant |
-| CS-1500 | CS-Triple Repeater | Three-segment repeater |
-| CS-1510 | CS-Six Repeater in a Pair | Sextup repeater in pair context |
+| CS-1440 | CS-Repeater | Parent/intro entry; covered by subtypes CS-1450–CS-1510 |
+| CS-1450 | CS-Single Bookend Repeater | Same as CS-Single Bookend (CS-950) — already covered |
+| CS-1460 | CS-Dual Bookend Repeater | Same as CS-Dual Repeater Bookend (CS-980) — already covered |
+| CS-1470 | CS-Tri Bookend Repeater | Same as CS-Tri Repeated Bookend (CS-1000) — already covered |
+| CS-1490 | CS-Random Quad Repeater | Same as CS-Paired Quad Repeater (CS-1480) as implemented — already covered |
 | CS-1600 | CS-Double Skip Notes | Same as CS-Super Repeater (ABABABAB) — already covered by CS-1530 |
 | CS-1630 | CS-True Binary Skip Note | Binary variant of skip note |
 | CS-1700 | CS-Stand Alone Sextup | 6-digit run surrounded by zeros |
@@ -341,3 +341,10 @@ These require visual inspection of the physical note (printing errors, stamps, e
 - CS-2280 = CS-Zip Codes (previously mislabeled "CS-Mismatched Serial" in TRACKING.md)
 - CS-2290 = CS-Prime Numbers (previously mislabeled "CS-Radar Serial Letters" in TRACKING.md)
 - CS# verified 2026-02-22 against ~/projects/tggfsn.ods spreadsheet (book appendix page numbers and CS# confirmed accurate)
+- Batch 7 added (2026-02-23): CS-10, CS-20, CS-40, CS-80, CS-90, CS-140, CS-180, CS-220, CS-300, CS-320, CS-340, CS-350, CS-390, CS-450, CS-970, CS-1030, CS-1080, CS-1500, CS-1510
+- CS-140 (Random Triple Triple Pair): excludes all-consecutive case (that is CS-130); at least one group must be scattered
+- CS-180 (Random Triple Double Double): excludes all-consecutive case (that is CS-170); at least one group must be scattered
+- CS-300 (Random Triple in Quad): both triple and quad must be scattered (no runs of 3 or 4); triple surrounded by quad
+- CS-220 (Leading, Center & Trailing Quads): same serials as CS-200 (CS-Quad), adds positional labeling (Leading/Center/Trailing)
+- CS-1030 (Unary Flipper): subset of CS-Solid (CS-500); only digits {1,6,8,9} qualify, not 0
+- CS-1440/1450/1460/1470/1490: covered by existing bookend/repeater patterns (CS-950/980/1000/1480)

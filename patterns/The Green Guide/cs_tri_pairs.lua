@@ -1,10 +1,10 @@
 --[[
 Pattern: CS_TRI_PAIRS
 DisplayName: CS-Random Tri Pairs
-Description: Three different digits each appearing exactly twice anywhere in the FSN. At least one pair must be non-adjacent. e.g., M 12313x2xx M or M 1x232x31 M.
+Description: Three different digits each appearing exactly twice in the serial. At most two of the three pairs may be adjacent — all three cannot be grouped consecutively.
 BookRef: CS-50
 Tier: 7
-Examples: ["11223345", "12213345", "12312345"]
+Examples: ["12031204", "12213345", "12312345"]
 Odds: 1 in 2,540
 Price: $0
 --]]
@@ -29,18 +29,24 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Build highlights
+    -- Build highlights; require at least one pair to be non-adjacent
     local colors = {"orange", "coral", "cyan"}
     local highlights = {}
     local connectors = {}
+    local any_separated = false
     table.sort(paired_digits)
     for i, digit in ipairs(paired_digits) do
         local positions = find_digit_positions(d, digit)
         table.insert(highlights, {positions = positions, color = colors[i]})
-        -- Arc connector for separated (non-adjacent) pairs
         if positions[2] - positions[1] > 1 then
+            any_separated = true
             table.insert(connectors, {from = positions[1], to = positions[2], color = colors[i], style = "arc"})
         end
+    end
+
+    -- Book rule: not all three pairs can be grouped
+    if not any_separated then
+        return {matched = false}
     end
 
     return {

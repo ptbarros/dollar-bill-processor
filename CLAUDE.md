@@ -143,7 +143,7 @@ print(engine.classify_simple('A12344321B'))
 
 ## Green Guide Pattern Library
 
-**104 implemented patterns** in `patterns/The Green Guide/`. Full status in `patterns/The Green Guide/TRACKING.md`.
+**123 implemented patterns** in `patterns/The Green Guide/`. Full status in `patterns/The Green Guide/TRACKING.md`.
 
 ### Book sources
 - `/tmp/tggfsn.txt` — OCR scan of the Green Guide book. @CS~NNN tags identify pattern numbers.
@@ -163,7 +163,7 @@ print(engine.classify_simple('A12344321B'))
 | 8 | Description | book prose definition (manually verified) |
 
 ### CS# verified state (2026-02-23)
-All 104 implemented pattern files have correct `BookRef:` fields verified against the spreadsheet. All ODS Description (col 8) and Examples (col 7) fields are now manually verified and complete for all implementable patterns. Key corrections made:
+All 123 implemented pattern files have correct `BookRef:` fields verified against the spreadsheet. Original 104 patterns: ODS Description (col 8) and Examples (col 7) fields manually verified. Batch 7 (19 new patterns): CS# verified from ODS. Key corrections made:
 - CS-100 = CS-Triple, CS-110 = CS-3OAK (not swapped)
 - CS-190 = CS-4OAK, CS-200 = CS-Quad, CS-210 = CS-Random 4OAK
 - CS-1060 = CS-Trinary Flipper, CS-1070 = CS-Quad Flipper
@@ -177,7 +177,7 @@ All 104 implemented pattern files have correct `BookRef:` fields verified agains
 - **"CS-Random XXX"** prefix — NOT "CS-XXX (Random)" suffix
 - **No invented qualifiers**: don't add "(Scattered)", "(Grouped)", "(CS-80AK)" etc. unless the book uses that exact wording
 - Pattern family example: "CS-Quad Pairs" (grouped AABBCCDD), "CS-Random Quad Pairs" (scattered)
-- DisplayName audit is **complete** — all 104 files verified
+- DisplayName audit is **complete** — all original 104 files verified; batch 7 patterns written fresh to match book names
 
 ### Pending work
 See `patterns/The Green Guide/TRACKING.md` Todo section for the full list.

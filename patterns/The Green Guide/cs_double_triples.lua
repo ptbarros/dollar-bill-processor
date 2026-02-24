@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_DOUBLE_TRIPLES
-DisplayName: CS-Double Triples
-Description: Two consecutive triple runs (grouped), e.g. M 777555xx M. Distinct from CS-Random Double Triples (CS-160) which allows any positions.
+DisplayName: CS-Doubles Triples
+Description: Two grouped triple runs (each a run of 3+ identical digits) anywhere in the serial, independent of their positions relative to each other. Distinct from CS-Random Double Triples (CS-160) which allows scattered triples.
 BookRef: CS-150
 Tier: 5
 Examples: ["00011100", "11100222", "00033355"]

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRIPLE
-DisplayName: CS-Triple
-Description: Three or more of the same digit grouped consecutively. Scattered version is CS-30AK (CS-110).
+DisplayName: CS-Triples
+Description: Three or more of the same digit grouped consecutively. Scattered version is CS-3OAK (CS-110).
 BookRef: CS-100
 Tier: 5
 Examples: ["00033300", "11100011", "44478900"]

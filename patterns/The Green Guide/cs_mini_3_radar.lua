@@ -1,10 +1,10 @@
 --[[
 Pattern: CS_MINI_3_RADAR
 DisplayName: CS-Mini 3 Radar
-Description: A CS-20AK separated by one non-similar digit: 3-digit palindrome (AXA) anywhere. Also the CS-Mini 3 Repeater. e.g., M xx1x1xxx M.
+Description: A mirrored 3-digit window (AXA) anywhere in the serial — the same digit at positions i and i+2 with a different digit sandwiched between them. The window can begin at any of the first six positions.
 BookRef: CS-1370
 Tier: 8
-Examples: ["12132456", "11213456", "12345616"]
+Examples: ["34356789", "45056789", "23456787"]
 Odds: 1 in ~100,000
 Price: $0
 --]]
@@ -30,7 +30,7 @@ function match(ctx)
                 connectors = {
                     {from = base, to = base + 2, color = "orange", style = "arc"}
                 },
-                message = a .. x .. a .. " mini 3-radar at position " .. i .. " (CS-1340)"
+                message = a .. x .. a .. " mini 3-radar at position " .. i .. " (CS-1370)"
             }
         end
     end

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SOLID
 DisplayName: CS-Solid
-Description: All 8 digits identical (CS-80AK in book nomenclature). The rarest possible serial.
+Description: All 8 digits identical (CS-8OAK in book nomenclature). The rarest possible serial.
 BookRef: CS-500
 Tier: 1
 Examples: ["00000000", "11111111", "88888888"]
@@ -23,6 +23,6 @@ function match(ctx)
         group_boxes = {
             {from = 0, to = 7, color = "gold", thickness = 3}
         },
-        message = "Solid " .. first .. "s — CS-Solid (CS-80AK)"
+        message = "Solid " .. first .. "s — CS-Solid (CS-8OAK)"
     }
 end
