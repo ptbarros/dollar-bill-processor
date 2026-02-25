@@ -2,8 +2,8 @@
 
 **Legend:** ✅ Implemented | 🔲 Todo | ⏸ Deferred | ❌ Image-only
 
-Last updated: 2026-02-24
-Implemented: 123 files
+Last updated: 2026-02-25
+Implemented: 130 files
 Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~/projects/tggfsn.ods
 
 ---
@@ -184,13 +184,6 @@ Implementable with pure serial-number Lua logic (no metadata required).
 
 | CS# | Book Name | Notes |
 |-----|-----------|-------|
-| CS-830 | CS-Count Hundreds | Counting pattern variant |
-| CS-840 | CS-Count One Quads | Counting pattern variant |
-| CS-850 | CS-Count Ten Quads | Counting pattern variant |
-| CS-860 | CS-Count Hundred Quads | Counting pattern variant |
-| CS-870 | CS-Count Thousand Quad | Counting pattern variant |
-| CS-880 | CS-Double Quads Count Note | Counting pattern variant |
-| CS-890 | CS-Split Count | Counting pattern variant |
 | CS-1100 | CS-Unary Rotator | Needs rotator research |
 | CS-1110 | CS-True Binary Rotator | May overlap CS-1040 (True Binary Flipper) — deferred pending clarification |
 | CS-1120 | CS-Binary Rotator | Needs rotator research |
@@ -342,6 +335,7 @@ These require visual inspection of the physical note (printing errors, stamps, e
 - CS-2290 = CS-Prime Numbers (previously mislabeled "CS-Radar Serial Letters" in TRACKING.md)
 - CS# verified 2026-02-22 against ~/projects/tggfsn.ods spreadsheet (book appendix page numbers and CS# confirmed accurate)
 - Batch 7 added (2026-02-23): CS-10, CS-20, CS-40, CS-80, CS-90, CS-140, CS-180, CS-220, CS-300, CS-320, CS-340, CS-350, CS-390, CS-450, CS-970, CS-1030, CS-1080, CS-1500, CS-1510
+- Batch 8 added (2026-02-25): CS-830, CS-840, CS-850, CS-860, CS-870, CS-880, CS-890 (counting patterns)
 - CS-140 (Random Triple Triple Pair): excludes all-consecutive case (that is CS-130); at least one group must be scattered
 - CS-180 (Random Triple Double Double): excludes all-consecutive case (that is CS-170); at least one group must be scattered
 - CS-300 (Random Triple in Quad): both triple and quad must be scattered (no runs of 3 or 4); triple surrounded by quad

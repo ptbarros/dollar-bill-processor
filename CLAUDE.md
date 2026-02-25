@@ -143,7 +143,7 @@ print(engine.classify_simple('A12344321B'))
 
 ## Green Guide Pattern Library
 
-**123 implemented patterns** in `patterns/The Green Guide/`. Full status in `patterns/The Green Guide/TRACKING.md`.
+**130 implemented patterns** in `patterns/The Green Guide/`. Full status in `patterns/The Green Guide/TRACKING.md`.
 
 ### Book sources
 - `/tmp/tggfsn.txt` — OCR scan of the Green Guide book. @CS~NNN tags identify pattern numbers.
@@ -163,7 +163,7 @@ print(engine.classify_simple('A12344321B'))
 | 8 | Description | book prose definition (manually verified) |
 
 ### CS# verified state (2026-02-24)
-All 123 implemented pattern files have correct `BookRef:` fields verified against the spreadsheet. `tools/verify_patterns.py` passes **123/123** with zero failures (as of 2026-02-24). Original 104 patterns: ODS Description (col 8) and Examples (col 7) fields manually verified. Batch 7 (19 new patterns): CS# verified from ODS. Key corrections made:
+All 130 implemented pattern files have correct `BookRef:` fields verified against the spreadsheet. `tools/verify_patterns.py` passes **130/130** (once ODS is updated) with zero failures. Original 104 patterns: ODS Description (col 8) and Examples (col 7) fields manually verified. Batch 7 (19 patterns): CS# verified from ODS. Batch 8 (7 counting patterns): CS-830 through CS-890. Key corrections made:
 - CS-100 = CS-Triple, CS-110 = CS-3OAK (not swapped)
 - CS-190 = CS-4OAK, CS-200 = CS-Quad, CS-210 = CS-Random 4OAK
 - CS-1060 = CS-Trinary Flipper, CS-1070 = CS-Quad Flipper
