@@ -3,7 +3,7 @@
 **Legend:** ✅ Implemented | 🔲 Todo | ⏸ Deferred | ❌ Image-only
 
 Last updated: 2026-02-25
-Implemented: 130 files
+Implemented: 140 files
 Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~/projects/tggfsn.ods
 
 ---
@@ -163,12 +163,22 @@ Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~
 | CS-1670 | CS-Stand Alone Triple | ✅ | cs_stand_alone_triple.lua |
 | CS-1680 | CS-Stand Alone Quad | ✅ | cs_stand_alone_quad.lua |
 | CS-1690 | CS-Stand Alone Quint | ✅ | cs_stand_alone_quint.lua |
+| CS-1700 | CS-Stand Alone Sextup | ✅ | cs_stand_alone_sextup.lua |
 | CS-1710 | CS-Stand Alone Double Repeater | ✅ | cs_stand_alone_double_repeater.lua |
 | CS-1720 | CS-Stand Alone Tri Repeater | ✅ | cs_stand_alone_tri_repeater.lua |
 | CS-1730 | CS-Stand Alone Mini 3 Radar | ✅ | cs_stand_alone_mini_3_radar.lua |
 | CS-1740 | CS-Stand Alone Mini 4 Radar | ✅ | cs_stand_alone_mini_4_radar.lua |
+| CS-1750 | CS-Stand Alone Mini 5 Radar | ✅ | cs_stand_alone_mini_5_radar.lua |
+| CS-1760 | CS-Stand Alone Tri Radar | ✅ | cs_stand_alone_tri_radar.lua |
+| CS-1770 | CS-Stand Alone Quad Radar | ✅ | cs_stand_alone_quad_radar.lua |
 | CS-1810 | CS-Stand Alone Year | ✅ | cs_stand_alone_year.lua |
 | CS-1860 | CS-Stand Alone Mini Ladder | ✅ | cs_stand_alone_ladder.lua |
+| CS-1870 | CS-Stand Alone Mini Up Ladder 4 | ✅ | cs_stand_alone_up_ladder_4.lua |
+| CS-1880 | CS-Stand Alone Mini Down Ladder 4 | ✅ | cs_stand_alone_down_ladder_4.lua |
+| CS-1890 | CS-Stand Alone Mini Up Ladder 5 | ✅ | cs_stand_alone_up_ladder_5.lua |
+| CS-1900 | CS-Stand Alone Mini Down Ladder 5 | ✅ | cs_stand_alone_down_ladder_5.lua |
+| CS-1910 | CS-Stand Alone Mini Up Ladder 6 | ✅ | cs_stand_alone_up_ladder_6.lua |
+| CS-1920 | CS-Stand Alone Mini Down Ladder 6 | ✅ | cs_stand_alone_down_ladder_6.lua |
 | CS-1940 | CS-Leading Zeros | ✅ | cs_leading_zeros.lua |
 | CS-1950 | CS-Centered Zeros | ✅ | cs_centered_zeros.lua |
 | CS-1960 | CS-Trailing Zeros | ✅ | cs_trailing_zeros.lua |
@@ -202,16 +212,6 @@ Implementable with pure serial-number Lua logic (no metadata required).
 | CS-1490 | CS-Random Quad Repeater | Same as CS-Paired Quad Repeater (CS-1480) as implemented — already covered |
 | CS-1600 | CS-Double Skip Notes | Same as CS-Super Repeater (ABABABAB) — already covered by CS-1530 |
 | CS-1630 | CS-True Binary Skip Note | Binary variant of skip note |
-| CS-1700 | CS-Stand Alone Sextup | 6-digit run surrounded by zeros |
-| CS-1750 | CS-Stand Alone Mini 5 Radar | Mini 5-digit palindrome surrounded by zeros |
-| CS-1760 | CS-Stand Alone Tri Radar | Tri radar surrounded by zeros |
-| CS-1770 | CS-Stand Alone Quad Radar | Quad radar surrounded by zeros |
-| CS-1870 | CS-Stand Alone Mini Up Ladder 4 | 4-digit ascending ladder surrounded by zeros |
-| CS-1880 | CS-Stand Alone Mini Down Ladder 4 | 4-digit descending ladder surrounded by zeros |
-| CS-1890 | CS-Stand Alone Mini Up Ladder 5 | 5-digit ascending ladder surrounded by zeros |
-| CS-1900 | CS-Stand Alone Mini Down Ladder 5 | 5-digit descending ladder surrounded by zeros |
-| CS-1910 | CS-Stand Alone Mini Up Ladder 6 | 6-digit ascending ladder surrounded by zeros |
-| CS-1920 | CS-Stand Alone Mini Down Ladder 6 | 6-digit descending ladder surrounded by zeros |
 | CS-1930 | CS-Random Zeros | Zeros scattered throughout serial |
 | CS-2280 | CS-Zip Codes | Serial matches a US zip code format |
 | CS-2290 | CS-Prime Numbers | Serial number is mathematically prime |
@@ -336,6 +336,7 @@ These require visual inspection of the physical note (printing errors, stamps, e
 - CS# verified 2026-02-22 against ~/projects/tggfsn.ods spreadsheet (book appendix page numbers and CS# confirmed accurate)
 - Batch 7 added (2026-02-23): CS-10, CS-20, CS-40, CS-80, CS-90, CS-140, CS-180, CS-220, CS-300, CS-320, CS-340, CS-350, CS-390, CS-450, CS-970, CS-1030, CS-1080, CS-1500, CS-1510
 - Batch 8 added (2026-02-25): CS-830, CS-840, CS-850, CS-860, CS-870, CS-880, CS-890 (counting patterns)
+- Batch 9 added (2026-02-25): CS-1700, CS-1750, CS-1760, CS-1770, CS-1870, CS-1880, CS-1890, CS-1900, CS-1910, CS-1920 (stand-alone variant patterns)
 - CS-140 (Random Triple Triple Pair): excludes all-consecutive case (that is CS-130); at least one group must be scattered
 - CS-180 (Random Triple Double Double): excludes all-consecutive case (that is CS-170); at least one group must be scattered
 - CS-300 (Random Triple in Quad): both triple and quad must be scattered (no runs of 3 or 4); triple surrounded by quad
