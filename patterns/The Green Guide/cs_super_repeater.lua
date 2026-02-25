@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SUPER_REPEATER
 DisplayName: CS-Super Repeater
-Description: A 2-digit pair repeated four times (ABABABAB pattern).
+Description: Two different digits alternate four times (ABABABAB pattern, A≠B).
 BookRef: CS-1530
 Tier: 2
 Examples: ["12121212", "34343434", "01010101"]
@@ -18,6 +18,9 @@ function match(ctx)
     local pair = d:sub(1, 2)
     local a = pair:sub(1, 1)
     local b = pair:sub(2, 2)
+
+    -- Must be two different digits (Solid is CS-500, not Super Repeater)
+    if a == b then return {matched = false} end
 
     -- Highlight alternating positions
     local pos_a = {0, 2, 4, 6}

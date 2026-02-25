@@ -17,10 +17,10 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Find a run of 5+ identical non-zero digits; all other positions must be zero
+    -- Find a run of exactly 5 identical non-zero digits; all other positions must be zero
     local runs = find_runs(d)
     for _, run in ipairs(runs) do
-        if run.length >= 5 and run.digit ~= "0" then
+        if run.length == 5 and run.digit ~= "0" then
             -- All other positions must be zero
             local all_others_zero = true
             for j = 1, 8 do

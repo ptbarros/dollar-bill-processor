@@ -1,10 +1,10 @@
 --[[
 Pattern: CS_MINI_5_RADAR
 DisplayName: CS-Mini 5 Radar
-Description: A CS-20AK separated by one digit with another CS-20AK outside: 5-digit palindrome (ABCBA) anywhere in the serial. e.g., M 24x42xxx M or M xxx24x42 M.
+Description: A CS-20AK separated by one digit with another CS-20AK outside: 5-digit palindrome (ABCBA) anywhere in the serial. Can also be a CS-4OAK when A==B (e.g., M 44x44xxx M). e.g., M 24x42xxx M.
 BookRef: CS-1390
 Tier: 5
-Examples: ["24342000", "00024342", "02434200"]
+Examples: ["24342000", "00024342", "02434200", "44344000", "00044344"]
 Odds: 1 in 729,000
 Price: $0
 --]]
@@ -21,7 +21,7 @@ function match(ctx)
         local b2 = d:sub(i + 3, i + 3)
         local a2 = d:sub(i + 4, i + 4)
 
-        if a == a2 and b == b2 and a ~= b then
+        if a == a2 and b == b2 then
             local base = i - 1  -- 0-indexed
             local mid = base + 2
             return {

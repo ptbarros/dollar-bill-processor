@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_DOUBLE_TRIPLES
 DisplayName: CS-Random Double Triples
-Description: Two distinct digits each appearing 3+ times anywhere in the serial, in any arrangement (grouped or scattered).
+Description: Two distinct digits each appearing exactly 3 times anywhere in the serial, in any arrangement (grouped or scattered).
 BookRef: CS-160
 Tier: 6
 Examples: ["75775511", "12312321", "77755500"]
@@ -13,11 +13,11 @@ function match(ctx)
     local d = ctx.digits
     local counts = count_digits(d)
 
-    -- Find digits with 3+ occurrences, ordered 0-9
+    -- Find digits with exactly 3 occurrences, ordered 0-9
     local triple_digits = {}
     for n = 0, 9 do
         local s = tostring(n)
-        if (counts[s] or 0) >= 3 then
+        if (counts[s] or 0) == 3 then
             table.insert(triple_digits, s)
         end
     end
@@ -39,6 +39,6 @@ function match(ctx)
     return {
         matched = true,
         highlights = highlights,
-        message = #triple_digits .. " digits × 3+ occurrences (CS-Random Double Triples)"
+        message = #triple_digits .. " digits × 3 occurrences (CS-Random Double Triples)"
     }
 end

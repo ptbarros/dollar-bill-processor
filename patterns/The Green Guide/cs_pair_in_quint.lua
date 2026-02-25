@@ -1,10 +1,10 @@
 --[[
 Pattern: CS_PAIR_IN_QUINT
 DisplayName: CS-Pair in a Quint
-Description: Five occurrences of one digit surround a consecutive pair of another digit, with one random digit strictly at position 1 or 8 only. The quint digit must appear on both sides of the pair. e.g., M x5225555 M.
+Description: Five occurrences of one digit surround a consecutive pair of another digit, with one remaining digit anywhere. The quint digit must appear on both sides of the pair. e.g., M x5225555 M.
 BookRef: CS-390
 Tier: 5
-Examples: ["05225555", "05522555", "05552255", "52255550", "55225550"]
+Examples: ["05225555", "05522555", "52255550", "55225515", "52255155"]
 Odds: 1 in 720
 Price: $0.25
 --]]
@@ -37,10 +37,7 @@ function match(ctx)
     local pair_positions = find_digit_positions(d, pair_digit)
     if pair_positions[2] - pair_positions[1] ~= 1 then return {matched = false} end
 
-    -- Singleton must be at position 0 or 7 (0-indexed) only
     local single_positions = find_digit_positions(d, single_digit)
-    local sp = single_positions[1]
-    if sp ~= 0 and sp ~= 7 then return {matched = false} end
 
     -- Quint digit must appear on both sides of the pair
     local quint_positions = find_digit_positions(d, quint_digit)

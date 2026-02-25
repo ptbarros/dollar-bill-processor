@@ -1,10 +1,10 @@
 --[[
 Pattern: CS_TRI_BOOKEND
 DisplayName: CS-Tri Matched Bookend
-Description: The first three digits match the last three digits. e.g., M 333xx333 M.
+Description: The first three digits are all the same and match the last three digits: AAAxxAAA. e.g., M 333xx333 M.
 BookRef: CS-990
 Tier: 6
-Examples: ["33300333", "77712777", "12312123"]
+Examples: ["33300333", "77712777", "99945999"]
 Odds: 1 in 720
 Price: $0
 --]]
@@ -21,6 +21,12 @@ function match(ctx)
     local b1 = d:sub(1, 1)
     local b2 = d:sub(2, 2)
     local b3 = d:sub(3, 3)
+
+    -- All three bookend digits must be identical (AAAxxAAA)
+    -- Distinct sequences like ABCxxABC are CS-Tri Repeated Bookend (CS-1000)
+    if b1 ~= b2 or b2 ~= b3 then
+        return {matched = false}
+    end
 
     return {
         matched = true,

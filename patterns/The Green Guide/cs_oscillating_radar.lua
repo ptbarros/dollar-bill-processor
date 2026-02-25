@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_OSCILLATING_RADAR
 DisplayName: CS-Oscillating Radar
-Description: CS-60AK appearing as 3 evenly-spaced CS-Pairs: e.g., 44144144. The 6 identical digits appear in pairs at positions 0-1, 3-4, 6-7 (separated by single different digits at positions 2 and 5).
+Description: CS-60AK split into 3 evenly-spaced CS-Pairs separated by a CS-2OAK at positions 3 and 6. The separators must be the same digit. e.g., M 44144144 M.
 BookRef: CS-1330
 Tier: 2
 Examples: ["44144144", "22322322", "99199199"]
@@ -29,8 +29,9 @@ function match(ctx)
     local sep1 = d:sub(3, 3)
     local sep2 = d:sub(6, 6)
 
-    -- Separators must differ from the dominant digit
+    -- Separators must differ from the dominant digit and be the same (CS-2OAK)
     if sep1 == a or sep2 == a then return {matched = false} end
+    if sep1 ~= sep2 then return {matched = false} end
 
     -- Verify count: 6 of the dominant digit
     local counts = count_digits(d)
