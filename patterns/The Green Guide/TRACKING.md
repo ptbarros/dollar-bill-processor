@@ -3,7 +3,7 @@
 **Legend:** ✅ Implemented | 🔲 Todo | ⏸ Deferred | ❌ Image-only
 
 Last updated: 2026-02-25
-Implemented: 140 files
+Implemented: 151 files
 Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~/projects/tggfsn.ods
 
 ---
@@ -124,12 +124,19 @@ Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~
 | CS-1070 | CS-Quad Flipper | ✅ | cs_quad_flipper.lua |
 | CS-1080 | CS-Quinary Flipper | ✅ | cs_quinary_flipper.lua |
 | CS-1090 | CS-Rotator | ✅ | cs_rotator.lua |
+| CS-1100 | CS-Unary Rotator | ✅ | cs_unary_rotator.lua |
+| CS-1110 | CS-True Binary Rotator | ✅ | cs_true_binary_rotator.lua |
+| CS-1120 | CS-Binary Rotator | ✅ | cs_binary_rotator.lua |
+| CS-1130 | CS-Trinary Rotator | ✅ | cs_trinary_rotator.lua |
+| CS-1140 | CS-Quad Rotator | ✅ | cs_quad_rotator.lua |
+| CS-1150 | CS-Quinary Rotator | ✅ | cs_quinary_rotator.lua |
 | CS-1160 | CS-Tetradic | ✅ | cs_tetradic.lua |
 | CS-1170 | CS-Ascending Ladder | ✅ | cs_ascending_ladder.lua |
 | CS-1180 | CS-Descending Ladder | ✅ | cs_descending_ladder.lua |
 | CS-1190 | CS-Ascending Looping Ladder | ✅ | cs_looping_ladder_asc.lua |
 | CS-1200 | CS-Descending Looping Ladder | ✅ | cs_looping_ladder_desc.lua |
 | CS-1210 | CS-Scattered Ladder | ✅ | cs_scattered_ladder.lua |
+| CS-1220 | CS-Broken Ladder | ✅ | cs_broken_ladder.lua |
 | CS-1230 | CS-Ascending Broken Ladder | ✅ | cs_ascending_broken_ladder.lua |
 | CS-1240 | CS-Descending Broken Ladder | ✅ | cs_descending_broken_ladder.lua |
 | CS-1260 | CS-Super Radar | ✅ | cs_super_radar.lua |
@@ -146,6 +153,8 @@ Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~
 | CS-1390 | CS-Mini 5 Radar | ✅ | cs_mini_5_radar.lua |
 | CS-1400 | CS-Mini 6 Radar | ✅ | cs_mini_6_radar.lua |
 | CS-1410 | CS-Mini 7 Radar | ✅ | cs_mini_7_radar.lua |
+| CS-1420 | CS-Ascending Laddered Radar | ✅ | cs_ascending_laddered_radar.lua |
+| CS-1430 | CS-Descending Laddered Radar | ✅ | cs_descending_laddered_radar.lua |
 | CS-1480 | CS-Paired Quad Repeater | ✅ | cs_full_repeater.lua |
 | CS-1500 | CS-Triple Repeater | ✅ | cs_triple_repeater.lua |
 | CS-1510 | CS-Six Repeater in a Pair | ✅ | cs_six_repeater_in_pair.lua |
@@ -158,6 +167,7 @@ Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~
 | CS-1590 | CS-Single Skip Notes | ✅ | cs_single_skip_note.lua |
 | CS-1610 | CS-Skip Count Up Note | ✅ | cs_skip_count_up.lua |
 | CS-1620 | CS-Skip Count Down Note | ✅ | cs_skip_count_down.lua |
+| CS-1630 | CS-True Binary Skip Note | ✅ | cs_true_binary_skip_note.lua |
 | CS-1650 | CS-Stand Alone Singles | ✅ | cs_stand_alone_single.lua |
 | CS-1660 | CS-Stand Alone Pair | ✅ | cs_stand_alone_pair.lua |
 | CS-1670 | CS-Stand Alone Triple | ✅ | cs_stand_alone_triple.lua |
@@ -179,6 +189,7 @@ Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~
 | CS-1900 | CS-Stand Alone Mini Down Ladder 5 | ✅ | cs_stand_alone_down_ladder_5.lua |
 | CS-1910 | CS-Stand Alone Mini Up Ladder 6 | ✅ | cs_stand_alone_up_ladder_6.lua |
 | CS-1920 | CS-Stand Alone Mini Down Ladder 6 | ✅ | cs_stand_alone_down_ladder_6.lua |
+| CS-1930 | CS-Random Zeros | ✅ | cs_random_zeros.lua |
 | CS-1940 | CS-Leading Zeros | ✅ | cs_leading_zeros.lua |
 | CS-1950 | CS-Centered Zeros | ✅ | cs_centered_zeros.lua |
 | CS-1960 | CS-Trailing Zeros | ✅ | cs_trailing_zeros.lua |
@@ -194,25 +205,14 @@ Implementable with pure serial-number Lua logic (no metadata required).
 
 | CS# | Book Name | Notes |
 |-----|-----------|-------|
-| CS-1100 | CS-Unary Rotator | Needs rotator research |
-| CS-1110 | CS-True Binary Rotator | May overlap CS-1040 (True Binary Flipper) — deferred pending clarification |
-| CS-1120 | CS-Binary Rotator | Needs rotator research |
-| CS-1130 | CS-Trinary Rotator | Needs rotator research |
-| CS-1140 | CS-Quad Rotator | Needs rotator research |
-| CS-1150 | CS-Quinary Rotator | Needs rotator research |
-| CS-1220 | CS-Broken Ladder | Superset of CS-1230/CS-1240; skip until subtypes are stable |
 | CS-1250 | CS-Buildable Ladder | Complex definition; needs more book research |
 | CS-1340 | CS-Shotgun Radar | Distinct from CS-Mini 3 Radar (CS-1370); needs book definition |
-| CS-1420 | CS-Ascending Laddered Radar | Ascending ladder embedded in radar structure |
-| CS-1430 | CS-Descending Laddered Radar | Descending ladder embedded in radar structure |
 | CS-1440 | CS-Repeater | Parent/intro entry; covered by subtypes CS-1450–CS-1510 |
 | CS-1450 | CS-Single Bookend Repeater | Same as CS-Single Bookend (CS-950) — already covered |
 | CS-1460 | CS-Dual Bookend Repeater | Same as CS-Dual Repeater Bookend (CS-980) — already covered |
 | CS-1470 | CS-Tri Bookend Repeater | Same as CS-Tri Repeated Bookend (CS-1000) — already covered |
 | CS-1490 | CS-Random Quad Repeater | Same as CS-Paired Quad Repeater (CS-1480) as implemented — already covered |
 | CS-1600 | CS-Double Skip Notes | Same as CS-Super Repeater (ABABABAB) — already covered by CS-1530 |
-| CS-1630 | CS-True Binary Skip Note | Binary variant of skip note |
-| CS-1930 | CS-Random Zeros | Zeros scattered throughout serial |
 | CS-2280 | CS-Zip Codes | Serial matches a US zip code format |
 | CS-2290 | CS-Prime Numbers | Serial number is mathematically prime |
 | CS-2300 | CS-Phone Notes | Serial matches phone number format |
@@ -337,6 +337,7 @@ These require visual inspection of the physical note (printing errors, stamps, e
 - Batch 7 added (2026-02-23): CS-10, CS-20, CS-40, CS-80, CS-90, CS-140, CS-180, CS-220, CS-300, CS-320, CS-340, CS-350, CS-390, CS-450, CS-970, CS-1030, CS-1080, CS-1500, CS-1510
 - Batch 8 added (2026-02-25): CS-830, CS-840, CS-850, CS-860, CS-870, CS-880, CS-890 (counting patterns)
 - Batch 9 added (2026-02-25): CS-1700, CS-1750, CS-1760, CS-1770, CS-1870, CS-1880, CS-1890, CS-1900, CS-1910, CS-1920 (stand-alone variant patterns)
+- Batch 10 added (2026-02-25): CS-1100, CS-1110, CS-1120, CS-1130, CS-1140, CS-1150, CS-1220, CS-1420, CS-1430, CS-1630, CS-1930 (rotator variants, laddered radars, broken ladder, true binary skip note, random zeros)
 - CS-140 (Random Triple Triple Pair): excludes all-consecutive case (that is CS-130); at least one group must be scattered
 - CS-180 (Random Triple Double Double): excludes all-consecutive case (that is CS-170); at least one group must be scattered
 - CS-300 (Random Triple in Quad): both triple and quad must be scattered (no runs of 3 or 4); triple surrounded by quad
