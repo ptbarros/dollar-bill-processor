@@ -621,3 +621,40 @@ function find_quads(s)
     end
     return quads
 end
+
+-- =============================================================================
+-- DATE/CALENDAR HELPERS
+-- =============================================================================
+
+-- Check if a year is a leap year
+function is_leap_year(y)
+    return (y % 4 == 0 and y % 100 ~= 0) or (y % 400 == 0)
+end
+
+-- Get number of days in a given month/year
+function days_in_month(m, y)
+    local dim = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+    if m == 2 and is_leap_year(y) then return 29 end
+    return dim[m] or 0
+end
+
+-- Check if mm/dd/yyyy is a valid calendar date (year 1700-2099)
+function is_valid_date(mm, dd, yyyy)
+    if yyyy < 1700 or yyyy > 2099 then return false end
+    if mm < 1 or mm > 12 then return false end
+    if dd < 1 or dd > days_in_month(mm, yyyy) then return false end
+    return true
+end
+
+-- Check if year is in valid range (1000-2099 for year note patterns)
+function is_valid_year(y)
+    return y >= 1000 and y <= 2099
+end
+
+-- Check if mm/dd is a plausible calendar day (ignoring year; Feb allows 29)
+function is_valid_mmdd(mm, dd)
+    if mm < 1 or mm > 12 then return false end
+    if dd < 1 or dd > 31 then return false end
+    local max_days = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+    return dd <= max_days[mm]
+end

@@ -582,6 +582,15 @@ def create_context(serial: str, metadata: dict = None) -> dict:
     Returns:
         Context dict with digits, full_serial, metadata, digit_list
     """
+    from datetime import date
+
+    # Build metadata with current date defaults
+    meta = metadata.copy() if metadata else {}
+    today = date.today()
+    meta.setdefault('current_year', today.year)
+    meta.setdefault('current_month', today.month)
+    meta.setdefault('current_day', today.day)
+
     # Extract numeric digits
     digits = ''.join(c for c in serial if c.isdigit())
 
@@ -591,7 +600,7 @@ def create_context(serial: str, metadata: dict = None) -> dict:
     return {
         'digits': digits,
         'full_serial': serial,
-        'metadata': metadata or {},
+        'metadata': meta,
         'digit_list': digit_list
     }
 

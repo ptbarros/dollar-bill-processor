@@ -3,7 +3,7 @@
 **Legend:** ✅ Implemented | 🔲 Todo | ⏸ Deferred | ❌ Image-only
 
 Last updated: 2026-02-26
-Implemented: 154 files
+Implemented: 190 files
 Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~/projects/tggfsn.ods
 
 ---
@@ -102,7 +102,36 @@ Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~
 | CS-480 | CS-Seven | ✅ | cs_seven.lua |
 | CS-490 | CS-7OAK | ✅ | cs_70ak.lua |
 | CS-500 | CS-Solid | ✅ | cs_solid.lua |
+| CS-510 | CS-Reverse Date Notes | ✅ | cs_reverse_date_notes.lua |
+| CS-520 | CS-US Date Notes | ✅ | cs_us_date_notes.lua |
+| CS-530 | CS-US Leap Year Birthday Note | ✅ | cs_us_leap_year_birthday.lua |
+| CS-540 | CS-US History Note | ✅ | cs_us_history_note.lua |
+| CS-550 | CS-US Leap Year History Note | ✅ | cs_us_leap_year_history.lua |
+| CS-560 | CS-US Future Date Note | ✅ | cs_us_future_date.lua |
+| CS-570 | CS-EU Birthday Note | ✅ | cs_eu_birthday_note.lua |
+| CS-580 | CS-EU Leap Year Birthday Note | ✅ | cs_eu_leap_year_birthday.lua |
+| CS-590 | CS-EU History Note | ✅ | cs_eu_history_note.lua |
+| CS-600 | CS-EU Leap Year History Note | ✅ | cs_eu_leap_year_history.lua |
+| CS-610 | CS-EU Future Date Note | ✅ | cs_eu_future_date.lua |
+| CS-620 | CS-INTL Birthday Note | ✅ | cs_intl_birthday_note.lua |
+| CS-630 | CS-INTL Leap Year Birthday Note | ✅ | cs_intl_leap_year_birthday.lua |
+| CS-640 | CS-INTL History Note | ✅ | cs_intl_history_note.lua |
+| CS-650 | CS-INTL Leap Year History Note | ✅ | cs_intl_leap_year_history.lua |
+| CS-660 | CS-INTL Future Date Note | ✅ | cs_intl_future_date.lua |
+| CS-670 | CS-True Year Note | ✅ | cs_true_year_note.lua |
+| CS-680 | CS-Numbered Year Note | ✅ | cs_numbered_year_note.lua |
+| CS-690 | CS-Random Year Note | ✅ | cs_random_year_note.lua |
+| CS-700 | CS-Year Notes | ✅ | cs_year_notes.lua |
 | CS-710 | CS-Double Year Note | ✅ | double_year.lua |
+| CS-720 | CS-Triple Year Note | ✅ | cs_triple_year_note.lua |
+| CS-730 | CS-Quad Year Note | ✅ | cs_quad_year_note.lua |
+| CS-740 | CS-Quint Year Note | ✅ | cs_quint_year_note.lua |
+| CS-750 | CS-Day Notes | ✅ | cs_day_notes.lua |
+| CS-760 | CS-True Day Note | ✅ | cs_true_day_note.lua |
+| CS-770 | CS-US & INTL True Day Notes | ✅ | cs_us_intl_true_day.lua |
+| CS-780 | CS-EU True Day Notes | ✅ | cs_eu_true_day.lua |
+| CS-790 | CS-Numbered Day Note | ✅ | cs_numbered_day_note.lua |
+| CS-800 | CS-Random Day Month Note | ✅ | cs_random_day_month.lua |
 | CS-810 | CS-Count Ones | ✅ | cs_count_ones.lua |
 | CS-820 | CS-Count Tens | ✅ | cs_count_tens.lua |
 | CS-900 | CS-True Binary | ✅ | cs_true_binary.lua |
@@ -183,7 +212,14 @@ Book total: 240 patterns per appendix (CS-10 to CS-2390); CS# verified against ~
 | CS-1750 | CS-Stand Alone Mini 5 Radar | ✅ | cs_stand_alone_mini_5_radar.lua |
 | CS-1760 | CS-Stand Alone Tri Radar | ✅ | cs_stand_alone_tri_radar.lua |
 | CS-1770 | CS-Stand Alone Quad Radar | ✅ | cs_stand_alone_quad_radar.lua |
+| CS-1780 | CS-Stand Alone Date | ✅ | cs_stand_alone_date.lua |
+| CS-1790 | CS-Stand Alone Date US & INTL | ✅ | cs_stand_alone_date_us_intl.lua |
+| CS-1800 | CS-Stand Alone Date EU | ✅ | cs_stand_alone_date_eu.lua |
 | CS-1810 | CS-Stand Alone Year | ✅ | cs_stand_alone_year.lua |
+| CS-1820 | CS-Stand Alone Date Year | ✅ | cs_stand_alone_date_year.lua |
+| CS-1830 | CS-Stand Alone US Date Year | ✅ | cs_stand_alone_us_date_year.lua |
+| CS-1840 | CS-Stand Alone EU Date Year | ✅ | cs_stand_alone_eu_date_year.lua |
+| CS-1850 | CS-Stand Alone INTL Date Year | ✅ | cs_stand_alone_intl_date_year.lua |
 | CS-1860 | CS-Stand Alone Mini Ladder | ✅ | cs_stand_alone_ladder.lua |
 | CS-1870 | CS-Stand Alone Mini Up Ladder 4 | ✅ | cs_stand_alone_up_ladder_4.lua |
 | CS-1880 | CS-Stand Alone Mini Down Ladder 4 | ✅ | cs_stand_alone_down_ladder_4.lua |
@@ -231,49 +267,6 @@ Implementable with pure serial-number Lua logic (no metadata required).
 | CS-2390 | CS-Sequential Numbers | Serial forms a sequential numeric run |
 
 ---
-
-## Deferred — Date/Calendar Patterns
-
-These require calendar validation (valid date math) or `ctx.metadata.series_year`. Save for a dedicated date batch.
-
-| CS# | Book Name | Reason Deferred |
-|-----|-----------|-----------------|
-| CS-510 | CS-Reverse Date Notes | Date note read backwards |
-| CS-520 | CS-US Date Notes | Section header / US Birthday Note (mm/dd/yyyy format) |
-| CS-530 | CS-US Leap Year Birthday Note | US format, must start with Feb. 29, year within lifetime |
-| CS-1780 | CS-Stand Alone Date | Section header; encompasses CS-1790 and CS-1800 |
-| CS-1790 | CS-Stand Alone Date US & INTL | mm/dd block surrounded by zeros; needs valid date validation |
-| CS-1800 | CS-Stand Alone Date E.U. | dd/mm block surrounded by zeros; needs valid date validation |
-| CS-1820 | CS-Stand Alone Date Year | Date + 2-digit year block; needs date+year validation |
-| CS-1830 | CS-Stand Alone US Date Year | Needs calendar logic to verify year is a real US date year |
-| CS-1840 | CS-Stand Alone EU Date Year | EU date + year; needs date validation |
-| CS-1850 | CS-Stand Alone INTL Date Year | INTL date + year; needs date validation |
-| CS-540 | CS-US History Note | US mm/dd/yyyy format, year must be older than 100 years |
-| CS-550 | CS-US Leap Year History Note | Calendar date + leap year math |
-| CS-560 | CS-US Future Date Note | Date must be in the future relative to series year |
-| CS-570 | CS-EU Birthday Note | EU date format calendar match |
-| CS-580 | CS-EU Leap Year Birthday Note | EU date + leap year |
-| CS-590 | CS-EU History Note | EU date calendar match |
-| CS-600 | CS-EU Leap Year History Note | EU date + leap year |
-| CS-610 | CS-EU Future Date Note | EU date in future |
-| CS-620 | CS-INTL Birthday Note | INTL date format calendar match |
-| CS-630 | CS-INTL Leap Year Birthday Note | INTL date + leap year |
-| CS-640 | CS-INTL History Note | INTL date calendar match |
-| CS-650 | CS-INTL Leap Year History Note | INTL yyyy/mm/dd, Feb. 29, year older than 100 years |
-| CS-660 | CS-INTL Future Date Note | INTL yyyy/mm/dd, date in the future |
-| CS-670 | CS-True Year Note | series_year in serial |
-| CS-680 | CS-Numbered Year Note | Year appears in serial as a numbered reference |
-| CS-690 | CS-Random Year Note | Year scattered in serial |
-| CS-700 | CS-Year Notes | Section header for year-based patterns |
-| CS-720 | CS-Triple Year Note | Year appears three times |
-| CS-730 | CS-Quad Year Note | Year appears four times |
-| CS-740 | CS-Quint Year Note | Year appears five times |
-| CS-750 | CS-Day Notes | Section header; serial forms a day pattern |
-| CS-760 | CS-True Day Note | Serial digits form exact day |
-| CS-770 | CS-US & INTL True Day Notes | US/INTL format day match |
-| CS-780 | CS-EU True Day Notes | EU format day match |
-| CS-790 | CS-Numbered Day Note | Day appears as numbered reference |
-| CS-800 | CS-Random Day Month Note | Random day/month combination |
 
 ---
 
@@ -354,6 +347,7 @@ These require visual inspection of the physical note (printing errors, stamps, e
 - Batch 9 added (2026-02-25): CS-1700, CS-1750, CS-1760, CS-1770, CS-1870, CS-1880, CS-1890, CS-1900, CS-1910, CS-1920 (stand-alone variant patterns)
 - Batch 10 added (2026-02-25): CS-1100, CS-1110, CS-1120, CS-1130, CS-1140, CS-1150, CS-1220, CS-1420, CS-1430, CS-1630, CS-1930 (rotator variants, laddered radars, broken ladder, true binary skip note, random zeros)
 - Batch 11 added (2026-02-26): CS-1340 (Shotgun Radar), CS-2290 (Prime Numbers), CS-1250 (Buildable Ladder)
+- Batch 12 added (2026-02-26): 36 date/calendar/year patterns (CS-510–CS-800, CS-1780–CS-1850). Added date helpers to helpers.lua (is_leap_year, days_in_month, is_valid_date, is_valid_year, is_valid_mmdd). Injected current_year/month/day into ctx.metadata via create_context(). Year range 1700–2099. Section headers CS-700, CS-750, CS-1780, CS-1820 implemented as catch-all patterns.
 - CS-140 (Random Triple Triple Pair): excludes all-consecutive case (that is CS-130); at least one group must be scattered
 - CS-180 (Random Triple Double Double): excludes all-consecutive case (that is CS-170); at least one group must be scattered
 - CS-300 (Random Triple in Quad): both triple and quad must be scattered (no runs of 3 or 4); triple surrounded by quad
