@@ -104,18 +104,18 @@ if exist "%SOURCE_DIR%\gui" (
     xcopy /y /e /q "%SOURCE_DIR%\gui\*" "gui\" >nul 2>&1
 )
 
-:: Copy patterns folder (core Lua patterns, Nicks library, and helpers)
+:: Copy patterns folder (all libraries except user patterns)
 if exist "%SOURCE_DIR%\patterns" (
     echo Updating pattern files...
     if not exist "patterns" mkdir "patterns"
-    if not exist "patterns\core" mkdir "patterns\core"
-    if not exist "patterns\Nicks" mkdir "patterns\Nicks"
-    if not exist "patterns\lib" mkdir "patterns\lib"
     if not exist "patterns\user" mkdir "patterns\user"
-    :: Copy core patterns, Nicks library, and lib (but not user patterns)
-    xcopy /y /e /q "%SOURCE_DIR%\patterns\core\*" "patterns\core\" >nul 2>&1
-    xcopy /y /e /q "%SOURCE_DIR%\patterns\Nicks\*" "patterns\Nicks\" >nul 2>&1
-    xcopy /y /e /q "%SOURCE_DIR%\patterns\lib\*" "patterns\lib\" >nul 2>&1
+    :: Copy all pattern subdirectories except user (preserve user's custom patterns)
+    for /d %%D in ("%SOURCE_DIR%\patterns\*") do (
+        if /i not "%%~nxD"=="user" (
+            if not exist "patterns\%%~nxD" mkdir "patterns\%%~nxD"
+            xcopy /y /e /q "%%D\*" "patterns\%%~nxD\" >nul 2>&1
+        )
+    )
 )
 
 :: Clean up temp files
