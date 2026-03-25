@@ -507,6 +507,7 @@ class MainWindow(QMainWindow):
 
         # Generate printable labels file
         self._generate_labels(results, output_dir)
+        self._generate_labels_docx(results, output_dir)
 
         # Show confirmation
         self.statusBar().showMessage(f"Generated crops for {cropped_count} bill(s) in {output_dir}", 5000)
@@ -559,6 +560,188 @@ class MainWindow(QMainWindow):
                 f.write(f"Series: {series}\n")
                 f.write(f"Catalog: {catalog}  Pos: {position}\n")
                 f.write("=" * 30 + "\n\n")
+
+    def _generate_labels_docx(self, results: list, output_dir: Path):
+        """Generate printable .docx labels for Rollo label printer (2x1 inch labels).
+
+        Each bill gets two label pages:
+        1. Without catalog (for reference/binder)
+        2. With catalog (to store with the physical bill)
+        """
+        try:
+            from docx import Document
+            from docx.shared import Inches, Pt, Twips
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            from docx.oxml.ns import qn
+        except ImportError:
+            print("python-docx not installed, skipping .docx label generation")
+            return
+
+        labels_file = output_dir / "zbill_labels.docx"
+        doc = Document()
+
+        first_label = True
+        for result in results:
+            serial = result.get('serial', 'Unknown')
+            fancy_types = result.get('fancy_types', '')
+            position = result.get('position', '')
+            series = result.get('series_year', '')
+
+            pattern_override = result.get('pattern_override')
+            if pattern_override:
+                pattern_str = pattern_override
+            else:
+                patterns = [p.strip() for p in fancy_types.split(',') if p.strip()]
+                pattern_str = patterns[0] if patterns else 'No Pattern'
+
+            catalog = ''
+            if pattern_str and pattern_str != 'No Pattern':
+                catalog = self.settings.get_pattern_catalog(pattern_str, '')
+
+            note = result.get('note', '')
+
+            for label_num in range(2):
+                # Set up page as 2x1 inch label with zero margins
+                if first_label:
+                    section = doc.sections[0]
+                    first_label = False
+                else:
+                    section = doc.add_section()
+
+                section.page_width = Inches(2)
+                section.page_height = Inches(1)
+                section.left_margin = Inches(0)
+                section.right_margin = Inches(0)
+                section.top_margin = Inches(0)
+                section.bottom_margin = Inches(0)
+
+                # Create table (single cell, matching label.docx structure)
+                table = doc.add_table(rows=1, cols=1)
+                table.autofit = False
+
+                # Remove table borders
+                tbl_pr = table._element.find(qn('w:tblPr'))
+                borders = tbl_pr.find(qn('w:tblBorders'))
+                if borders is None:
+                    borders = tbl_pr.makeelement(qn('w:tblBorders'), {})
+                    tbl_pr.append(borders)
+                for border_name in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+                    border_el = borders.makeelement(qn(f'w:{border_name}'), {
+                        qn('w:val'): 'none', qn('w:sz'): '0',
+                        qn('w:space'): '0', qn('w:color'): 'auto'
+                    })
+                    existing = borders.find(qn(f'w:{border_name}'))
+                    if existing is not None:
+                        borders.remove(existing)
+                    borders.append(border_el)
+
+                # Set fixed layout and cell width
+                tbl_layout = tbl_pr.makeelement(qn('w:tblLayout'), {qn('w:type'): 'fixed'})
+                tbl_pr.append(tbl_layout)
+
+                # Set cell margins to minimal (matching label.docx: 15 twips L/R)
+                cell_mar = tbl_pr.makeelement(qn('w:tblCellMar'), {})
+                for side, val in [('left', '15'), ('right', '15')]:
+                    el = cell_mar.makeelement(qn(f'w:{side}'), {
+                        qn('w:w'): val, qn('w:type'): 'dxa'
+                    })
+                    cell_mar.append(el)
+                tbl_pr.append(cell_mar)
+
+                # Set column width to 2 inches (2880 twips)
+                grid = table._element.find(qn('w:tblGrid'))
+                if grid is not None:
+                    for col in grid.findall(qn('w:gridCol')):
+                        col.set(qn('w:w'), '2880')
+
+                # Set row height to 1 inch exact (1440 twips)
+                row = table.rows[0]
+                tr_pr = row._element.find(qn('w:trPr'))
+                if tr_pr is None:
+                    tr_pr = row._element.makeelement(qn('w:trPr'), {})
+                    row._element.insert(0, tr_pr)
+                tr_height = tr_pr.makeelement(qn('w:trHeight'), {
+                    qn('w:val'): '1440', qn('w:hRule'): 'exact'
+                })
+                tr_pr.append(tr_height)
+
+                cell = table.cell(0, 0)
+                # Set cell width
+                tc_pr = cell._element.find(qn('w:tcPr'))
+                if tc_pr is None:
+                    tc_pr = cell._element.makeelement(qn('w:tcPr'), {})
+                    cell._element.insert(0, tc_pr)
+                tc_w = tc_pr.makeelement(qn('w:tcW'), {
+                    qn('w:w'): '2880', qn('w:type'): 'dxa'
+                })
+                tc_pr.append(tc_w)
+
+                # Line 1: serial + series year
+                p1 = cell.paragraphs[0]
+                p1_ppr = p1._element.find(qn('w:pPr'))
+                if p1_ppr is None:
+                    p1_ppr = p1._element.makeelement(qn('w:pPr'), {})
+                    p1._element.insert(0, p1_ppr)
+                # Add spacing before (matching label.docx: 111 twips)
+                spacing = p1_ppr.makeelement(qn('w:spacing'), {qn('w:before'): '111'})
+                p1_ppr.append(spacing)
+                # Add indent (matching label.docx: 72 twips L/R)
+                indent = p1_ppr.makeelement(qn('w:ind'), {
+                    qn('w:left'): '72', qn('w:right'): '72'
+                })
+                p1_ppr.append(indent)
+
+                run1 = p1.add_run(f"{serial}     SERIES  {series}")
+                run1.font.size = Pt(10)
+
+                # Line 2: pattern name
+                p2 = cell.add_paragraph()
+                p2_ppr = p2._element.find(qn('w:pPr'))
+                if p2_ppr is None:
+                    p2_ppr = p2._element.makeelement(qn('w:pPr'), {})
+                    p2._element.insert(0, p2_ppr)
+                indent2 = p2_ppr.makeelement(qn('w:ind'), {
+                    qn('w:left'): '72', qn('w:right'): '72'
+                })
+                p2_ppr.append(indent2)
+
+                run2 = p2.add_run(pattern_str)
+                run2.font.size = Pt(10)
+
+                # Line 3: note or catalog info
+                line3 = ''
+                if label_num == 0 and note:
+                    line3 = note
+                elif label_num == 1:
+                    if note:
+                        line3 = note
+                    catalog_line = f"Catalog: {catalog}  Pos: {position}" if catalog or position else ''
+                    if catalog_line:
+                        line3 = f"{line3}\n{catalog_line}" if line3 else catalog_line
+
+                if line3:
+                    for li, line_text in enumerate(line3.split('\n')):
+                        p3 = cell.add_paragraph()
+                        p3_ppr = p3._element.find(qn('w:pPr'))
+                        if p3_ppr is None:
+                            p3_ppr = p3._element.makeelement(qn('w:pPr'), {})
+                            p3._element.insert(0, p3_ppr)
+                        indent3 = p3_ppr.makeelement(qn('w:ind'), {
+                            qn('w:left'): '72', qn('w:right'): '72'
+                        })
+                        p3_ppr.append(indent3)
+                        run3 = p3.add_run(line_text)
+                        run3.font.size = Pt(10)
+
+        # Remove the empty paragraph that python-docx adds at the start
+        body = doc.element.body
+        first_p = body.find(qn('w:p'))
+        first_tbl = body.find(qn('w:tbl'))
+        if first_p is not None and first_tbl is not None:
+            if list(body).index(first_p) < list(body).index(first_tbl):
+                body.remove(first_p)
+
+        doc.save(str(labels_file))
 
     def _zoom_in(self):
         """Zoom in on preview."""
