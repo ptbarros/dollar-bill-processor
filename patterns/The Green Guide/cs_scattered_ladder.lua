@@ -1,10 +1,10 @@
 --[[
 Pattern: CS_SCATTERED_LADDER
 DisplayName: CS-Scattered Ladder
-Description: All 8 digits are a permutation of 8 consecutive mod-10 values in scrambled (non-ladder) order. e.g., M 07634152 M or M 05734896 M.
+Description: All 8 digits are a permutation of a straight run of 8 consecutive values (0-7, 1-8, or 2-9) in scrambled (non-ladder) order. No 9->0 wrap (that is a Looping Ladder). e.g., M 07634152 M or M 25734896 M.
 BookRef: CS-1210
 Tier: 4
-Examples: ["07634152", "85412367", "57034896"]
+Examples: ["07634152", "85412367", "57234896"]
 Odds: 1 in 2,500
 Price: $10-$25
 --]]
@@ -17,42 +17,30 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Find k: the natural start of the 8-consecutive-mod-10 set
-    local counts = {}
+    -- Find the min and max digit
+    local lo, hi = 10, -1
     for i = 1, 8 do
-        counts[d:sub(i, i)] = true
+        local n = tonumber(d:sub(i, i))
+        if n < lo then lo = n end
+        if n > hi then hi = n end
     end
 
-    local k = nil
-    for candidate = 0, 9 do
-        local prev = tostring((candidate - 1 + 10) % 10)
-        if not counts[prev] then
-            local valid = true
-            for j = 0, 7 do
-                if not counts[tostring((candidate + j) % 10)] then
-                    valid = false
-                    break
-                end
-            end
-            if valid then
-                k = candidate
-                break
-            end
-        end
+    -- Require a STRAIGHT run of 8 consecutive values (no 9->0 wrap).
+    -- With 8 distinct digits, hi - lo == 7 guarantees the set is exactly {lo..hi},
+    -- i.e. one of 0-7, 1-8, 2-9. Looping (wrapping) runs are CS-Looping Ladder.
+    if hi - lo ~= 7 then
+        return {matched = false}
     end
-    if k == nil then return {matched = false} end
+    local k = lo
 
-    -- Build the cyclic ascending sequence for this k
+    -- Build the ascending straight sequence for this run
     local asc_seq = ""
     for j = 0, 7 do
-        asc_seq = asc_seq .. tostring((k + j) % 10)
+        asc_seq = asc_seq .. tostring(k + j)
     end
 
-    -- Build the cyclic descending sequence for this k
-    local desc_seq = ""
-    for j = 0, 7 do
-        desc_seq = desc_seq .. tostring((k + 7 - j + 100) % 10)
-    end
+    -- Build the descending straight sequence for this run
+    local desc_seq = string.reverse(asc_seq)
 
     -- Exclude any cyclic ascending rotation (CS-Ascending Ladder or CS-Ascending Looping Ladder)
     if string.find(asc_seq .. asc_seq, d, 1, true) then
