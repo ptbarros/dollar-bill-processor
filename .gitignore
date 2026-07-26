@@ -52,6 +52,10 @@ user_patterns.yaml
 corrections.yaml
 .session_recovery.json
 
+# Runtime debug log (see debug_logger.py)
+debug_log.txt
+debug_log.txt.*
+
 # Example/test files
 *_example.py
 *_example.yaml

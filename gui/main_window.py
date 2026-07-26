@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from settings_manager import SettingsManager, get_settings
 from correction_manager import CorrectionManager
 from session_recovery import SessionRecoveryManager, get_recovery_manager
+from debug_logger import dlog, fingerprint
 
 
 class MainWindow(QMainWindow):
@@ -443,6 +444,9 @@ class MainWindow(QMainWindow):
 
     def _on_crop_selected(self, results: list):
         """Generate crops for selected bills."""
+        dlog("action.crop_selected", count=len(results) if results else 0,
+             viewing_batch=str(self.results_list.get_current_batch_path() or "(current)"),
+             state=fingerprint(self.current_results))
         if not results:
             return
 
@@ -908,6 +912,12 @@ class MainWindow(QMainWindow):
     @Slot(str, str)
     def _on_process_requested(self, input_dir: str, output_dir: str):
         """Handle process request from processing panel."""
+        # This WIPES all in-memory review state (viewed/checked/cropped/note/
+        # label) and reprocesses from scratch. If this fires unexpectedly
+        # during review it looks exactly like "it reset / auto-archived".
+        dlog("PROCESS_REQUESTED (clears results!)", input_dir=input_dir,
+             discarding=fingerprint(self.current_results),
+             was_processing=self.is_processing, monitoring=self.is_monitoring)
         self.is_processing = True
         self.status_label.setText(f"Processing: {input_dir}")
         self.processing_panel.set_processing(True)
@@ -1415,6 +1425,9 @@ class MainWindow(QMainWindow):
             self._auto_export(summary)
 
         # Auto-archive if enabled, otherwise enable manual archive button
+        dlog("processing.complete", total=total, fancy=fancy, review=review,
+             auto_archive=self.settings.processing.auto_archive,
+             state=fingerprint(self.current_results))
         if self.settings.processing.auto_archive and self.current_results:
             self._archive_manual_batch()
 
@@ -1601,6 +1614,7 @@ class MainWindow(QMainWindow):
 
     def _restore_session(self):
         """Restore session from recovery file."""
+        dlog("RESTORE_session.START", replacing=fingerprint(self.current_results))
         data = self.recovery_manager.load_recovery()
         if not data:
             QMessageBox.warning(self, "Recovery Error", "Failed to load recovery data.")
@@ -1725,6 +1739,7 @@ class MainWindow(QMainWindow):
             last_selected_index=last_index
         )
 
+        dlog("autosave", success=success, state=fingerprint(self.current_results))
         if success:
             self._session_dirty = False
 
@@ -1791,6 +1806,8 @@ class MainWindow(QMainWindow):
         print(f"[MainWindow] Monitor output path: {output_dir}")
 
         # Switch to current session and clear previous results
+        dlog("MONITOR_START (clears results!)",
+             discarding=fingerprint(self.current_results))
         self.results_list.select_current_session()
         self.current_results = []
         self.results_list.clear()
@@ -1841,6 +1858,9 @@ class MainWindow(QMainWindow):
 
     def _stop_monitoring(self):
         """Stop monitor mode and optionally archive files."""
+        dlog("MONITOR_STOP", is_monitoring=self.is_monitoring,
+             auto_archive=self.settings.monitor.auto_archive,
+             state=fingerprint(self.current_results))
         if not self.is_monitoring:
             return
 
@@ -1922,6 +1942,8 @@ class MainWindow(QMainWindow):
         import shutil
         from datetime import datetime
 
+        dlog("ARCHIVE_monitor.START", has_thread=bool(self.monitor_thread),
+             state=fingerprint(self.current_results))
         if not self.monitor_thread:
             return
 
@@ -2021,6 +2043,9 @@ class MainWindow(QMainWindow):
         import shutil
         from datetime import datetime
 
+        dlog("ARCHIVE_manual.START", has_thread=bool(self.processing_thread),
+             copy_mode=self.settings.processing.archive_copy_mode,
+             state=fingerprint(self.current_results))
         if not self.processing_thread:
             return
 
@@ -2148,6 +2173,10 @@ class MainWindow(QMainWindow):
 
 def run_gui():
     """Launch the GUI application."""
+    from debug_logger import dlog, get_log_path
+    dlog("app.start", log=get_log_path())
+    print(f"[DollarBill] Debug log: {get_log_path()}")
+
     app = QApplication(sys.argv)
     app.setApplicationName("Dollar Bill Processor")
     app.setOrganizationName("DollarBillProcessor")

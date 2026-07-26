@@ -24,6 +24,7 @@ from pattern_engine_v3 import PatternEngineV3 as PatternEngine
 
 from settings_manager import get_settings
 from gui.correction_dialog import CorrectionDialog, ReviewNoteDialog
+from debug_logger import dlog, fingerprint
 
 
 class NumericTreeWidgetItem(QTreeWidgetItem):
@@ -329,12 +330,15 @@ class ResultsList(QWidget):
 
     def set_results(self, results: List[dict]):
         """Set all results at once."""
+        dlog("results_list.set_results", was=fingerprint(self.results),
+             now=fingerprint(results))
         self.results = results
         self._rebuild_pattern_filter()
         self._apply_filters()
 
     def clear(self):
         """Clear all results."""
+        dlog("results_list.clear", was=fingerprint(self.results))
         self.results = []
         self.filtered_results = []
         self.tree.clear()
@@ -660,7 +664,13 @@ class ResultsList(QWidget):
             for r in self.results:
                 if r.get('front_file') == front_file:
                     r[field] = value
-                    break
+                    return
+            # No authoritative row matched this edit -> it lives only on a
+            # throwaway tree copy and will be lost on the next repopulate.
+            dlog("sync.MISS", field=field, reason="no_match_in_results",
+                 front_file=front_file, n_results=len(self.results))
+        else:
+            dlog("sync.MISS", field=field, reason="empty_front_file")
 
     def _update_status_cell(self, item, result: dict):
         """Update the status column text for a single tree item.
@@ -692,6 +702,8 @@ class ResultsList(QWidget):
             self.item_selected.emit(result)
             # Auto-track viewed status
             if result and not result.get('viewed'):
+                dlog("action.viewed", front_file=result.get('front_file'),
+                     position=result.get('position'))
                 result['viewed'] = True
                 self._sync_result_field(result, 'viewed', True)
                 sorting_enabled = self.tree.isSortingEnabled()
@@ -942,6 +954,8 @@ class ResultsList(QWidget):
         )
 
         if ok and pattern and pattern.strip():
+            dlog("action.custom_label", front_file=result.get('front_file'),
+                 position=result.get('position'), value=pattern.strip())
             self._set_pattern_override(result, pattern.strip())
 
     def _set_note(self, result: dict):
@@ -958,7 +972,12 @@ class ResultsList(QWidget):
 
         front_file = result.get('front_file')
         if not front_file:
+            dlog("action.note.DROPPED", reason="empty_front_file",
+                 position=result.get('position'))
             return
+
+        dlog("action.note", front_file=front_file,
+             position=result.get('position'), value=note)
 
         # Update the authoritative results list
         for r in self.results:
@@ -1140,6 +1159,8 @@ class ResultsList(QWidget):
             result = item.data(0, Qt.UserRole)
             if result:
                 new_val = not result.get('checked', False)
+                dlog("action.toggle_checked", front_file=result.get('front_file'),
+                     position=result.get('position'), new_val=new_val)
                 result['checked'] = new_val
                 self._sync_result_field(result, 'checked', new_val)
                 self._update_status_cell(item, result)
@@ -1147,6 +1168,8 @@ class ResultsList(QWidget):
 
     def mark_cropped(self, results: list):
         """Mark given results as cropped and clear checked flag."""
+        dlog("action.mark_cropped", count=len(results),
+             front_files=[r.get('front_file') for r in results][:10])
         cropped_files = {r.get('front_file') for r in results}
         for i in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(i)
@@ -1231,14 +1254,21 @@ class ResultsList(QWidget):
     def _on_batch_changed(self, index: int):
         """Handle batch selection change."""
         batch_path = self.batch_combo.currentData()
+        dlog("batch_combo.changed", index=index, batch_path=batch_path or "(current session)")
 
         if not batch_path:
-            # Current session selected
+            # Current session selected. NOTE: this does NOT restore the live
+            # session's dicts into the list, so the display can diverge from
+            # MainWindow.current_results after having viewed an archived batch.
             self._current_batch_path = None
             self.save_csv_btn.setEnabled(False)
             self.batch_changed.emit("")
         else:
-            # Archived batch selected
+            # Archived batch selected. This replaces self.results with fresh
+            # CSV dicts -> object-sharing with current_results is broken; any
+            # edits made while a batch is selected land only on these dicts.
+            dlog("batch.load.START", batch=str(batch_path),
+                 before=fingerprint(self.results))
             self._current_batch_path = Path(batch_path)
             self._load_batch(self._current_batch_path)
             self.save_csv_btn.setEnabled(True)
