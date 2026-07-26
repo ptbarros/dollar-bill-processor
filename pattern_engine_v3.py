@@ -111,7 +111,7 @@ class PatternEngineV3:
         """Load helper functions into sandbox."""
         helpers_path = self.patterns_dir / "lib" / "helpers.lua"
         if helpers_path.exists():
-            with open(helpers_path, 'r') as f:
+            with open(helpers_path, 'r', encoding='utf-8') as f:
                 helpers_code = f.read()
             self.sandbox.load_helpers(helpers_code)
 
@@ -136,7 +136,7 @@ class PatternEngineV3:
     def _load_lua_pattern(self, file_path: Path, library: str = "user"):
         """Load a single Lua pattern from file."""
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path, 'r', encoding='utf-8') as f:
                 script = f.read()
 
             # Parse metadata from header comment
@@ -566,7 +566,7 @@ class PatternEngineV3:
         full_script = f"{header}\n\n{cleaned_script}"
 
         try:
-            with open(file_path, 'w') as f:
+            with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(full_script)
 
             # Reload to pick up the new pattern
