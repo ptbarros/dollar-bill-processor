@@ -4,6 +4,7 @@ Results List - Tree/table view of processed bills.
 
 import sys
 import csv
+import re
 import shutil
 from pathlib import Path
 from datetime import datetime
@@ -27,13 +28,33 @@ from gui.correction_dialog import CorrectionDialog, ReviewNoteDialog
 from debug_logger import dlog, fingerprint
 
 
+def _natural_sort_key(text: str):
+    """Split a string into text/number runs so it sorts the way people expect.
+
+    "A 9" sorts before "A 10" (the number run compares numerically), while the
+    letter prefix still groups alphabetically. Each token is a (kind, num, text)
+    tuple so int and str parts never get compared directly.
+    """
+    key = []
+    for tok in re.split(r'(\d+)', text or ''):
+        if tok.isdigit():
+            key.append((1, int(tok), ''))       # numeric run
+        elif tok:
+            key.append((0, 0, tok.upper()))      # text run (case-insensitive)
+    return key
+
+
 class NumericTreeWidgetItem(QTreeWidgetItem):
     """TreeWidgetItem that sorts numerically for specific columns."""
 
     # Columns that should be sorted numerically (by index)
     # Back Plate (11) is digits-only, so it must sort numerically or "10" lands
-    # before "9". Front Plate (10) is alphanumeric, so it stays a string sort.
+    # before "9".
     NUMERIC_COLUMNS = {0, 4, 5, 6, 7, 11}  # Position, GPT, Shift X%, Shift Y%, Seal %, Back Plate
+
+    # Columns that should use natural sort (letters group, embedded numbers sort
+    # numerically). Front Plate (10) is alphanumeric like "A 9" / "A 10".
+    NATURAL_COLUMNS = {10}  # Front Plate
 
     def __lt__(self, other):
         column = self.treeWidget().sortColumn() if self.treeWidget() else 0
@@ -45,6 +66,8 @@ class NumericTreeWidgetItem(QTreeWidgetItem):
                 return self_val < other_val
             except ValueError:
                 pass
+        elif column in self.NATURAL_COLUMNS:
+            return _natural_sort_key(self.text(column)) < _natural_sort_key(other.text(column))
         # Fall back to string comparison (avoid super().__lt__ which can recurse)
         return self.text(column) < other.text(column)
 
