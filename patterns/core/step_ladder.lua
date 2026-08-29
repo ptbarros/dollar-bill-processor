@@ -1,9 +1,10 @@
 --[[
 Pattern: STEP_LADDER
-Description: Steps of 2 (02468xxx or similar)
+DisplayName: Step Ladder
+Description: The serial splits into two 4-digit halves that are identical except one digit, which steps up or down by 1 (e.g. 5191|5091). "Step Down" when the back half is lower, "Step Up" when higher.
 Tier: 4
-Examples: ["02468135", "13579246"]
-Odds: 1 in 5,000
+Examples: ["51915091", "77367636", "44784578", "52114211"]
+Odds: 1 in 1,500
 Price: $5-$30
 --]]
 
@@ -13,44 +14,45 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Check for step ladder with step of 2 (at least 4 digits)
-    local best_length = 0
-    local best_start = 0
-
-    for start = 1, 5 do  -- Start positions 0-4 (1-indexed)
-        local length = 1
-        local d = tonumber(digits:sub(start, start))
-        for i = start + 1, 8 do
-            local next_d = tonumber(digits:sub(i, i))
-            local expected = (d + (i - start) * 2) % 10
-            if next_d == expected then
-                length = length + 1
-            else
-                break
+    -- Split into two 4-digit halves and compare digit-by-digit.
+    -- Require EXACTLY one position to differ, and by exactly 1 (a single "rung").
+    -- Comparing digits (not the numeric difference) correctly rejects borrow
+    -- cases like 2000 vs 1999 (numeric diff of 1, but all four digits change).
+    local diff_pos = nil
+    local diff_count = 0
+    local direction = nil
+    for j = 1, 4 do
+        local a = tonumber(digits:sub(j, j))          -- first-half digit
+        local b = tonumber(digits:sub(j + 4, j + 4))  -- second-half digit
+        if a ~= b then
+            if math.abs(a - b) ~= 1 then
+                return {matched = false}  -- changed digit isn't a single step
             end
-        end
-        if length > best_length then
-            best_length = length
-            best_start = start - 1  -- Convert to 0-indexed
+            diff_count = diff_count + 1
+            diff_pos = j
+            direction = (b > a) and "Up" or "Down"
         end
     end
 
-    if best_length < 4 then
+    if diff_count ~= 1 then
         return {matched = false}
     end
 
-    -- Highlight the step ladder
-    local positions = {}
-    for i = 0, best_length - 1 do
-        table.insert(positions, best_start + i)
-    end
+    local p = diff_pos - 1  -- 0-indexed position of the stepped digit in half 1
 
     return {
         matched = true,
         highlights = {
-            highlight(positions, "lime", "step ladder")
+            highlight({p}, "orange", "step"),
+            highlight({p + 4}, "orange", "step"),
         },
-        connectors = {},
-        message = best_length .. "-digit step ladder (step 2)"
+        connectors = {
+            {from = p, to = p + 4, color = "orange", style = "arc"}
+        },
+        group_boxes = {
+            {from = 0, to = 3, color = "gold", thickness = 3},
+            {from = 4, to = 7, color = "gold", thickness = 3},
+        },
+        message = "Step Ladder (Step " .. direction .. "): back half steps one rung from the front half"
     }
 end
