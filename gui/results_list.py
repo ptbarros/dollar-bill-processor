@@ -31,7 +31,9 @@ class NumericTreeWidgetItem(QTreeWidgetItem):
     """TreeWidgetItem that sorts numerically for specific columns."""
 
     # Columns that should be sorted numerically (by index)
-    NUMERIC_COLUMNS = {0, 4, 5, 6, 7}  # Position, GPT, Shift X%, Shift Y%, Seal %
+    # Back Plate (11) is digits-only, so it must sort numerically or "10" lands
+    # before "9". Front Plate (10) is alphanumeric, so it stays a string sort.
+    NUMERIC_COLUMNS = {0, 4, 5, 6, 7, 11}  # Position, GPT, Shift X%, Shift Y%, Seal %, Back Plate
 
     def __lt__(self, other):
         column = self.treeWidget().sortColumn() if self.treeWidget() else 0
