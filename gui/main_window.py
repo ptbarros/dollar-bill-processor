@@ -1930,9 +1930,16 @@ class MainWindow(QMainWindow):
             print(f"[MainWindow] Setting input_dir to: {batch_path}")
             self.processing_panel.set_input_dir(batch_path)
         else:
-            # Back to current session
+            # Back to current session. Selecting an archive had replaced the
+            # results display with the archive's dicts; without re-installing
+            # the live results here, the list stays stuck on the archive even
+            # though current_results (still autosaved) holds the live session.
+            # Re-sharing current_results also restores object identity so edits
+            # flow back to the authoritative list again.
             self.preview_panel.clear()
+            self.results_list.set_results(self.current_results)
             self.status_label.setText("Current session")
+            dlog("session.restored_to_list", state=fingerprint(self.current_results))
 
     @Slot(dict)
     def _on_monitor_complete(self, summary: dict):

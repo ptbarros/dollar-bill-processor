@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QComboBox, QPushButton, QMenu, QHeaderView,
     QInputDialog
 )
-from PySide6.QtCore import Qt, Signal, Slot, QSettings
+from PySide6.QtCore import Qt, Signal, Slot, QSettings, QEvent
 from PySide6.QtGui import QColor, QBrush, QAction, QIcon
 
 # Add parent for imports
@@ -106,6 +106,12 @@ class ResultsList(QWidget):
         self.batch_combo = QComboBox()
         self.batch_combo.addItem("Current Session", "")
         self.batch_combo.setMinimumWidth(200)
+        # Click-only focus so arrow-key navigation in the results list can't
+        # bleed into the dropdown and silently load an archive (a focused combo
+        # box changes its selection on Up/Down without opening the popup).
+        self.batch_combo.setFocusPolicy(Qt.ClickFocus)
+        # Log when the dropdown actually gains focus, to confirm the fix holds.
+        self.batch_combo.installEventFilter(self)
         self.batch_combo.currentIndexChanged.connect(self._on_batch_changed)
         batch_layout.addWidget(self.batch_combo, 1)
 
@@ -331,6 +337,16 @@ class ResultsList(QWidget):
         header = self.tree.header()
         for i in range(self.tree.columnCount()):
             settings.setValue(f"column_{i}_hidden", header.isSectionHidden(i))
+
+    def eventFilter(self, obj, event):
+        """Log when the batch dropdown gains focus (diagnostic for the
+        accidental archive-load issue). Never consumes the event."""
+        if obj is self.batch_combo and event.type() == QEvent.FocusIn:
+            try:
+                dlog("batch_combo.focus_in", reason=int(event.reason()))
+            except Exception:
+                pass
+        return super().eventFilter(obj, event)
 
     def _get_display_name(self, pattern_name: str) -> str:
         """Get the display name for a pattern."""
