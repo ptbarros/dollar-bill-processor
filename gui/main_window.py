@@ -516,6 +516,20 @@ class MainWindow(QMainWindow):
         # Show confirmation
         self.statusBar().showMessage(f"Generated crops for {cropped_count} bill(s) in {output_dir}", 5000)
 
+    def _pattern_display_name(self, pattern_str: str) -> str:
+        """Resolve a pattern identifier to its friendly display name for labels.
+
+        Detected patterns are stored as internal names (e.g. STEP_LADDER); the
+        engine maps those to a friendly display name. A user-typed override that
+        isn't a known pattern has no mapping and passes through unchanged.
+        """
+        if not pattern_str or pattern_str == 'No Pattern':
+            return pattern_str
+        try:
+            return self.results_list._get_display_name(pattern_str)
+        except Exception:
+            return pattern_str
+
     def _generate_labels(self, results: list, output_dir: Path):
         """Generate printable labels file for bills.
 
@@ -540,17 +554,20 @@ class MainWindow(QMainWindow):
                     patterns = [p.strip() for p in fancy_types.split(',') if p.strip()]
                     pattern_str = patterns[0] if patterns else 'No Pattern'
 
-                # Get catalog for the selected pattern
+                # Get catalog for the selected pattern (keyed by internal name)
                 catalog = ''
                 if pattern_str and pattern_str != 'No Pattern':
                     catalog = self.settings.get_pattern_catalog(pattern_str, '')
+
+                # Show the friendly display name on the label, not the internal name
+                pattern_display = self._pattern_display_name(pattern_str)
 
                 # Get user note if present
                 note = result.get('note', '')
 
                 # Label 1: Without catalog (for reference)
                 f.write(f"Serial: {serial}\n")
-                f.write(f"Pattern: {pattern_str}\n")
+                f.write(f"Pattern: {pattern_display}\n")
                 if note:
                     f.write(f"Note: {note}\n")
                 f.write(f"Series: {series}\n")
@@ -558,7 +575,7 @@ class MainWindow(QMainWindow):
 
                 # Label 2: With catalog (to store with bill)
                 f.write(f"Serial: {serial}\n")
-                f.write(f"Pattern: {pattern_str}\n")
+                f.write(f"Pattern: {pattern_display}\n")
                 if note:
                     f.write(f"Note: {note}\n")
                 f.write(f"Series: {series}\n")
@@ -601,6 +618,9 @@ class MainWindow(QMainWindow):
             catalog = ''
             if pattern_str and pattern_str != 'No Pattern':
                 catalog = self.settings.get_pattern_catalog(pattern_str, '')
+
+            # Show the friendly display name on the label, not the internal name
+            pattern_display = self._pattern_display_name(pattern_str)
 
             note = result.get('note', '')
 
@@ -709,7 +729,7 @@ class MainWindow(QMainWindow):
                 })
                 p2_ppr.append(indent2)
 
-                run2 = p2.add_run(pattern_str)
+                run2 = p2.add_run(pattern_display)
                 run2.font.size = Pt(10)
 
                 # Line 3: note or catalog info
