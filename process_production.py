@@ -37,6 +37,22 @@ import shutil
 import yaml
 
 from pattern_engine_v3 import PatternEngineV3 as PatternEngine
+from debug_logger import dlog
+
+
+def _safe_serial_for_filename(serial: str) -> str:
+    """Make a serial safe to use as a filename on all platforms.
+
+    Star notes carry a '*' in the serial (e.g. 'A12345678*'), and '*' is one of
+    the characters Windows forbids in filenames (< > : " / \\ | ? *). Writing to
+    such a path makes cv2.imwrite fail silently, so no crop is produced. Replace
+    '*' with 'star' (to keep star notes recognizable) and any other illegal
+    character with '_'.
+    """
+    s = serial or "unknown"
+    s = s.replace("*", "star")
+    s = re.sub(r'[<>:"/\\|?]', "_", s)
+    return s
 
 
 # =============================================================================
@@ -3349,11 +3365,22 @@ class ProductionProcessor:
             # Handle case where dynamic crop failed
             if crop is None:
                 crop = self.create_crop(img, side, region)
+            if crop is None:
+                # Nothing to write for this region; skip rather than crash on imwrite(None)
+                dlog("crop.SKIP_no_image", serial=pair.serial, region=f"{side}/{region}")
+                continue
 
-            filename = f"{pair.serial}_{i:02d}.jpg"
+            # Star notes have a '*' in the serial, which is an ILLEGAL character
+            # in Windows filenames -> cv2.imwrite silently fails (returns False,
+            # no exception) and no crop file is written. Sanitize the serial so
+            # the crop actually saves; '*' becomes 'star' to stay recognizable.
+            safe_serial = _safe_serial_for_filename(pair.serial)
+            filename = f"{safe_serial}_{i:02d}.jpg"
             crop_path = output_dir / filename
 
-            cv2.imwrite(str(crop_path), crop, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
+            ok = cv2.imwrite(str(crop_path), crop, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
+            if not ok:
+                dlog("crop.imwrite.FAILED", serial=pair.serial, path=str(crop_path))
             crop_paths.append(crop_path)
 
         timing.stop('crops')
