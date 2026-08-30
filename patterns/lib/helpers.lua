@@ -646,9 +646,9 @@ function is_valid_date(mm, dd, yyyy)
     return true
 end
 
--- Check if year is in valid range (1000-2099 for year note patterns)
+-- Check if year is in valid range (1700-2099 for year note patterns)
 function is_valid_year(y)
-    return y >= 1000 and y <= 2099
+    return y >= 1700 and y <= 2099
 end
 
 -- Check if mm/dd is a plausible calendar day (ignoring year; Feb allows 29)
