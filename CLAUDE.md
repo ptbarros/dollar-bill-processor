@@ -138,7 +138,7 @@ print(engine.classify_simple('A12344321B'))
 
 - User patterns in `patterns/user/` are gitignored
 - `engine.reload()` reloads all patterns
-- Low run patterns: LOW_RUN_6M (Tier 5), LOW_RUN_12M (Tier 6)
+- Low run patterns: LOW_RUN_6M (Tier 5), LOW_RUN_12M (Tier 6). Data in `patterns/core/low_runs.csv`; see `patterns/core/LOW_RUNS.md` for how the data is derived from uspapermoney.io serial charts (96M block cap, facility slices) and `tools/parse_low_runs.py` to regenerate candidates from a saved chart.
 - Debug logging: Use `log()` in Lua patterns during batch testing
 
 ## Green Guide Pattern Library
