@@ -1,13 +1,18 @@
 --[[
 Pattern: CS_RANDOM_YEAR_NOTE
 DisplayName: CS-Random Year Note
-Description: A valid 4-digit year (1700-2099) at any position, with the remaining 4 digits random (not all zeros and not 4OAK).
+Description: A valid 4-digit year (default 1700-2099, editable below) at any position, with the remaining 4 digits random (not all zeros and not 4OAK).
 BookRef: CS-690
 Tier: 8
 Examples: ["19752468", "12197534", "56197524"]
 --]]
 
 function match(ctx)
+    -- === Editable year range (inclusive) ===
+    local YEAR_MIN = 1700   -- earliest year to accept
+    local YEAR_MAX = 2099   -- latest year to accept
+    -- =======================================
+
     local d = ctx.digits
     if #d ~= 8 then return {matched = false} end
 
@@ -15,7 +20,7 @@ function match(ctx)
         local year_str = d:sub(start, start + 3)
         local year = tonumber(year_str)
 
-        if year and is_valid_year(year) then
+        if year and (year >= YEAR_MIN and year <= YEAR_MAX) then
             local rest = d:sub(1, start - 1) .. d:sub(start + 4)
             if #rest == 4 then
                 -- Exclude all-zero (True Year) and 4OAK non-zero (Numbered Year)
