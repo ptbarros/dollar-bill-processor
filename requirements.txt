@@ -16,6 +16,11 @@ torchvision>=0.15.0
 # (ultralytics/torch are still required for now: model export + EasyOCR.)
 onnxruntime>=1.17.0
 
+# Torch-free OCR backend (onnxruntime). Opt-in via DBP_OCR=rapid while it is
+# validated against EasyOCR on real bills; intended to eventually replace
+# EasyOCR so torch can be dropped from the shipped package entirely.
+rapidocr-onnxruntime>=1.4.0
+
 # Configuration
 Pillow>=10.0.0
 pyyaml>=6.0

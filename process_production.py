@@ -20,7 +20,6 @@ Usage:
 
 import cv2
 import numpy as np
-import easyocr
 import re
 import json
 import math
@@ -38,6 +37,7 @@ import yaml
 
 from pattern_engine_v3 import PatternEngineV3 as PatternEngine
 from yolo_backend import load_detector
+from ocr_backend import load_ocr_backend
 from debug_logger import dlog
 
 
@@ -900,8 +900,8 @@ class ProductionProcessor:
         # YOLO-based aligner for GUI alignment feature
         self.yolo_aligner = YOLOBillAligner(self.yolo_model)
 
-        print(f"Loading EasyOCR (GPU={use_gpu})...")
-        self.ocr_reader = easyocr.Reader(['en'], gpu=use_gpu, verbose=False)
+        self.ocr_reader = load_ocr_backend(use_gpu=use_gpu)
+        print(f"  OCR backend: {self.ocr_reader.name}")
 
         # Load pattern engine (Lua patterns)
         print(f"Loading pattern engine...")
@@ -3187,7 +3187,8 @@ class ProductionProcessor:
         ocr_results = self.ocr_reader.readtext(
             img,
             allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
-            detail=1
+            detail=1,
+            whole_image=True,  # full-image scan needs the text detector
         )
 
         candidates = []
