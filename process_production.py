@@ -374,7 +374,10 @@ class BillAligner:
 
         if lines is not None:
             for line in lines[:20]:  # Limit to 20 lines
-                x1, y1, x2, y2 = line[0]
+                # HoughLinesP returns (N,1,4) on some cv2/numpy builds and (N,4)
+                # on others; ravel handles both (the latter made line[0] a scalar
+                # and crashed unpacking on numpy 2.x).
+                x1, y1, x2, y2 = np.asarray(line).ravel()[:4]
                 if x2 != x1:  # Avoid division by zero
                     line_angle = np.degrees(np.arctan2(y2 - y1, x2 - x1))
                     # Normalize to [-45, 45] (we expect mostly horizontal/vertical lines)
