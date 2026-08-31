@@ -37,6 +37,7 @@ import shutil
 import yaml
 
 from pattern_engine_v3 import PatternEngineV3 as PatternEngine
+from yolo_backend import load_detector
 from debug_logger import dlog
 
 
@@ -850,10 +851,14 @@ class ProductionProcessor:
         self.use_gpu = use_gpu
 
         print(f"Loading YOLOv8 model: {yolo_model_path}")
-        self.yolo_model = YOLO(str(yolo_model_path))
+        self.yolo_model, self.use_onnx = load_detector(yolo_model_path, use_gpu=use_gpu)
 
-        # Determine and set device explicitly
-        if use_gpu and torch.cuda.is_available():
+        if self.use_onnx:
+            # ONNX Runtime picks its own execution provider (DirectML / CUDA / CPU);
+            # there is no torch device to manage here.
+            print(f"  Using ONNX Runtime backend: {self.yolo_model.providers}")
+        # Determine and set device explicitly (torch backend only)
+        elif use_gpu and torch.cuda.is_available():
             try:
                 # Test actual CUDA kernel execution to catch GPU incompatibility
                 # (e.g. Blackwell sm_120 with older PyTorch that only supports up to sm_90)

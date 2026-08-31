@@ -10,6 +10,12 @@ ultralytics>=8.0.0
 torch>=2.0.0
 torchvision>=0.15.0
 
+# ONNX Runtime backend for YOLO inference (no torch needed for detection).
+# CPU wheel here works everywhere; on a Windows GPU box install
+# onnxruntime-directml instead for GPU acceleration without a CUDA install.
+# (ultralytics/torch are still required for now: model export + EasyOCR.)
+onnxruntime>=1.17.0
+
 # Configuration
 Pillow>=10.0.0
 pyyaml>=6.0
