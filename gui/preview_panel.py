@@ -1292,7 +1292,12 @@ class PreviewPanel(QWidget):
         serial_images_layout.addWidget(self.serial_image_2, 1)
 
         # Pattern overlay filter: "__gas_pump__", specific pattern, or "__none__"
+        # _pattern_overlay_filter is what is rendered for the CURRENT bill;
+        # _sticky_overlay is the user's last explicit choice, re-applied to each
+        # new bill when that bill also has the pattern (so it can be scanned down
+        # the list) and falling back to "__none__" when it doesn't.
         self._pattern_overlay_filter = "__gas_pump__"
+        self._sticky_overlay = "__gas_pump__"
 
         serial_main_layout.addLayout(serial_images_layout)
 
@@ -2213,10 +2218,6 @@ class PreviewPanel(QWidget):
             back_btn.setEnabled(False)
 
         # Generate serial region crops on-demand (only if serial view is visible)
-        _of = getattr(self, '_pattern_overlay_filter', '__gas_pump__')
-        dlog("serial_overlay.show_bill", serial_visible=self.serial_frame.isVisible(),
-             overlay_filter=_of, bill_patterns=result.get('fancy_types', '') or '(none)',
-             filter_matches_bill=(_of in (result.get('fancy_types', '') or '')))
         if self.serial_frame.isVisible():
             # Update matched patterns for context menu (list of (internal_name, display_name) tuples)
             fancy_types_str = result.get('fancy_types', '')
@@ -2229,6 +2230,10 @@ class PreviewPanel(QWidget):
                 matched_patterns = []
             self.serial_image_1.set_matched_patterns(matched_patterns)
             self.serial_image_2.set_matched_patterns(matched_patterns)
+
+            # Reconcile the overlay (filter + label + cycler index) with THIS bill
+            # so the label doesn't stay stuck on a pattern the new bill lacks.
+            self._sync_overlay_to_bill([name for name, _ in matched_patterns])
 
             serial_crops, fresh_px_dev = self._generate_serial_region_crops(self._current_front_file)
             if len(serial_crops) >= 1:
@@ -2733,11 +2738,31 @@ class PreviewPanel(QWidget):
         # Apply the selection (this will update indices and refresh display)
         self._on_pattern_overlay_selected(next_pattern)
 
-    def _on_pattern_overlay_selected(self, pattern_filter: str):
-        """Handle pattern selection from cycling or context menu."""
-        self._pattern_overlay_filter = pattern_filter
+    def _sync_overlay_to_bill(self, matched_pattern_names: list):
+        """Reconcile the overlay for the current bill.
 
-        # Update the pattern mode label
+        Gas Pump / No Overlay always apply. A specific pattern applies only if
+        this bill actually has it (so it can be scanned down the list), otherwise
+        we fall back to No Overlay. Keeps the rendered filter, the label, and the
+        cycler index in sync so the label can't stay stuck on a pattern the new
+        bill doesn't have.
+        """
+        sticky = getattr(self, '_sticky_overlay', '__gas_pump__')
+        if sticky in ("__gas_pump__", "__none__") or sticky in matched_pattern_names:
+            effective = sticky
+        else:
+            effective = "__none__"
+
+        self._pattern_overlay_filter = effective
+        self._update_overlay_label(effective)
+
+        # Sync the cycler index on both serial widgets to the effective filter
+        for widget in (self.serial_image_1, self.serial_image_2):
+            options = widget._get_cycle_options()
+            widget._current_pattern_index = options.index(effective) if effective in options else 0
+
+    def _update_overlay_label(self, pattern_filter: str):
+        """Set the pattern-mode label text/style to match the given filter."""
         if pattern_filter == "__gas_pump__":
             self.pattern_mode_label.setText("Gas Pump")
             self.pattern_mode_label.setStyleSheet("""
@@ -2759,6 +2784,16 @@ class PreviewPanel(QWidget):
                 QLabel { color: #2a6; font-size: 9pt; font-weight: bold; padding: 2px 4px; background: #e8f5e9; border-radius: 3px; }
                 QLabel:hover { background: #d8ead8; }
             """)
+
+    def _on_pattern_overlay_selected(self, pattern_filter: str):
+        """Handle pattern selection from cycling or context menu."""
+        self._pattern_overlay_filter = pattern_filter
+        # Remember the user's explicit choice so it re-applies to later bills
+        # that also have this pattern (see _sync_overlay_to_bill).
+        self._sticky_overlay = pattern_filter
+
+        # Update the pattern mode label
+        self._update_overlay_label(pattern_filter)
 
         # Sync the cycle index between both serial images
         options = self.serial_image_1._get_cycle_options()
