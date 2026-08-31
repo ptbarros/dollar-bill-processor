@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from pattern_engine_v3 import PatternEngineV3 as PatternEngine
 
 from settings_manager import get_settings
+from debug_logger import dlog
 
 
 def _load_crosshair_settings():
@@ -1816,11 +1817,15 @@ class PreviewPanel(QWidget):
                     # Draw group boxes (boxes spanning multiple digits)
                     if is_pattern_mode and pattern_group_boxes:
                         for gb in pattern_group_boxes:
-                            # Get start and end positions
-                            from_pos = gb.get('from', 0)
-                            to_pos = gb.get('to', 0)
+                            # Get start and end positions. Cast to int: on some
+                            # Lua builds (e.g. the Windows package) these come
+                            # back as floats, and cv2 rejects a float thickness/
+                            # coordinate -- which would throw and abort the whole
+                            # overlay, so year-note boxes silently vanished.
+                            from_pos = int(gb.get('from', 0))
+                            to_pos = int(gb.get('to', 0))
                             gb_color = PATTERN_COLORS.get(gb.get('color', 'magenta'), (255, 0, 255))
-                            thickness = gb.get('thickness', 3)
+                            thickness = int(gb.get('thickness', 3))
 
                             # Get the bounding rect spanning from first to last digit
                             if from_pos in digit_rects and to_pos in digit_rects:
@@ -1829,10 +1834,10 @@ class PreviewPanel(QWidget):
 
                                 # Combine rects: min x1/y1, max x2/y2 with padding
                                 padding = 4
-                                gx1 = min(r1[0], r2[0]) - padding
-                                gy1 = min(r1[1], r2[1]) - padding
-                                gx2 = max(r1[2], r2[2]) + padding
-                                gy2 = max(r1[3], r2[3]) + padding
+                                gx1 = int(min(r1[0], r2[0]) - padding)
+                                gy1 = int(min(r1[1], r2[1]) - padding)
+                                gx2 = int(max(r1[2], r2[2]) + padding)
+                                gy2 = int(max(r1[3], r2[3]) + padding)
 
                                 # Draw the group box
                                 cv2.rectangle(crop, (gx1, gy1), (gx2, gy2), gb_color, thickness)
@@ -1848,6 +1853,10 @@ class PreviewPanel(QWidget):
             return pixmaps, max_deviation
 
         except Exception as e:
+            # This swallowed a per-platform cv2 error that made whole overlays
+            # (notably year-note group boxes) render nothing. Log it so the
+            # cause is visible instead of silently returning no crops.
+            dlog("serial_overlay.render_error", error=f"{type(e).__name__}: {e}")
             print(f"Error generating serial crops: {e}")
             return [], 0.0
 
