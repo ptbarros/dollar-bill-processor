@@ -1968,7 +1968,7 @@ class ProductionProcessor:
 
         # Helper function to extract text from a region using OCR
         def ocr_region(img: np.ndarray, boxes: list, allowlist: str, clean_func=None,
-                       extra_bottom_pad: int = 0, upscale: int = 1) -> str:
+                       extra_bottom_pad: int = 0, upscale: int = 1, detect: bool = False) -> str:
             if not boxes or img is None or img.size == 0:
                 return ''
             h, w = img.shape[:2]
@@ -1999,7 +1999,8 @@ class ProductionProcessor:
                 ocr_results = self.ocr_reader.readtext(
                     crop,
                     allowlist=allowlist,
-                    detail=1
+                    detail=1,
+                    detect=detect,  # multi-line regions (series) need the detector
                 )
                 if ocr_results:
                     # Combine all text results
@@ -2265,7 +2266,8 @@ class ProductionProcessor:
                     front_img, series_boxes,
                     'SERIES0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ ',
                     clean_series,
-                    upscale=2  # 2x upscale helps OCR detect small suffix letter
+                    upscale=2,  # 2x upscale helps OCR detect small suffix letter
+                    detect=True  # "SERIES" + year are two lines; needs text detection
                 )
 
             # Extract front plate (class 4)

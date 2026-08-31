@@ -41,7 +41,8 @@ class EasyOCRBackend:
         import easyocr
         self.reader = easyocr.Reader(["en"], gpu=use_gpu, verbose=False)
 
-    def readtext(self, image, allowlist="", detail=1, whole_image=False, **kw):
+    def readtext(self, image, allowlist="", detail=1, whole_image=False, detect=False, **kw):
+        # whole_image/detect are RapidOCR routing hints; EasyOCR always detects.
         return self.reader.readtext(image, allowlist=allowlist, detail=detail, **kw)
 
 
@@ -63,12 +64,16 @@ class RapidOCRBackend:
             text = "".join(c for c in text if c in allowed)
         return text
 
-    def readtext(self, image, allowlist="", detail=1, whole_image=False, **kw):
+    def readtext(self, image, allowlist="", detail=1, whole_image=False, detect=False, **kw):
         h, w = image.shape[:2]
         full_bbox = [[0, 0], [w, 0], [w, h], [0, h]]
 
-        if whole_image:
-            # full detection + recognition (last-resort whole-image scan)
+        # Use RapidOCR's text detector for the full-image scan AND for multi-line /
+        # multi-token regions (series year = "SERIES" + year, plates). Recognition-
+        # only is reserved for genuinely single-line crops (the serial), where the
+        # detector tends to over-segment.
+        if whole_image or detect:
+            # full detection + recognition
             res, _ = self.engine(image, use_det=True, use_cls=False, use_rec=True)
             rows = []
             for item in (res or []):
