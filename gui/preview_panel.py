@@ -24,6 +24,7 @@ from pattern_engine_v3 import PatternEngineV3 as PatternEngine
 
 from settings_manager import get_settings
 from debug_logger import dlog
+from serial_overlay import draw_serial_overlay
 
 
 def _load_crosshair_settings():
@@ -1667,185 +1668,31 @@ class PreviewPanel(QWidget):
                 if zoom != 1.0:
                     crop = cv2.resize(crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
 
-                # Get overlay filter mode
-                overlay_filter = getattr(self, '_pattern_overlay_filter', '__gas_pump__')
-                is_gas_pump_mode = (overlay_filter == "__gas_pump__")
-                is_pattern_mode = (overlay_filter not in ("__gas_pump__", "__none__"))
-
-                # Draw serial bounding box only in gas pump mode
-                if is_gas_pump_mode and self._pattern_overlay_enabled:
-                    box_x1 = int((x1 - crop_x1) * zoom)
-                    box_y1 = int((y1 - crop_y1) * zoom)
-                    box_x2 = int((x2 - crop_x1) * zoom)
-                    box_y2 = int((y2 - crop_y1) * zoom)
-                    cv2.rectangle(crop, (box_x1, box_y1), (box_x2, box_y2), bbox_color, 2)
-
-                # Draw pattern overlay if enabled
+                # Draw pattern / gas-pump overlay (shared with the crop
+                # pipeline so the saved overlay crop matches the preview exactly)
                 if self._pattern_overlay_enabled:
-                    # Get matched patterns from current result for pattern-based highlighting
+                    overlay_filter = getattr(self, '_pattern_overlay_filter', '__gas_pump__')
+
                     matched_patterns = []
                     if self.current_result:
                         fancy_types_str = self.current_result.get('fancy_types', '')
                         if fancy_types_str:
                             matched_patterns = [p.strip() for p in fancy_types_str.split(',')]
 
-                    # Get serial for pattern highlights
                     serial = self.current_result.get('serial', '') if self.current_result else ''
 
-                    # Get pattern-based digit highlights for specific pattern mode
-                    pattern_highlights = []
-                    pattern_connectors = []
-                    pattern_group_boxes = []
-                    if is_pattern_mode and serial:
-                        patterns_for_highlights = [overlay_filter] if overlay_filter in matched_patterns else []
-                        if patterns_for_highlights:
-                            viz_data = self.pattern_engine.get_digit_highlights(serial, patterns_for_highlights)
-                            pattern_highlights = viz_data.get('highlights', [])
-                            pattern_connectors = viz_data.get('connectors', [])
-                            pattern_group_boxes = viz_data.get('group_boxes', [])
-
-                    # Color map for pattern highlights (CSS name -> BGR)
-                    PATTERN_COLORS = {
-                        'purple': (128, 0, 128),    # Flipper digits
-                        'blue': (255, 0, 0),        # Binary
-                        'cyan': (255, 255, 0),      # Trinary
-                        'orange': (0, 165, 255),    # Radar pairs
-                        'coral': (80, 127, 255),    # Radar pair 2
-                        'gold': (0, 215, 255),      # Radar pair 3 / Quads
-                        'salmon': (114, 128, 250),  # Radar pair 4
-                        'magenta': (255, 0, 255),   # Repeater
-                        'yellow': (0, 255, 255),    # Solid/near-solid
-                        'lime': (0, 255, 0),        # Ladder
-                        'green': (0, 128, 0),       # Alias for common AI usage
-                        'teal': (128, 128, 0),      # Pairs
-                        'red': (0, 0, 255),         # Broken/invalid
-                        'gray': (128, 128, 128),    # Muted/prefix
-                    }
-
-                    # Store digit box info for drawing connectors and group boxes
-                    digit_centers = {}  # digit_idx -> (center_x, center_y)
-                    digit_rects = {}    # digit_idx -> (x1, y1, x2, y2)
-
-                    # Draw colored boxes for each digit
-                    # Sort digit boxes left-to-right to ensure position indices match pattern positions
-                    digit_boxes = sorted(gp_result['digit_boxes'], key=lambda db: db['x1'])
-
-                    for idx, digit_box in enumerate(digit_boxes):
-                        # Convert digit coordinates to crop-relative, then apply zoom
-                        dx1 = int((digit_box['x1'] + (x1 - crop_x1)) * zoom)
-                        dy1 = int((digit_box['y1'] + (y1 - crop_y1)) * zoom)
-                        dx2 = int((digit_box['x2'] + (x1 - crop_x1)) * zoom)
-                        dy2 = int((digit_box['y2'] + (y1 - crop_y1)) * zoom)
-
-                        # Map digit_box index to pattern highlight index (skip letters)
-                        digit_idx = sum(1 for db in digit_boxes[:idx] if not db['is_letter'])
-
-                        # Store center and rect for connectors and group boxes
-                        if not digit_box['is_letter']:
-                            digit_centers[digit_idx] = ((dx1 + dx2) // 2, (dy1 + dy2) // 2)
-                            digit_rects[digit_idx] = (dx1, dy1, dx2, dy2)
-
-                        if is_gas_pump_mode:
-                            # Gas pump mode: show all boxes with deviation coloring
-                            if digit_box['is_letter']:
-                                color = (128, 128, 128)  # Gray
-                            elif digit_box['deviation'] >= self._gas_pump_threshold:
-                                color = (0, 0, 255)  # Red (BGR) - shifted
-                            else:
-                                color = (0, 255, 0)  # Green (BGR) - normal
-                            cv2.rectangle(crop, (dx1, dy1), (dx2, dy2), color, 2)
-
-                        elif is_pattern_mode:
-                            # Pattern mode: only show boxes for digits that match the pattern
-                            if not digit_box['is_letter'] and digit_idx < len(pattern_highlights):
-                                ph = pattern_highlights[digit_idx]
-                                if ph['highlights']:
-                                    # This digit matches the pattern - show it
-                                    first_highlight = ph['highlights'][0]
-                                    pattern_color = first_highlight.get('color', 'lime')
-                                    color = PATTERN_COLORS.get(pattern_color, (0, 255, 0))
-                                    cv2.rectangle(crop, (dx1, dy1), (dx2, dy2), color, 2)
-
-                    # Draw connector lines for relational patterns (e.g., RADAR pairs)
-                    if is_pattern_mode and pattern_connectors:
-                        for conn in pattern_connectors:
-                            # Support both formats: {positions: [a, b]} and {from: a, to: b}
-                            if 'positions' in conn:
-                                pos1, pos2 = conn['positions']
-                            else:
-                                pos1 = conn.get('from', 0)
-                                pos2 = conn.get('to', 0)
-
-                            if pos1 in digit_centers and pos2 in digit_centers:
-                                pt1 = digit_centers[pos1]
-                                pt2 = digit_centers[pos2]
-                                conn_color = PATTERN_COLORS.get(conn.get('color', 'orange'), (0, 165, 255))
-                                conn_style = conn.get('style', 'arc')
-
-                                # Calculate arc - height proportional to distance, but capped
-                                mid_x = (pt1[0] + pt2[0]) // 2
-                                distance = abs(pt2[0] - pt1[0])
-                                # Scale gently and cap at 35px to stay in viewable area
-                                arc_height = min(35, max(15, distance // 8))
-                                mid_y = min(pt1[1], pt2[1]) - arc_height
-
-                                if conn_style in ('broken', 'dashed'):
-                                    # Broken/dashed pair: X marks near each digit (no connecting line)
-                                    x_size = 5
-                                    # Draw small X near the left digit
-                                    x1_pos = pt1[0] + 15  # Offset right from digit center
-                                    x1_y = pt1[1] - 10    # Slightly above
-                                    cv2.line(crop, (x1_pos - x_size, x1_y - x_size), (x1_pos + x_size, x1_y + x_size), conn_color, 2, cv2.LINE_AA)
-                                    cv2.line(crop, (x1_pos - x_size, x1_y + x_size), (x1_pos + x_size, x1_y - x_size), conn_color, 2, cv2.LINE_AA)
-                                    # Draw small X near the right digit
-                                    x2_pos = pt2[0] - 15  # Offset left from digit center
-                                    x2_y = pt2[1] - 10    # Slightly above
-                                    cv2.line(crop, (x2_pos - x_size, x2_y - x_size), (x2_pos + x_size, x2_y + x_size), conn_color, 2, cv2.LINE_AA)
-                                    cv2.line(crop, (x2_pos - x_size, x2_y + x_size), (x2_pos + x_size, x2_y - x_size), conn_color, 2, cv2.LINE_AA)
-                                elif conn_style == 'line':
-                                    # Straight line between digit centers
-                                    cv2.line(crop, pt1, pt2, conn_color, 2, cv2.LINE_AA)
-                                elif conn_style == 'bracket':
-                                    # Bracket connector below digits
-                                    bracket_y = max(pt1[1], pt2[1]) + 10
-                                    cv2.line(crop, (pt1[0], pt1[1] + 5), (pt1[0], bracket_y), conn_color, 2, cv2.LINE_AA)
-                                    cv2.line(crop, (pt1[0], bracket_y), (pt2[0], bracket_y), conn_color, 2, cv2.LINE_AA)
-                                    cv2.line(crop, (pt2[0], bracket_y), (pt2[0], pt2[1] + 5), conn_color, 2, cv2.LINE_AA)
-                                elif conn_style == 'arrow':
-                                    # Arrow from left to right
-                                    cv2.arrowedLine(crop, pt1, pt2, conn_color, 2, cv2.LINE_AA, tipLength=0.15)
-                                else:
-                                    # Default arc connector: curved line above digits
-                                    pts = np.array([pt1, (mid_x, mid_y), pt2], np.int32)
-                                    cv2.polylines(crop, [pts], False, conn_color, 2, cv2.LINE_AA)
-
-                    # Draw group boxes (boxes spanning multiple digits)
-                    if is_pattern_mode and pattern_group_boxes:
-                        for gb in pattern_group_boxes:
-                            # Get start and end positions. Cast to int: on some
-                            # Lua builds (e.g. the Windows package) these come
-                            # back as floats, and cv2 rejects a float thickness/
-                            # coordinate -- which would throw and abort the whole
-                            # overlay, so year-note boxes silently vanished.
-                            from_pos = int(gb.get('from', 0))
-                            to_pos = int(gb.get('to', 0))
-                            gb_color = PATTERN_COLORS.get(gb.get('color', 'magenta'), (255, 0, 255))
-                            thickness = int(gb.get('thickness', 3))
-
-                            # Get the bounding rect spanning from first to last digit
-                            if from_pos in digit_rects and to_pos in digit_rects:
-                                r1 = digit_rects[from_pos]
-                                r2 = digit_rects[to_pos]
-
-                                # Combine rects: min x1/y1, max x2/y2 with padding
-                                padding = 4
-                                gx1 = int(min(r1[0], r2[0]) - padding)
-                                gy1 = int(min(r1[1], r2[1]) - padding)
-                                gx2 = int(max(r1[2], r2[2]) + padding)
-                                gy2 = int(max(r1[3], r2[3]) + padding)
-
-                                # Draw the group box
-                                cv2.rectangle(crop, (gx1, gy1), (gx2, gy2), gb_color, thickness)
+                    draw_serial_overlay(
+                        crop,
+                        gp_result['digit_boxes'],
+                        zoom=zoom,
+                        overlay_filter=overlay_filter,
+                        serial=serial,
+                        matched_patterns=matched_patterns,
+                        pattern_engine=self.pattern_engine,
+                        gas_pump_threshold=self._gas_pump_threshold,
+                        tight_box_rel=(x1 - crop_x1, y1 - crop_y1, x2 - crop_x1, y2 - crop_y1),
+                        bbox_color=bbox_color,
+                    )
 
                 # Convert to QPixmap
                 rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)

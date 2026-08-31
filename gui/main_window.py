@@ -30,6 +30,7 @@ from .layout_manager import (
 # Import backend
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from settings_manager import SettingsManager, get_settings
+from version import get_version_string
 from correction_manager import CorrectionManager
 from session_recovery import SessionRecoveryManager, get_recovery_manager
 from debug_logger import dlog, fingerprint
@@ -494,6 +495,12 @@ class MainWindow(QMainWindow):
                 # Set alignment info for crop generation
                 pair.front_align_angle = result.get('front_align_angle', 0.0)
                 pair.front_align_flipped = result.get('front_align_flipped', False)
+                # Pattern info drives the serial overlay crop. pattern_override
+                # (right-click "Set Pattern...") picks which overlay to draw;
+                # fancy_types is the fallback set of matched patterns.
+                fancy_types_str = result.get('fancy_types', '') or ''
+                pair.fancy_types = [p.strip() for p in fancy_types_str.split(',') if p.strip()]
+                pair.pattern_override = result.get('pattern_override')
 
                 # Generate crops
                 processor.generate_crops(pair, output_dir)
@@ -1180,7 +1187,7 @@ class MainWindow(QMainWindow):
         """Show about dialog."""
         QMessageBox.about(
             self, "About Dollar Bill Processor",
-            "Dollar Bill Processor v1.0\n\n"
+            f"Dollar Bill Processor v{get_version_string()}\n\n"
             "Automated detection of fancy serial numbers\n"
             "on US currency bills.\n\n"
             "Features:\n"
