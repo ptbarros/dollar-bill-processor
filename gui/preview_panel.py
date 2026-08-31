@@ -2213,6 +2213,10 @@ class PreviewPanel(QWidget):
             back_btn.setEnabled(False)
 
         # Generate serial region crops on-demand (only if serial view is visible)
+        _of = getattr(self, '_pattern_overlay_filter', '__gas_pump__')
+        dlog("serial_overlay.show_bill", serial_visible=self.serial_frame.isVisible(),
+             overlay_filter=_of, bill_patterns=result.get('fancy_types', '') or '(none)',
+             filter_matches_bill=(_of in (result.get('fancy_types', '') or '')))
         if self.serial_frame.isVisible():
             # Update matched patterns for context menu (list of (internal_name, display_name) tuples)
             fancy_types_str = result.get('fancy_types', '')
