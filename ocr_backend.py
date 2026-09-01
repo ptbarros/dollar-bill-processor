@@ -53,8 +53,17 @@ class RapidOCRBackend:
 
     def __init__(self, use_gpu=False):
         from rapidocr_onnxruntime import RapidOCR
-        # RapidOCR bundles its own ONNX models; CPU by default.
-        self.engine = RapidOCR()
+        # RapidOCR bundles a lightweight (mobile) recognizer; DBP_RAPIDOCR_REC can
+        # point at a heavier/English rec model (with DBP_RAPIDOCR_REC_KEYS for its
+        # dict if it isn't the default Chinese one) to improve small-font digits.
+        kwargs = {}
+        rec = os.environ.get("DBP_RAPIDOCR_REC")
+        if rec:
+            kwargs["rec_model_path"] = rec
+            keys = os.environ.get("DBP_RAPIDOCR_REC_KEYS")
+            if keys:
+                kwargs["rec_keys_path"] = keys
+        self.engine = RapidOCR(**kwargs)
 
     @staticmethod
     def _filter(text, allowlist):
