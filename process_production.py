@@ -254,6 +254,9 @@ class BillPair:
     # Which pattern's overlay to draw on the serial overlay crop (from the
     # right-click "Set Pattern..." choice). None -> fall back to top match.
     pattern_override: Optional[str] = None
+    # Multiple selected patterns -> one overlay crop each (and all names on the
+    # label). Empty -> use pattern_override / top-match fallback (single crop).
+    pattern_overrides: list = field(default_factory=list)
 
 
 @dataclass
@@ -3390,11 +3393,11 @@ class ProductionProcessor:
             crop_paths.append(crop_path)
 
         # Append a serial overlay crop (digit bounding boxes + pattern overlay)
-        # as the final crop, so listings can show which pattern the bill matched.
-        overlay_crop = self._generate_serial_overlay_crop(front_img, front_detections, pair)
-        if overlay_crop is not None:
-            i = len(crop_order) + 1
-            safe_serial = _safe_serial_for_filename(pair.serial)
+        # per selected pattern, so listings can show which pattern(s) the bill has.
+        overlay_crops = self._generate_serial_overlay_crops(front_img, front_detections, pair)
+        safe_serial = _safe_serial_for_filename(pair.serial)
+        for n, overlay_crop in enumerate(overlay_crops):
+            i = len(crop_order) + 1 + n
             crop_path = output_dir / f"{safe_serial}_{i:02d}.jpg"
             ok = cv2.imwrite(str(crop_path), overlay_crop, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
             if not ok:
@@ -3405,22 +3408,23 @@ class ProductionProcessor:
         timing.stop('crops')
         return crop_paths
 
-    def _generate_serial_overlay_crop(self, front_img, front_detections, pair):
-        """Build the serial-region crop with digit boxes + pattern overlay drawn.
+    def _generate_serial_overlay_crops(self, front_img, front_detections, pair):
+        """Build serial-region overlay crops -- one per selected pattern.
 
         Mirrors the GUI preview (``preview_panel._generate_serial_region_crops``)
-        via the shared ``serial_overlay.draw_serial_overlay`` so the saved crop
-        matches what the user sees. Which pattern's overlay is drawn is chosen by
-        ``pair.pattern_override`` (right-click "Set Pattern..."), falling back to
-        the bill's top matched pattern. Returns a BGR image, or None.
+        via the shared ``serial_overlay.draw_serial_overlay`` so each saved crop
+        matches what the user sees. If ``pair.pattern_overrides`` lists patterns
+        (right-click "Set Pattern(s)..."), one crop is produced for each; otherwise
+        a single crop is produced using ``pair.pattern_override`` / the top matched
+        pattern. Returns a list of BGR images (possibly empty).
         """
         from serial_overlay import draw_serial_overlay, resolve_overlay_filter, pad_to_min
 
         if front_img is None or not front_detections:
-            return None
+            return []
         serial_boxes = front_detections.get('serial_number') or []
         if not serial_boxes:
-            return None
+            return []
 
         # Use the highest-confidence serial region.
         x1, y1, x2, y2, _conf = max(serial_boxes, key=lambda b: b[4])
@@ -3431,46 +3435,56 @@ class ProductionProcessor:
         crop_x2 = min(w, x2 + padding)
         crop_y2 = min(h, y2 + padding)
 
-        crop = front_img[crop_y1:crop_y2, crop_x1:crop_x2].copy()
-        if crop.size == 0:
-            return None
+        base_crop = front_img[crop_y1:crop_y2, crop_x1:crop_x2].copy()
+        if base_crop.size == 0:
+            return []
         tight_crop = front_img[y1:y2, x1:x2]
 
         try:
             gp_result = self.analyze_gas_pump_digits(tight_crop)
         except Exception as e:
             dlog("crop.overlay.gp_failed", serial=pair.serial, error=str(e))
-            return None
+            return []
 
         zoom = 2.0
-        crop = cv2.resize(crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
+        base_crop = cv2.resize(base_crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
 
         matched_patterns = list(pair.fancy_types or [])
-        overlay_filter = resolve_overlay_filter(None, matched_patterns, pair.pattern_override)
+
+        # One overlay filter per crop: each selected pattern, or a single fallback.
+        overrides = [p for p in (pair.pattern_overrides or []) if p]
+        if overrides:
+            overlay_filters = overrides
+        else:
+            overlay_filters = [resolve_overlay_filter(None, matched_patterns, pair.pattern_override)]
 
         try:
             gas_pump_threshold = self.pattern_engine.get_gas_pump_threshold()
         except Exception:
             gas_pump_threshold = 3.5
 
-        try:
-            draw_serial_overlay(
-                crop,
-                gp_result.get('digit_boxes', []),
-                zoom=zoom,
-                overlay_filter=overlay_filter,
-                serial=pair.serial or '',
-                matched_patterns=matched_patterns,
-                pattern_engine=self.pattern_engine,
-                gas_pump_threshold=gas_pump_threshold,
-                tight_box_rel=(x1 - crop_x1, y1 - crop_y1, x2 - crop_x1, y2 - crop_y1),
-            )
-        except Exception as e:
-            dlog("crop.overlay.draw_failed", serial=pair.serial, error=str(e))
-            # Still return the plain (zoomed) serial crop rather than nothing.
-
-        # Pad to eBay's 500px minimum dimension (black bars, serial centered).
-        return pad_to_min(crop)
+        crops = []
+        for overlay_filter in overlay_filters:
+            crop = base_crop.copy()
+            try:
+                draw_serial_overlay(
+                    crop,
+                    gp_result.get('digit_boxes', []),
+                    zoom=zoom,
+                    overlay_filter=overlay_filter,
+                    serial=pair.serial or '',
+                    matched_patterns=matched_patterns,
+                    pattern_engine=self.pattern_engine,
+                    gas_pump_threshold=gas_pump_threshold,
+                    tight_box_rel=(x1 - crop_x1, y1 - crop_y1, x2 - crop_x1, y2 - crop_y1),
+                )
+            except Exception as e:
+                dlog("crop.overlay.draw_failed", serial=pair.serial,
+                     pattern=str(overlay_filter), error=str(e))
+                # Still emit the plain (zoomed) serial crop rather than nothing.
+            # Pad to eBay's 500px minimum dimension (black bars, serial centered).
+            crops.append(pad_to_min(crop))
+        return crops
 
     def process_directory(
         self,

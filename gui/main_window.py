@@ -495,12 +495,14 @@ class MainWindow(QMainWindow):
                 # Set alignment info for crop generation
                 pair.front_align_angle = result.get('front_align_angle', 0.0)
                 pair.front_align_flipped = result.get('front_align_flipped', False)
-                # Pattern info drives the serial overlay crop. pattern_override
-                # (right-click "Set Pattern...") picks which overlay to draw;
-                # fancy_types is the fallback set of matched patterns.
+                # Pattern info drives the serial overlay crop(s). pattern_overrides
+                # (right-click "Set Pattern(s)...") picks which overlays to draw --
+                # one crop each; fancy_types is the fallback set of matched patterns.
                 fancy_types_str = result.get('fancy_types', '') or ''
                 pair.fancy_types = [p.strip() for p in fancy_types_str.split(',') if p.strip()]
                 pair.pattern_override = result.get('pattern_override')
+                overrides_str = result.get('pattern_overrides') or ''
+                pair.pattern_overrides = [p.strip() for p in overrides_str.split(',') if p.strip()]
 
                 # Generate crops
                 processor.generate_crops(pair, output_dir)
@@ -537,6 +539,21 @@ class MainWindow(QMainWindow):
         except Exception:
             return pattern_str
 
+    def _selected_patterns(self, result: dict) -> list:
+        """Resolve which pattern name(s) a bill's label/crops should use.
+
+        Priority: multi-select pattern_overrides -> single pattern_override ->
+        the first detected fancy type. Returns a list (may be empty).
+        """
+        overrides = result.get('pattern_overrides')
+        if overrides:
+            return [p.strip() for p in overrides.split(',') if p.strip()]
+        single = result.get('pattern_override')
+        if single:
+            return [single]
+        patterns = [p.strip() for p in (result.get('fancy_types', '') or '').split(',') if p.strip()]
+        return [patterns[0]] if patterns else []
+
     def _generate_labels(self, results: list, output_dir: Path):
         """Generate printable labels file for bills.
 
@@ -549,25 +566,19 @@ class MainWindow(QMainWindow):
         with open(labels_file, 'a', encoding='utf-8') as f:
             for result in results:
                 serial = result.get('serial', 'Unknown')
-                fancy_types = result.get('fancy_types', '')
                 position = result.get('position', '')
                 series = result.get('series_year', '')
 
-                # Check for user override, otherwise use first pattern
-                pattern_override = result.get('pattern_override')
-                if pattern_override:
-                    pattern_str = pattern_override
-                else:
-                    patterns = [p.strip() for p in fancy_types.split(',') if p.strip()]
-                    pattern_str = patterns[0] if patterns else 'No Pattern'
-
-                # Get catalog for the selected pattern (keyed by internal name)
-                catalog = ''
-                if pattern_str and pattern_str != 'No Pattern':
-                    catalog = self.settings.get_pattern_catalog(pattern_str, '')
-
-                # Show the friendly display name on the label, not the internal name
-                pattern_display = self._pattern_display_name(pattern_str)
+                # Selected pattern(s): may be several (multi-select), each with
+                # its own catalog number.
+                selected = self._selected_patterns(result)
+                if not selected:
+                    selected = ['No Pattern']
+                pattern_display = ', '.join(self._pattern_display_name(p) for p in selected)
+                catalog = ', '.join(
+                    c for c in (self.settings.get_pattern_catalog(p, '') for p in selected
+                                if p != 'No Pattern') if c
+                )
 
                 # Get user note if present
                 note = result.get('note', '')
@@ -611,23 +622,18 @@ class MainWindow(QMainWindow):
         first_label = True
         for result in results:
             serial = result.get('serial', 'Unknown')
-            fancy_types = result.get('fancy_types', '')
             position = result.get('position', '')
             series = result.get('series_year', '')
 
-            pattern_override = result.get('pattern_override')
-            if pattern_override:
-                pattern_str = pattern_override
-            else:
-                patterns = [p.strip() for p in fancy_types.split(',') if p.strip()]
-                pattern_str = patterns[0] if patterns else 'No Pattern'
-
-            catalog = ''
-            if pattern_str and pattern_str != 'No Pattern':
-                catalog = self.settings.get_pattern_catalog(pattern_str, '')
-
-            # Show the friendly display name on the label, not the internal name
-            pattern_display = self._pattern_display_name(pattern_str)
+            # Selected pattern(s): may be several (multi-select).
+            selected = self._selected_patterns(result)
+            if not selected:
+                selected = ['No Pattern']
+            pattern_display = ', '.join(self._pattern_display_name(p) for p in selected)
+            catalog = ', '.join(
+                c for c in (self.settings.get_pattern_catalog(p, '') for p in selected
+                            if p != 'No Pattern') if c
+            )
 
             note = result.get('note', '')
 
@@ -1279,7 +1285,7 @@ class MainWindow(QMainWindow):
                 'front_align_angle', 'front_align_flipped',
                 'series_year', 'front_plate', 'back_plate', 'potential_mule', 'serial_mismatch',
                 'viewed', 'cropped', 'sent_for_review', 'checked',
-                'note', 'pattern_override'
+                'note', 'pattern_override', 'pattern_overrides'
             ], extrasaction='ignore')
             writer.writeheader()
             writer.writerows(self.current_results)
@@ -2199,7 +2205,7 @@ class MainWindow(QMainWindow):
                 'front_align_angle', 'front_align_flipped',
                 'series_year', 'front_plate', 'back_plate', 'potential_mule', 'serial_mismatch',
                 'viewed', 'cropped', 'sent_for_review', 'checked',
-                'note', 'pattern_override'
+                'note', 'pattern_override', 'pattern_overrides'
             ], extrasaction='ignore')
             writer.writeheader()
             writer.writerows(self.current_results)
