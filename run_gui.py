@@ -5,6 +5,7 @@ Dollar Bill Processor - GUI Launcher
 Launches the graphical user interface for processing and reviewing bills.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -64,8 +65,13 @@ def _selftest(image_path: str) -> int:
         return 1
 
     model = app_base() / "best.pt"
-    proc = ProductionProcessor(str(model))
-    print(f"SELFTEST backend: yolo_onnx={getattr(proc, 'use_onnx', '?')} ocr={proc.ocr_reader.name}")
+    # DBP_SELFTEST_GPU=1 exercises the accelerated provider path (OpenVINO / CUDA /
+    # DirectML) so a packaged build can be verified end-to-end, not just on CPU.
+    use_gpu = os.environ.get("DBP_SELFTEST_GPU") == "1"
+    proc = ProductionProcessor(str(model), use_gpu=use_gpu)
+    providers = getattr(getattr(proc, "yolo_model", None), "providers", None)
+    print(f"SELFTEST backend: yolo_onnx={getattr(proc, 'use_onnx', '?')} "
+          f"ocr={proc.ocr_reader.name} use_gpu={use_gpu} providers={providers}")
     img = cv2.imread(image_path)
     if img is None:
         print(f"SELFTEST FAIL: could not read {image_path}")
