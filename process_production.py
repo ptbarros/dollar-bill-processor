@@ -2296,7 +2296,14 @@ class ProductionProcessor:
                 bx1, by1, bx2, by2, bconf = best_box
                 h, w = front_img.shape[:2]
                 pad = 5
-                crop = front_img[max(0,by1-pad):min(h,by2+pad), max(0,bx1-pad):min(w,bx2+pad)]
+                # Extra room on the right: a trailing plate digit can sit near the
+                # detected box edge and get clipped or distorted. The check letter
+                # is on the left, so widening right only helps the digits without
+                # disturbing letter detection. 15px is the sweet spot on the test
+                # batch (recovers clipped/distorted digits with zero regressions);
+                # larger values start pulling in noise as phantom digits.
+                right_pad = 15
+                crop = front_img[max(0,by1-pad):min(h,by2+pad), max(0,bx1-pad):min(w,bx2+right_pad)]
 
                 # Try contour-based detection for FW and check letter
                 contour_result = detect_check_letter_by_contour(crop)
