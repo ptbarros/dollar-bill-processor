@@ -51,7 +51,7 @@ class OnnxYoloDetector:
     def __init__(self, model_path, providers=None, imgsz=None, use_gpu=True):
         import onnxruntime as ort  # local import so the module loads without ORT
 
-        self.session = self._make_session(ort, str(model_path), providers, use_gpu)
+        self.session, self.backend = self._make_session(ort, str(model_path), providers, use_gpu)
         self.providers = self.session.get_providers()
         self.input_name = self.session.get_inputs()[0].name
 
@@ -60,25 +60,37 @@ class OnnxYoloDetector:
         self.names = self._parse_names(meta)
 
     @staticmethod
+    def _label(prov, opts):
+        """Human-readable backend label, e.g. 'OpenVINO:GPU', 'CUDA', 'CPU'."""
+        p0 = prov[0]
+        if p0 == "OpenVINOExecutionProvider":
+            return f"OpenVINO:{(opts[0] or {}).get('device_type', '?')}"
+        return {"CUDAExecutionProvider": "CUDA",
+                "DmlExecutionProvider": "DirectML"}.get(p0, "CPU")
+
+    @staticmethod
     def _make_session(ort, model_path, providers, use_gpu):
         # Explicit provider list (tests / force-CPU): use verbatim.
         if providers is not None:
-            return ort.InferenceSession(model_path, providers=providers)
+            sess = ort.InferenceSession(model_path, providers=providers)
+            return sess, OnnxYoloDetector._label(providers, [{}])
         prov, opts = OnnxYoloDetector._auto_providers(ort, use_gpu)
         try:
-            return ort.InferenceSession(model_path, providers=prov, provider_options=opts)
+            sess = ort.InferenceSession(model_path, providers=prov, provider_options=opts)
+            return sess, OnnxYoloDetector._label(prov, opts)
         except Exception:
             # OpenVINO iGPU (device GPU) can be unavailable -> retry OpenVINO CPU, then plain CPU.
             if "OpenVINOExecutionProvider" in prov:
                 try:
-                    return ort.InferenceSession(
+                    sess = ort.InferenceSession(
                         model_path,
                         providers=["OpenVINOExecutionProvider", "CPUExecutionProvider"],
                         provider_options=[{"device_type": "CPU"}, {}],
                     )
+                    return sess, "OpenVINO:CPU (iGPU unavailable)"
                 except Exception:
                     pass
-            return ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+            return ort.InferenceSession(model_path, providers=["CPUExecutionProvider"]), "CPU"
 
     @staticmethod
     def _auto_providers(ort, use_gpu=True):

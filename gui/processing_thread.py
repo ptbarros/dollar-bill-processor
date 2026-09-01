@@ -56,6 +56,16 @@ class ProcessingThread(QThread):
         self._stop_requested = False
         self.processor = None  # Will be set during run()
 
+    def _backend_desc(self):
+        """Human-readable backend line: which provider/device YOLO and OCR bound to."""
+        proc = self.processor
+        if getattr(proc, "use_onnx", False):
+            ym = getattr(proc, "yolo_model", None)
+            yolo = getattr(ym, "backend", None) or ",".join(getattr(ym, "providers", []) or [])
+            ocr = getattr(getattr(proc, "ocr_reader", None), "device", None) or "CPU"
+            return f"ONNX Runtime — YOLO {yolo} | OCR {ocr}"
+        return "torch/ultralytics (CUDA/EasyOCR)"
+
     def run(self):
         """Main processing loop."""
         try:
@@ -87,12 +97,7 @@ class ProcessingThread(QThread):
             )
 
             if self.debug_logging:
-                if getattr(self.processor, 'use_onnx', False):
-                    provs = getattr(self.processor.yolo_model, 'providers', [])
-                    backend = f"ONNX Runtime {list(provs)}"
-                else:
-                    backend = "torch/ultralytics"
-                dlog_raw(f"[BACKEND] {backend} | gpu_acceleration={self.use_gpu}")
+                dlog_raw(f"[BACKEND] {self._backend_desc()} | gpu_acceleration={self.use_gpu}")
 
             # Validate directory - check it's not an output directory
             self.progress_updated.emit(0, 0, "Scanning directory...")
@@ -366,10 +371,7 @@ class ProcessingThread(QThread):
             avg_per_bill = processing_time / total if total > 0 else 0
             all_yolo = verify_yolo_calls + total_yolo_calls
             rate = (total / processing_time * 60) if processing_time > 0 else 0
-            if getattr(self.processor, 'use_onnx', False):
-                backend = f"ONNX Runtime {list(getattr(self.processor.yolo_model, 'providers', []))}"
-            else:
-                backend = "torch/ultralytics"
+            backend = self._backend_desc()
             summary_block = "\n".join([
                 f"\n{'='*70}",
                 f"[BATCH SUMMARY]",

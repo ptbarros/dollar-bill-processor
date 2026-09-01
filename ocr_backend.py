@@ -31,24 +31,24 @@ def _enable_openvino_for_rapidocr():
     try:
         import onnxruntime as ort
         if "OpenVINOExecutionProvider" not in ort.get_available_providers():
-            return
+            return None
         from rapidocr_onnxruntime.utils import infer_engine as ie
         cls = ie.OrtInferSession
+        _dev = os.environ.get("DBP_OPENVINO_DEVICE_OCR", "CPU")
         if getattr(cls, "_dbp_openvino_patched", False):
-            return
+            return f"OpenVINO:{_dev}"
         _orig = cls._get_ep_list
         # The small OCR models are FASTER on the CPU device than the iGPU (dispatch
         # overhead on tiny dynamic-shape inputs), so OCR defaults to CPU even when
         # YOLO uses the iGPU. DBP_OPENVINO_DEVICE_OCR overrides.
-        _dev = os.environ.get("DBP_OPENVINO_DEVICE_OCR", "CPU")
-
         def _get_ep_list(self):
             return [("OpenVINOExecutionProvider", {"device_type": _dev})] + list(_orig(self))
 
         cls._get_ep_list = _get_ep_list
         cls._dbp_openvino_patched = True
+        return f"OpenVINO:{_dev}"
     except Exception:
-        pass  # OCR must never fail to load over an optional speedup
+        return None  # OCR must never fail to load over an optional speedup
 
 
 def load_ocr_backend(use_gpu=False):
@@ -87,8 +87,8 @@ class RapidOCRBackend:
         # When GPU acceleration is on and the OpenVINO wheel is installed, route
         # RapidOCR's ONNX sessions through OpenVINO (~2x faster on Intel CPUs).
         # RapidOCR has no native OpenVINO option, so we patch its EP list.
-        if use_gpu:
-            _enable_openvino_for_rapidocr()
+        self.device = _enable_openvino_for_rapidocr() if use_gpu else None
+        self.device = self.device or "CPU"
         from rapidocr_onnxruntime import RapidOCR
         # RapidOCR bundles a lightweight (mobile) recognizer; DBP_RAPIDOCR_REC can
         # point at a heavier/English rec model (with DBP_RAPIDOCR_REC_KEYS for its
