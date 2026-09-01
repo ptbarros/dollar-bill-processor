@@ -91,12 +91,23 @@ class PatternEngineV3:
         self.sandbox = PatternSandbox()
         self._load_helpers()
 
+        # User patterns must be writable. When frozen the bundle is read-only,
+        # so user patterns live in the writable per-user data dir instead of the
+        # (bundled) patterns/ tree. Set before loading so they get picked up.
+        import sys
+        if getattr(sys, "frozen", False):
+            from resource_path import user_data_dir
+            self.user_patterns_dir = user_data_dir() / "patterns" / "user"
+            try:
+                self.user_patterns_dir.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
+        else:
+            self.user_patterns_dir = self.patterns_dir / "user"
+
         # Load Lua patterns
         self.lua_patterns: Dict[str, LuaPatternInfo] = {}
         self._load_lua_patterns()
-
-        # Cache for user config path
-        self.user_patterns_dir = self.patterns_dir / "user"
 
     @property
     def settings(self) -> Optional['SettingsManager']:
@@ -134,6 +145,12 @@ class PatternEngineV3:
 
                 for lua_file in subdir.glob("*.lua"):
                     self._load_lua_pattern(lua_file, library=library_name)
+
+        # Also load user patterns from the writable user dir when it lives outside
+        # the bundled patterns tree (frozen build), so saved patterns persist.
+        if self.user_patterns_dir.exists() and self.user_patterns_dir != self.patterns_dir / "user":
+            for lua_file in self.user_patterns_dir.glob("*.lua"):
+                self._load_lua_pattern(lua_file, library="user")
 
     def _load_lua_pattern(self, file_path: Path, library: str = "user"):
         """Load a single Lua pattern from file."""

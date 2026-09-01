@@ -1107,18 +1107,24 @@ class MainWindow(QMainWindow):
         import yaml
         from .crop_dialog import EbayCropDialog
 
-        # Load current config
-        config_path = Path(__file__).parent.parent / "config.yaml"
-        if config_path.exists():
-            with open(config_path) as f:
+        # Load current config: prefer the user's saved copy (writable dir), else
+        # the bundled default. Always SAVE to the writable dir (the bundle is
+        # read-only when frozen).
+        from resource_path import app_base, user_data_dir
+        user_config = user_data_dir() / "config.yaml"
+        bundled_config = app_base() / "config.yaml"
+        load_path = user_config if user_config.exists() else bundled_config
+        if load_path.exists():
+            with open(load_path) as f:
                 config = yaml.safe_load(f)
         else:
             config = {}
 
         dialog = EbayCropDialog(config, self)
         if dialog.exec():
-            # Save updated config
+            # Save updated config to the writable location
             updated_config = dialog.get_config()
+            config_path = user_config
             with open(config_path, 'w') as f:
                 yaml.dump(updated_config, f, default_flow_style=False, sort_keys=False)
             QMessageBox.information(
@@ -1565,10 +1571,13 @@ class MainWindow(QMainWindow):
                 self.status_label.setText("Ready")
                 return None
 
-            # Load config from config.yaml (for crop settings, etc.)
+            # Load config from config.yaml (crop settings). Prefer the user's
+            # saved copy (writable dir) over the bundled default.
+            from resource_path import user_data_dir
             script_dir = base
-            config_path = script_dir / "config.yaml"
             patterns_dir = script_dir / "patterns"
+            user_config = user_data_dir() / "config.yaml"
+            config_path = user_config if user_config.exists() else (script_dir / "config.yaml")
 
             cfg = Config(config_path) if config_path.exists() else None
 

@@ -60,10 +60,10 @@ class CorrectionManager:
         serial = cm.get_corrected_serial("bill_0008.jpg", "G12345678A")
     """
 
-    DEFAULT_PATH = Path(__file__).parent / "corrections.yaml"
-
     def __init__(self, path: Optional[Path] = None):
-        self.path = path or self.DEFAULT_PATH
+        # Writable per-user location (bundle is read-only when frozen).
+        from resource_path import user_data_dir
+        self.path = path or (user_data_dir() / "corrections.yaml")
         self.corrections: Dict[str, Correction] = {}
         self._load()
 

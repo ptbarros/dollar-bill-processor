@@ -126,10 +126,11 @@ class SettingsManager:
         settings.save()
     """
 
-    DEFAULT_PATH = Path(__file__).parent / "user_settings.yaml"
-
     def __init__(self, path: Optional[Path] = None):
-        self.path = path or self.DEFAULT_PATH
+        # Writable per-user location (repo root in dev, user config dir when
+        # frozen -- the bundle itself is read-only).
+        from resource_path import user_data_dir
+        self.path = path or (user_data_dir() / "user_settings.yaml")
         self.processing = ProcessingSettings()
         self.ui = UISettings()
         self.export = ExportSettings()

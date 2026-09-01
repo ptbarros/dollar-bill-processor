@@ -50,8 +50,18 @@ def _selftest(image_path: str) -> int:
     """
     from pathlib import Path
     import cv2
-    from resource_path import app_base
+    from resource_path import app_base, user_data_dir
     from process_production import ProductionProcessor
+
+    # Writable user-data check: the read-only bundle must not be written to.
+    from settings_manager import get_settings
+    try:
+        settings = get_settings()
+        settings.save()  # the call that failed inside the read-only bundle
+        print(f"SELFTEST settings: writable -> {settings.path}")
+    except Exception as e:
+        print(f"SELFTEST FAIL: settings.save() -> {type(e).__name__}: {e}")
+        return 1
 
     model = app_base() / "best.pt"
     proc = ProductionProcessor(str(model))

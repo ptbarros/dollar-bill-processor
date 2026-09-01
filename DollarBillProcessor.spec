@@ -14,9 +14,10 @@ datas = [
     ('best.pt', '.'),        # only needs to exist; ONNX sibling drives inference
     ('config.yaml', '.'),
 ]
-# patterns/ tree, preserving structure (skip caches)
+# patterns/ tree, preserving structure (skip caches and the writable user dir --
+# user patterns live in the per-user data dir, not the read-only bundle).
 for p in Path('patterns').rglob('*'):
-    if p.is_file() and '__pycache__' not in p.parts:
+    if p.is_file() and '__pycache__' not in p.parts and 'user' not in p.parts:
         datas.append((str(p), str(p.parent)))
 
 binaries = []
