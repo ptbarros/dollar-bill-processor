@@ -15,7 +15,11 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QComboBox, QPushButton, QMenu, QHeaderView,
     QInputDialog
 )
-from PySide6.QtCore import Qt, Signal, Slot, QSettings, QEvent
+from PySide6.QtCore import Qt, Signal, Slot, QSettings, QEvent, QByteArray
+
+# Bump when the set/order of columns changes, to invalidate an incompatible
+# saved header layout instead of restoring it onto the wrong columns.
+_HEADER_STATE_VERSION = 1
 from PySide6.QtGui import QColor, QBrush, QAction, QIcon
 
 # Add parent for imports
@@ -213,9 +217,7 @@ class ResultsList(QWidget):
         header.setSectionResizeMode(13, QHeaderView.Interactive)  # Mismatch?
         header.setSectionResizeMode(14, QHeaderView.Interactive)  # Status
         header.setMinimumSectionSize(30)  # Minimum for any column
-
-        # Move Status column (logical 14) to visual position 1 (between # and Serial)
-        header.moveSection(14, 1)
+        header.setSectionsMovable(True)  # allow drag-reordering (and persist it)
 
         # Enable right-click context menu on header to hide columns
         header.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -224,14 +226,14 @@ class ResultsList(QWidget):
         # Callback for notifying main window when column visibility changes
         self._on_column_visibility_changed = None
 
-        # Load saved column widths or use defaults
-        self._load_column_widths()
+        # Restore the saved column layout (order + widths + visibility), or apply
+        # defaults. Done before connecting the save signals so restoring doesn't
+        # re-trigger a save.
+        self._restore_header_state()
 
-        # Load saved column visibility
-        self._load_column_visibility()
-
-        # Save column widths when user resizes them
-        header.sectionResized.connect(self._save_column_widths)
+        # Persist the layout whenever the user reorders or resizes columns.
+        header.sectionResized.connect(self._save_header_state)
+        header.sectionMoved.connect(self._save_header_state)
 
         layout.addWidget(self.tree)
 
@@ -239,20 +241,47 @@ class ResultsList(QWidget):
         self.summary_label = QLabel("0 bills")
         layout.addWidget(self.summary_label)
 
-    def _load_column_widths(self):
-        """Load saved column widths from QSettings, or use defaults."""
+    def _restore_header_state(self):
+        """Restore the saved column layout (order + widths + visibility) via
+        QHeaderView.restoreState, or apply defaults if there is no compatible
+        saved layout."""
         settings = QSettings("DollarBillProcessor", "ResultsList")
-        # Default widths: #, Serial, Patterns, Conf, GPT, Shift X%, Shift Y%, Seal %, Est. Price, Series, Front Plate, Back Plate, Mule?, Status
-        defaults = [35, 130, 150, 50, 55, 50, 50, 45, 100, 60, 70, 60, 45, 50]
+        blob = settings.value("header_state")
+        saved_cols = settings.value("header_state_columns", 0, type=int)
+        saved_ver = settings.value("header_state_version", 0, type=int)
+        header = self.tree.header()
 
-        for i in range(14):
-            width = settings.value(f"column_{i}_width", defaults[i], type=int)
-            self.tree.setColumnWidth(i, width)
+        if (blob is not None
+                and saved_cols == self.tree.columnCount()
+                and saved_ver == _HEADER_STATE_VERSION):
+            try:
+                state = blob if isinstance(blob, QByteArray) else QByteArray(blob)
+                if header.restoreState(state):
+                    return  # order + widths + visibility restored
+            except Exception:
+                pass  # corrupt/incompatible state -> fall through to defaults
 
-    def _save_column_widths(self, logical_index: int, old_size: int, new_size: int):
-        """Save column widths when user resizes them."""
+        self._apply_default_columns()
+
+    def _apply_default_columns(self):
+        """Apply the default column widths and order (used when there is no saved
+        layout)."""
+        header = self.tree.header()
+        # Default widths per logical column: #, Serial, Patterns, Conf, GPT,
+        # Shift X%, Shift Y%, Seal %, Est. Price, Series, Front Plate, Back Plate,
+        # Mule?, Mismatch?, Status
+        defaults = [35, 130, 150, 50, 55, 50, 50, 45, 100, 60, 70, 60, 45, 55, 50]
+        for i in range(self.tree.columnCount()):
+            self.tree.setColumnWidth(i, defaults[i] if i < len(defaults) else 60)
+        # Default order: Status (logical 14) sits just after the "#" column.
+        header.moveSection(header.visualIndex(14), 1)
+
+    def _save_header_state(self, *args):
+        """Persist the full column layout (order + widths + visibility)."""
         settings = QSettings("DollarBillProcessor", "ResultsList")
-        settings.setValue(f"column_{logical_index}_width", new_size)
+        settings.setValue("header_state", self.tree.header().saveState())
+        settings.setValue("header_state_columns", self.tree.columnCount())
+        settings.setValue("header_state_version", _HEADER_STATE_VERSION)
 
     def _setup_header_tooltips(self):
         """Set tooltips on column headers to explain what each column means."""
@@ -316,27 +345,11 @@ class ResultsList(QWidget):
     def set_column_visible(self, column: int, visible: bool):
         """Show or hide a column by index."""
         self.tree.header().setSectionHidden(column, not visible)
-        self._save_column_visibility()
+        self._save_header_state()
 
     def is_column_visible(self, column: int) -> bool:
         """Check if a column is visible."""
         return not self.tree.header().isSectionHidden(column)
-
-    def _load_column_visibility(self):
-        """Load saved column visibility from QSettings."""
-        settings = QSettings("DollarBillProcessor", "ResultsList")
-        header = self.tree.header()
-        for i in range(self.tree.columnCount()):
-            # Default: all columns visible
-            hidden = settings.value(f"column_{i}_hidden", False, type=bool)
-            header.setSectionHidden(i, hidden)
-
-    def _save_column_visibility(self):
-        """Save column visibility to QSettings."""
-        settings = QSettings("DollarBillProcessor", "ResultsList")
-        header = self.tree.header()
-        for i in range(self.tree.columnCount()):
-            settings.setValue(f"column_{i}_hidden", header.isSectionHidden(i))
 
     def eventFilter(self, obj, event):
         """Log when the batch dropdown gains focus (diagnostic for the
