@@ -1152,10 +1152,11 @@ class ResultsList(QWidget):
 
         note = dialog.get_note()
 
-        # Universal review folder at project root (not inside batch output)
-        project_root = Path(__file__).parent.parent
-        review_folder = project_root / "review"
-        review_folder.mkdir(exist_ok=True)
+        # Universal review folder in the writable per-user data dir (repo root in
+        # dev; ~/.config/DollarBillProcessor when frozen -- the bundle is read-only).
+        from resource_path import user_data_dir
+        review_folder = user_data_dir() / "review"
+        review_folder.mkdir(parents=True, exist_ok=True)
 
         # Copy files to review folder
         files_copied = []
