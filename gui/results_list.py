@@ -1152,10 +1152,11 @@ class ResultsList(QWidget):
 
         note = dialog.get_note()
 
-        # Universal review folder in the writable per-user data dir (repo root in
-        # dev; ~/.config/DollarBillProcessor when frozen -- the bundle is read-only).
+        # Review folder: the user-configured Review Directory if set, else the
+        # writable per-user data dir (repo root in dev; ~/.config/... when frozen).
         from resource_path import user_data_dir
-        review_folder = user_data_dir() / "review"
+        configured = (self.settings.ui.review_directory or "").strip()
+        review_folder = Path(configured) if configured else (user_data_dir() / "review")
         review_folder.mkdir(parents=True, exist_ok=True)
 
         # Copy files to review folder

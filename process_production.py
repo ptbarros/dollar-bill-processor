@@ -218,6 +218,12 @@ class Config:
             return self.data['options'].get('jpeg_quality', 95)
         return 95
 
+    @property
+    def include_serial_overlay(self) -> bool:
+        """Whether to append the serial overlay crop(s). Toggled in the eBay
+        Crop Manager; default on."""
+        return bool(self.data.get('include_serial_overlay', True))
+
 
 # =============================================================================
 # DATA CLASSES
@@ -3415,7 +3421,9 @@ class ProductionProcessor:
 
         # Append a serial overlay crop (digit bounding boxes + pattern overlay)
         # per selected pattern, so listings can show which pattern(s) the bill has.
-        overlay_crops = self._generate_serial_overlay_crops(front_img, front_detections, pair)
+        # Toggleable in the eBay Crop Manager (default on).
+        overlay_crops = (self._generate_serial_overlay_crops(front_img, front_detections, pair)
+                         if self.cfg.include_serial_overlay else [])
         safe_serial = _safe_serial_for_filename(pair.serial)
         for n, overlay_crop in enumerate(overlay_crops):
             i = len(crop_order) + 1 + n

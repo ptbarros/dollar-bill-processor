@@ -157,6 +157,14 @@ class EbayCropDialog(QDialog):
         back_seal_layout.addStretch()
         layout.addWidget(back_seal_group)
 
+        # Serial overlay crop toggle
+        self.overlay_crop_check = QCheckBox(
+            "Add serial overlay crop (digit boxes + pattern highlights)")
+        self.overlay_crop_check.setToolTip(
+            "Append a zoomed serial-number crop with the matched pattern(s) drawn "
+            "on it (one per selected pattern; gas-pump targets the shifted serial).")
+        layout.addWidget(self.overlay_crop_check)
+
         # Dialog buttons
         button_box = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
@@ -236,6 +244,9 @@ class EbayCropDialog(QDialog):
         self.back_seal_offset_x.setValue(back_seal.get('offset_x', 0))
         self.back_seal_offset_y.setValue(back_seal.get('offset_y', 0))
 
+        # Serial overlay crop (default on)
+        self.overlay_crop_check.setChecked(self.config.get('include_serial_overlay', True))
+
         # Update order numbers based on enabled state
         self._update_order_numbers()
 
@@ -310,6 +321,7 @@ class EbayCropDialog(QDialog):
                 crop_order.append([crop['side'], crop['region']])
 
         self.config['crop_order'] = crop_order
+        self.config['include_serial_overlay'] = self.overlay_crop_check.isChecked()
 
         # Save seal settings
         if 'yolo_crops' not in self.config:

@@ -445,6 +445,21 @@ class SettingsDialog(QDialog):
         archive_hint.setStyleSheet("color: gray; font-size: 9px;")
         dirs_layout.addRow("", archive_hint)
 
+        # Review directory
+        self.review_dir_edit = QLineEdit()
+        self.review_dir_edit.setPlaceholderText("Where 'Save for Review' copies bills...")
+        review_layout = QHBoxLayout()
+        review_layout.addWidget(self.review_dir_edit)
+        review_btn = QPushButton("...")
+        review_btn.setMaximumWidth(30)
+        review_btn.clicked.connect(self._browse_review_dir)
+        review_layout.addWidget(review_btn)
+        dirs_layout.addRow("Review Directory:", review_layout)
+
+        review_hint = QLabel("Blank = default per-user location")
+        review_hint.setStyleSheet("color: gray; font-size: 9px;")
+        dirs_layout.addRow("", review_hint)
+
         layout.addWidget(dirs_group)
 
         # Options
@@ -725,6 +740,7 @@ class SettingsDialog(QDialog):
         self.watch_dir_edit.setText(self.settings.monitor.watch_directory)
         self.monitor_output_edit.setText(self.settings.monitor.output_directory)
         self.archive_dir_edit.setText(self.settings.monitor.archive_directory)
+        self.review_dir_edit.setText(self.settings.ui.review_directory)
         self.mon_auto_archive_check.setChecked(self.settings.monitor.auto_archive)
         self.poll_interval_spin.setValue(self.settings.monitor.poll_interval)
         self.settle_time_spin.setValue(self.settings.monitor.file_settle_time)
@@ -775,6 +791,7 @@ class SettingsDialog(QDialog):
         self.settings.monitor.watch_directory = self.watch_dir_edit.text()
         self.settings.monitor.output_directory = self.monitor_output_edit.text()
         self.settings.monitor.archive_directory = self.archive_dir_edit.text()
+        self.settings.ui.review_directory = self.review_dir_edit.text().strip()
         self.settings.monitor.auto_archive = self.mon_auto_archive_check.isChecked()
         self.settings.monitor.poll_interval = self.poll_interval_spin.value()
         self.settings.monitor.file_settle_time = self.settle_time_spin.value()
@@ -889,3 +906,12 @@ class SettingsDialog(QDialog):
         )
         if folder:
             self.archive_dir_edit.setText(folder)
+
+    def _browse_review_dir(self):
+        """Browse for review directory."""
+        folder = QFileDialog.getExistingDirectory(
+            self, "Select Review Directory",
+            self.review_dir_edit.text() or str(Path.home())
+        )
+        if folder:
+            self.review_dir_edit.setText(folder)

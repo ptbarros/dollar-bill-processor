@@ -46,6 +46,7 @@ class UISettings:
     default_working_dir: str = ""  # Starting directory for file browse dialogs
     last_input_dir: str = ""  # Most recently used input (internal tracking)
     last_output_dir: str = ""  # Most recently used output (internal tracking)
+    review_directory: str = ""  # Where "Save for Review" copies bills (blank = per-user data dir)
     window_width: int = 1200
     window_height: int = 800
     window_x: int = 100
@@ -179,6 +180,7 @@ class SettingsManager:
             self.ui.default_working_dir = ui.get('default_working_dir', "")
             self.ui.last_input_dir = ui.get('last_input_dir', "")
             self.ui.last_output_dir = ui.get('last_output_dir', "")
+            self.ui.review_directory = ui.get('review_directory', "")
             self.ui.window_width = ui.get('window_width', 1200)
             self.ui.window_height = ui.get('window_height', 800)
             self.ui.window_x = ui.get('window_x', 100)
@@ -356,6 +358,7 @@ class SettingsManager:
                 'default_working_dir': self.ui.default_working_dir,
                 'last_input_dir': self.ui.last_input_dir,
                 'last_output_dir': self.ui.last_output_dir,
+                'review_directory': self.ui.review_directory,
                 'window_width': self.ui.window_width,
                 'window_height': self.ui.window_height,
                 'window_x': self.ui.window_x,
