@@ -105,6 +105,51 @@ jobs:
           path: dist/DollarBillProcessor-*-cuda-setup.exe
           if-no-files-found: error
 
+  windows-openvino:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: "Install dependencies (OpenVINO)"
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Swap the CPU-only onnxruntime for the OpenVINO wheel. yolo_backend runs
+          # YOLO on the Intel iGPU (device GPU, ~2x) and RapidOCR on the OpenVINO CPU
+          # device. On most Intel Windows machines the Intel graphics driver ships
+          # OpenCL, so the iGPU tier works out of the box (falls back to CPU otherwise).
+          # Same import name as onnxruntime, so rapidocr keeps working; collect_all
+          # bundles the OpenVINO runtime DLLs (they live in onnxruntime/capi).
+          pip uninstall -y onnxruntime onnxruntime-gpu onnxruntime-directml || true
+          pip install "onnxruntime-openvino>=1.17.0"
+          python -c "import onnxruntime as o; p=o.get_available_providers(); print('providers:',p); assert 'OpenVINOExecutionProvider' in p, 'OpenVINO EP missing'"
+          pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
+          pip install pyinstaller
+
+      - name: Build onedir (PyInstaller)
+        run: pyinstaller --noconfirm --clean DollarBillProcessor.spec
+
+      - name: Read app version
+        id: ver
+        shell: bash
+        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: "Build installer (Inno Setup, OpenVINO edition)"
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} /DEditionTag=-openvino "/DEditionName= (OpenVINO)" installer\DollarBillProcessor.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-openvino
+          path: dist/DollarBillProcessor-*-openvino-setup.exe
+          if-no-files-found: error
+
   linux:
     runs-on: ubuntu-latest
     steps:
@@ -134,7 +179,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [windows, windows-cuda, linux]
+    needs: [windows, windows-cuda, windows-openvino, linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -149,6 +194,7 @@ jobs:
           files: |
             artifacts/windows-installer/*
             artifacts/windows-installer-cuda/*
+            artifacts/windows-installer-openvino/*
             artifacts/linux-appimage/*
           generate_release_notes: true
           # Tags with a hyphen (e.g. v1.4.0-ci1) are test/pre-releases.
