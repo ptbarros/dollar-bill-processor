@@ -92,3 +92,5 @@ jobs:
             artifacts/windows-installer/*
             artifacts/linux-appimage/*
           generate_release_notes: true
+          # Tags with a hyphen (e.g. v1.4.0-ci1) are test/pre-releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}
