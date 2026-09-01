@@ -13,9 +13,13 @@ from typing import Optional, Dict, List
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
     QLabel, QLineEdit, QComboBox, QPushButton, QMenu, QHeaderView,
-    QInputDialog
+    QInputDialog, QDialog, QCheckBox, QDialogButtonBox
 )
-from PySide6.QtCore import Qt, Signal, Slot, QSettings, QEvent
+from PySide6.QtCore import Qt, Signal, Slot, QSettings, QEvent, QByteArray
+
+# Bump when the set/order of columns changes, to invalidate an incompatible
+# saved header layout instead of restoring it onto the wrong columns.
+_HEADER_STATE_VERSION = 1
 from PySide6.QtGui import QColor, QBrush, QAction, QIcon
 
 # Add parent for imports
@@ -70,6 +74,51 @@ class NumericTreeWidgetItem(QTreeWidgetItem):
             return _natural_sort_key(self.text(column)) < _natural_sort_key(other.text(column))
         # Fall back to string comparison (avoid super().__lt__ which can recurse)
         return self.text(column) < other.text(column)
+
+
+class SetPatternsDialog(QDialog):
+    """Checkbox dialog to pick one or more patterns for a bill.
+
+    Each selected pattern produces its own serial overlay crop, and all selected
+    names go on the label. A checkbox dialog (rather than the old menu) lets the
+    user tick several at once without the menu closing after each pick.
+    """
+
+    def __init__(self, patterns, selected, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Set Pattern(s)")
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Select pattern(s) — one crop per pattern, all on the label:"))
+
+        self._checks = []
+        for p in patterns:
+            cb = QCheckBox(p)
+            cb.setChecked(p in selected)
+            layout.addWidget(cb)
+            self._checks.append((p, cb))
+
+        if not patterns:
+            layout.addWidget(QLabel("(No detected patterns — add a custom one below.)"))
+
+        layout.addWidget(QLabel("Custom (comma-separated):"))
+        self._custom = QLineEdit()
+        extra = [p for p in selected if p not in patterns]
+        if extra:
+            self._custom.setText(", ".join(extra))
+        layout.addWidget(self._custom)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def selected_patterns(self) -> list:
+        """Checked patterns followed by any custom entries, de-duplicated."""
+        out = [p for p, cb in self._checks if cb.isChecked()]
+        for c in (t.strip() for t in self._custom.text().split(",")):
+            if c and c not in out:
+                out.append(c)
+        return out
 
 
 class ResultsList(QWidget):
@@ -213,9 +262,7 @@ class ResultsList(QWidget):
         header.setSectionResizeMode(13, QHeaderView.Interactive)  # Mismatch?
         header.setSectionResizeMode(14, QHeaderView.Interactive)  # Status
         header.setMinimumSectionSize(30)  # Minimum for any column
-
-        # Move Status column (logical 14) to visual position 1 (between # and Serial)
-        header.moveSection(14, 1)
+        header.setSectionsMovable(True)  # allow drag-reordering (and persist it)
 
         # Enable right-click context menu on header to hide columns
         header.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -224,14 +271,14 @@ class ResultsList(QWidget):
         # Callback for notifying main window when column visibility changes
         self._on_column_visibility_changed = None
 
-        # Load saved column widths or use defaults
-        self._load_column_widths()
+        # Restore the saved column layout (order + widths + visibility), or apply
+        # defaults. Done before connecting the save signals so restoring doesn't
+        # re-trigger a save.
+        self._restore_header_state()
 
-        # Load saved column visibility
-        self._load_column_visibility()
-
-        # Save column widths when user resizes them
-        header.sectionResized.connect(self._save_column_widths)
+        # Persist the layout whenever the user reorders or resizes columns.
+        header.sectionResized.connect(self._save_header_state)
+        header.sectionMoved.connect(self._save_header_state)
 
         layout.addWidget(self.tree)
 
@@ -239,20 +286,47 @@ class ResultsList(QWidget):
         self.summary_label = QLabel("0 bills")
         layout.addWidget(self.summary_label)
 
-    def _load_column_widths(self):
-        """Load saved column widths from QSettings, or use defaults."""
+    def _restore_header_state(self):
+        """Restore the saved column layout (order + widths + visibility) via
+        QHeaderView.restoreState, or apply defaults if there is no compatible
+        saved layout."""
         settings = QSettings("DollarBillProcessor", "ResultsList")
-        # Default widths: #, Serial, Patterns, Conf, GPT, Shift X%, Shift Y%, Seal %, Est. Price, Series, Front Plate, Back Plate, Mule?, Status
-        defaults = [35, 130, 150, 50, 55, 50, 50, 45, 100, 60, 70, 60, 45, 50]
+        blob = settings.value("header_state")
+        saved_cols = settings.value("header_state_columns", 0, type=int)
+        saved_ver = settings.value("header_state_version", 0, type=int)
+        header = self.tree.header()
 
-        for i in range(14):
-            width = settings.value(f"column_{i}_width", defaults[i], type=int)
-            self.tree.setColumnWidth(i, width)
+        if (blob is not None
+                and saved_cols == self.tree.columnCount()
+                and saved_ver == _HEADER_STATE_VERSION):
+            try:
+                state = blob if isinstance(blob, QByteArray) else QByteArray(blob)
+                if header.restoreState(state):
+                    return  # order + widths + visibility restored
+            except Exception:
+                pass  # corrupt/incompatible state -> fall through to defaults
 
-    def _save_column_widths(self, logical_index: int, old_size: int, new_size: int):
-        """Save column widths when user resizes them."""
+        self._apply_default_columns()
+
+    def _apply_default_columns(self):
+        """Apply the default column widths and order (used when there is no saved
+        layout)."""
+        header = self.tree.header()
+        # Default widths per logical column: #, Serial, Patterns, Conf, GPT,
+        # Shift X%, Shift Y%, Seal %, Est. Price, Series, Front Plate, Back Plate,
+        # Mule?, Mismatch?, Status
+        defaults = [35, 130, 150, 50, 55, 50, 50, 45, 100, 60, 70, 60, 45, 55, 50]
+        for i in range(self.tree.columnCount()):
+            self.tree.setColumnWidth(i, defaults[i] if i < len(defaults) else 60)
+        # Default order: Status (logical 14) sits just after the "#" column.
+        header.moveSection(header.visualIndex(14), 1)
+
+    def _save_header_state(self, *args):
+        """Persist the full column layout (order + widths + visibility)."""
         settings = QSettings("DollarBillProcessor", "ResultsList")
-        settings.setValue(f"column_{logical_index}_width", new_size)
+        settings.setValue("header_state", self.tree.header().saveState())
+        settings.setValue("header_state_columns", self.tree.columnCount())
+        settings.setValue("header_state_version", _HEADER_STATE_VERSION)
 
     def _setup_header_tooltips(self):
         """Set tooltips on column headers to explain what each column means."""
@@ -316,27 +390,11 @@ class ResultsList(QWidget):
     def set_column_visible(self, column: int, visible: bool):
         """Show or hide a column by index."""
         self.tree.header().setSectionHidden(column, not visible)
-        self._save_column_visibility()
+        self._save_header_state()
 
     def is_column_visible(self, column: int) -> bool:
         """Check if a column is visible."""
         return not self.tree.header().isSectionHidden(column)
-
-    def _load_column_visibility(self):
-        """Load saved column visibility from QSettings."""
-        settings = QSettings("DollarBillProcessor", "ResultsList")
-        header = self.tree.header()
-        for i in range(self.tree.columnCount()):
-            # Default: all columns visible
-            hidden = settings.value(f"column_{i}_hidden", False, type=bool)
-            header.setSectionHidden(i, hidden)
-
-    def _save_column_visibility(self):
-        """Save column visibility to QSettings."""
-        settings = QSettings("DollarBillProcessor", "ResultsList")
-        header = self.tree.header()
-        for i in range(self.tree.columnCount()):
-            settings.setValue(f"column_{i}_hidden", header.isSectionHidden(i))
 
     def eventFilter(self, obj, event):
         """Log when the batch dropdown gains focus (diagnostic for the
@@ -869,45 +927,16 @@ class ResultsList(QWidget):
 
         # === Set Pattern / Set Note (for queue-based workflow) ===
         if not is_multi_select:
-            # Single selection - show "Set Pattern..." submenu
-            fancy_types = result.get('fancy_types', '')
-            patterns = [p.strip() for p in fancy_types.split(',') if p.strip()]
-            current_override = result.get('pattern_override', '')
-
-            pattern_menu = menu.addMenu("Set Pattern...")
-
-            # "(Auto)" option to clear override and use first pattern
-            auto_action = QAction("(Auto)" if patterns else "(None)", self)
-            if not current_override:
-                auto_action.setCheckable(True)
-                auto_action.setChecked(True)
-            auto_action.triggered.connect(lambda: self._set_pattern_override(result, None))
-            pattern_menu.addAction(auto_action)
-
-            if patterns:
-                pattern_menu.addSeparator()
-
-                # Add each detected pattern
-                for pattern in patterns:
-                    pattern_action = QAction(pattern, self)
-                    pattern_action.setCheckable(True)
-                    if current_override == pattern:
-                        pattern_action.setChecked(True)
-                    pattern_action.triggered.connect(
-                        lambda checked, p=pattern: self._set_pattern_override(result, p)
-                    )
-                    pattern_menu.addAction(pattern_action)
-
-            pattern_menu.addSeparator()
-
-            # "Custom..." option to type a custom pattern name
-            custom_action = QAction("Custom...", self)
-            if current_override and current_override not in patterns:
-                custom_action.setCheckable(True)
-                custom_action.setChecked(True)
-                custom_action.setText(f"Custom: {current_override}")
-            custom_action.triggered.connect(lambda: self._set_custom_pattern(result))
-            pattern_menu.addAction(custom_action)
+            # Single selection - open the multi-select "Set Pattern(s)..." dialog
+            selected = self._current_pattern_overrides(result)
+            label = "Set Pattern(s)..."
+            if selected:
+                label = f"Set Pattern(s)... ({len(selected)} selected)"
+            set_patterns_action = QAction(label, self)
+            set_patterns_action.triggered.connect(
+                lambda: self._open_set_patterns_dialog(result)
+            )
+            menu.addAction(set_patterns_action)
 
             # "Set Note..." option
             note_action = QAction("Set Note...", self)
@@ -947,23 +976,51 @@ class ResultsList(QWidget):
 
         menu.exec(self.tree.viewport().mapToGlobal(pos))
 
-    def _set_pattern_override(self, result: dict, pattern: Optional[str]):
-        """Set or clear the pattern override for a result.
+    def _current_pattern_overrides(self, result: dict) -> list:
+        """The bill's currently-selected override pattern(s), as a list.
 
-        This stores the override in the result dict for use during crop generation.
-        The override is persisted via session recovery.
+        Reads the new multi-select ``pattern_overrides`` list, falling back to the
+        legacy single ``pattern_override`` for bills saved before multi-select.
         """
+        overrides = result.get('pattern_overrides')
+        if overrides:
+            return [p.strip() for p in overrides.split(',') if p.strip()]
+        single = result.get('pattern_override')
+        return [single] if single else []
+
+    def _open_set_patterns_dialog(self, result: dict):
+        """Open the checkbox dialog to choose the bill's pattern(s)."""
+        patterns = [p.strip() for p in (result.get('fancy_types', '') or '').split(',') if p.strip()]
+        selected = self._current_pattern_overrides(result)
+        dialog = SetPatternsDialog(patterns, selected, self)
+        if dialog.exec():
+            self._set_pattern_overrides(result, dialog.selected_patterns())
+
+    def _set_pattern_overrides(self, result: dict, patterns: list):
+        """Store the selected override pattern(s) on the result (and mirror the
+        first onto the legacy single field for back-compat). Empty list clears it.
+        Persisted via session recovery."""
         front_file = result.get('front_file')
         if not front_file:
             return
+        patterns = [p for p in patterns if p]
+        dlog("action.set_patterns", front_file=front_file,
+             position=result.get('position'), value=", ".join(patterns))
+
+        def apply(r):
+            if patterns:
+                # Comma-joined string (like fancy_types) so it round-trips through
+                # the CSV session/archive persistence.
+                r['pattern_overrides'] = ', '.join(patterns)
+                r['pattern_override'] = patterns[0]  # legacy single-value mirror
+            else:
+                r.pop('pattern_overrides', None)
+                r.pop('pattern_override', None)
 
         # Update the authoritative results list
         for r in self.results:
             if r.get('front_file') == front_file:
-                if pattern:
-                    r['pattern_override'] = pattern
-                elif 'pattern_override' in r:
-                    del r['pattern_override']
+                apply(r)
                 break
 
         # Update the tree item data
@@ -971,33 +1028,12 @@ class ResultsList(QWidget):
             item = self.tree.topLevelItem(i)
             item_result = item.data(0, Qt.UserRole)
             if item_result and item_result.get('front_file') == front_file:
-                if pattern:
-                    item_result['pattern_override'] = pattern
-                elif 'pattern_override' in item_result:
-                    del item_result['pattern_override']
+                apply(item_result)
                 item.setData(0, Qt.UserRole, item_result)
                 break
 
         # Emit status_changed to trigger autosave
         self.status_changed.emit()
-
-    def _set_custom_pattern(self, result: dict):
-        """Open dialog to type a custom pattern name for a result."""
-        current_override = result.get('pattern_override', '')
-        patterns = [p.strip() for p in result.get('fancy_types', '').split(',') if p.strip()]
-        # Pre-fill with current custom override if it's not from detected patterns
-        prefill = current_override if current_override and current_override not in patterns else ''
-
-        pattern, ok = QInputDialog.getText(
-            self, "Set Custom Pattern",
-            "Enter a pattern name for this bill:",
-            text=prefill
-        )
-
-        if ok and pattern and pattern.strip():
-            dlog("action.custom_label", front_file=result.get('front_file'),
-                 position=result.get('position'), value=pattern.strip())
-            self._set_pattern_override(result, pattern.strip())
 
     def _set_note(self, result: dict):
         """Open dialog to set or edit a note for a result."""
@@ -1416,7 +1452,7 @@ class ResultsList(QWidget):
                     'front_align_angle', 'front_align_flipped',
                     'series_year', 'front_plate', 'back_plate', 'potential_mule', 'serial_mismatch',
                     'viewed', 'cropped', 'sent_for_review', 'checked',
-                    'note', 'pattern_override'
+                    'note', 'pattern_override', 'pattern_overrides'
                 ])
                 writer.writeheader()
 
