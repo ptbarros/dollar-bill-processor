@@ -17,7 +17,8 @@ DefaultDirName={autopf}\DollarBillProcessor
 DefaultGroupName=Dollar Bill Processor
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
-OutputDir=dist
+; Paths are relative to this .iss file (installer/), so reach up to the repo root.
+OutputDir=..\dist
 OutputBaseFilename=DollarBillProcessor-{#MyAppVersion}-setup
 Compression=lzma2
 SolidCompression=yes
@@ -31,7 +32,7 @@ DisableProgramGroupPage=yes
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
 
 [Files]
-Source: "dist\DollarBillProcessor\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\dist\DollarBillProcessor\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
