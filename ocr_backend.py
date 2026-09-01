@@ -37,7 +37,10 @@ def _enable_openvino_for_rapidocr():
         if getattr(cls, "_dbp_openvino_patched", False):
             return
         _orig = cls._get_ep_list
-        _dev = os.environ.get("DBP_OPENVINO_DEVICE", "CPU")
+        # The small OCR models are FASTER on the CPU device than the iGPU (dispatch
+        # overhead on tiny dynamic-shape inputs), so OCR defaults to CPU even when
+        # YOLO uses the iGPU. DBP_OPENVINO_DEVICE_OCR overrides.
+        _dev = os.environ.get("DBP_OPENVINO_DEVICE_OCR", "CPU")
 
         def _get_ep_list(self):
             return [("OpenVINOExecutionProvider", {"device_type": _dev})] + list(_orig(self))

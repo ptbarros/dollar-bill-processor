@@ -89,9 +89,10 @@ class OnnxYoloDetector:
         # Gate acceleration on the "Use GPU acceleration" toggle so unchecking it
         # still gives a plain-CPU baseline for comparison (works on every build).
         if use_gpu and "OpenVINOExecutionProvider" in avail:
-            # Default to the reliable CPU device; DBP_OPENVINO_DEVICE=GPU targets the
-            # Intel iGPU (needs the Intel compute runtime) or NPU.
-            dev = os.environ.get("DBP_OPENVINO_DEVICE", "CPU")
+            # YOLO is the heavy model and runs well on the Intel iGPU, so default to
+            # GPU (falls back to OpenVINO CPU then plain CPU if no iGPU/driver).
+            # DBP_OPENVINO_DEVICE overrides (CPU / GPU / NPU).
+            dev = os.environ.get("DBP_OPENVINO_DEVICE", "GPU")
             return (["OpenVINOExecutionProvider", "CPUExecutionProvider"],
                     [{"device_type": dev}, {}])
         prov, opts = [], []
