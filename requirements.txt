@@ -1,25 +1,26 @@
 # Dollar Bill Serial Number Processor
 # Python 3.8+
 
-# Core dependencies
+# Core dependencies (torch-free)
 # Use headless OpenCV to avoid Qt conflicts with PySide6
 opencv-python-headless>=4.8.0
 numpy>=1.24.0
-easyocr>=1.7.0
-ultralytics>=8.0.0
-torch>=2.0.0
-torchvision>=0.15.0
 
-# ONNX Runtime backend for YOLO inference (no torch needed for detection).
-# CPU wheel here works everywhere; on a Windows GPU box install
-# onnxruntime-directml instead for GPU acceleration without a CUDA install.
-# (ultralytics/torch are still required for now: model export + EasyOCR.)
+# Inference backends (default path, no torch):
+#   - YOLO detection via ONNX Runtime (best.onnx). On a Windows GPU box install
+#     onnxruntime-directml instead for GPU acceleration without a CUDA install.
+#   - OCR via RapidOCR (also onnxruntime). Faster than and >= EasyOCR accuracy.
 onnxruntime>=1.17.0
-
-# Torch-free OCR backend (onnxruntime). Opt-in via DBP_OCR=rapid while it is
-# validated against EasyOCR on real bills; intended to eventually replace
-# EasyOCR so torch can be dropped from the shipped package entirely.
 rapidocr-onnxruntime>=1.4.0
+
+# Optional fallback (NOT needed for the default path; large ~GBs).
+# Install only to use the torch YOLO fallback (DBP_FORCE_TORCH=1), the EasyOCR
+# backend (DBP_OCR=easy), or to re-export best.pt -> best.onnx. Packaged builds
+# exclude these to keep the installer small.
+# easyocr>=1.7.0
+# ultralytics>=8.0.0
+# torch>=2.0.0
+# torchvision>=0.15.0
 
 # Configuration
 Pillow>=10.0.0

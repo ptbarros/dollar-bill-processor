@@ -23,13 +23,16 @@ import os
 
 
 def load_ocr_backend(use_gpu=False):
-    """Return an OCR backend. RapidOCR when DBP_OCR=rapid and importable, else EasyOCR."""
-    if os.environ.get("DBP_OCR", "").lower() in ("rapid", "rapidocr", "onnx"):
-        try:
-            return RapidOCRBackend(use_gpu=use_gpu)
-        except Exception as e:
-            print(f"  RapidOCR unavailable ({type(e).__name__}: {e}); using EasyOCR.")
-    return EasyOCRBackend(use_gpu=use_gpu)
+    """Return an OCR backend. RapidOCR (torch-free, faster, >= EasyOCR accuracy)
+    is the default; EasyOCR is used only when DBP_OCR=easy, or as a fallback if
+    RapidOCR fails to load."""
+    if os.environ.get("DBP_OCR", "").lower() in ("easy", "easyocr"):
+        return EasyOCRBackend(use_gpu=use_gpu)
+    try:
+        return RapidOCRBackend(use_gpu=use_gpu)
+    except Exception as e:
+        print(f"  RapidOCR unavailable ({type(e).__name__}: {e}); falling back to EasyOCR.")
+        return EasyOCRBackend(use_gpu=use_gpu)
 
 
 class EasyOCRBackend:
