@@ -58,6 +58,53 @@ jobs:
           path: dist/DollarBillProcessor-*-setup.exe
           if-no-files-found: error
 
+  windows-cuda:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: "Install dependencies (CUDA: torch + EasyOCR)"
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          # CUDA 12.8 wheels (Blackwell / RTX 50-series support), same as the
+          # original app's setup_windows.bat.
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+          pip install -r requirements-cuda.txt
+          # EasyOCR can drag in the non-headless opencv, which fights PySide6's Qt.
+          # Force headless to win.
+          pip uninstall -y opencv-python || true
+          pip install --force-reinstall --no-deps opencv-python-headless
+          pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
+          pip install pyinstaller
+          # Confirm CUDA-capable torch is what got installed.
+          python -c "import torch; print('torch', torch.__version__, 'cuda build:', torch.version.cuda)"
+          # Reclaim the wheel cache (~GBs) before PyInstaller doubles the footprint.
+          pip cache purge || true
+
+      - name: Build onedir (PyInstaller, CUDA spec)
+        run: pyinstaller --noconfirm --clean DollarBillProcessor-cuda.spec
+
+      - name: Read app version
+        id: ver
+        shell: bash
+        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Build installer (Inno Setup, CUDA edition)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} /DEditionTag=-cuda "/DEditionName= (CUDA)" installer\DollarBillProcessor.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-cuda
+          path: dist/DollarBillProcessor-*-cuda-setup.exe
+          if-no-files-found: error
+
   linux:
     runs-on: ubuntu-latest
     steps:
@@ -87,7 +134,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [windows, linux]
+    needs: [windows, windows-cuda, linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -101,6 +148,7 @@ jobs:
         with:
           files: |
             artifacts/windows-installer/*
+            artifacts/windows-installer-cuda/*
             artifacts/linux-appimage/*
           generate_release_notes: true
           # Tags with a hyphen (e.g. v1.4.0-ci1) are test/pre-releases.

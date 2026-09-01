@@ -3,23 +3,33 @@
 ; with Start-menu + optional desktop shortcuts and an uninstaller.
 ; Build (in CI): ISCC /DMyAppVersion=1.4.0 installer\DollarBillProcessor.iss
 
-#define MyAppName "Dollar Bill Processor"
 #define MyAppExeName "DollarBillProcessor.exe"
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0"
 #endif
+; Edition tags let a second build (e.g. CUDA) install alongside the default one.
+; Defaults are empty, so a plain build is byte-for-byte the same as before.
+;   EditionTag  -> filename/dir suffix, e.g. "-cuda"
+;   EditionName -> display suffix, e.g. " (CUDA)"
+#ifndef EditionTag
+  #define EditionTag ""
+#endif
+#ifndef EditionName
+  #define EditionName ""
+#endif
+#define MyAppName "Dollar Bill Processor" + EditionName
 
 [Setup]
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher=Paul Barros
-DefaultDirName={autopf}\DollarBillProcessor
-DefaultGroupName=Dollar Bill Processor
+DefaultDirName={autopf}\DollarBillProcessor{#EditionTag}
+DefaultGroupName={#MyAppName}
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ; Paths are relative to this .iss file (installer/), so reach up to the repo root.
 OutputDir=..\dist
-OutputBaseFilename=DollarBillProcessor-{#MyAppVersion}-setup
+OutputBaseFilename=DollarBillProcessor-{#MyAppVersion}{#EditionTag}-setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
