@@ -3466,9 +3466,16 @@ class ProductionProcessor:
         matched_patterns = list(pair.fancy_types or [])
 
         # One overlay filter per crop: each selected pattern, or a single fallback.
+        # The GAS_PUMP pattern maps to the gas-pump drawing mode sentinel so the
+        # crop gets the red/green deviation boxes (not a normal Lua-highlight pass).
+        from serial_overlay import GAS_PUMP_FILTER
+
+        def _to_filter(p):
+            return GAS_PUMP_FILTER if str(p).upper() == "GAS_PUMP" else p
+
         overrides = [p for p in (pair.pattern_overrides or []) if p]
         if overrides:
-            overlay_filters = overrides
+            overlay_filters = [_to_filter(p) for p in overrides]
         else:
             overlay_filters = [resolve_overlay_filter(None, matched_patterns, pair.pattern_override)]
 
