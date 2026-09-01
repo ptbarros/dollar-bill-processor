@@ -3430,9 +3430,16 @@ class ProductionProcessor:
         matches what the user sees. If ``pair.pattern_overrides`` lists patterns
         (right-click "Set Pattern(s)..."), one crop is produced for each; otherwise
         a single crop is produced using ``pair.pattern_override`` / the top matched
-        pattern. Returns a list of BGR images (possibly empty).
+        pattern.
+
+        Gas pump is special: it is a per-impression printing shift, not a serial
+        property, so the two serials on a bill can differ. A GAS_PUMP crop targets
+        the serial region(s) that actually show the shift (deviation >= threshold)
+        -- one crop per shifted serial (a bill shifted on both gets two). Every
+        other pattern uses the highest-confidence serial (both serials are
+        identical for pattern purposes). Returns a list of BGR images.
         """
-        from serial_overlay import draw_serial_overlay, resolve_overlay_filter, pad_to_min
+        from serial_overlay import resolve_overlay_filter, GAS_PUMP_FILTER
 
         if front_img is None or not front_detections:
             return []
@@ -3440,36 +3447,17 @@ class ProductionProcessor:
         if not serial_boxes:
             return []
 
-        # Use the highest-confidence serial region.
-        x1, y1, x2, y2, _conf = max(serial_boxes, key=lambda b: b[4])
-        h, w = front_img.shape[:2]
-        padding = 15
-        crop_x1 = max(0, x1 - padding)
-        crop_y1 = max(0, y1 - padding)
-        crop_x2 = min(w, x2 + padding)
-        crop_y2 = min(h, y2 + padding)
-
-        base_crop = front_img[crop_y1:crop_y2, crop_x1:crop_x2].copy()
-        if base_crop.size == 0:
-            return []
-        tight_crop = front_img[y1:y2, x1:x2]
-
-        try:
-            gp_result = self.analyze_gas_pump_digits(tight_crop)
-        except Exception as e:
-            dlog("crop.overlay.gp_failed", serial=pair.serial, error=str(e))
-            return []
-
-        zoom = 2.0
-        base_crop = cv2.resize(base_crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
-
+        serial_boxes = sorted(serial_boxes, key=lambda b: b[4], reverse=True)  # conf desc
+        primary_box = serial_boxes[0]
         matched_patterns = list(pair.fancy_types or [])
 
-        # One overlay filter per crop: each selected pattern, or a single fallback.
-        # The GAS_PUMP pattern maps to the gas-pump drawing mode sentinel so the
-        # crop gets the red/green deviation boxes (not a normal Lua-highlight pass).
-        from serial_overlay import GAS_PUMP_FILTER
+        try:
+            gas_pump_threshold = self.pattern_engine.get_gas_pump_threshold()
+        except Exception:
+            gas_pump_threshold = 3.5
 
+        # The GAS_PUMP pattern maps to the gas-pump drawing-mode sentinel so the
+        # crop gets red/green deviation boxes (not a normal Lua-highlight pass).
         def _to_filter(p):
             return GAS_PUMP_FILTER if str(p).upper() == "GAS_PUMP" else p
 
@@ -3479,33 +3467,81 @@ class ProductionProcessor:
         else:
             overlay_filters = [resolve_overlay_filter(None, matched_patterns, pair.pattern_override)]
 
-        try:
-            gas_pump_threshold = self.pattern_engine.get_gas_pump_threshold()
-        except Exception:
-            gas_pump_threshold = 3.5
-
         crops = []
         for overlay_filter in overlay_filters:
-            crop = base_crop.copy()
-            try:
-                draw_serial_overlay(
-                    crop,
-                    gp_result.get('digit_boxes', []),
-                    zoom=zoom,
-                    overlay_filter=overlay_filter,
-                    serial=pair.serial or '',
-                    matched_patterns=matched_patterns,
-                    pattern_engine=self.pattern_engine,
-                    gas_pump_threshold=gas_pump_threshold,
-                    tight_box_rel=(x1 - crop_x1, y1 - crop_y1, x2 - crop_x1, y2 - crop_y1),
-                )
-            except Exception as e:
-                dlog("crop.overlay.draw_failed", serial=pair.serial,
-                     pattern=str(overlay_filter), error=str(e))
-                # Still emit the plain (zoomed) serial crop rather than nothing.
-            # Pad to eBay's 500px minimum dimension (black bars, serial centered).
-            crops.append(pad_to_min(crop))
+            if overlay_filter == GAS_PUMP_FILTER:
+                boxes = self._gas_pump_serial_boxes(front_img, serial_boxes, gas_pump_threshold)
+            else:
+                boxes = [primary_box]
+            for box in boxes:
+                crop = self._render_serial_overlay(
+                    front_img, box, overlay_filter, pair.serial or '',
+                    matched_patterns, gas_pump_threshold)
+                if crop is not None:
+                    crops.append(crop)
         return crops
+
+    def _gas_pump_serial_boxes(self, front_img, serial_boxes, threshold):
+        """Serial region(s) whose max digit deviation meets the gas-pump threshold
+        (one crop each); if none qualify, the single most-shifted region."""
+        scored = []
+        for box in serial_boxes:
+            x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
+            try:
+                dev = self.analyze_gas_pump_digits(front_img[y1:y2, x1:x2]).get('max_deviation', 0.0)
+            except Exception:
+                dev = 0.0
+            scored.append((dev, box))
+        qualifying = [b for dev, b in scored if dev >= threshold]
+        if qualifying:
+            return qualifying
+        return [max(scored, key=lambda s: s[0])[1]]  # fallback: most-shifted
+
+    def _render_serial_overlay(self, front_img, box, overlay_filter, serial,
+                               matched_patterns, gas_pump_threshold):
+        """Crop one serial region and draw one overlay onto it; return a padded
+        BGR crop (eBay 500px min) or None."""
+        from serial_overlay import draw_serial_overlay, pad_to_min
+
+        x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
+        h, w = front_img.shape[:2]
+        padding = 15
+        crop_x1 = max(0, x1 - padding)
+        crop_y1 = max(0, y1 - padding)
+        crop_x2 = min(w, x2 + padding)
+        crop_y2 = min(h, y2 + padding)
+
+        crop = front_img[crop_y1:crop_y2, crop_x1:crop_x2].copy()
+        if crop.size == 0:
+            return None
+
+        try:
+            gp_result = self.analyze_gas_pump_digits(front_img[y1:y2, x1:x2])
+        except Exception as e:
+            dlog("crop.overlay.gp_failed", serial=serial, error=str(e))
+            return None
+
+        zoom = 2.0
+        crop = cv2.resize(crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
+
+        try:
+            draw_serial_overlay(
+                crop,
+                gp_result.get('digit_boxes', []),
+                zoom=zoom,
+                overlay_filter=overlay_filter,
+                serial=serial,
+                matched_patterns=matched_patterns,
+                pattern_engine=self.pattern_engine,
+                gas_pump_threshold=gas_pump_threshold,
+                tight_box_rel=(x1 - crop_x1, y1 - crop_y1, x2 - crop_x1, y2 - crop_y1),
+            )
+        except Exception as e:
+            dlog("crop.overlay.draw_failed", serial=serial,
+                 pattern=str(overlay_filter), error=str(e))
+            # Still emit the plain (zoomed) serial crop rather than nothing.
+
+        return pad_to_min(crop)
 
     def process_directory(
         self,
