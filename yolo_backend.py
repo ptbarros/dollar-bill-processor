@@ -48,13 +48,10 @@ class _Result:
 class OnnxYoloDetector:
     """Standalone onnxruntime YOLOv8 detector, callable like ultralytics YOLO."""
 
-    def __init__(self, model_path, providers=None, imgsz=None):
+    def __init__(self, model_path, providers=None, imgsz=None, use_gpu=True):
         import onnxruntime as ort  # local import so the module loads without ORT
 
-        self.session = ort.InferenceSession(
-            str(model_path),
-            providers=providers or self._default_providers(ort),
-        )
+        self.session = self._make_session(ort, str(model_path), providers, use_gpu)
         self.providers = self.session.get_providers()
         self.input_name = self.session.get_inputs()[0].name
 
@@ -63,10 +60,47 @@ class OnnxYoloDetector:
         self.names = self._parse_names(meta)
 
     @staticmethod
-    def _default_providers(ort):
+    def _make_session(ort, model_path, providers, use_gpu):
+        # Explicit provider list (tests / force-CPU): use verbatim.
+        if providers is not None:
+            return ort.InferenceSession(model_path, providers=providers)
+        prov, opts = OnnxYoloDetector._auto_providers(ort, use_gpu)
+        try:
+            return ort.InferenceSession(model_path, providers=prov, provider_options=opts)
+        except Exception:
+            # OpenVINO iGPU (device GPU) can be unavailable -> retry OpenVINO CPU, then plain CPU.
+            if "OpenVINOExecutionProvider" in prov:
+                try:
+                    return ort.InferenceSession(
+                        model_path,
+                        providers=["OpenVINOExecutionProvider", "CPUExecutionProvider"],
+                        provider_options=[{"device_type": "CPU"}, {}],
+                    )
+                except Exception:
+                    pass
+            return ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+
+    @staticmethod
+    def _auto_providers(ort, use_gpu=True):
+        """Return (providers, provider_options). Prefers OpenVINO when its wheel is
+        installed (it accelerates the CPU path ~2x); else CUDA/DirectML when GPU is
+        requested; always CPU last as a fallback."""
         avail = ort.get_available_providers()
-        order = ["DmlExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"]
-        return [p for p in order if p in avail] or ["CPUExecutionProvider"]
+        # Gate acceleration on the "Use GPU acceleration" toggle so unchecking it
+        # still gives a plain-CPU baseline for comparison (works on every build).
+        if use_gpu and "OpenVINOExecutionProvider" in avail:
+            # Default to the reliable CPU device; DBP_OPENVINO_DEVICE=GPU targets the
+            # Intel iGPU (needs the Intel compute runtime) or NPU.
+            dev = os.environ.get("DBP_OPENVINO_DEVICE", "CPU")
+            return (["OpenVINOExecutionProvider", "CPUExecutionProvider"],
+                    [{"device_type": dev}, {}])
+        prov, opts = [], []
+        if use_gpu:
+            for p in ("CUDAExecutionProvider", "DmlExecutionProvider"):
+                if p in avail:
+                    prov.append(p); opts.append({})
+        prov.append("CPUExecutionProvider"); opts.append({})
+        return prov, opts
 
     @staticmethod
     def _parse_imgsz(meta):
@@ -180,10 +214,9 @@ def load_detector(yolo_model_path, use_gpu=False):
 
     if onnx_path.exists() and not force_torch:
         try:
-            # use_gpu True -> auto-select best provider (DirectML/CUDA/CPU);
-            # False -> pin to CPU so GPU-vs-CPU can be compared in one build.
-            providers = None if use_gpu else ["CPUExecutionProvider"]
-            det = OnnxYoloDetector(onnx_path, providers=providers)
+            # use_gpu True -> auto-select best provider (OpenVINO/CUDA/DirectML/CPU);
+            # False -> plain CPU so acceleration can be compared in one build.
+            det = OnnxYoloDetector(onnx_path, use_gpu=use_gpu)
             return det, True
         except Exception as e:  # onnxruntime missing / bad model -> fall back
             print(f"  ONNX backend unavailable ({type(e).__name__}: {e}); using torch.")
