@@ -982,7 +982,7 @@ class MainWindow(QMainWindow):
         # Create and start organize thread
         self.organize_thread = OrganizeThread(
             input_dir,
-            use_gpu=self.settings.processing.use_gpu
+            use_gpu=self.settings.processing.gpu_acceleration
         )
         self.organize_thread.progress_updated.connect(self._on_organize_progress)
         self.organize_thread.organize_complete.connect(self._on_organize_complete)
@@ -1405,11 +1405,12 @@ class MainWindow(QMainWindow):
         self.processing_thread = ProcessingThread(
             input_dir=input_dir,
             output_dir=output_dir,
-            use_gpu=self.settings.processing.use_gpu,
+            use_gpu=self.settings.processing.gpu_acceleration,
             verify_pairs=self.settings.processing.verify_pairs,
             crop_all=self.settings.processing.crop_all,
             auto_crop=self.settings.processing.auto_crop,
-            extract_plate_info=self.settings.processing.extract_plate_info
+            extract_plate_info=self.settings.processing.extract_plate_info,
+            debug_logging=self.settings.processing.debug_logging
         )
         self.processing_thread.progress_updated.connect(self._on_progress_updated)
         self.processing_thread.result_ready.connect(self._on_result_ready)
@@ -1584,7 +1585,7 @@ class MainWindow(QMainWindow):
             # Create processor with config
             self.processor = ProductionProcessor(
                 yolo_model_path=model_path,
-                use_gpu=self.settings.processing.use_gpu,
+                use_gpu=self.settings.processing.gpu_acceleration,
                 cfg=cfg,
                 patterns_dir=patterns_dir if patterns_dir.exists() else None
             )
@@ -1866,7 +1867,7 @@ class MainWindow(QMainWindow):
         self.monitor_thread = MonitorThread(
             watch_dir=watch_path,
             output_dir=Path(output_dir),
-            use_gpu=self.settings.processing.use_gpu,
+            use_gpu=self.settings.processing.gpu_acceleration,
             verify_pairs=self.settings.processing.verify_pairs,
             crop_all=self.settings.processing.crop_all,
             extract_plate_info=self.settings.processing.extract_plate_info

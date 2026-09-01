@@ -21,7 +21,9 @@ from dataclasses import dataclass, field
 class ProcessingSettings:
     """Processing-related settings."""
     confidence_threshold: float = 0.5
-    use_gpu: bool = False
+    use_gpu: bool = False  # legacy (torch era); ONNX path uses gpu_acceleration
+    gpu_acceleration: bool = True  # ONNX: allow GPU providers (DirectML/CUDA); uncheck -> force CPU
+    debug_logging: bool = False  # write per-bill timing + batch summary to debug_log.txt
     verify_pairs: bool = True
     jpeg_quality: int = 95
     multi_pass_detection: bool = True
@@ -164,6 +166,9 @@ class SettingsManager:
             proc = data['processing']
             self.processing.confidence_threshold = proc.get('confidence_threshold', 0.5)
             self.processing.use_gpu = proc.get('use_gpu', False)
+            # Absent key -> True so upgraded installs keep GPU on by default.
+            self.processing.gpu_acceleration = proc.get('gpu_acceleration', True)
+            self.processing.debug_logging = proc.get('debug_logging', False)
             self.processing.verify_pairs = proc.get('verify_pairs', True)
             self.processing.jpeg_quality = proc.get('jpeg_quality', 95)
             self.processing.multi_pass_detection = proc.get('multi_pass_detection', True)
@@ -344,6 +349,8 @@ class SettingsManager:
             'processing': {
                 'confidence_threshold': self.processing.confidence_threshold,
                 'use_gpu': self.processing.use_gpu,
+                'gpu_acceleration': self.processing.gpu_acceleration,
+                'debug_logging': self.processing.debug_logging,
                 'verify_pairs': self.processing.verify_pairs,
                 'jpeg_quality': self.processing.jpeg_quality,
                 'multi_pass_detection': self.processing.multi_pass_detection,

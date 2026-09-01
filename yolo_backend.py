@@ -180,7 +180,10 @@ def load_detector(yolo_model_path, use_gpu=False):
 
     if onnx_path.exists() and not force_torch:
         try:
-            det = OnnxYoloDetector(onnx_path)
+            # use_gpu True -> auto-select best provider (DirectML/CUDA/CPU);
+            # False -> pin to CPU so GPU-vs-CPU can be compared in one build.
+            providers = None if use_gpu else ["CPUExecutionProvider"]
+            det = OnnxYoloDetector(onnx_path, providers=providers)
             return det, True
         except Exception as e:  # onnxruntime missing / bad model -> fall back
             print(f"  ONNX backend unavailable ({type(e).__name__}: {e}); using torch.")

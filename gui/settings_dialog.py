@@ -9,10 +9,10 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
     QGroupBox, QFormLayout, QSpinBox, QDoubleSpinBox, QCheckBox,
     QComboBox, QLineEdit, QPushButton, QDialogButtonBox, QLabel,
-    QFileDialog, QColorDialog
+    QFileDialog, QColorDialog, QMessageBox
 )
-from PySide6.QtGui import QColor
-from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QDesktopServices
+from PySide6.QtCore import Qt, QUrl
 
 
 class ClickableInfoLabel(QLabel):
@@ -172,12 +172,28 @@ class SettingsDialog(QDialog):
         hardware_layout = QFormLayout(hardware_group)
 
         self.gpu_check, gpu_container = self._create_checkbox_with_info(
-            "Use GPU acceleration (if available)",
-            "Enable CUDA/GPU processing for faster YOLO detection.\n\n"
-            "• Checked: Uses GPU if available (2-3x faster)\n"
-            "• Unchecked: Uses CPU only (slower but compatible)"
+            "Use GPU acceleration (DirectML / CUDA if available)",
+            "Let ONNX Runtime run YOLO detection on the GPU.\n\n"
+            "• Checked: auto-selects the best provider (DirectML on Windows,\n"
+            "  CUDA where available), falling back to CPU if there's no GPU.\n"
+            "• Unchecked: forces CPU only.\n\n"
+            "Uncheck to compare CPU vs GPU speed in the same build (see the\n"
+            "Rate line in the debug log)."
         )
         hardware_layout.addRow(gpu_container)
+
+        self.debug_log_check, debug_container = self._create_checkbox_with_info(
+            "Write processing debug log",
+            "Write per-bill timing and the batch summary (with backend/provider\n"
+            "and bills-per-minute) to debug_log.txt.\n\n"
+            "Use this to compare processing speed between runs and machines.\n"
+            "Turn it off for normal use to keep the log small."
+        )
+        hardware_layout.addRow(debug_container)
+
+        view_log_btn = QPushButton("View debug log…")
+        view_log_btn.clicked.connect(self._open_debug_log)
+        hardware_layout.addRow("", view_log_btn)
 
         self.verify_pairs_check, verify_container = self._create_checkbox_with_info(
             "Verify front/back pairs",
@@ -699,13 +715,27 @@ class SettingsDialog(QDialog):
             self.ai_test_result.setText(f"Error: {str(e)}")
             self.ai_test_result.setStyleSheet("color: red;")
 
+    def _open_debug_log(self):
+        """Open debug_log.txt in the OS default text viewer."""
+        from debug_logger import get_log_path
+        path = get_log_path()
+        if path and Path(path).exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+        else:
+            QMessageBox.information(
+                self, "Debug Log",
+                "No debug log yet.\n\nEnable \"Write processing debug log\" and "
+                "run a batch first."
+            )
+
     def _load_settings(self):
         """Load current settings into the UI."""
         # Processing
         self.confidence_spin.setValue(self.settings.processing.confidence_threshold)
         self.multipass_check.setChecked(self.settings.processing.multi_pass_detection)
         self.max_passes_spin.setValue(self.settings.processing.max_detection_passes)
-        self.gpu_check.setChecked(self.settings.processing.use_gpu)
+        self.gpu_check.setChecked(self.settings.processing.gpu_acceleration)
+        self.debug_log_check.setChecked(self.settings.processing.debug_logging)
         self.verify_pairs_check.setChecked(self.settings.processing.verify_pairs)
         self.jpeg_quality_spin.setValue(self.settings.processing.jpeg_quality)
         self.crop_all_check.setChecked(self.settings.processing.crop_all)
@@ -761,7 +791,8 @@ class SettingsDialog(QDialog):
         self.settings.processing.confidence_threshold = self.confidence_spin.value()
         self.settings.processing.multi_pass_detection = self.multipass_check.isChecked()
         self.settings.processing.max_detection_passes = self.max_passes_spin.value()
-        self.settings.processing.use_gpu = self.gpu_check.isChecked()
+        self.settings.processing.gpu_acceleration = self.gpu_check.isChecked()
+        self.settings.processing.debug_logging = self.debug_log_check.isChecked()
         self.settings.processing.verify_pairs = self.verify_pairs_check.isChecked()
         self.settings.processing.jpeg_quality = self.jpeg_quality_spin.value()
         self.settings.processing.crop_all = self.crop_all_check.isChecked()
