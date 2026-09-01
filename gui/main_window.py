@@ -1545,23 +1545,28 @@ class MainWindow(QMainWindow):
         try:
             from process_production import ProductionProcessor, Config
 
-            # Find the YOLO model
-            model_path = Path(__file__).parent.parent / "models" / "best.pt"
+            # Find the YOLO model (resolve against the app base so it works both
+            # from source and when frozen by PyInstaller). The ONNX backend loads
+            # best.onnx derived from this path; best.pt only needs to exist.
+            from resource_path import app_base
+            base = app_base()
+            model_path = base / "models" / "best.pt"
             if not model_path.exists():
-                # Try alternate location
-                model_path = Path(__file__).parent.parent / "best.pt"
-            if not model_path.exists():
+                model_path = base / "best.pt"
+            if not model_path.exists() and (base / "best.onnx").exists():
+                model_path = base / "best.pt"  # ONNX sibling drives inference
+            if not model_path.exists() and not (base / "best.onnx").exists():
                 if not silent:
                     QMessageBox.warning(
                         self, "Model Not Found",
-                        "Could not find YOLO model (best.pt).\n\n"
-                        "Please ensure the model file is in the models/ directory."
+                        "Could not find YOLO model (best.onnx / best.pt).\n\n"
+                        "Please ensure the model file is bundled with the app."
                     )
                 self.status_label.setText("Ready")
                 return None
 
             # Load config from config.yaml (for crop settings, etc.)
-            script_dir = Path(__file__).parent.parent
+            script_dir = base
             config_path = script_dir / "config.yaml"
             patterns_dir = script_dir / "patterns"
 

@@ -73,8 +73,10 @@ class PatternEngineV3:
         Args:
             patterns_dir: Path to patterns/ directory (default: auto-detect)
         """
-        # Base directory
-        base_dir = Path(__file__).parent
+        # Base directory (repo root when running from source, bundle data dir
+        # when frozen by PyInstaller).
+        from resource_path import app_base
+        base_dir = app_base()
 
         # Settings manager (lazy loaded)
         self._settings: Optional['SettingsManager'] = None
