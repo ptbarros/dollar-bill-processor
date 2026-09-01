@@ -22,6 +22,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # GPU acceleration: swap the CPU-only onnxruntime for the DirectML wheel
+          # so the bundle picks up DmlExecutionProvider (yolo_backend auto-selects
+          # it). DirectML works on any Windows GPU with no CUDA/cuDNN install.
+          # onnxruntime-directml installs into the same `onnxruntime` import name,
+          # so rapidocr keeps working; pip's metadata check will warn that
+          # rapidocr's `onnxruntime` dep is unsatisfied -- harmless, the DLLs are
+          # physically present and collect_all bundles DirectML.dll.
+          pip uninstall -y onnxruntime onnxruntime-gpu || true
+          pip install "onnxruntime-directml>=1.17.0"
+          # Fail early if the DirectML provider isn't exposed by the installed wheel.
+          python -c "import onnxruntime as o; p=o.get_available_providers(); print('providers:',p); assert 'DmlExecutionProvider' in p, 'DirectML EP missing'"
           # App uses PySide6; drop PyQt/QScintilla so PyInstaller doesn't trip
           # over two Qt bindings (syntax highlighting is optional in the app).
           pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
