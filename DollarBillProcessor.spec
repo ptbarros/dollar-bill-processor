@@ -5,6 +5,7 @@ onedir build. Bundles the ONNX model, patterns, config, and RapidOCR's model
 data; excludes the heavy torch/ultralytics/easyocr stack (the app runs on
 onnxruntime + rapidocr). Reusable on Windows (produces .exe) and Linux.
 """
+import os
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 
@@ -37,7 +38,12 @@ for pkg in ('rapidocr_onnxruntime', 'onnxruntime', 'lupa'):
 excludes = [
     'torch', 'torchvision', 'ultralytics', 'easyocr',
     'scipy', 'matplotlib', 'nvidia',  # only pulled in by the excluded stack
+    'PyQt5', 'PyQt6',                  # app uses PySide6; QScintilla drags PyQt in
 ]
+
+# Release builds have no console window (errors still go to the debug log in the
+# user data dir). Set DBP_BUILD_CONSOLE=1 to keep a console for debugging.
+_console = os.environ.get('DBP_BUILD_CONSOLE') == '1'
 
 a = Analysis(
     ['run_gui.py'],
@@ -63,7 +69,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=True,   # keep a console for Phase 2 debugging; flip to False for release
+    console=_console,   # release: no console (DBP_BUILD_CONSOLE=1 to debug)
 )
 coll = COLLECT(
     exe,

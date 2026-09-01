@@ -1,0 +1,42 @@
+; Inno Setup script for Dollar Bill Processor (Windows installer).
+; Packages the PyInstaller onedir (dist\DollarBillProcessor\) into a setup .exe
+; with Start-menu + optional desktop shortcuts and an uninstaller.
+; Build (in CI): ISCC /DMyAppVersion=1.4.0 installer\DollarBillProcessor.iss
+
+#define MyAppName "Dollar Bill Processor"
+#define MyAppExeName "DollarBillProcessor.exe"
+#ifndef MyAppVersion
+  #define MyAppVersion "0.0.0"
+#endif
+
+[Setup]
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppPublisher=Paul Barros
+DefaultDirName={autopf}\DollarBillProcessor
+DefaultGroupName=Dollar Bill Processor
+UninstallDisplayName={#MyAppName}
+UninstallDisplayIcon={app}\{#MyAppExeName}
+OutputDir=dist
+OutputBaseFilename=DollarBillProcessor-{#MyAppVersion}-setup
+Compression=lzma2
+SolidCompression=yes
+ArchitecturesInstallIn64BitMode=x64compatible
+; Per-user install: no admin/UAC prompt, and the install dir is writable.
+PrivilegesRequired=lowest
+WizardStyle=modern
+DisableProgramGroupPage=yes
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
+
+[Files]
+Source: "dist\DollarBillProcessor\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+
+[Icons]
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
