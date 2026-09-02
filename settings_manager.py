@@ -29,7 +29,7 @@ class ProcessingSettings:
     multi_pass_detection: bool = True
     max_detection_passes: int = 5
     crop_all: bool = False  # Crop all bills, not just fancy ones
-    auto_crop: bool = True  # Auto-crop fancy bills during processing
+    auto_crop: bool = False  # Auto-crop fancy bills during processing (off by default for new installs)
     auto_archive: bool = False  # Archive files after manual processing
     archive_copy_mode: bool = False  # Copy instead of move when archiving (for testing)
     extract_plate_info: bool = True  # Extract series year, front plate, back plate (cheap + accurate with RapidOCR)
@@ -174,7 +174,7 @@ class SettingsManager:
             self.processing.multi_pass_detection = proc.get('multi_pass_detection', True)
             self.processing.max_detection_passes = proc.get('max_detection_passes', 5)
             self.processing.crop_all = proc.get('crop_all', False)
-            self.processing.auto_crop = proc.get('auto_crop', True)
+            self.processing.auto_crop = proc.get('auto_crop', False)
             self.processing.auto_archive = proc.get('auto_archive', False)
             self.processing.archive_copy_mode = proc.get('archive_copy_mode', False)
             self.processing.extract_plate_info = proc.get('extract_plate_info', True)

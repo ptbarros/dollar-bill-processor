@@ -734,6 +734,15 @@ class PatternDialog(QDialog):
         else:
             # Pattern row
             name = data['name']
+            # Duplicate: works for any Lua pattern (incl. read-only core patterns —
+            # the copy becomes an editable user pattern), reusing the same flow as
+            # the script dialog's "Create Copy...".
+            lua_info = None
+            if HAS_V3_ENGINE and hasattr(self.engine, 'lua_patterns'):
+                lua_info = self.engine.lua_patterns.get(name)
+            if lua_info is not None:
+                dup_action = menu.addAction("Duplicate Pattern...")
+                dup_action.triggered.connect(lambda: self._create_pattern_copy(lua_info))
             if self.settings.get_pattern_color(name):
                 clear_action = menu.addAction("Clear Pattern Color")
                 clear_action.triggered.connect(lambda: self._clear_pattern_color(item, name))
@@ -1467,10 +1476,11 @@ class PatternDialog(QDialog):
         clipboard.setText(script)
         QMessageBox.information(self, "Copied", "Script copied to clipboard!")
 
-    def _create_pattern_copy(self, lua_info, parent_dialog):
+    def _create_pattern_copy(self, lua_info, parent_dialog=None):
         """Create a new pattern based on an existing Lua script."""
-        # Close the view dialog
-        parent_dialog.accept()
+        # Close the view dialog if we were launched from one.
+        if parent_dialog is not None:
+            parent_dialog.accept()
 
         # Generate display name from original or create new one
         original_display = lua_info.display_name if lua_info.display_name else lua_info.name.replace('_', ' ').title()
