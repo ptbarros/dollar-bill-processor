@@ -27,6 +27,8 @@ DefaultDirName={autopf}\DollarBillProcessor{#EditionTag}
 DefaultGroupName={#MyAppName}
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
+; Installer's own icon (the app exe already carries the icon via PyInstaller).
+SetupIconFile=..\assets\icon.ico
 ; Paths are relative to this .iss file (installer/), so reach up to the repo root.
 OutputDir=..\dist
 OutputBaseFilename=DollarBillProcessor-{#MyAppVersion}{#EditionTag}-setup

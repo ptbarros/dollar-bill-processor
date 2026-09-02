@@ -35,8 +35,10 @@ Categories=Utility;Graphics;
 Terminal=false
 EOF
 
-# Icon (money-green with a white $). AppImage requires a top-level icon.
-if command -v convert >/dev/null 2>&1; then
+# Icon: use the bundled app icon; fall back to a generated $ if it's missing.
+if [ -f assets/icon.png ]; then
+    cp assets/icon.png "$APPDIR/DollarBillProcessor.png"
+elif command -v convert >/dev/null 2>&1; then
     convert -size 256x256 xc:'#1F6E56' -gravity center -fill white \
         -pointsize 170 -annotate 0 '$' "$APPDIR/DollarBillProcessor.png"
 else

@@ -14,6 +14,7 @@ datas = [
     ('best.onnx', '.'),
     ('best.pt', '.'),        # only needs to exist; ONNX sibling drives inference
     ('config.yaml', '.'),
+    ('assets/icon.png', 'assets'),   # window / taskbar icon
 ]
 # patterns/ tree, preserving structure (skip caches and the writable user dir --
 # user patterns live in the per-user data dir, not the read-only bundle).
@@ -70,6 +71,7 @@ exe = EXE(
     strip=False,
     upx=False,
     console=_console,   # release: no console (DBP_BUILD_CONSOLE=1 to debug)
+    icon='assets/icon.ico',
 )
 coll = COLLECT(
     exe,

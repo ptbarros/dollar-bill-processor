@@ -15,6 +15,7 @@ from PyInstaller.utils.hooks import collect_all
 datas = [
     ('best.pt', '.'),        # torch YOLO model drives inference in this edition
     ('config.yaml', '.'),
+    ('assets/icon.png', 'assets'),   # window / taskbar icon
 ]
 # NOTE: best.onnx is deliberately NOT bundled so load_detector uses the torch
 # path even if the runtime hook were bypassed.
@@ -67,6 +68,7 @@ exe = EXE(
     strip=False,
     upx=False,
     console=_console,
+    icon='assets/icon.ico',
 )
 coll = COLLECT(
     exe,

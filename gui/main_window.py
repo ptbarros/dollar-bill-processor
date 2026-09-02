@@ -2236,6 +2236,13 @@ def run_gui():
     app.setApplicationName("Dollar Bill Processor")
     app.setOrganizationName("DollarBillProcessor")
 
+    # App / window / taskbar icon (bundled under assets/).
+    from PySide6.QtGui import QIcon
+    from resource_path import app_base
+    _icon_path = app_base() / "assets" / "icon.png"
+    if _icon_path.exists():
+        app.setWindowIcon(QIcon(str(_icon_path)))
+
     # Apply theme and font size from settings
     from .theme_manager import apply_theme, get_combined_stylesheet
     settings = get_settings()
