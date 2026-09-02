@@ -102,10 +102,10 @@ class SettingsDialog(QDialog):
         self._setup_export_tab(export_tab)
         tabs.addTab(export_tab, "Export")
 
-        # Monitor tab
-        monitor_tab = QWidget()
-        self._setup_monitor_tab(monitor_tab)
-        tabs.addTab(monitor_tab, "Monitor")
+        # Folders tab
+        folders_tab = QWidget()
+        self._setup_folders_tab(folders_tab)
+        tabs.addTab(folders_tab, "Folders")
 
         # AI tab
         ai_tab = QWidget()
@@ -240,7 +240,7 @@ class SettingsDialog(QDialog):
             "Move processed files to a timestamped archive folder.\n\n"
             "• Checked: Files moved to archive/batch_YYYYMMDD_HHMMSS/\n"
             "• Unchecked: Files stay in original location\n\n"
-            "Uses the archive directory from Monitor settings."
+            "Set the archive folder in the Folders tab (blank = <input>/archive)."
         )
         output_layout.addRow(auto_archive_container)
 
@@ -387,42 +387,14 @@ class SettingsDialog(QDialog):
         layout.addWidget(format_group)
 
         layout.addStretch()
-
-    def _setup_monitor_tab(self, tab: QWidget):
-        """Setup the monitor mode settings tab."""
+    def _setup_folders_tab(self, tab: QWidget):
+        """Setup the Folders tab (archive + review locations)."""
         layout = QVBoxLayout(tab)
 
-        # Directories
-        dirs_group = QGroupBox("Monitor Mode Directories")
+        dirs_group = QGroupBox("Folders")
         dirs_layout = QFormLayout(dirs_group)
 
-        # Watch directory
-        self.watch_dir_edit = QLineEdit()
-        self.watch_dir_edit.setPlaceholderText("Directory where scanner saves files...")
-        watch_layout = QHBoxLayout()
-        watch_layout.addWidget(self.watch_dir_edit)
-        watch_btn = QPushButton("...")
-        watch_btn.setMaximumWidth(30)
-        watch_btn.clicked.connect(self._browse_watch_dir)
-        watch_layout.addWidget(watch_btn)
-        dirs_layout.addRow("Watch Directory:", watch_layout)
-
-        watch_hint = QLabel("Scanner saves files here - monitored for new images")
-        watch_hint.setStyleSheet("color: gray; font-size: 9px;")
-        dirs_layout.addRow("", watch_hint)
-
-        # Output directory
-        self.monitor_output_edit = QLineEdit()
-        self.monitor_output_edit.setPlaceholderText("Directory for fancy bill crops...")
-        output_layout = QHBoxLayout()
-        output_layout.addWidget(self.monitor_output_edit)
-        output_btn = QPushButton("...")
-        output_btn.setMaximumWidth(30)
-        output_btn.clicked.connect(self._browse_monitor_output)
-        output_layout.addWidget(output_btn)
-        dirs_layout.addRow("Output Directory:", output_layout)
-
-        # Archive directory
+        # Archive directory (where 'Archive after processing' moves batches)
         self.archive_dir_edit = QLineEdit()
         self.archive_dir_edit.setPlaceholderText("Directory for completed batches...")
         archive_layout = QHBoxLayout()
@@ -433,7 +405,7 @@ class SettingsDialog(QDialog):
         archive_layout.addWidget(archive_btn)
         dirs_layout.addRow("Archive Directory:", archive_layout)
 
-        archive_hint = QLabel("Processed files are moved here when monitoring stops")
+        archive_hint = QLabel("Where 'Archive after processing' moves batches (blank = <input>/archive)")
         archive_hint.setStyleSheet("color: gray; font-size: 9px;")
         dirs_layout.addRow("", archive_hint)
 
@@ -453,40 +425,8 @@ class SettingsDialog(QDialog):
         dirs_layout.addRow("", review_hint)
 
         layout.addWidget(dirs_group)
-
-        # Options
-        options_group = QGroupBox("Monitor Options")
-        options_layout = QFormLayout(options_group)
-
-        self.mon_auto_archive_check = QCheckBox("Auto-archive on stop")
-        self.mon_auto_archive_check.setToolTip("Move processed files to timestamped directory when monitoring stops")
-        options_layout.addRow(self.mon_auto_archive_check)
-
-        self.poll_interval_spin = QDoubleSpinBox()
-        self.poll_interval_spin.setRange(0.1, 10.0)
-        self.poll_interval_spin.setSingleStep(0.1)
-        self.poll_interval_spin.setDecimals(1)
-        self.poll_interval_spin.setSuffix(" seconds")
-        options_layout.addRow("Poll Interval:", self.poll_interval_spin)
-
-        poll_hint = QLabel("How often to check for new files (0.5s recommended)")
-        poll_hint.setStyleSheet("color: gray; font-size: 9px;")
-        options_layout.addRow("", poll_hint)
-
-        self.settle_time_spin = QDoubleSpinBox()
-        self.settle_time_spin.setRange(0.1, 5.0)
-        self.settle_time_spin.setSingleStep(0.1)
-        self.settle_time_spin.setDecimals(1)
-        self.settle_time_spin.setSuffix(" seconds")
-        options_layout.addRow("File Settle Time:", self.settle_time_spin)
-
-        settle_hint = QLabel("Wait for file to finish writing before processing")
-        settle_hint.setStyleSheet("color: gray; font-size: 9px;")
-        options_layout.addRow("", settle_hint)
-
-        layout.addWidget(options_group)
-
         layout.addStretch()
+
 
     def _setup_ai_tab(self, tab: QWidget):
         """Setup the AI-assisted pattern generation settings tab."""
@@ -739,14 +679,9 @@ class SettingsDialog(QDialog):
         self.auto_csv_check.setChecked(self.settings.export.auto_export_csv)
         self.auto_summary_check.setChecked(self.settings.export.auto_export_summary)
 
-        # Monitor
-        self.watch_dir_edit.setText(self.settings.monitor.watch_directory)
-        self.monitor_output_edit.setText(self.settings.monitor.output_directory)
-        self.archive_dir_edit.setText(self.settings.monitor.archive_directory)
+        # Folders
+        self.archive_dir_edit.setText(self.settings.processing.archive_directory)
         self.review_dir_edit.setText(self.settings.ui.review_directory)
-        self.mon_auto_archive_check.setChecked(self.settings.monitor.auto_archive)
-        self.poll_interval_spin.setValue(self.settings.monitor.poll_interval)
-        self.settle_time_spin.setValue(self.settings.monitor.file_settle_time)
 
         # AI
         provider = self.settings.ai.provider
@@ -789,14 +724,9 @@ class SettingsDialog(QDialog):
         self.settings.export.auto_export_csv = self.auto_csv_check.isChecked()
         self.settings.export.auto_export_summary = self.auto_summary_check.isChecked()
 
-        # Monitor
-        self.settings.monitor.watch_directory = self.watch_dir_edit.text()
-        self.settings.monitor.output_directory = self.monitor_output_edit.text()
-        self.settings.monitor.archive_directory = self.archive_dir_edit.text()
+        # Folders
+        self.settings.processing.archive_directory = self.archive_dir_edit.text().strip()
         self.settings.ui.review_directory = self.review_dir_edit.text().strip()
-        self.settings.monitor.auto_archive = self.mon_auto_archive_check.isChecked()
-        self.settings.monitor.poll_interval = self.poll_interval_spin.value()
-        self.settings.monitor.file_settle_time = self.settle_time_spin.value()
 
         # AI
         self.settings.ai.provider = self.ai_provider_combo.currentData() or ""
@@ -812,13 +742,12 @@ class SettingsDialog(QDialog):
 
     def _restore_defaults(self):
         """Restore default settings."""
-        from settings_manager import ProcessingSettings, UISettings, ExportSettings, MonitorSettings, AutosaveSettings, AISettings
+        from settings_manager import ProcessingSettings, UISettings, ExportSettings, AutosaveSettings, AISettings
 
         # Reset to defaults
         self.settings.processing = ProcessingSettings()
         self.settings.ui = UISettings()
         self.settings.export = ExportSettings()
-        self.settings.monitor = MonitorSettings()
         self.settings.autosave = AutosaveSettings()
         self.settings.ai = AISettings()
 
@@ -855,30 +784,6 @@ class SettingsDialog(QDialog):
             f"background-color: {self._fancy_color}; color: {text_color}; border: 1px solid #555;"
         )
         self.fancy_color_btn.setText(self._fancy_color)
-
-    def _browse_watch_dir(self):
-        """Browse for watch directory."""
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select Watch Directory",
-            self.watch_dir_edit.text() or str(Path.home())
-        )
-        if folder:
-            self.watch_dir_edit.setText(folder)
-            # Auto-set output if empty
-            if not self.monitor_output_edit.text():
-                self.monitor_output_edit.setText(str(Path(folder) / "fancy_bills"))
-            # Auto-set archive if empty
-            if not self.archive_dir_edit.text():
-                self.archive_dir_edit.setText(str(Path(folder) / "archive"))
-
-    def _browse_monitor_output(self):
-        """Browse for monitor output directory."""
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select Output Directory",
-            self.monitor_output_edit.text() or str(Path.home())
-        )
-        if folder:
-            self.monitor_output_edit.setText(folder)
 
     def _browse_archive_dir(self):
         """Browse for archive directory."""

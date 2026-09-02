@@ -1296,13 +1296,14 @@ class ResultsList(QWidget):
         self.batch_combo.addItem("Current Session", "")
 
         # Get archive directory from settings
-        archive_dir = self.settings.monitor.archive_directory
+        archive_dir = self.settings.processing.archive_directory
         if not archive_dir:
-            # Fall back to default location
-            archive_dir = str(Path(self.settings.monitor.watch_directory) / "archive")
+            # Fall back to the last-used input dir's archive folder
+            last_input = self.settings.ui.last_input_dir
+            archive_dir = str(Path(last_input) / "archive") if last_input else ""
 
-        archive_path = Path(archive_dir)
-        if archive_path.exists():
+        archive_path = Path(archive_dir) if archive_dir else None
+        if archive_path and archive_path.exists():
             # Find all batch directories, sorted newest first
             batch_dirs = sorted(
                 [d for d in archive_path.iterdir() if d.is_dir() and d.name.startswith("batch_")],

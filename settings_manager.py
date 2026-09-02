@@ -31,6 +31,7 @@ class ProcessingSettings:
     crop_all: bool = False  # Crop all bills, not just fancy ones
     auto_crop: bool = False  # Auto-crop fancy bills during processing (off by default for new installs)
     auto_archive: bool = False  # Archive files after manual processing
+    archive_directory: str = ""  # Where processed batches are archived (was under Monitor)
     archive_copy_mode: bool = False  # Copy instead of move when archiving (for testing)
     extract_plate_info: bool = True  # Extract series year, front plate, back plate (cheap + accurate with RapidOCR)
 
@@ -96,17 +97,6 @@ class CropSettings:
 
 
 @dataclass
-class MonitorSettings:
-    """Monitor mode settings for real-time processing."""
-    watch_directory: str = ""  # Directory to watch for new files
-    output_directory: str = ""  # Output directory for fancy bill crops
-    archive_directory: str = ""  # Where to move processed batches
-    poll_interval: float = 0.5  # Seconds between directory checks
-    file_settle_time: float = 0.2  # Wait for file write completion
-    auto_archive: bool = True  # Move files to timestamped dir on stop
-
-
-@dataclass
 class AISettings:
     """AI-assisted pattern generation settings."""
     provider: str = ""  # "anthropic" or "openai"
@@ -136,7 +126,6 @@ class SettingsManager:
         self.ui = UISettings()
         self.export = ExportSettings()
         self.crop = CropSettings()
-        self.monitor = MonitorSettings()
         self.autosave = AutosaveSettings()
         self.ai = AISettings()
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
@@ -174,6 +163,10 @@ class SettingsManager:
             self.processing.crop_all = proc.get('crop_all', False)
             self.processing.auto_crop = proc.get('auto_crop', False)
             self.processing.auto_archive = proc.get('auto_archive', False)
+            # archive_directory moved out of the (removed) Monitor settings; migrate
+            # the old value so existing users keep their archive location.
+            self.processing.archive_directory = proc.get('archive_directory') or \
+                data.get('monitor', {}).get('archive_directory', '')
             self.processing.archive_copy_mode = proc.get('archive_copy_mode', False)
             self.processing.extract_plate_info = proc.get('extract_plate_info', True)
 
@@ -220,15 +213,6 @@ class SettingsManager:
             self.crop.back_seal_w = crop.get('back_seal_w', 0.261)
             self.crop.back_seal_h = crop.get('back_seal_h', 0.557)
 
-        # Load monitor settings
-        if 'monitor' in data:
-            mon = data['monitor']
-            self.monitor.watch_directory = mon.get('watch_directory', '')
-            self.monitor.output_directory = mon.get('output_directory', '')
-            self.monitor.archive_directory = mon.get('archive_directory', '')
-            self.monitor.poll_interval = mon.get('poll_interval', 2.0)
-            self.monitor.file_settle_time = mon.get('file_settle_time', 1.0)
-            self.monitor.auto_archive = mon.get('auto_archive', True)
 
         # Load autosave settings
         if 'autosave' in data:
@@ -359,6 +343,7 @@ class SettingsManager:
                 'crop_all': self.processing.crop_all,
                 'auto_crop': self.processing.auto_crop,
                 'auto_archive': self.processing.auto_archive,
+                'archive_directory': self.processing.archive_directory,
                 'archive_copy_mode': self.processing.archive_copy_mode,
                 'extract_plate_info': self.processing.extract_plate_info,
             },
@@ -398,14 +383,6 @@ class SettingsManager:
                 'back_seal_y': self.crop.back_seal_y,
                 'back_seal_w': self.crop.back_seal_w,
                 'back_seal_h': self.crop.back_seal_h,
-            },
-            'monitor': {
-                'watch_directory': self.monitor.watch_directory,
-                'output_directory': self.monitor.output_directory,
-                'archive_directory': self.monitor.archive_directory,
-                'poll_interval': self.monitor.poll_interval,
-                'file_settle_time': self.monitor.file_settle_time,
-                'auto_archive': self.monitor.auto_archive,
             },
             'autosave': {
                 'enabled': self.autosave.enabled,
@@ -609,7 +586,6 @@ class SettingsManager:
         self.ui = UISettings()
         self.export = ExportSettings()
         self.crop = CropSettings()
-        self.monitor = MonitorSettings()
         self.autosave = AutosaveSettings()
         self.pattern_states = {}
         self.pattern_colors = {}

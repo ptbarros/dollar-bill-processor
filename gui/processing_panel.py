@@ -23,14 +23,10 @@ class ProcessingPanel(QWidget):
     process_requested = Signal(str, str)  # input_dir, output_dir
     organize_requested = Signal(str)  # input_dir - organize folder before processing
     stop_requested = Signal()
-    monitor_requested = Signal()  # Start monitoring
-    monitor_stop_requested = Signal()  # Stop monitoring
     archive_requested = Signal()  # Archive the current batch
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._monitor_mode = False
-        self._is_monitoring = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -38,13 +34,6 @@ class ProcessingPanel(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-
-        # Monitor mode checkbox
-        from PySide6.QtWidgets import QCheckBox
-        self.monitor_check = QCheckBox("Monitor")
-        self.monitor_check.setToolTip("Enable monitor mode to watch a directory for incoming files")
-        self.monitor_check.toggled.connect(self._on_monitor_toggled)
-        layout.addWidget(self.monitor_check)
 
         # Separator
         sep1 = QFrame()
@@ -89,26 +78,6 @@ class ProcessingPanel(QWidget):
         output_layout.addWidget(self.browse_output_btn)
 
         layout.addWidget(self.output_group, 1)
-
-        # Monitor mode display (hidden by default)
-        self.monitor_group = QFrame()
-        monitor_layout = QHBoxLayout(self.monitor_group)
-        monitor_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.monitor_status_label = QLabel()
-        self.monitor_status_label.setStyleSheet("color: #666;")
-        monitor_layout.addWidget(self.monitor_status_label)
-
-        # Monitor indicator (blinking dot when active)
-        self.monitor_indicator = QLabel()
-        self.monitor_indicator.setFixedSize(12, 12)
-        self.monitor_indicator.setStyleSheet(
-            "background-color: #888; border-radius: 6px;"
-        )
-        monitor_layout.addWidget(self.monitor_indicator)
-
-        layout.addWidget(self.monitor_group, 1)
-        self.monitor_group.hide()
 
         # Separator
         separator = QFrame()
@@ -247,63 +216,19 @@ class ProcessingPanel(QWidget):
         if folder:
             self.output_edit.setText(folder)
 
-    def _on_monitor_toggled(self, checked: bool):
-        """Handle monitor mode checkbox toggle."""
-        self._monitor_mode = checked
-
-        if checked:
-            # Switch to monitor mode display
-            self.input_group.hide()
-            self.output_group.hide()
-            self.monitor_group.show()
-            self.process_btn.setText("Start Monitoring")
-            self._update_monitor_display()
-        else:
-            # Switch to manual mode display
-            self.monitor_group.hide()
-            self.input_group.show()
-            self.output_group.show()
-            self.process_btn.setText("Process")
-
-    def _update_monitor_display(self, watch_dir: str = "", output_dir: str = ""):
-        """Update the monitor mode display labels."""
-        if watch_dir:
-            self.monitor_status_label.setText(f"Watch: {watch_dir}")
-        else:
-            self.monitor_status_label.setText("Configure directories in Settings > Monitor")
-
-    def set_monitor_dirs(self, watch_dir: str, output_dir: str):
-        """Set monitor directories for display."""
-        if watch_dir:
-            self.monitor_status_label.setText(f"Watching: {watch_dir}")
-        else:
-            self.monitor_status_label.setText("Configure directories in Settings > Monitor")
-
     def _on_process(self):
         """Handle process button click."""
-        print(f"[ProcessingPanel] _on_process called, monitor_mode={self._monitor_mode}, is_monitoring={self._is_monitoring}")
-        if self._monitor_mode:
-            if self._is_monitoring:
-                # Already monitoring - this shouldn't happen as button should be disabled
-                print("[ProcessingPanel] Already monitoring, returning")
-                return
-            print("[ProcessingPanel] Emitting monitor_requested")
-            self.monitor_requested.emit()
-        else:
-            input_dir = self.input_edit.text().strip()
-            output_dir = self.output_edit.text().strip()
-            print(f"[ProcessingPanel] input_dir='{input_dir}', output_dir='{output_dir}'")
+        input_dir = self.input_edit.text().strip()
+        output_dir = self.output_edit.text().strip()
 
-            if not input_dir:
-                print("[ProcessingPanel] No input_dir, returning")
-                return
+        if not input_dir:
+            return
 
-            if not output_dir:
-                output_dir = str(Path(input_dir) / "fancy_bills")
-                self.output_edit.setText(output_dir)
+        if not output_dir:
+            output_dir = str(Path(input_dir) / "fancy_bills")
+            self.output_edit.setText(output_dir)
 
-            print(f"[ProcessingPanel] Emitting process_requested({input_dir}, {output_dir})")
-            self.process_requested.emit(input_dir, output_dir)
+        self.process_requested.emit(input_dir, output_dir)
 
     def _on_organize(self):
         """Handle organize button click."""
@@ -317,10 +242,7 @@ class ProcessingPanel(QWidget):
 
     def _on_stop(self):
         """Handle stop button click."""
-        if self._monitor_mode:
-            self.monitor_stop_requested.emit()
-        else:
-            self.stop_requested.emit()
+        self.stop_requested.emit()
 
     def set_input_dir(self, path: str):
         """Set the input directory."""
@@ -337,13 +259,11 @@ class ProcessingPanel(QWidget):
         self.process_btn.setEnabled(not is_processing)
         self.organize_btn.setEnabled(not is_processing)
         self.stop_btn.setEnabled(is_processing)
-        self.monitor_check.setEnabled(not is_processing)
 
-        if not self._monitor_mode:
-            self.browse_input_btn.setEnabled(not is_processing)
-            self.browse_output_btn.setEnabled(not is_processing)
-            self.input_edit.setEnabled(not is_processing)
-            self.output_edit.setEnabled(not is_processing)
+        self.browse_input_btn.setEnabled(not is_processing)
+        self.browse_output_btn.setEnabled(not is_processing)
+        self.input_edit.setEnabled(not is_processing)
+        self.output_edit.setEnabled(not is_processing)
 
         if not is_processing:
             self.progress_bar.setValue(0)
@@ -373,31 +293,7 @@ class ProcessingPanel(QWidget):
         """Reset archive button to disabled state (e.g., after archiving)."""
         self.archive_btn.setEnabled(False)
 
-    def set_monitoring(self, is_monitoring: bool):
-        """Update UI for monitoring state."""
-        self._is_monitoring = is_monitoring
-        self.process_btn.setEnabled(not is_monitoring)
-        self.stop_btn.setEnabled(is_monitoring)
-        self.monitor_check.setEnabled(not is_monitoring)
 
-        # Update indicator color
-        if is_monitoring:
-            self.monitor_indicator.setStyleSheet(
-                "background-color: #4CAF50; border-radius: 6px;"
-            )
-            self.process_btn.setText("Monitoring...")
-        else:
-            self.monitor_indicator.setStyleSheet(
-                "background-color: #888; border-radius: 6px;"
-            )
-            self.process_btn.setText("Start Monitoring")
-
-        if not is_monitoring:
-            self.progress_bar.setValue(0)
-
-    def is_monitor_mode(self) -> bool:
-        """Return whether monitor mode is enabled."""
-        return self._monitor_mode
 
     def update_progress(self, current: int, total: int):
         """Update progress bar."""
