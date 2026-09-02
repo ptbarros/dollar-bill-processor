@@ -44,7 +44,7 @@ end
 - **highlights**: Individual digit boxes
 - **connectors**: Lines between digits (styles: arc, line, bracket, arrow, dashed)
 - **group_boxes**: Box spanning multiple digits (preferred for groups)
-- **Colors**: purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, green, teal, red, gray
+- **Colors**: purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, teal, red, gray
 
 ### Pattern Dialog Features
 - **Pattern Wizard**: GUI-based recipe creation (Ladder, Binary, Pairs, Palindrome, etc.)

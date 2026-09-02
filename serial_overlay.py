@@ -26,8 +26,10 @@ PATTERN_COLORS = {
     'salmon': (114, 128, 250),  # Radar pair 4
     'magenta': (255, 0, 255),   # Repeater
     'yellow': (0, 255, 255),    # Solid/near-solid
-    'lime': (0, 255, 0),        # Ladder
-    'green': (0, 128, 0),       # Alias for common AI usage
+    # 'lime'/'green' were retired (too close to the green serial digits) and now
+    # render as cyan; kept as aliases so existing patterns/scripts don't break.
+    'lime': (255, 255, 0),      # -> cyan (was Ladder green)
+    'green': (255, 255, 0),     # -> cyan (was AI-usage green)
     'teal': (128, 128, 0),      # Pairs
     'red': (0, 0, 255),         # Broken/invalid
     'gray': (128, 128, 128),    # Muted/prefix
@@ -199,7 +201,7 @@ def draw_serial_overlay(
                 ph = pattern_highlights[digit_idx]
                 if ph['highlights']:
                     first_highlight = ph['highlights'][0]
-                    pattern_color = first_highlight.get('color', 'lime')
+                    pattern_color = first_highlight.get('color', 'cyan')
                     color = PATTERN_COLORS.get(pattern_color, (0, 255, 0))
                     cv2.rectangle(crop, (dx1, dy1), (dx2, dy2), color, 2)
 

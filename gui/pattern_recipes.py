@@ -99,7 +99,7 @@ class LadderRecipe(PatternRecipe):
         ]
 
     def generate_lua(self, params: dict, pattern_name: str, pattern_desc: str,
-                     tier: int, color: str = "lime") -> str:
+                     tier: int, color: str = "cyan") -> str:
         min_length = int(params.get("min_length", 4))
         direction = params.get("direction", "Either")
         examples = self.generate_examples(params)
