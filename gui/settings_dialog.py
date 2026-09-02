@@ -386,30 +386,6 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(format_group)
 
-        # Templates
-        templates_group = QGroupBox("Templates (Optional)")
-        templates_layout = QFormLayout(templates_group)
-
-        self.excel_template_edit = QLineEdit()
-        excel_layout = QHBoxLayout()
-        excel_layout.addWidget(self.excel_template_edit)
-        excel_btn = QPushButton("...")
-        excel_btn.setMaximumWidth(30)
-        excel_btn.clicked.connect(self._browse_excel_template)
-        excel_layout.addWidget(excel_btn)
-        templates_layout.addRow("Excel template:", excel_layout)
-
-        self.html_template_edit = QLineEdit()
-        html_layout = QHBoxLayout()
-        html_layout.addWidget(self.html_template_edit)
-        html_btn = QPushButton("...")
-        html_btn.setMaximumWidth(30)
-        html_btn.clicked.connect(self._browse_html_template)
-        html_layout.addWidget(html_btn)
-        templates_layout.addRow("HTML template:", html_layout)
-
-        layout.addWidget(templates_group)
-
         layout.addStretch()
 
     def _setup_monitor_tab(self, tab: QWidget):
@@ -580,10 +556,10 @@ class SettingsDialog(QDialog):
         # Anthropic model
         self.anthropic_model_combo = QComboBox()
         self.anthropic_model_combo.addItems([
-            "claude-sonnet-4-20250514",
-            "claude-opus-4-20250514",
-            "claude-3-5-sonnet-20241022",
-            "claude-3-5-haiku-20241022",
+            "claude-opus-5",
+            "claude-sonnet-5",
+            "claude-haiku-4-5",
+            "claude-opus-4-8",
         ])
         self.anthropic_model_combo.setEditable(True)  # Allow custom model names
         model_layout.addRow("Anthropic Model:", self.anthropic_model_combo)
@@ -591,11 +567,10 @@ class SettingsDialog(QDialog):
         # OpenAI model
         self.openai_model_combo = QComboBox()
         self.openai_model_combo.addItems([
+            "gpt-5",
+            "gpt-5-mini",
             "gpt-4o",
             "gpt-4o-mini",
-            "gpt-4-turbo",
-            "gpt-4",
-            "o4-mini",
         ])
         self.openai_model_combo.setEditable(True)  # Allow custom model names
         model_layout.addRow("OpenAI Model:", self.openai_model_combo)
@@ -761,8 +736,6 @@ class SettingsDialog(QDialog):
         idx = self.format_combo.findData(self.settings.export.default_format)
         if idx >= 0:
             self.format_combo.setCurrentIndex(idx)
-        self.excel_template_edit.setText(self.settings.export.excel_template)
-        self.html_template_edit.setText(self.settings.export.html_template)
         self.auto_csv_check.setChecked(self.settings.export.auto_export_csv)
         self.auto_summary_check.setChecked(self.settings.export.auto_export_summary)
 
@@ -813,8 +786,6 @@ class SettingsDialog(QDialog):
 
         # Export
         self.settings.export.default_format = self.format_combo.currentData()
-        self.settings.export.excel_template = self.excel_template_edit.text()
-        self.settings.export.html_template = self.html_template_edit.text()
         self.settings.export.auto_export_csv = self.auto_csv_check.isChecked()
         self.settings.export.auto_export_summary = self.auto_summary_check.isChecked()
 
@@ -865,26 +836,6 @@ class SettingsDialog(QDialog):
         )
         if folder:
             self.working_dir_edit.setText(folder)
-
-    def _browse_excel_template(self):
-        """Browse for Excel template."""
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Select Excel Template",
-            str(Path.home()),
-            "Excel Files (*.xlsx)"
-        )
-        if path:
-            self.excel_template_edit.setText(path)
-
-    def _browse_html_template(self):
-        """Browse for HTML template."""
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Select HTML Template",
-            str(Path.home()),
-            "HTML Files (*.html)"
-        )
-        if path:
-            self.html_template_edit.setText(path)
 
     def _pick_fancy_color(self):
         """Open color picker for default fancy color."""

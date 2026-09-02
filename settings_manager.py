@@ -76,8 +76,6 @@ class UISettings:
 class ExportSettings:
     """Export-related settings."""
     default_format: str = "csv"  # csv, excel, html
-    excel_template: str = ""
-    html_template: str = ""
     auto_export_csv: bool = True  # Auto-generate CSV after processing
     auto_export_summary: bool = True  # Auto-generate summary after processing
 
@@ -114,8 +112,8 @@ class AISettings:
     provider: str = ""  # "anthropic" or "openai"
     anthropic_api_key: str = ""  # Anthropic API key
     openai_api_key: str = ""  # OpenAI API key
-    anthropic_model: str = "claude-sonnet-4-20250514"
-    openai_model: str = "gpt-4o"
+    anthropic_model: str = "claude-opus-5"
+    openai_model: str = "gpt-5"
 
 
 class SettingsManager:
@@ -207,8 +205,6 @@ class SettingsManager:
         if 'export' in data:
             exp = data['export']
             self.export.default_format = exp.get('default_format', 'csv')
-            self.export.excel_template = exp.get('excel_template', '')
-            self.export.html_template = exp.get('html_template', '')
             self.export.auto_export_csv = exp.get('auto_export_csv', True)
             self.export.auto_export_summary = exp.get('auto_export_summary', True)
 
@@ -254,8 +250,13 @@ class SettingsManager:
                         self.ai.anthropic_api_key = old_key
                     elif self.ai.provider == 'openai':
                         self.ai.openai_api_key = old_key
-            self.ai.anthropic_model = ai.get('anthropic_model', 'claude-sonnet-4-20250514')
-            self.ai.openai_model = ai.get('openai_model', 'gpt-4o')
+            self.ai.anthropic_model = ai.get('anthropic_model', 'claude-opus-5')
+            self.ai.openai_model = ai.get('openai_model', 'gpt-5')
+            # Migrate retired model IDs saved by older versions to a current default
+            # (the combos are editable, so anything current is left untouched).
+            if self.ai.anthropic_model.startswith(('claude-sonnet-4-2025',
+                                                   'claude-opus-4-2025', 'claude-3-')):
+                self.ai.anthropic_model = 'claude-opus-5'
 
         # Load pattern states
         self.pattern_states = data.get('pattern_states', {})
@@ -385,8 +386,6 @@ class SettingsManager:
             },
             'export': {
                 'default_format': self.export.default_format,
-                'excel_template': self.export.excel_template,
-                'html_template': self.export.html_template,
                 'auto_export_csv': self.export.auto_export_csv,
                 'auto_export_summary': self.export.auto_export_summary,
             },
