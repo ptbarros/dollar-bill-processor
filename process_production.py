@@ -224,6 +224,13 @@ class Config:
         Crop Manager; default on."""
         return bool(self.data.get('include_serial_overlay', True))
 
+    @property
+    def serial_sides(self) -> str:
+        """Which serial region(s) the serial crop targets: 'auto' (highest-conf,
+        default), 'left', 'right', or 'both'. Set in the eBay Crop Manager."""
+        val = str(self.data.get('serial_sides', 'auto')).lower()
+        return val if val in ('auto', 'left', 'right', 'both') else 'auto'
+
 
 # =============================================================================
 # DATA CLASSES
@@ -2463,6 +2470,10 @@ class ProductionProcessor:
                 'offset_x': 0,    # X offset from anchor (positive = right)
                 'offset_y': 0,    # Y offset from anchor (positive = down)
             },
+            # Left/right serial crops: anchored to the serial_number detection,
+            # expanded to at least min_width x min_height, shifted by the offsets.
+            'serial_left': {'min_width': 500, 'min_height': 0, 'offset_x': 0, 'offset_y': 0},
+            'serial_right': {'min_width': 500, 'min_height': 0, 'offset_x': 0, 'offset_y': 0},
             # Per-side manual overlap adjustments for the left/center/right thirds,
             # in pixels. Positive values grow the crop toward the center of the bill
             # so a defect near a third boundary can be pulled fully into one crop.
@@ -2486,6 +2497,9 @@ class ProductionProcessor:
                 result['front_seal'].update(config['front_seal'])
             if 'back_seal' in config:
                 result['back_seal'].update(config['back_seal'])
+            for k in ('serial_left', 'serial_right'):
+                if k in config:
+                    result[k].update(config[k])
             if 'thirds' in config:
                 for side in ('front', 'back'):
                     if side in config['thirds']:
@@ -3351,15 +3365,56 @@ class ProductionProcessor:
         if region in ('left', 'center', 'right'):
             rects = self._thirds_rects(img, detections, side)
             return rects.get(region)
+        if region in ('serial_left', 'serial_right'):
+            return self._serial_crop_rect(img, detections,
+                                          'left' if region == 'serial_left' else 'right')
         return self.create_crop_rect(img, side, region)
 
-    def generate_crops(self, pair: BillPair, output_dir: Path) -> list[Path]:
+    def _serial_crop_rect(self, img: np.ndarray, detections: dict, which: str):
+        """Rect for the left/right serial crop: anchored to that serial_number
+        detection, padded, expanded to the configured min size, and shifted by the
+        configured offsets (positive x = right, positive y = up). None if missing."""
+        boxes = detections.get('serial_number') or []
+        if not boxes:
+            return None
+        by_x = sorted(boxes, key=lambda b: b[0])   # left -> right
+        box = by_x[0] if which == 'left' else by_x[-1]
+        h, w = img.shape[:2]
+        sc = self._get_yolo_crop_config().get('serial_' + which, {})
+        min_w = sc.get('min_width', 0)
+        min_h = sc.get('min_height', 0)
+        off_x = sc.get('offset_x', 0)
+        off_y = sc.get('offset_y', 0)
+        pad = 15
+        x1, y1, x2, y2 = box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad
+        x1 += off_x; x2 += off_x
+        y1 -= off_y; y2 -= off_y     # negate so positive offset = up
+        cw, ch = x2 - x1, y2 - y1
+        if min_w > 0 and cw < min_w:
+            e = (min_w - cw) // 2
+            x1 -= e; x2 += e
+        if min_h > 0 and ch < min_h:
+            e = (min_h - ch) // 2
+            y1 -= e; y2 += e
+        x1 = max(0, x1); y1 = max(0, y1); x2 = min(w, x2); y2 = min(h, y2)
+        if x2 <= x1 or y2 <= y1:
+            return None
+        return (int(x1), int(y1), int(x2), int(y2))
+
+    def generate_crops(self, pair: BillPair, output_dir: Path, name: Optional[str] = None) -> list[Path]:
         """Generate crops for a fancy bill pair using YOLO-based dynamic cropping.
 
         Uses YOLO detections to dynamically position crops based on actual element
         locations, ensuring serial numbers, seals, and other features are fully
         captured regardless of scan border spacing.
+
+        ``name`` overrides the output filename base (default: the serial number).
+        The standalone crop tool passes the source filename when serial reading is
+        off, so crops are named without needing OCR.
         """
+        file_base = name if name is not None else pair.serial
+        if not file_base:
+            file_base = pair.front_path.stem
         timing = get_timing()
         timing.start('crops')
         crop_paths = []
@@ -3412,75 +3467,82 @@ class ProductionProcessor:
 
         crop_order = self.cfg.crop_order
         jpeg_quality = self.cfg.jpeg_quality
+        # Star notes have a '*' in the serial, ILLEGAL in Windows filenames ->
+        # cv2.imwrite silently fails. Sanitize ('*' -> 'star') so crops save.
+        safe_serial = _safe_serial_for_filename(file_base)
 
-        for i, (side, region) in enumerate(crop_order, 1):
-            if side == 'front':
-                img = front_img
-                detections = front_detections
-                thirds = front_thirds
+        # Running output index: increments per file actually written, so a crop
+        # that emits multiple images (the serial crop, left+right) or one that is
+        # skipped doesn't leave gaps in the _NN numbering.
+        seq = [0]
+
+        def _write(crop_img):
+            if crop_img is None or getattr(crop_img, 'size', 1) == 0:
+                return
+            seq[0] += 1
+            path = output_dir / f"{safe_serial}_{seq[0]:02d}.jpg"
+            ok = cv2.imwrite(str(path), crop_img, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
+            if not ok:
+                dlog("crop.imwrite.FAILED", serial=pair.serial, path=str(path))
             else:
-                img = back_img
-                detections = back_detections
-                thirds = back_thirds
+                crop_paths.append(path)
+
+        serial_regions = ('serial_left', 'serial_right')
+        serial_in_order = any(tuple(c)[1] in serial_regions for c in crop_order)
+
+        for side, region in crop_order:
+            # Left/right serial crops (anchored to the serial detection, adjustable).
+            if region in serial_regions:
+                if side != 'front':
+                    continue
+                which = 'left' if region == 'serial_left' else 'right'
+                rect = self._serial_crop_rect(front_img, front_detections, which)
+                if rect is not None:
+                    x1, y1, x2, y2 = rect
+                    _write(front_img[y1:y2, x1:x2])
+                continue
+
+            if side == 'front':
+                img, detections, thirds = front_img, front_detections, front_thirds
+            else:
+                img, detections, thirds = back_img, back_detections, back_thirds
                 if img is None:
                     continue
 
             # Route to appropriate dynamic crop method
             if region == 'seal':
-                if side == 'front':
-                    crop = self._generate_front_seal_crop(img, detections)
-                else:
-                    crop = self._generate_back_seal_crop(img, detections)
+                crop = (self._generate_front_seal_crop(img, detections) if side == 'front'
+                        else self._generate_back_seal_crop(img, detections))
             elif region in ('left', 'center', 'right'):
-                if thirds is not None:
-                    crop = {'left': thirds[0], 'center': thirds[1], 'right': thirds[2]}[region]
-                else:
-                    # Fallback to percentage-based crop
-                    crop = self.create_crop(img, side, region)
+                crop = ({'left': thirds[0], 'center': thirds[1], 'right': thirds[2]}[region]
+                        if thirds is not None else self.create_crop(img, side, region))
             else:  # 'full' or any other region
                 crop = self.create_crop(img, side, region)
 
-            # Handle case where dynamic crop failed
             if crop is None:
                 crop = self.create_crop(img, side, region)
             if crop is None:
-                # Nothing to write for this region; skip rather than crash on imwrite(None)
                 dlog("crop.SKIP_no_image", serial=pair.serial, region=f"{side}/{region}")
                 continue
+            _write(crop)
 
-            # Star notes have a '*' in the serial, which is an ILLEGAL character
-            # in Windows filenames -> cv2.imwrite silently fails (returns False,
-            # no exception) and no crop file is written. Sanitize the serial so
-            # the crop actually saves; '*' becomes 'star' to stay recognizable.
-            safe_serial = _safe_serial_for_filename(pair.serial)
-            filename = f"{safe_serial}_{i:02d}.jpg"
-            crop_path = output_dir / filename
-
-            ok = cv2.imwrite(str(crop_path), crop, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
-            if not ok:
-                dlog("crop.imwrite.FAILED", serial=pair.serial, path=str(crop_path))
-            crop_paths.append(crop_path)
-
-        # Append a serial overlay crop (digit bounding boxes + pattern overlay)
-        # per selected pattern, so listings can show which pattern(s) the bill has.
-        # Toggleable in the eBay Crop Manager (default on).
-        overlay_crops = (self._generate_serial_overlay_crops(front_img, front_detections, pair)
-                         if self.cfg.include_serial_overlay else [])
-        safe_serial = _safe_serial_for_filename(pair.serial)
-        for n, overlay_crop in enumerate(overlay_crops):
-            i = len(crop_order) + 1 + n
-            crop_path = output_dir / f"{safe_serial}_{i:02d}.jpg"
-            ok = cv2.imwrite(str(crop_path), overlay_crop, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
-            if not ok:
-                dlog("crop.imwrite.FAILED", serial=pair.serial, path=str(crop_path))
-            else:
-                crop_paths.append(crop_path)
+        # Legacy path: configs that don't list a 'serial' crop still get one
+        # appended when the toggle is on (matches pre-list-row behavior).
+        if not serial_in_order and self.cfg.include_serial_overlay:
+            for sc in self._generate_serial_overlay_crops(
+                    front_img, front_detections, pair, serial_sides=self.cfg.serial_sides):
+                _write(sc)
 
         timing.stop('crops')
         return crop_paths
 
-    def _generate_serial_overlay_crops(self, front_img, front_detections, pair):
+    def _generate_serial_overlay_crops(self, front_img, front_detections, pair, serial_sides='auto'):
         """Build serial-region overlay crops -- one per selected pattern.
+
+        ``serial_sides`` chooses which serial region(s) to crop:
+        'auto' (default) = the highest-confidence serial (original behavior);
+        'left'/'right' = the left/right serial by x-position; 'both' = both.
+        Gas-pump still targets the shifted serial(s) regardless.
 
         Mirrors the GUI preview (``preview_panel._generate_serial_region_crops``)
         via the shared ``serial_overlay.draw_serial_overlay`` so each saved crop
@@ -3524,12 +3586,19 @@ class ProductionProcessor:
         else:
             overlay_filters = [resolve_overlay_filter(None, matched_patterns, pair.pattern_override)]
 
+        # Which serial region(s) a non-gas-pump crop targets.
+        if serial_sides in ('left', 'right', 'both'):
+            by_x = sorted(serial_boxes, key=lambda b: b[0])   # left -> right
+            side_boxes = {'left': by_x[:1], 'right': by_x[-1:], 'both': by_x}[serial_sides]
+        else:
+            side_boxes = [primary_box]   # 'auto' = original highest-confidence
+
         crops = []
         for overlay_filter in overlay_filters:
             if overlay_filter == GAS_PUMP_FILTER:
                 boxes = self._gas_pump_serial_boxes(front_img, serial_boxes, gas_pump_threshold)
             else:
-                boxes = [primary_box]
+                boxes = side_boxes
             for box in boxes:
                 crop = self._render_serial_overlay(
                     front_img, box, overlay_filter, pair.serial or '',

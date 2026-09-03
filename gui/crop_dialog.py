@@ -32,14 +32,21 @@ class EbayCropDialog(QDialog):
         {'side': 'back', 'region': 'left', 'name': 'Back Left', 'has_settings': False},
         {'side': 'back', 'region': 'center', 'name': 'Back Center', 'has_settings': False},
         {'side': 'back', 'region': 'right', 'name': 'Back Right', 'has_settings': False},
+        {'side': 'front', 'region': 'serial_left', 'name': 'Left Serial', 'has_settings': True},
+        {'side': 'front', 'region': 'serial_right', 'name': 'Right Serial', 'has_settings': True},
     ]
 
     def __init__(self, config, parent=None, preview_ctx=None):
         super().__init__(parent)
         self.config = config
         self.preview_ctx = preview_ctx
+        self._preview_cache = None   # (bill_bgr, rect, crop_bgr) for re-render on resize
         self.setWindowTitle("eBay Crop Manager")
         self.setMinimumSize(1080 if preview_ctx else 700, 560)
+        # Give the dialog a full window frame with min/maximize buttons (a modal
+        # child dialog otherwise shows only a close button on some window managers).
+        self.setWindowFlags(Qt.Window | Qt.WindowMinMaxButtonsHint
+                            | Qt.WindowSystemMenuHint | Qt.WindowCloseButtonHint)
         self._setup_ui()
         self._load_settings()
 
@@ -206,13 +213,22 @@ class EbayCropDialog(QDialog):
         self.thirds_group.setVisible(False)
         layout.addWidget(self.thirds_group)
 
-        # Serial crop toggle
-        self.overlay_crop_check = QCheckBox("Add Serial Crop")
-        self.overlay_crop_check.setToolTip(
-            "Append a zoomed crop of the serial number. In the main app any matched "
-            "pattern(s) are drawn on it (one crop per pattern; gas-pump targets the "
-            "shifted serial).")
-        layout.addWidget(self.overlay_crop_check)
+        # Per-serial settings (contextual, like the seal settings): size + offset
+        # for the left and right serial crops.
+        self.serial_left_group = self._build_serial_settings_group("Left Serial Settings", "left")
+        layout.addWidget(self.serial_left_group)
+        self.serial_right_group = self._build_serial_settings_group("Right Serial Settings", "right")
+        layout.addWidget(self.serial_right_group)
+
+        # Short explainer: anchored (seal/serial) vs thirds crops.
+        note = QLabel(
+            "Seal and serial crops anchor to features the detection model finds, so "
+            "they stay aligned even when a scan shifts — but they only work on "
+            "denominations in the model ($1). Left / Center / Right are plain thirds "
+            "of the bill and work on any note.")
+        note.setWordWrap(True)
+        note.setStyleSheet("color:#888; font-size:11px")
+        layout.addWidget(note)
 
         # Dialog buttons
         button_box = QDialogButtonBox(
@@ -226,9 +242,10 @@ class EbayCropDialog(QDialog):
         # emphasis) and, when available, the live preview.
         self.crop_table.itemSelectionChanged.connect(self._on_row_selected)
 
-        # Live preview panel (only when a sample bill was supplied)
+        # Live preview panel (only when a sample bill was supplied). Give it stretch
+        # so it (and the bill image) grows as the window is enlarged/maximized.
         if self.preview_ctx:
-            outer.addWidget(self._build_preview_panel())
+            outer.addWidget(self._build_preview_panel(), 1)
             for spin in (self.front_seal_width, self.front_seal_height,
                          self.front_seal_offset_x, self.front_seal_offset_y,
                          self.back_seal_width, self.back_seal_height,
@@ -236,8 +253,9 @@ class EbayCropDialog(QDialog):
                 spin.valueChanged.connect(self._refresh_preview)
 
     def _build_preview_panel(self) -> QWidget:
+        from PySide6.QtWidgets import QSizePolicy
         panel = QWidget()
-        panel.setFixedWidth(380)
+        panel.setMinimumWidth(360)
         v = QVBoxLayout(panel)
         title = QLabel("Preview")
         title.setStyleSheet("font-weight:bold")
@@ -252,20 +270,65 @@ class EbayCropDialog(QDialog):
         self.preview_bill.setMinimumHeight(180)
         self.preview_bill.setAlignment(Qt.AlignCenter)
         self.preview_bill.setFrameShape(QFrame.Box)
-        v.addWidget(self.preview_bill)
+        self.preview_bill.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        # Bill preview gets the extra vertical space when the window grows.
+        v.addWidget(self.preview_bill, 3)
 
         v.addWidget(QLabel("Resulting crop:"))
         self.preview_crop = QLabel()
         self.preview_crop.setMinimumHeight(150)
         self.preview_crop.setAlignment(Qt.AlignCenter)
         self.preview_crop.setFrameShape(QFrame.Box)
-        v.addWidget(self.preview_crop)
+        self.preview_crop.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        v.addWidget(self.preview_crop, 2)
 
         self.preview_info = QLabel("")
         self.preview_info.setStyleSheet("color:#888")
         v.addWidget(self.preview_info)
-        v.addStretch()
         return panel
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Re-render the preview to fill the (possibly larger) labels.
+        if getattr(self, '_preview_cache', None):
+            bill, rect, crop = self._preview_cache
+            self._show_bill_with_rect(bill, rect)
+            self._show_crop(crop)
+
+    def _build_serial_settings_group(self, title, which) -> QWidget:
+        """Width/height/offset settings for one serial crop (mirrors the seals)."""
+        if not hasattr(self, 'serial_spins'):
+            self.serial_spins = {}
+        box = QGroupBox(title)
+        lay = QHBoxLayout(box)
+        spins = {}
+
+        def add(label, key, lo, hi, tip):
+            lay.addWidget(QLabel(label))
+            sp = QSpinBox()
+            sp.setRange(lo, hi)
+            sp.setSuffix(" px")
+            sp.setToolTip(tip)
+            sp.valueChanged.connect(lambda _=0, w=which: self._on_serial_setting_changed(w))
+            lay.addWidget(sp)
+            spins[key] = sp
+
+        add("Width:", 'min_width', 0, 2000, "Minimum crop width (0 = natural size).")
+        add("Height:", 'min_height', 0, 2000, "Minimum crop height (0 = natural size).")
+        add("Offset X:", 'offset_x', -500, 500, "Positive = shift right.")
+        add("Offset Y:", 'offset_y', -500, 500, "Positive = shift up.")
+        lay.addStretch()
+        self.serial_spins[which] = spins
+        box.setVisible(False)
+        return box
+
+    def _on_serial_setting_changed(self, which):
+        if getattr(self, '_loading_serial', False):
+            return
+        node = self.config.setdefault('yolo_crops', {}).setdefault('serial_' + which, {})
+        for key, sp in self.serial_spins[which].items():
+            node[key] = sp.value()
+        self._refresh_preview()
 
     def _load_settings(self):
         """Load current settings from config."""
@@ -338,8 +401,32 @@ class EbayCropDialog(QDialog):
         self.back_seal_offset_x.setValue(back_seal.get('offset_x', 0))
         self.back_seal_offset_y.setValue(back_seal.get('offset_y', 0))
 
-        # Serial overlay crop (default on)
-        self.overlay_crop_check.setChecked(self.config.get('include_serial_overlay', True))
+        # Serial crops: enabled if in crop_order; legacy configs (old single
+        # serial overlay via include_serial_overlay, no serial rows) migrate to
+        # BOTH serial crops enabled.
+        crop_keys = [tuple(c) for c in self.config.get('crop_order', [])]
+        has_serial_rows = any(k in crop_keys for k in (('front', 'serial_left'), ('front', 'serial_right')))
+        legacy_on = self.config.get('include_serial_overlay', True)
+        for i in range(self.crop_table.rowCount()):
+            crop = self.crop_table.item(i, 1).data(Qt.UserRole)
+            if crop['region'] in ('serial_left', 'serial_right'):
+                cb = self.crop_table.cellWidget(i, 0)
+                if cb:
+                    if has_serial_rows:
+                        cb.setChecked((crop['side'], crop['region']) in crop_keys)
+                    else:
+                        cb.setChecked(bool(legacy_on))   # migrate: enable both
+
+        # Load per-serial size/offset settings
+        self._loading_serial = True
+        for which in ('left', 'right'):
+            sc = yolo_crops.get('serial_' + which, {})
+            spins = self.serial_spins[which]
+            spins['min_width'].setValue(sc.get('min_width', 500))
+            spins['min_height'].setValue(sc.get('min_height', 0))
+            spins['offset_x'].setValue(sc.get('offset_x', 0))
+            spins['offset_y'].setValue(sc.get('offset_y', 0))
+        self._loading_serial = False
 
         # Update order numbers based on enabled state
         self._update_order_numbers()
@@ -355,7 +442,14 @@ class EbayCropDialog(QDialog):
     def _on_row_selected(self):
         self._update_seal_groups()
         self._update_thirds_group()
+        self._update_serial_group()
         self._refresh_preview()
+
+    def _update_serial_group(self):
+        crop = self._selected_crop()
+        region = crop['region'] if crop else None
+        self.serial_left_group.setVisible(region == 'serial_left')
+        self.serial_right_group.setVisible(region == 'serial_right')
 
     def _update_thirds_group(self):
         """Show the overlap knobs relevant to the selected left/center/right crop."""
@@ -445,11 +539,13 @@ class EbayCropDialog(QDialog):
             self.preview_bill.clear()
             self.preview_crop.clear()
             self.preview_info.clear()
+            self._preview_cache = None
             return
         self.preview_hint.setText(f"{crop['name']}  ({side} / {region})")
         bill, rect, cropimg = self.preview_ctx.render(side, region, self._current_config_overrides())
         if bill is None:
             return
+        self._preview_cache = (bill, rect, cropimg)   # for resize re-render
         self._show_bill_with_rect(bill, rect)
         self._show_crop(cropimg)
         if rect:
@@ -467,7 +563,9 @@ class EbayCropDialog(QDialog):
                                               Qt.SmoothTransformation)
 
     def _show_bill_with_rect(self, bill, rect):
-        pm = self._bgr_to_pixmap(bill, 360, 200)
+        avail_w = max(120, self.preview_bill.width() - 6)
+        avail_h = max(120, self.preview_bill.height() - 6)
+        pm = self._bgr_to_pixmap(bill, avail_w, avail_h)
         if rect and pm.width() and pm.height():
             bh, bw = bill.shape[:2]
             sx = pm.width() / bw
@@ -484,7 +582,9 @@ class EbayCropDialog(QDialog):
         if cropimg is None or cropimg.size == 0:
             self.preview_crop.setText("(empty)")
             return
-        self.preview_crop.setPixmap(self._bgr_to_pixmap(cropimg, 360, 150))
+        avail_w = max(120, self.preview_crop.width() - 6)
+        avail_h = max(100, self.preview_crop.height() - 6)
+        self.preview_crop.setPixmap(self._bgr_to_pixmap(cropimg, avail_w, avail_h))
 
     def _update_order_numbers(self):
         """Update the order column to reflect current row positions."""
@@ -557,7 +657,10 @@ class EbayCropDialog(QDialog):
                 crop_order.append([crop['side'], crop['region']])
 
         self.config['crop_order'] = crop_order
-        self.config['include_serial_overlay'] = self.overlay_crop_check.isChecked()
+        # Serial crops now live in crop_order as serial_left/serial_right. Keep the
+        # legacy include_serial_overlay flag off so the old appended overlay path
+        # doesn't double up (the rows drive it now).
+        self.config['include_serial_overlay'] = False
 
         # Save seal settings
         if 'yolo_crops' not in self.config:

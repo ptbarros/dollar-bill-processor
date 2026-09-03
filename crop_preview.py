@@ -42,10 +42,11 @@ class CropPreviewContext:
         if img is None:
             return None, None, None
 
+        keys = ('yolo_crops', 'crops', 'serial_sides')
         data = self.p.cfg.data
-        saved = {k: data.get(k) for k in ('yolo_crops', 'crops')}
+        saved = {k: data.get(k) for k in keys}
         try:
-            for k in ('yolo_crops', 'crops'):
+            for k in keys:
                 if k in config and config[k] is not None:
                     data[k] = config[k]
             rect = self.p.crop_region_rect(img, self.dets[side], side, region)

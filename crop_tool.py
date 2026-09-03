@@ -62,16 +62,16 @@ class CropWorker(QThread):
     done = Signal(dict)
     failed = Signal(str)
 
-    def __init__(self, input_dir: Path, output_dir: Path, crop_all: bool, use_gpu: bool):
+    def __init__(self, input_dir: Path, output_dir: Path, use_gpu: bool, read_serial: bool):
         super().__init__()
         self.input_dir = input_dir
         self.output_dir = output_dir
-        self.crop_all = crop_all
         self.use_gpu = use_gpu
+        self.read_serial = read_serial
 
     def run(self):
         try:
-            from process_production import ProductionProcessor, Config
+            from process_production import ProductionProcessor, Config, ScannerFormatDetector
 
             base = app_base()
             yolo_path, onnx_path = _resolve_model()
@@ -92,16 +92,45 @@ class CropWorker(QThread):
                 onnx_model_path=onnx_path,
             )
 
-            self.log.emit(f"Cropping bills in {self.input_dir} …")
-            results = processor.process_directory(
-                self.input_dir,
-                self.output_dir,
-                verify_pairs=True,
-                crop_all=self.crop_all,
-                progress_callback=lambda i, t, name: self.progress.emit(i, t, name),
-                write_reports=False,   # don't litter the input folder with CSV/summary files
-            )
-            self.done.emit(results or {})
+            # Lean crop-only path: find pairs, verify front/back (YOLO), align +
+            # crop. Deliberately does NOT classify patterns, compute seal-shift /
+            # gas-pump, read plates, or write a results CSV — none of which the
+            # crop tool uses. OCR runs ONLY when serial-in-filename is enabled.
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            self.log.emit(f"Scanning {self.input_dir} …")
+            _fmt, pairs = ScannerFormatDetector.find_pairs(self.input_dir)
+            if not pairs:
+                self.failed.emit("No bill pairs found in the input folder.")
+                return
+            pairs = processor.verify_and_swap_pairs(pairs)
+
+            total = len(pairs)
+            self.log.emit(f"Cropping {total} bills"
+                          + (" (reading serials)…" if self.read_serial else "…"))
+            cropped = 0
+            for i, pair in enumerate(pairs, 1):
+                self.progress.emit(i, total, pair.front_path.name)
+                if getattr(pair, 'error', None):
+                    continue
+                try:
+                    if self.read_serial:
+                        serial, _conf, is_ud, _bvar, star, align_info = processor.extract_serial(
+                            pair.front_path, cached_detections=pair.front_cache)
+                        if serial and star and not serial.endswith('*'):
+                            serial = serial[:-1] + '*' if len(serial) == 10 else serial + '*'
+                        pair.serial = serial or pair.front_path.stem
+                        pair.is_upside_down = is_ud
+                        pair.front_align_angle = align_info.get('angle', 0.0)
+                        pair.front_align_flipped = align_info.get('flipped', False)
+                        processor.generate_crops(pair, self.output_dir)
+                    else:
+                        pair.serial = None
+                        processor.generate_crops(pair, self.output_dir,
+                                                 name=pair.front_path.stem)
+                    cropped += 1
+                except Exception as e:
+                    self.log.emit(f"  skipped {pair.front_path.name}: {e}")
+            self.done.emit({'total': total, 'cropped': cropped})
         except Exception as e:
             import traceback
             self.failed.emit(f"{e}\n\n{traceback.format_exc()}")
@@ -148,6 +177,12 @@ class CropToolWindow(QWidget):
         opts = QHBoxLayout()
         # This tool always crops every bill in the folder (that's the whole point
         # of opening it separately), so there's no "crop all" toggle.
+        self.serial_check = QCheckBox("Include serial number in filename")
+        self.serial_check.setChecked(True)
+        self.serial_check.setToolTip(
+            "On: read each bill's serial (via OCR) and name crops by it — handy for "
+            "organizing.\nOff: name crops by the source file (no OCR, a bit faster).")
+        opts.addWidget(self.serial_check)
         self.gpu_check = QCheckBox("Use GPU")
         self.gpu_check.setChecked(True)
         self.gpu_check.setToolTip("Use GPU acceleration if available.")
@@ -256,8 +291,8 @@ class CropToolWindow(QWidget):
 
         self.worker = CropWorker(
             input_dir, output_dir,
-            crop_all=True,   # standalone tool always crops the whole folder
             use_gpu=self.gpu_check.isChecked(),
+            read_serial=self.serial_check.isChecked(),
         )
         self.worker.progress.connect(self._on_progress)
         self.worker.log.connect(self._append_log)
