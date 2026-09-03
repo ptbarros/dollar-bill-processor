@@ -839,8 +839,30 @@ class MainWindow(QMainWindow):
         self.statusbar.addPermanentWidget(self.progress_label)
 
     def _restore_geometry(self):
-        """Restore window geometry from settings."""
+        """Restore window geometry from settings, clamped to a visible screen.
+
+        Without the clamp, a geometry saved on a monitor that has since been
+        removed would restore the window -- and any startup dialog centered on it
+        (e.g. the session-recovery prompt) -- off-screen, so the user never sees
+        it and can't interact with it."""
         x, y, w, h = self.settings.get_window_geometry()
+        try:
+            from PySide6.QtWidgets import QApplication
+            from PySide6.QtCore import QRect
+            vis = None
+            for scr in QApplication.screens():
+                ag = scr.availableGeometry()
+                vis = ag if vis is None else vis.united(ag)
+            if vis is not None:
+                w = max(400, min(w, vis.width()))
+                h = max(300, min(h, vis.height()))
+                inter = vis.intersected(QRect(x, y, w, h))
+                # Recenter if barely any of the window lands on a real screen.
+                if inter.width() < 100 or inter.height() < 100:
+                    x = vis.x() + (vis.width() - w) // 2
+                    y = vis.y() + (vis.height() - h) // 2
+        except Exception:
+            pass
         self.setGeometry(x, y, w, h)
 
     def _save_geometry(self):
