@@ -333,6 +333,12 @@ class EbayCropDialog(QDialog):
         button_box = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         )
+        # Run the crop batch on a folder right here, using this profile's current
+        # (even unsaved) settings -- no need to open the standalone crop tool.
+        run_batch_btn = button_box.addButton("Run on Folder…", QDialogButtonBox.ActionRole)
+        run_batch_btn.setToolTip("Crop a whole folder of bill scans now, using this "
+                                 "profile's settings.")
+        run_batch_btn.clicked.connect(self._run_on_folder)
         button_box.accepted.connect(self._save_and_close)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
@@ -788,6 +794,82 @@ class EbayCropDialog(QDialog):
         """Save settings to config and close."""
         self._sync_to_config()
         self.accept()
+
+    def _run_on_folder(self):
+        """Crop a whole folder now, using this profile's current (unsaved) edits.
+
+        Reuses the shared lean crop-only batch worker so the results match the
+        standalone crop tool -- the point is not having to launch that app.
+        """
+        import os
+        import tempfile
+        import yaml
+        from PySide6.QtWidgets import QFileDialog, QProgressDialog, QMessageBox
+        from PySide6.QtCore import QEventLoop
+
+        in_dir = QFileDialog.getExistingDirectory(self, "Select the folder of bill scans to crop")
+        if not in_dir:
+            return
+        out_dir = QFileDialog.getExistingDirectory(self, "Select the output folder for the crops")
+        if not out_dir:
+            return
+
+        # Dump the dialog's current config to a temp file so the batch honors
+        # edits made since the dialog opened (you don't have to hit OK first).
+        try:
+            tmp = tempfile.NamedTemporaryFile(
+                "w", suffix=".yaml", delete=False, encoding="utf-8")
+            yaml.safe_dump(self.get_config(), tmp, default_flow_style=False, sort_keys=False)
+            tmp.close()
+        except Exception as e:
+            QMessageBox.critical(self, "Crop run failed", f"Could not prepare settings:\n{e}")
+            return
+
+        # Honor the app's GPU setting (default on) for the batch.
+        use_gpu = True
+        try:
+            from settings_manager import SettingsManager
+            use_gpu = bool(SettingsManager().processing.gpu_acceleration)
+        except Exception:
+            pass
+
+        from crop_batch import CropWorker
+        worker = CropWorker(Path(in_dir), Path(out_dir), use_gpu=use_gpu,
+                            read_serial=True, config_path=Path(tmp.name))
+
+        progress = QProgressDialog("Loading model + settings…", "Cancel", 0, 0, self)
+        progress.setWindowTitle("Cropping folder")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+
+        result = {}
+        loop = QEventLoop()
+        worker.progress.connect(lambda i, total, label: (
+            progress.setMaximum(total), progress.setValue(i),
+            progress.setLabelText(f"Cropping {i}/{total}: {label}")))
+        worker.done.connect(lambda d: (result.update(d), loop.quit()))
+        worker.failed.connect(lambda m: (result.__setitem__("error", m), loop.quit()))
+        progress.canceled.connect(worker.requestInterruption)   # cooperative
+
+        progress.show()
+        worker.start()
+        loop.exec()
+        worker.wait()
+        progress.reset()
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+
+        if "error" in result:
+            QMessageBox.critical(self, "Crop run failed", result["error"])
+        else:
+            QMessageBox.information(
+                self, "Crop run complete",
+                f"Cropped {result.get('cropped', 0)} of {result.get('total', 0)} bills.\n\n"
+                f"Output folder:\n{out_dir}")
 
     def get_config(self):
         """Return the full config with the edited crop profiles folded in."""
