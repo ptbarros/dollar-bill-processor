@@ -39,7 +39,10 @@ class EbayCropDialog(QDialog):
 
     # Keys that belong to a crop profile (per-denomination settings). Everything
     # else in config.yaml (crops %, options, ...) stays global.
-    PROFILE_KEYS = ('crop_order', 'yolo_crops', 'include_serial_overlay')
+    PROFILE_KEYS = ('crop_order', 'yolo_crops', 'include_serial_overlay', 'denomination')
+    # Denominations offered in the profile's denomination selector. $5+ use the
+    # two-letter serial prefix (series + district); $1/$2 use one letter.
+    DENOMINATIONS = (1, 2, 5, 10, 20, 50, 100)
 
     def __init__(self, config, parent=None, preview_ctx=None):
         super().__init__(parent)
@@ -90,6 +93,11 @@ class EbayCropDialog(QDialog):
         self.active_name = name
         self.config = self.profiles[name]
         self._load_settings()                           # rebuild table + panels
+
+    def _on_denomination_changed(self):
+        if getattr(self, '_loading_denom', False):
+            return
+        self.config['denomination'] = self.denom_combo.currentData()
 
     def _save_as_profile(self):
         import copy
@@ -153,6 +161,19 @@ class EbayCropDialog(QDialog):
         rename_btn = QPushButton("Rename"); rename_btn.clicked.connect(self._rename_profile)
         del_btn = QPushButton("Delete"); del_btn.clicked.connect(self._delete_profile)
         prof.addWidget(new_profile_btn); prof.addWidget(rename_btn); prof.addWidget(del_btn)
+
+        # Denomination for this profile -> drives the serial-number format
+        # ($5+ have a two-letter prefix). Stored per profile.
+        prof.addSpacing(12)
+        prof.addWidget(QLabel("Denomination:"))
+        self.denom_combo = QComboBox()
+        self.denom_combo.setToolTip("Bill denomination for this profile. $5 and up have a\n"
+                                    "two-letter serial prefix (series + district); $1/$2 have one.\n"
+                                    "Reading serials with the wrong setting drops or misreads a letter.")
+        for d in self.DENOMINATIONS:
+            self.denom_combo.addItem(f"${d}", d)
+        self.denom_combo.currentIndexChanged.connect(self._on_denomination_changed)
+        prof.addWidget(self.denom_combo)
         layout.addLayout(prof)
 
         # Instructions
@@ -476,6 +497,13 @@ class EbayCropDialog(QDialog):
 
     def _load_settings(self):
         """Load current settings from config."""
+        # Denomination selector (per profile)
+        if hasattr(self, 'denom_combo'):
+            self._loading_denom = True
+            idx = self.denom_combo.findData(self.config.get('denomination', 1))
+            self.denom_combo.setCurrentIndex(idx if idx >= 0 else 0)
+            self._loading_denom = False
+
         # Get current crop order from config
         crop_order = self.config.get('crop_order', [])
 
