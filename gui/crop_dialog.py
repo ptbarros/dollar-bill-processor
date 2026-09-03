@@ -427,7 +427,10 @@ class EbayCropDialog(QDialog):
         if not hasattr(self, 'serial_overlay_cbs'):
             self.serial_overlay_cbs = {}
         box = QGroupBox(title)
-        lay = QHBoxLayout(box)
+        outer = QVBoxLayout(box)
+        # Spins on one row...
+        lay = QHBoxLayout()
+        outer.addLayout(lay)
         spins = {}
 
         def add(label, key, lo, hi, tip):
@@ -444,7 +447,10 @@ class EbayCropDialog(QDialog):
         add("Height:", 'min_height', 0, 2000, "Minimum crop height (0 = natural size).")
         add("Offset X:", 'offset_x', -500, 500, "Positive = shift right.")
         add("Offset Y:", 'offset_y', -500, 500, "Positive = shift up.")
+        lay.addStretch()
 
+        # ...overlay toggle on its own line below (a long label that otherwise
+        # ran off the row until the window was widened).
         overlay_cb = QCheckBox("Draw pattern overlay")
         overlay_cb.setToolTip(
             "During processing, draw the set-pattern overlay on this serial crop —\n"
@@ -452,10 +458,9 @@ class EbayCropDialog(QDialog):
             "results list. Off = a plain crop of the serial. (No effect on batch/\n"
             "standalone crops, which have no set pattern.)")
         overlay_cb.toggled.connect(lambda _=False, w=which: self._on_serial_setting_changed(w))
-        lay.addWidget(overlay_cb)
+        outer.addWidget(overlay_cb)
         self.serial_overlay_cbs[which] = overlay_cb
 
-        lay.addStretch()
         self.serial_spins[which] = spins
         box.setVisible(False)
         return box
