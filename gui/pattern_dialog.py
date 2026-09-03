@@ -1684,7 +1684,15 @@ DataFile: optional_data.csv
 ctx.digits      -- "12345678" (8 numeric characters)
 ctx.full_serial -- "A12345678B" (with prefix/suffix letters)
 ctx.digit_list  -- {1,2,3,4,5,6,7,8} as integer array
-ctx.metadata    -- {} additional detection data
+ctx.metadata    -- bill features beyond the serial (guard each; absent when quick-testing a bare serial):
+                   .series_year      -- series string e.g. "2013" ("" if none); tonumber() to compare
+                   .front_plate      -- front plate letter+number string e.g. "E 84" ("" if none)
+                   .back_plate       -- back plate number string ("" if none); mules = 1988+ w/ small back plate
+                   .seal_x / .seal_y -- treasury-seal offset vs "ONE" beneath, % (0 = aligned)
+                   .seal_containment -- % of seal inside "ONE" bbox (100 = normal, < 97 = seal shift)
+                   .baseline_variance-- largest vertical digit misalignment px (gas-pump signal)
+                   .gas_pump_threshold -- current px threshold for gas-pump
+                   .current_year / .current_month / .current_day -- today (date patterns)
 ctx.data        -- External data (if DataFile specified)
 ctx.data_by_key -- Key lookup dict (CSV only, keyed by first column)
 </pre>
@@ -1751,7 +1759,16 @@ DataFile: optional_data.csv
 - ctx.digits: "12345678" (8 numeric characters)
 - ctx.full_serial: "A12345678B" (with prefix/suffix)
 - ctx.digit_list: {1,2,3,4,5,6,7,8} as integers
-- ctx.metadata: {} additional detection data
+- ctx.metadata: table of bill features beyond the serial (guard each field; absent when quick-testing a bare serial):
+    - ctx.metadata.series_year: series string, e.g. "2013" ("" if not detected); tonumber() to compare
+    - ctx.metadata.front_plate: front plate check-letter + number string, e.g. "E 84" ("" if not detected)
+    - ctx.metadata.back_plate: back plate number string ("" if not detected); mules are 1988+ with a small back plate
+    - ctx.metadata.seal_x / seal_y: treasury-seal overprint offset vs the "ONE" beneath, as % (0 = aligned)
+    - ctx.metadata.seal_containment: % of seal inside the "ONE" bbox (100 = normal, < 97 = seal shift)
+    - ctx.metadata.baseline_variance: largest vertical digit misalignment in px (gas-pump signal)
+    - ctx.metadata.gas_pump_threshold: current px threshold for baseline_variance to count as gas-pump
+    - ctx.metadata.current_year / current_month / current_day: today's date, for date-based patterns
+  (Serial-only patterns -- repeaters, ladders, ranges like tonumber(ctx.digits) > 96000000 -- don't need metadata.)
 - ctx.data: External data (if DataFile specified)
 - ctx.data_by_key: Key lookup dict (CSV only)
 
@@ -3113,7 +3130,15 @@ DataFile: optional_data.csv
 ctx.digits      -- "12345678" (8 numeric characters)
 ctx.full_serial -- "A12345678B" (with prefix/suffix letters)
 ctx.digit_list  -- {1,2,3,4,5,6,7,8} as integer array
-ctx.metadata    -- {} additional detection data
+ctx.metadata    -- bill features beyond the serial (guard each; absent when quick-testing a bare serial):
+                   .series_year      -- series string e.g. "2013" ("" if none); tonumber() to compare
+                   .front_plate      -- front plate letter+number string e.g. "E 84" ("" if none)
+                   .back_plate       -- back plate number string ("" if none); mules = 1988+ w/ small back plate
+                   .seal_x / .seal_y -- treasury-seal offset vs "ONE" beneath, % (0 = aligned)
+                   .seal_containment -- % of seal inside "ONE" bbox (100 = normal, < 97 = seal shift)
+                   .baseline_variance-- largest vertical digit misalignment px (gas-pump signal)
+                   .gas_pump_threshold -- current px threshold for gas-pump
+                   .current_year / .current_month / .current_day -- today (date patterns)
 ctx.data        -- External data (if DataFile specified)
 ctx.data_by_key -- Key lookup dict (CSV only, keyed by first column)
 </pre>

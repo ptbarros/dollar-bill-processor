@@ -123,6 +123,24 @@ The `ctx` table is available in every pattern script:
 - `ctx.full_serial`: "A12345678B" (with prefix/suffix letters)
 - `ctx.digit_list`: {{1,2,3,4,5,6,7,8}} as integer array (1-indexed in Lua)
 
+### ctx.metadata (bill features beyond the serial digits)
+`ctx.metadata` is always a table, but individual fields are only populated during
+real processing -- when a pattern is quick-tested against a bare serial they are
+absent. ALWAYS guard before use, e.g. `if ctx.metadata.series_year and ctx.metadata.series_year ~= "" then ...`.
+- `ctx.metadata.series_year`: series as a string, e.g. "2013" (empty "" if not detected). Use `tonumber(...)` to compare, e.g. mule/series-range checks.
+- `ctx.metadata.front_plate`: front plate face-check letter + number as a string, e.g. "E 84" (empty if not detected).
+- `ctx.metadata.back_plate`: back plate number as a string (empty if not detected). Mule notes are 1988+ series with a small back plate.
+- `ctx.metadata.seal_x`, `ctx.metadata.seal_y`: treasury-seal overprint offset vs the "ONE" beneath it, as a percentage (0 = aligned).
+- `ctx.metadata.seal_containment`: percent of the seal inside the "ONE" bounding box (100 = normal, < 97 = shifted / seal-shift note).
+- `ctx.metadata.baseline_variance`: largest vertical digit misalignment in pixels (the gas-pump signal).
+- `ctx.metadata.gas_pump_threshold`: current pixel threshold above which `baseline_variance` counts as a gas-pump note.
+- `ctx.metadata.current_year`, `ctx.metadata.current_month`, `ctx.metadata.current_day`: today's date, for date-based patterns.
+
+NOTE: patterns based ONLY on the serial digits (repeaters, ladders, palindromes,
+numeric ranges like "serial value over 96000000" via `tonumber(ctx.digits)`, etc.)
+do NOT need `ctx.metadata` -- the serial is already OCR'd and handed to you as
+`ctx.digits`. Use `ctx.metadata` only for plate / series / seal / gas-pump features.
+
 ### Return Value
 The match function must return a table with:
 - `matched`: boolean (required - true if pattern matches)
