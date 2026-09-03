@@ -68,8 +68,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          # CUDA 12.8 wheels (Blackwell / RTX 50-series support), same as the
-          # original app's setup_windows.bat.
+          # CUDA 12.8 wheels (Blackwell / RTX 50-series support).
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
           pip install -r requirements-cuda.txt
           # EasyOCR can drag in the non-headless opencv, which fights PySide6's Qt.
