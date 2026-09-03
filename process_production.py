@@ -242,6 +242,33 @@ class Config:
         val = str(self.data.get('serial_sides', 'auto')).lower()
         return val if val in ('auto', 'left', 'right', 'both') else 'auto'
 
+    # Denominations whose serials use the Series-1996+ TWO-letter prefix
+    # ([series][district][8 digits][suffix]); $1/$2 keep the one-letter form.
+    TWO_LETTER_DENOMINATIONS = (5, 10, 20, 50, 100)
+
+    @property
+    def denomination(self) -> int:
+        """The bill denomination for this run (drives the serial format). Read from
+        the active crop profile (so picking e.g. the '5 Dollar' profile switches
+        the serial format), falling back to a global options value, then 1 -- so
+        $1/$2 behavior is unchanged by default."""
+        try:
+            src = self.active_profile_data if hasattr(self, 'active_profile_data') else {}
+            val = src.get('denomination')
+            if val is None:
+                val = self.data.get('options', {}).get('denomination', 1)
+            return int(val)
+        except (TypeError, ValueError):
+            return 1
+
+    @property
+    def serial_prefix_length(self) -> int:
+        """How many leading letters the serial has: 2 for $5+ (series + Federal
+        Reserve district), 1 for $1/$2 (district only). The district (FRB) letter
+        -- what the treasury seal encodes -- is always the LAST prefix letter,
+        immediately before the 8 digits."""
+        return 2 if self.denomination in self.TWO_LETTER_DENOMINATIONS else 1
+
 
 # =============================================================================
 # DATA CLASSES
@@ -1029,17 +1056,25 @@ class ProductionProcessor:
         if not serial:
             return False, "No serial detected"
 
-        # Check length (should be 10 chars: letter + 8 digits + letter/*)
-        if len(serial) != 10:
-            return False, f"Invalid length: {len(serial)} (expected 10)"
+        prefix_len, _pattern, _star, total_len = self._serial_format()
 
-        # Check first character is valid Federal Reserve code (A-L)
-        first_char = serial[0]
-        if first_char not in self.VALID_FED_CODES:
-            return False, f"Invalid Federal Reserve code: {first_char} (must be A-L)"
+        # Length: prefix letters + 8 digits + 1 suffix (10 for $1/$2, 11 for $5+)
+        if len(serial) != total_len:
+            return False, f"Invalid length: {len(serial)} (expected {total_len})"
 
-        # Check middle 8 characters are digits
-        middle = serial[1:9]
+        prefix = serial[:prefix_len]
+        # Any leading series letters (all prefix chars except the last) are A-Z.
+        for ch in prefix[:-1]:
+            if ch not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':
+                return False, f"Invalid series letter: {ch}"
+
+        # The district letter (last prefix char) is the Federal Reserve code A-L.
+        district = prefix[-1]
+        if district not in self.VALID_FED_CODES:
+            return False, f"Invalid Federal Reserve code: {district} (must be A-L)"
+
+        # Check the 8-digit core
+        middle = serial[prefix_len:prefix_len + 8]
         if not middle.isdigit():
             return False, f"Invalid digits in middle: {middle}"
 
@@ -1602,16 +1637,32 @@ class ProductionProcessor:
 
         return result
 
+    def _serial_format(self):
+        """Serial format for the configured denomination, as
+        ``(prefix_len, pattern, star_pattern, total_len)``.
+
+        prefix_len 1 = $1/$2 (one district letter A-L); 2 = $5+ (a series letter
+        A-Z then the district letter A-L). The district letter -- what the seal
+        encodes -- is always the LAST prefix letter, right before the 8 digits.
+        For prefix_len 1 the values are identical to the historical literals, so
+        $1/$2 behavior is unchanged by construction."""
+        try:
+            n = self.cfg.serial_prefix_length
+        except Exception:
+            n = 1
+        if n == 2:
+            return 2, r'[A-Z][A-L]\d{8}[A-Y*]', r'^[A-Z][A-L]\d{8}$', 11
+        return 1, r'[A-L]\d{8}[A-Y*]', r'^[A-L]\d{8}$', 10
+
     def extract_serial_from_crop(self, crop_image, star_confirmed: bool = False) -> tuple[Optional[str], float]:
         r"""Extract serial number from a cropped region using OCR with expanded confusion matrix.
 
         Args:
             crop_image: Cropped image of serial number region
-            star_confirmed: If True, YOLO detected a star symbol, so accept 9-char serials
-                           matching [A-L]\d{8} and add the star.
+            star_confirmed: If True, YOLO detected a star symbol, so accept short
+                           serials matching the digits-only star form and add the star.
         """
-        pattern = r'[A-L]\d{8}[A-Y*]'
-        star_note_pattern = r'^[A-L]\d{8}$'  # 9 chars for star notes missing the star
+        prefix_len, pattern, star_note_pattern, total_len = self._serial_format()
 
         if len(crop_image.shape) == 3:
             gray = cv2.cvtColor(crop_image, cv2.COLOR_BGR2GRAY)
@@ -1626,7 +1677,7 @@ class ProductionProcessor:
                 text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
 
                 # O at suffix position is almost always a misread Q
-                if len(text_clean) == 10 and text_clean[-1] == 'O':
+                if len(text_clean) == total_len and text_clean[-1] == 'O':
                     text_clean = text_clean[:-1] + 'Q'
 
                 adjusted_conf = conf * source_conf_mult
@@ -1636,7 +1687,7 @@ class ProductionProcessor:
                 if match:
                     serial = match.group(0)
                     # Boost confidence for letter-prefixed serials (correct format)
-                    if serial[0] in self.VALID_FED_CODES:
+                    if serial[prefix_len - 1] in self.VALID_FED_CODES:
                         adjusted_conf *= 1.1
                     valid_serials.append((serial, min(adjusted_conf, 1.0)))
                     continue
@@ -1644,13 +1695,13 @@ class ProductionProcessor:
                 # If YOLO confirmed star and OCR found 9-char serial, add the star
                 if star_confirmed and re.match(star_note_pattern, text_clean):
                     serial = text_clean + '*'
-                    if serial[0] in self.VALID_FED_CODES:
+                    if serial[prefix_len - 1] in self.VALID_FED_CODES:
                         adjusted_conf *= 1.1
                     valid_serials.append((serial, min(adjusted_conf, 1.0)))
                     continue
 
                 # Apply confusion corrections
-                corrected = self._apply_confusion_corrections(text_clean, pattern)
+                corrected = self._apply_confusion_corrections(text_clean, pattern, prefix_len)
                 if corrected:
                     valid_serials.append((corrected, adjusted_conf * 0.95))
 
@@ -1664,7 +1715,7 @@ class ProductionProcessor:
         process_ocr_results(results)
 
         # Check if we have a high-confidence letter-prefixed result
-        letter_prefixed = [s for s in valid_serials if s[0][0] in self.VALID_FED_CODES]
+        letter_prefixed = [s for s in valid_serials if s[0][prefix_len - 1] in self.VALID_FED_CODES]
         if letter_prefixed:
             best = max(letter_prefixed, key=lambda x: x[1])
             if best[1] >= 0.7:
@@ -1682,7 +1733,7 @@ class ProductionProcessor:
         process_ocr_results(results, source_conf_mult=0.95)
 
         # Check again for letter-prefixed results
-        letter_prefixed = [s for s in valid_serials if s[0][0] in self.VALID_FED_CODES]
+        letter_prefixed = [s for s in valid_serials if s[0][prefix_len - 1] in self.VALID_FED_CODES]
         if letter_prefixed:
             best = max(letter_prefixed, key=lambda x: x[1])
             if best[1] >= 0.5:
@@ -1726,8 +1777,13 @@ class ProductionProcessor:
         # Use voting for best serial
         return self._vote_best_serial(valid_serials, [{} for _ in range(10)])
 
-    def _apply_confusion_corrections(self, text: str, pattern: str) -> Optional[str]:
-        """Apply OCR confusion corrections to extract a valid serial."""
+    def _apply_confusion_corrections(self, text: str, pattern: str, prefix_len: int = 1) -> Optional[str]:
+        """Apply OCR confusion corrections to extract a valid serial.
+
+        The 1-letter ($1/$2) branches below are unchanged. Two-letter ($5+)
+        serials are handled by a dedicated helper."""
+        if prefix_len == 2:
+            return self._apply_confusion_corrections_2letter(text, pattern)
         # 10 chars - try fixing both ends
         if re.match(r'^\d{10}$', text):
             first, last = text[0], text[-1]
@@ -1795,17 +1851,57 @@ class ProductionProcessor:
 
         return None
 
+    def _apply_confusion_corrections_2letter(self, text: str, pattern: str) -> Optional[str]:
+        r"""OCR confusion corrections for $5+ two-letter serials
+        ([series A-Z][district A-L]\d{8}[suffix]). Tries confusion alternatives
+        for the two prefix letters and the suffix; also prepends a district
+        letter when a leading series letter + 8 digits + suffix was read but the
+        district letter was dropped."""
+        def opts(ch):
+            return [ch] + [c for c in self.CHAR_CONFUSIONS.get(ch, []) if c != ch]
+
+        # 11 chars: fix any of series / district / suffix via confusions.
+        if len(text) == 11:
+            last = text[-1]
+            last_opts = ['Q', 'D'] if last == '0' else opts(last)
+            for a in opts(text[0]):
+                for b in opts(text[1]):
+                    for ll in last_opts:
+                        corrected = a + b + text[2:-1] + ll
+                        if re.match(pattern, corrected):
+                            return corrected
+
+        # 10 chars = series letter + 8 digits + suffix, district letter dropped:
+        # insert the district letter (A-L) that the confusions suggest for text[1]
+        # if text[1] was actually a mis-read district letter... handled at pos 1.
+        if re.match(r'^[A-Z]\d{8}[A-Y*]$', text):
+            # A real 1-letter ($1) serial also matches this; only treat as a
+            # dropped-district case, inserting a plausible Fed letter, when the
+            # confusion set for the leading char yields one (kept conservative).
+            for letter in self.CHAR_CONFUSIONS.get(text[0], []):
+                if letter in self.VALID_FED_CODES:
+                    corrected = text[0] + letter + text[1:]
+                    if re.match(pattern, corrected):
+                        return corrected
+
+        return None
+
     def _vote_best_serial(self, serials: list, char_votes: list) -> tuple[str, float]:
-        """Use character-by-character voting to determine best serial."""
+        """Use character-by-character voting to determine best serial.
+
+        Prefix-aware: groups on the 8-digit core, then votes on the whole prefix
+        (1 letter for $1/$2, 2 for $5+) and the suffix. The district letter (the
+        last prefix char) must be a valid Fed code. For prefix_len 1 this reduces
+        to the original first-char/last-char vote."""
         from collections import Counter
 
-        # Group by middle digits
+        prefix_len, pattern, _star, _total = self._serial_format()
+
+        # Group by the 8-digit core
         digit_groups = {}
         for serial, conf in serials:
-            middle = serial[1:9]
-            if middle not in digit_groups:
-                digit_groups[middle] = []
-            digit_groups[middle].append((serial, conf))
+            middle = serial[prefix_len:prefix_len + 8]
+            digit_groups.setdefault(middle, []).append((serial, conf))
 
         if not digit_groups:
             return max(serials, key=lambda x: x[1])
@@ -1814,30 +1910,30 @@ class ProductionProcessor:
         most_common_middle = max(digit_groups.keys(), key=lambda m: len(digit_groups[m]))
         candidates = digit_groups[most_common_middle]
 
-        # Vote on first character
-        first_votes = Counter()
+        # Vote on the whole prefix and the suffix
+        prefix_votes = Counter()
         last_votes = Counter()
         for serial, conf in candidates:
-            first_votes[serial[0]] += conf
+            prefix_votes[serial[:prefix_len]] += conf
             last_votes[serial[-1]] += conf
 
-        best_first = first_votes.most_common(1)[0][0]
+        best_prefix = prefix_votes.most_common(1)[0][0]
         best_last = last_votes.most_common(1)[0][0]
 
-        # Validate first letter is valid Fed code
-        if best_first not in self.VALID_FED_CODES:
-            # Try alternatives
-            for alt in self.CHAR_CONFUSIONS.get(best_first, []):
+        # The district letter (last prefix char) must be a valid Fed code; try
+        # confusion alternatives for just that char if not.
+        if best_prefix and best_prefix[-1] not in self.VALID_FED_CODES:
+            for alt in self.CHAR_CONFUSIONS.get(best_prefix[-1], []):
                 if alt in self.VALID_FED_CODES:
-                    best_first = alt
+                    best_prefix = best_prefix[:-1] + alt
                     break
 
         # Construct best serial
-        best_serial = best_first + most_common_middle + best_last
+        best_serial = best_prefix + most_common_middle + best_last
         best_conf = max(c for s, c in candidates)
 
-        # Verify it matches pattern
-        if not re.match(r'^[A-L]\d{8}[A-Y*]$', best_serial):
+        # Verify it matches the denomination's serial pattern
+        if not re.match('^' + pattern + '$', best_serial):
             # Fall back to highest confidence match
             return max(candidates, key=lambda x: x[1])
 
@@ -3140,12 +3236,20 @@ class ProductionProcessor:
         seal_letter = self._extract_fed_letter_from_seal(aligned_img)
 
         def verify_serial_with_seal(serial: str) -> str:
-            """Verify/correct serial's first character using seal letter."""
+            """Verify/correct the serial's DISTRICT letter using the seal letter.
+
+            The treasury seal encodes the Federal Reserve district letter, which is
+            always the LAST prefix char -- position 0 for $1/$2, position 1 for $5+
+            (where position 0 is the series letter and must NOT be touched)."""
             if not serial or not seal_letter:
                 return serial
-            if serial[0] != seal_letter and serial[0] in '0123456789' + ''.join(self.VALID_FED_CODES):
-                # First char doesn't match seal - correct it
-                return seal_letter + serial[1:]
+            prefix_len, _p, _s, _t = self._serial_format()
+            idx = prefix_len - 1
+            if len(serial) <= idx:
+                return serial
+            if serial[idx] != seal_letter and serial[idx] in '0123456789' + ''.join(self.VALID_FED_CODES):
+                # District char doesn't match the seal - correct just that char.
+                return serial[:idx] + seal_letter + serial[idx + 1:]
             return serial
 
         if boxes:
@@ -3256,7 +3360,7 @@ class ProductionProcessor:
 
     def _fallback_ocr_scan(self, img: np.ndarray) -> tuple[Optional[str], float]:
         """Fallback: scan entire image for serial patterns."""
-        pattern = r'[A-L]\d{8}[A-Y*]'
+        _prefix_len, pattern, star_pattern, total_len = self._serial_format()
 
         # Try OCR on full image
         get_timing().add_ocr_call()
@@ -3272,14 +3376,14 @@ class ProductionProcessor:
             text_clean = re.sub(r'[^A-Z0-9*]', '', text.upper())
 
             # O at suffix position is almost always a misread Q
-            if len(text_clean) == 10 and text_clean[-1] == 'O':
+            if len(text_clean) == total_len and text_clean[-1] == 'O':
                 text_clean = text_clean[:-1] + 'Q'
 
             match = re.search(pattern, text_clean)
             if match:
                 candidates.append((match.group(0), conf))
-            # Check for 9-digit star note pattern
-            elif re.match(r'^[A-L]\d{8}$', text_clean):
+            # Check for star note pattern missing the trailing star
+            elif re.match(star_pattern, text_clean):
                 candidates.append((text_clean + '*', conf * 0.85))
 
         if candidates:
@@ -3304,10 +3408,12 @@ class ProductionProcessor:
             'I': 'L', 'L': 'I',
         }
 
-        # Group by the 8 middle digits (most reliable)
+        prefix_len, _p, _s, _t = self._serial_format()
+
+        # Group by the 8-digit core (most reliable)
         digit_groups = {}
         for serial, ocr_conf, det_conf, pass_name in all_serials:
-            middle = serial[1:9]
+            middle = serial[prefix_len:prefix_len + 8]
             if middle not in digit_groups:
                 digit_groups[middle] = []
             # Weight by both OCR and detection confidence
@@ -3318,34 +3424,35 @@ class ProductionProcessor:
         most_common_middle = max(digit_groups.keys(), key=lambda m: len(digit_groups[m]))
         candidates = digit_groups[most_common_middle]
 
-        # If all agree on first letter, return highest weight
-        first_letters = set(s[0] for s, w, p in candidates)
-        if len(first_letters) == 1:
+        # If all agree on the prefix (1 letter for $1/$2, 2 for $5+), return best.
+        prefixes = set(s[:prefix_len] for s, w, p in candidates)
+        if len(prefixes) == 1:
             best = max(candidates, key=lambda x: x[1])
             return best[0], best[1]
 
-        # Disagreement - weighted voting on first letter
-        letter_votes = Counter()
+        # Disagreement - weighted voting on the prefix, with partial credit for
+        # confusion partners of the DISTRICT letter (the last prefix char).
+        prefix_votes = Counter()
         for serial, weight, pass_name in candidates:
-            first = serial[0]
-            letter_votes[first] += weight
-            # Partial credit for confusion partners
-            if first in first_letter_alts:
-                alt = first_letter_alts[first]
+            pfx = serial[:prefix_len]
+            prefix_votes[pfx] += weight
+            district = pfx[-1]
+            if district in first_letter_alts:
+                alt = first_letter_alts[district]
                 if alt in self.VALID_FED_CODES:
-                    letter_votes[alt] += weight * 0.3
+                    prefix_votes[pfx[:-1] + alt] += weight * 0.3
 
-        best_letter = letter_votes.most_common(1)[0][0]
+        best_prefix = prefix_votes.most_common(1)[0][0]
 
-        # Return candidate with that letter
+        # Return candidate with that prefix
         for serial, weight, pass_name in candidates:
-            if serial[0] == best_letter:
+            if serial[:prefix_len] == best_prefix:
                 return serial, weight
 
-        # Construct with voted letter
+        # Construct with voted prefix
         base = candidates[0][0]
         best_weight = max(w for s, w, p in candidates)
-        return best_letter + base[1:], best_weight
+        return best_prefix + base[prefix_len:], best_weight
 
     def create_crop_rect(self, image: np.ndarray, side: str, region: str) -> tuple:
         """Return (x1, y1, x2, y2) for a percentage-based crop region."""
@@ -3837,7 +3944,8 @@ class ProductionProcessor:
 
             # If star symbol visually detected but OCR missed it, append '*' to serial
             if serial and star_detected and not serial.endswith('*'):
-                serial = serial[:-1] + '*' if len(serial) == 10 else serial + '*'
+                _total_len = self._serial_format()[3]
+                serial = serial[:-1] + '*' if len(serial) == _total_len else serial + '*'
 
             pair.serial = serial
 
