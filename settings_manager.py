@@ -1,6 +1,6 @@
 """
 Settings Manager - Phase 2
-Persistent user settings for the Dollar Bill Processor.
+Persistent user settings for the Dollar Detective.
 
 Features:
 - Pattern enable/disable states

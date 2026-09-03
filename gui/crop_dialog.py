@@ -46,6 +46,7 @@ class EbayCropDialog(QDialog):
         self.full_config = config if isinstance(config, dict) else {}
         self.preview_ctx = preview_ctx
         self._preview_cache = None   # (bill_bgr, rect, crop_bgr) for re-render on resize
+        self._preview_initialized = False  # first render is deferred to showEvent
         self._init_profiles()        # sets self.profiles, self.active_name, self.config
         self.setWindowTitle("Crop Manager")
         self.setMinimumSize(1080 if preview_ctx else 700, 560)
@@ -92,7 +93,7 @@ class EbayCropDialog(QDialog):
 
     def _save_as_profile(self):
         import copy
-        name, ok = QInputDialog.getText(self, "Save Profile As", "Profile name (e.g. $5 bills):")
+        name, ok = QInputDialog.getText(self, "New Profile", "Profile name (e.g. $5 bills):")
         name = (name or "").strip()
         if not ok or not name:
             return
@@ -145,11 +146,13 @@ class EbayCropDialog(QDialog):
         self.profile_combo.setToolTip("Switch between saved crop setups (e.g. $1, $5).")
         self.profile_combo.currentTextChanged.connect(self._on_profile_combo)
         prof.addWidget(self.profile_combo, 1)
-        saveas_btn = QPushButton("Save As…"); saveas_btn.clicked.connect(self._save_as_profile)
-        saveas_btn.setToolTip("Save the current settings as a new named profile.")
+        new_profile_btn = QPushButton("New Profile…"); new_profile_btn.clicked.connect(self._save_as_profile)
+        new_profile_btn.setToolTip("Create a new profile, seeded from the current settings.\n"
+                                   "(Your edits to the current profile are saved automatically — "
+                                   "you don't need this to keep changes.)")
         rename_btn = QPushButton("Rename"); rename_btn.clicked.connect(self._rename_profile)
         del_btn = QPushButton("Delete"); del_btn.clicked.connect(self._delete_profile)
-        prof.addWidget(saveas_btn); prof.addWidget(rename_btn); prof.addWidget(del_btn)
+        prof.addWidget(new_profile_btn); prof.addWidget(rename_btn); prof.addWidget(del_btn)
         layout.addLayout(prof)
 
         # Instructions
@@ -326,6 +329,19 @@ class EbayCropDialog(QDialog):
         note.setStyleSheet("color:#888; font-size:11px")
         layout.addWidget(note)
 
+        # Prominent batch-run action on its own row (an ActionRole button in the
+        # button box below was too easy to miss next to OK/Cancel). Runs the crop
+        # batch on a folder using this profile's current (even unsaved) settings,
+        # so there's no need to open the standalone crop tool.
+        run_row = QHBoxLayout()
+        run_batch_btn = QPushButton("▶  Run on Folder…")
+        run_batch_btn.setToolTip("Crop a whole folder of bill scans now, using this "
+                                 "profile's settings.")
+        run_batch_btn.clicked.connect(self._run_on_folder)
+        run_row.addWidget(run_batch_btn)
+        run_row.addStretch()
+        layout.addLayout(run_row)
+
         # Dialog buttons
         button_box = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
@@ -383,6 +399,19 @@ class EbayCropDialog(QDialog):
         v.addWidget(self.preview_info)
         return panel
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        # The first preview render happens during __init__, before the dialog has
+        # its final laid-out geometry, so the labels report oversized sizeHint
+        # widths; the pixmap is scaled too large and then clipped to the real
+        # (smaller) label -- which looks like a zoomed-in crop of the bill's
+        # middle. Re-render once the layout has settled so the full bill fits
+        # from the first open (previously only a manual resize/maximize fixed it).
+        if not self._preview_initialized:
+            self._preview_initialized = True
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, self._refresh_preview)
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         # Re-render the preview to fill the (possibly larger) labels.
@@ -395,8 +424,13 @@ class EbayCropDialog(QDialog):
         """Width/height/offset settings for one serial crop (mirrors the seals)."""
         if not hasattr(self, 'serial_spins'):
             self.serial_spins = {}
+        if not hasattr(self, 'serial_overlay_cbs'):
+            self.serial_overlay_cbs = {}
         box = QGroupBox(title)
-        lay = QHBoxLayout(box)
+        outer = QVBoxLayout(box)
+        # Spins on one row...
+        lay = QHBoxLayout()
+        outer.addLayout(lay)
         spins = {}
 
         def add(label, key, lo, hi, tip):
@@ -414,6 +448,19 @@ class EbayCropDialog(QDialog):
         add("Offset X:", 'offset_x', -500, 500, "Positive = shift right.")
         add("Offset Y:", 'offset_y', -500, 500, "Positive = shift up.")
         lay.addStretch()
+
+        # ...overlay toggle on its own line below (a long label that otherwise
+        # ran off the row until the window was widened).
+        overlay_cb = QCheckBox("Draw pattern overlay")
+        overlay_cb.setToolTip(
+            "During processing, draw the set-pattern overlay on this serial crop —\n"
+            "one crop per pattern chosen via right-click \"Set Pattern(s)…\" in the\n"
+            "results list. Off = a plain crop of the serial. (No effect on batch/\n"
+            "standalone crops, which have no set pattern.)")
+        overlay_cb.toggled.connect(lambda _=False, w=which: self._on_serial_setting_changed(w))
+        outer.addWidget(overlay_cb)
+        self.serial_overlay_cbs[which] = overlay_cb
+
         self.serial_spins[which] = spins
         box.setVisible(False)
         return box
@@ -424,6 +471,7 @@ class EbayCropDialog(QDialog):
         node = self.config.setdefault('yolo_crops', {}).setdefault('serial_' + which, {})
         for key, sp in self.serial_spins[which].items():
             node[key] = sp.value()
+        node['overlay'] = self.serial_overlay_cbs[which].isChecked()
         self._refresh_preview()
 
     def _load_settings(self):
@@ -522,6 +570,7 @@ class EbayCropDialog(QDialog):
             spins['min_height'].setValue(sc.get('min_height', 0))
             spins['offset_x'].setValue(sc.get('offset_x', 0))
             spins['offset_y'].setValue(sc.get('offset_y', 0))
+            self.serial_overlay_cbs[which].setChecked(bool(sc.get('overlay', False)))
         self._loading_serial = False
 
         # Update order numbers based on enabled state
@@ -772,6 +821,82 @@ class EbayCropDialog(QDialog):
         """Save settings to config and close."""
         self._sync_to_config()
         self.accept()
+
+    def _run_on_folder(self):
+        """Crop a whole folder now, using this profile's current (unsaved) edits.
+
+        Reuses the shared lean crop-only batch worker so the results match the
+        standalone crop tool -- the point is not having to launch that app.
+        """
+        import os
+        import tempfile
+        import yaml
+        from PySide6.QtWidgets import QFileDialog, QProgressDialog, QMessageBox
+        from PySide6.QtCore import QEventLoop
+
+        in_dir = QFileDialog.getExistingDirectory(self, "Select the folder of bill scans to crop")
+        if not in_dir:
+            return
+        out_dir = QFileDialog.getExistingDirectory(self, "Select the output folder for the crops")
+        if not out_dir:
+            return
+
+        # Dump the dialog's current config to a temp file so the batch honors
+        # edits made since the dialog opened (you don't have to hit OK first).
+        try:
+            tmp = tempfile.NamedTemporaryFile(
+                "w", suffix=".yaml", delete=False, encoding="utf-8")
+            yaml.safe_dump(self.get_config(), tmp, default_flow_style=False, sort_keys=False)
+            tmp.close()
+        except Exception as e:
+            QMessageBox.critical(self, "Crop run failed", f"Could not prepare settings:\n{e}")
+            return
+
+        # Honor the app's GPU setting (default on) for the batch.
+        use_gpu = True
+        try:
+            from settings_manager import SettingsManager
+            use_gpu = bool(SettingsManager().processing.gpu_acceleration)
+        except Exception:
+            pass
+
+        from crop_batch import CropWorker
+        worker = CropWorker(Path(in_dir), Path(out_dir), use_gpu=use_gpu,
+                            read_serial=True, config_path=Path(tmp.name))
+
+        progress = QProgressDialog("Loading model + settings…", "Cancel", 0, 0, self)
+        progress.setWindowTitle("Cropping folder")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+
+        result = {}
+        loop = QEventLoop()
+        worker.progress.connect(lambda i, total, label: (
+            progress.setMaximum(total), progress.setValue(i),
+            progress.setLabelText(f"Cropping {i}/{total}: {label}")))
+        worker.done.connect(lambda d: (result.update(d), loop.quit()))
+        worker.failed.connect(lambda m: (result.__setitem__("error", m), loop.quit()))
+        progress.canceled.connect(worker.requestInterruption)   # cooperative
+
+        progress.show()
+        worker.start()
+        loop.exec()
+        worker.wait()
+        progress.reset()
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+
+        if "error" in result:
+            QMessageBox.critical(self, "Crop run failed", result["error"])
+        else:
+            QMessageBox.information(
+                self, "Crop run complete",
+                f"Cropped {result.get('cropped', 0)} of {result.get('total', 0)} bills.\n\n"
+                f"Output folder:\n{out_dir}")
 
     def get_config(self):
         """Return the full config with the edited crop profiles folded in."""

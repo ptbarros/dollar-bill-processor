@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dollar Bill Processor - GUI Launcher
+Dollar Detective - GUI Launcher
 
 Launches the graphical user interface for processing and reviewing bills.
 """

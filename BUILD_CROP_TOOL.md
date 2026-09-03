@@ -1,7 +1,7 @@
 # Building the standalone Crop Tool (Windows .exe)
 
 `crop_tool.py` is the eBay cropping feature packaged on its own, for distributing
-to other collectors without shipping the full Dollar Bill Processor app. This
+to other collectors without shipping the full Dollar Detective app. This
 builds a single self-contained `DollarBillCropTool.exe`.
 
 ## What it ships (and what it deliberately doesn't)
@@ -40,7 +40,7 @@ The rest of this doc is for building **locally** if you ever want to.
 
 1. Python 3.12 (match the dev version).
 2. A venv with the **torch-free** dependencies — the same set used to build the
-   full app (`DollarBillProcessor.spec`):
+   full app (`DollarDetective.spec`):
    ```
    pip install pyinstaller onnxruntime rapidocr_onnxruntime opencv-python-headless \
        PySide6 lupa pyyaml pandas openpyxl pillow numpy
@@ -73,9 +73,9 @@ folder (the tool passes `write_reports=False`).
 
 - **Onefile vs onedir:** onefile is one tidy .exe but unpacks to a temp dir on each
   launch (slower first paint). For faster startup, switch the spec to a `COLLECT`
-  (onedir) build like `DollarBillProcessor.spec` — you then distribute a folder.
+  (onedir) build like `DollarDetective.spec` — you then distribute a folder.
 - **Installer:** to wrap the exe in a Windows installer, adapt
-  `installer/DollarBillProcessor.iss` (Inno Setup) to point at `DollarBillCropTool`.
+  `installer/DollarDetective.iss` (Inno Setup) to point at `DollarBillCropTool`.
 - **Model updates:** re-export `best.onnx` and rebuild — the spec re-copies
   `detector.bin` when `best.onnx` is newer.
 - **Stronger protection (later):** Tier 2 would encrypt `detector.bin` and decrypt

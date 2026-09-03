@@ -290,7 +290,7 @@ class ResultsList(QWidget):
         """Restore the saved column layout (order + widths + visibility) via
         QHeaderView.restoreState, or apply defaults if there is no compatible
         saved layout."""
-        settings = QSettings("DollarBillProcessor", "ResultsList")
+        settings = QSettings("DollarDetective", "ResultsList")
         blob = settings.value("header_state")
         saved_cols = settings.value("header_state_columns", 0, type=int)
         saved_ver = settings.value("header_state_version", 0, type=int)
@@ -323,7 +323,7 @@ class ResultsList(QWidget):
 
     def _save_header_state(self, *args):
         """Persist the full column layout (order + widths + visibility)."""
-        settings = QSettings("DollarBillProcessor", "ResultsList")
+        settings = QSettings("DollarDetective", "ResultsList")
         settings.setValue("header_state", self.tree.header().saveState())
         settings.setValue("header_state_columns", self.tree.columnCount())
         settings.setValue("header_state_version", _HEADER_STATE_VERSION)
@@ -1013,6 +1013,10 @@ class ResultsList(QWidget):
                 # the CSV session/archive persistence.
                 r['pattern_overrides'] = ', '.join(patterns)
                 r['pattern_override'] = patterns[0]  # legacy single-value mirror
+                # Setting a pattern means you want this bill cropped, so queue it
+                # (check it) automatically -- no need to also hit space. Clearing
+                # the pattern leaves the checked state untouched.
+                r['checked'] = True
             else:
                 r.pop('pattern_overrides', None)
                 r.pop('pattern_override', None)
@@ -1030,8 +1034,14 @@ class ResultsList(QWidget):
             if item_result and item_result.get('front_file') == front_file:
                 apply(item_result)
                 item.setData(0, Qt.UserRole, item_result)
+                if patterns:
+                    # Reflect the auto-check in the row + persistence + summary.
+                    self._sync_result_field(item_result, 'checked', True)
+                    self._update_status_cell(item, item_result)
                 break
 
+        if patterns:
+            self._update_summary()
         # Emit status_changed to trigger autosave
         self.status_changed.emit()
 

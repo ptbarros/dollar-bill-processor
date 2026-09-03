@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for the Dollar Bill Processor (torch-free build).
+"""PyInstaller spec for the Dollar Detective (torch-free build).
 
 onedir build. Bundles the ONNX model, patterns, config, and RapidOCR's model
 data; excludes the heavy torch/ultralytics/easyocr stack (the app runs on
@@ -68,7 +68,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='DollarBillProcessor',
+    name='DollarDetective',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -82,5 +82,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name='DollarBillProcessor',
+    name='DollarDetective',
 )
