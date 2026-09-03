@@ -329,16 +329,23 @@ class EbayCropDialog(QDialog):
         note.setStyleSheet("color:#888; font-size:11px")
         layout.addWidget(note)
 
+        # Prominent batch-run action on its own row (an ActionRole button in the
+        # button box below was too easy to miss next to OK/Cancel). Runs the crop
+        # batch on a folder using this profile's current (even unsaved) settings,
+        # so there's no need to open the standalone crop tool.
+        run_row = QHBoxLayout()
+        run_batch_btn = QPushButton("▶  Run on Folder…")
+        run_batch_btn.setToolTip("Crop a whole folder of bill scans now, using this "
+                                 "profile's settings.")
+        run_batch_btn.clicked.connect(self._run_on_folder)
+        run_row.addWidget(run_batch_btn)
+        run_row.addStretch()
+        layout.addLayout(run_row)
+
         # Dialog buttons
         button_box = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         )
-        # Run the crop batch on a folder right here, using this profile's current
-        # (even unsaved) settings -- no need to open the standalone crop tool.
-        run_batch_btn = button_box.addButton("Run on Folder…", QDialogButtonBox.ActionRole)
-        run_batch_btn.setToolTip("Crop a whole folder of bill scans now, using this "
-                                 "profile's settings.")
-        run_batch_btn.clicked.connect(self._run_on_folder)
         button_box.accepted.connect(self._save_and_close)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
