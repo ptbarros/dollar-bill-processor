@@ -29,7 +29,10 @@ hiddenimports = ['yaml', 'pandas', 'openpyxl', 'docx', 'PIL']
 #   - rapidocr_onnxruntime: ONNX models + config.yaml
 #   - onnxruntime: provider shared libs
 #   - lupa: dynamically imports a versioned native lib (lupa._lua54 etc.)
-for pkg in ('rapidocr_onnxruntime', 'onnxruntime', 'lupa'):
+#   - anthropic / openai: AI pattern generation; imported lazily in the AI tab,
+#     so they must be forced in. Pull compiled deps (pydantic_core, jiter) and
+#     read their own version via package metadata -> collect_all grabs all three.
+for pkg in ('rapidocr_onnxruntime', 'onnxruntime', 'lupa', 'anthropic', 'openai'):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b

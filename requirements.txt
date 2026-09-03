@@ -37,5 +37,12 @@ python-docx>=1.0.0
 # Lua scripting for pattern plugins
 lupa>=2.0
 
+# AI pattern generation (Settings -> AI; the "AI Generate" tab). Bundled into
+# the packaged builds so the feature works out of the box -- a frozen app has
+# no venv for the user to pip install into. The SDKs are pure-Python but pull
+# compiled deps (pydantic_core, jiter), so the specs collect_all them.
+anthropic>=0.40
+openai>=1.50
+
 # Code editor widget (optional, for syntax highlighting)
 QScintilla>=2.14

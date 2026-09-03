@@ -32,7 +32,9 @@ hiddenimports = ['yaml', 'pandas', 'openpyxl', 'docx', 'PIL',
 #   - ultralytics: YOLO model plumbing + assets
 #   - easyocr: recognition/detection modules (weights auto-download on first run)
 #   - lupa: versioned native lua lib
-for pkg in ('torch', 'torchvision', 'ultralytics', 'easyocr', 'lupa'):
+#   - anthropic / openai: AI pattern generation (lazily imported in the AI tab);
+#     collect_all pulls their compiled deps (pydantic_core, jiter) + metadata
+for pkg in ('torch', 'torchvision', 'ultralytics', 'easyocr', 'lupa', 'anthropic', 'openai'):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b

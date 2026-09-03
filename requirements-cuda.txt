@@ -16,6 +16,10 @@ openpyxl>=3.1.0
 python-docx>=1.0.0
 lupa>=2.0
 
+# AI pattern generation (bundled so the AI tab works in the frozen app):
+anthropic>=0.40
+openai>=1.50
+
 # GPU inference stack (torch supplied via the cu128 index in CI):
 ultralytics>=8.0.0
 easyocr>=1.7.0
