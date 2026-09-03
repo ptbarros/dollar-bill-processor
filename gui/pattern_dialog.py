@@ -734,6 +734,15 @@ class PatternDialog(QDialog):
         else:
             # Pattern row
             name = data['name']
+            # Duplicate: works for any Lua pattern (incl. read-only core patterns —
+            # the copy becomes an editable user pattern), reusing the same flow as
+            # the script dialog's "Create Copy...".
+            lua_info = None
+            if HAS_V3_ENGINE and hasattr(self.engine, 'lua_patterns'):
+                lua_info = self.engine.lua_patterns.get(name)
+            if lua_info is not None:
+                dup_action = menu.addAction("Duplicate Pattern...")
+                dup_action.triggered.connect(lambda: self._create_pattern_copy(lua_info))
             if self.settings.get_pattern_color(name):
                 clear_action = menu.addAction("Clear Pattern Color")
                 clear_action.triggered.connect(lambda: self._clear_pattern_color(item, name))
@@ -1467,10 +1476,11 @@ class PatternDialog(QDialog):
         clipboard.setText(script)
         QMessageBox.information(self, "Copied", "Script copied to clipboard!")
 
-    def _create_pattern_copy(self, lua_info, parent_dialog):
+    def _create_pattern_copy(self, lua_info, parent_dialog=None):
         """Create a new pattern based on an existing Lua script."""
-        # Close the view dialog
-        parent_dialog.accept()
+        # Close the view dialog if we were launched from one.
+        if parent_dialog is not None:
+            parent_dialog.accept()
 
         # Generate display name from original or create new one
         original_display = lua_info.display_name if lua_info.display_name else lua_info.name.replace('_', ' ').title()
@@ -1691,7 +1701,7 @@ return {
 </pre>
 
 <h3>Available Colors</h3>
-<p>purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red, gray</p>
+<p>purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, teal, red, gray</p>
 
 <h3>Connector Styles</h3>
 <p>arc, line, dashed, bracket, arrow</p>
@@ -1755,7 +1765,7 @@ return {
 }
 
 ## Colors
-purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red, gray
+purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, teal, red, gray
 
 ## Connector Styles
 arc, line, dashed, bracket, arrow
@@ -1965,8 +1975,9 @@ class DigitPreviewWidget(QWidget):
             'salmon': QColor("#FA8072"),
             'magenta': QColor("#E91E63"),
             'yellow': QColor("#FFEB3B"),
-            'lime': QColor("#8BC34A"),
-            'green': QColor("#4CAF50"),  # Alias for common AI usage
+            # 'lime'/'green' retired -> render as cyan (kept as aliases).
+            'lime': QColor("#00BCD4"),
+            'green': QColor("#00BCD4"),
             'teal': QColor("#009688"),
             'red': QColor("#F44336"),
             'gray': QColor("#9E9E9E"),
@@ -2257,7 +2268,7 @@ class CustomPatternDialog(QDialog):
 
         self.wizard_color_combo = QComboBox()
         self.wizard_color_combo.addItems([
-            "orange", "lime", "cyan", "blue", "purple", "coral",
+            "cyan", "orange", "blue", "purple", "coral",
             "gold", "salmon", "magenta", "yellow", "teal", "red", "gray"
         ])
         self.wizard_color_combo.currentTextChanged.connect(self._on_wizard_param_changed)
@@ -3321,7 +3332,7 @@ The match function must return a table with:
 - message: optional string describing the match
 
 ## Available Colors
-purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red, gray
+purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, teal, red, gray
 
 ## Connector Styles
 arc, line, dashed, bracket, arrow
@@ -3602,7 +3613,7 @@ The match function must return a table with:
 - message: optional string describing the match
 
 ## Available Colors
-purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, lime, teal, red, gray
+purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, teal, red, gray
 
 ## Connector Styles
 arc, line, dashed, bracket, arrow'''

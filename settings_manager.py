@@ -21,16 +21,19 @@ from dataclasses import dataclass, field
 class ProcessingSettings:
     """Processing-related settings."""
     confidence_threshold: float = 0.5
-    use_gpu: bool = False
+    use_gpu: bool = False  # legacy (torch era); ONNX path uses gpu_acceleration
+    gpu_acceleration: bool = True  # ONNX: allow GPU providers (DirectML/CUDA); uncheck -> force CPU
+    debug_logging: bool = False  # write per-bill timing + batch summary to debug_log.txt
     verify_pairs: bool = True
     jpeg_quality: int = 95
     multi_pass_detection: bool = True
     max_detection_passes: int = 5
     crop_all: bool = False  # Crop all bills, not just fancy ones
-    auto_crop: bool = True  # Auto-crop fancy bills during processing
+    auto_crop: bool = False  # Auto-crop fancy bills during processing (off by default for new installs)
     auto_archive: bool = False  # Archive files after manual processing
+    archive_directory: str = ""  # Where processed batches are archived (was under Monitor)
     archive_copy_mode: bool = False  # Copy instead of move when archiving (for testing)
-    extract_plate_info: bool = False  # Extract series year, front plate, back plate (slower)
+    extract_plate_info: bool = True  # Extract series year, front plate, back plate (cheap + accurate with RapidOCR)
 
 
 @dataclass
@@ -46,6 +49,7 @@ class UISettings:
     default_working_dir: str = ""  # Starting directory for file browse dialogs
     last_input_dir: str = ""  # Most recently used input (internal tracking)
     last_output_dir: str = ""  # Most recently used output (internal tracking)
+    review_directory: str = ""  # Where "Save for Review" copies bills (blank = per-user data dir)
     window_width: int = 1200
     window_height: int = 800
     window_x: int = 100
@@ -73,8 +77,6 @@ class UISettings:
 class ExportSettings:
     """Export-related settings."""
     default_format: str = "csv"  # csv, excel, html
-    excel_template: str = ""
-    html_template: str = ""
     auto_export_csv: bool = True  # Auto-generate CSV after processing
     auto_export_summary: bool = True  # Auto-generate summary after processing
 
@@ -95,24 +97,13 @@ class CropSettings:
 
 
 @dataclass
-class MonitorSettings:
-    """Monitor mode settings for real-time processing."""
-    watch_directory: str = ""  # Directory to watch for new files
-    output_directory: str = ""  # Output directory for fancy bill crops
-    archive_directory: str = ""  # Where to move processed batches
-    poll_interval: float = 0.5  # Seconds between directory checks
-    file_settle_time: float = 0.2  # Wait for file write completion
-    auto_archive: bool = True  # Move files to timestamped dir on stop
-
-
-@dataclass
 class AISettings:
     """AI-assisted pattern generation settings."""
     provider: str = ""  # "anthropic" or "openai"
     anthropic_api_key: str = ""  # Anthropic API key
     openai_api_key: str = ""  # OpenAI API key
-    anthropic_model: str = "claude-sonnet-4-20250514"
-    openai_model: str = "gpt-4o"
+    anthropic_model: str = "claude-opus-5"
+    openai_model: str = "gpt-5"
 
 
 class SettingsManager:
@@ -126,15 +117,15 @@ class SettingsManager:
         settings.save()
     """
 
-    DEFAULT_PATH = Path(__file__).parent / "user_settings.yaml"
-
     def __init__(self, path: Optional[Path] = None):
-        self.path = path or self.DEFAULT_PATH
+        # Writable per-user location (repo root in dev, user config dir when
+        # frozen -- the bundle itself is read-only).
+        from resource_path import user_data_dir
+        self.path = path or (user_data_dir() / "user_settings.yaml")
         self.processing = ProcessingSettings()
         self.ui = UISettings()
         self.export = ExportSettings()
         self.crop = CropSettings()
-        self.monitor = MonitorSettings()
         self.autosave = AutosaveSettings()
         self.ai = AISettings()
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
@@ -162,15 +153,22 @@ class SettingsManager:
             proc = data['processing']
             self.processing.confidence_threshold = proc.get('confidence_threshold', 0.5)
             self.processing.use_gpu = proc.get('use_gpu', False)
+            # Absent key -> True so upgraded installs keep GPU on by default.
+            self.processing.gpu_acceleration = proc.get('gpu_acceleration', True)
+            self.processing.debug_logging = proc.get('debug_logging', False)
             self.processing.verify_pairs = proc.get('verify_pairs', True)
             self.processing.jpeg_quality = proc.get('jpeg_quality', 95)
             self.processing.multi_pass_detection = proc.get('multi_pass_detection', True)
             self.processing.max_detection_passes = proc.get('max_detection_passes', 5)
             self.processing.crop_all = proc.get('crop_all', False)
-            self.processing.auto_crop = proc.get('auto_crop', True)
+            self.processing.auto_crop = proc.get('auto_crop', False)
             self.processing.auto_archive = proc.get('auto_archive', False)
+            # archive_directory moved out of the (removed) Monitor settings; migrate
+            # the old value so existing users keep their archive location.
+            self.processing.archive_directory = proc.get('archive_directory') or \
+                data.get('monitor', {}).get('archive_directory', '')
             self.processing.archive_copy_mode = proc.get('archive_copy_mode', False)
-            self.processing.extract_plate_info = proc.get('extract_plate_info', False)
+            self.processing.extract_plate_info = proc.get('extract_plate_info', True)
 
         # Load UI settings
         if 'ui' in data:
@@ -178,6 +176,7 @@ class SettingsManager:
             self.ui.default_working_dir = ui.get('default_working_dir', "")
             self.ui.last_input_dir = ui.get('last_input_dir', "")
             self.ui.last_output_dir = ui.get('last_output_dir', "")
+            self.ui.review_directory = ui.get('review_directory', "")
             self.ui.window_width = ui.get('window_width', 1200)
             self.ui.window_height = ui.get('window_height', 800)
             self.ui.window_x = ui.get('window_x', 100)
@@ -199,8 +198,6 @@ class SettingsManager:
         if 'export' in data:
             exp = data['export']
             self.export.default_format = exp.get('default_format', 'csv')
-            self.export.excel_template = exp.get('excel_template', '')
-            self.export.html_template = exp.get('html_template', '')
             self.export.auto_export_csv = exp.get('auto_export_csv', True)
             self.export.auto_export_summary = exp.get('auto_export_summary', True)
 
@@ -216,15 +213,6 @@ class SettingsManager:
             self.crop.back_seal_w = crop.get('back_seal_w', 0.261)
             self.crop.back_seal_h = crop.get('back_seal_h', 0.557)
 
-        # Load monitor settings
-        if 'monitor' in data:
-            mon = data['monitor']
-            self.monitor.watch_directory = mon.get('watch_directory', '')
-            self.monitor.output_directory = mon.get('output_directory', '')
-            self.monitor.archive_directory = mon.get('archive_directory', '')
-            self.monitor.poll_interval = mon.get('poll_interval', 2.0)
-            self.monitor.file_settle_time = mon.get('file_settle_time', 1.0)
-            self.monitor.auto_archive = mon.get('auto_archive', True)
 
         # Load autosave settings
         if 'autosave' in data:
@@ -246,8 +234,13 @@ class SettingsManager:
                         self.ai.anthropic_api_key = old_key
                     elif self.ai.provider == 'openai':
                         self.ai.openai_api_key = old_key
-            self.ai.anthropic_model = ai.get('anthropic_model', 'claude-sonnet-4-20250514')
-            self.ai.openai_model = ai.get('openai_model', 'gpt-4o')
+            self.ai.anthropic_model = ai.get('anthropic_model', 'claude-opus-5')
+            self.ai.openai_model = ai.get('openai_model', 'gpt-5')
+            # Migrate retired model IDs saved by older versions to a current default
+            # (the combos are editable, so anything current is left untouched).
+            if self.ai.anthropic_model.startswith(('claude-sonnet-4-2025',
+                                                   'claude-opus-4-2025', 'claude-3-')):
+                self.ai.anthropic_model = 'claude-opus-5'
 
         # Load pattern states
         self.pattern_states = data.get('pattern_states', {})
@@ -341,6 +334,8 @@ class SettingsManager:
             'processing': {
                 'confidence_threshold': self.processing.confidence_threshold,
                 'use_gpu': self.processing.use_gpu,
+                'gpu_acceleration': self.processing.gpu_acceleration,
+                'debug_logging': self.processing.debug_logging,
                 'verify_pairs': self.processing.verify_pairs,
                 'jpeg_quality': self.processing.jpeg_quality,
                 'multi_pass_detection': self.processing.multi_pass_detection,
@@ -348,6 +343,7 @@ class SettingsManager:
                 'crop_all': self.processing.crop_all,
                 'auto_crop': self.processing.auto_crop,
                 'auto_archive': self.processing.auto_archive,
+                'archive_directory': self.processing.archive_directory,
                 'archive_copy_mode': self.processing.archive_copy_mode,
                 'extract_plate_info': self.processing.extract_plate_info,
             },
@@ -355,6 +351,7 @@ class SettingsManager:
                 'default_working_dir': self.ui.default_working_dir,
                 'last_input_dir': self.ui.last_input_dir,
                 'last_output_dir': self.ui.last_output_dir,
+                'review_directory': self.ui.review_directory,
                 'window_width': self.ui.window_width,
                 'window_height': self.ui.window_height,
                 'window_x': self.ui.window_x,
@@ -374,8 +371,6 @@ class SettingsManager:
             },
             'export': {
                 'default_format': self.export.default_format,
-                'excel_template': self.export.excel_template,
-                'html_template': self.export.html_template,
                 'auto_export_csv': self.export.auto_export_csv,
                 'auto_export_summary': self.export.auto_export_summary,
             },
@@ -388,14 +383,6 @@ class SettingsManager:
                 'back_seal_y': self.crop.back_seal_y,
                 'back_seal_w': self.crop.back_seal_w,
                 'back_seal_h': self.crop.back_seal_h,
-            },
-            'monitor': {
-                'watch_directory': self.monitor.watch_directory,
-                'output_directory': self.monitor.output_directory,
-                'archive_directory': self.monitor.archive_directory,
-                'poll_interval': self.monitor.poll_interval,
-                'file_settle_time': self.monitor.file_settle_time,
-                'auto_archive': self.monitor.auto_archive,
             },
             'autosave': {
                 'enabled': self.autosave.enabled,
@@ -599,7 +586,6 @@ class SettingsManager:
         self.ui = UISettings()
         self.export = ExportSettings()
         self.crop = CropSettings()
-        self.monitor = MonitorSettings()
         self.autosave = AutosaveSettings()
         self.pattern_states = {}
         self.pattern_colors = {}

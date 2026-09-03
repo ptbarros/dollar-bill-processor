@@ -52,10 +52,6 @@ class MainWindow(QMainWindow):
         self.current_results = []
         self.is_processing = False
 
-        # Monitor mode state
-        self.is_monitoring = False
-        self.file_watcher = None
-        self.monitor_thread = None
 
         # Autosave state
         self._session_dirty = False
@@ -92,9 +88,6 @@ class MainWindow(QMainWindow):
         self.processing_panel.process_requested.connect(self._on_process_requested)
         self.processing_panel.organize_requested.connect(self._on_organize_requested)
         self.processing_panel.stop_requested.connect(self._on_stop_requested)
-        self.processing_panel.monitor_requested.connect(self._start_monitoring)
-        self.processing_panel.monitor_stop_requested.connect(self._stop_monitoring)
-        self.processing_panel.monitor_check.toggled.connect(self._on_monitor_mode_changed)
         self.processing_panel.archive_requested.connect(self._on_archive_requested)
         self.main_layout.addWidget(self.processing_panel)
 
@@ -176,7 +169,7 @@ class MainWindow(QMainWindow):
         patterns_action.triggered.connect(self._on_pattern_manager)
         edit_menu.addAction(patterns_action)
 
-        crops_action = QAction("eBay &Crop Manager...", self)
+        crops_action = QAction("&Crop Manager...", self)
         crops_action.triggered.connect(self._on_crop_manager)
         edit_menu.addAction(crops_action)
 
@@ -311,12 +304,10 @@ class MainWindow(QMainWindow):
             self.preview_panel.reset_aligned_image()
             return
 
-        # Get processor - could be from batch processing or monitor mode
+        # Get processor - from batch processing
         processor = self.processor
         if not processor and hasattr(self, 'processing_thread') and self.processing_thread:
             processor = self.processing_thread.processor
-        if not processor and hasattr(self, 'monitor_thread') and self.monitor_thread:
-            processor = self.monitor_thread.processor
 
         # Check for cached alignment values from archived batch
         current_result = self.preview_panel.current_result
@@ -455,8 +446,6 @@ class MainWindow(QMainWindow):
         processor = self.processor
         if not processor and hasattr(self, 'processing_thread') and self.processing_thread:
             processor = self.processing_thread.processor
-        if not processor and hasattr(self, 'monitor_thread') and self.monitor_thread:
-            processor = self.monitor_thread.processor
 
         # If no processor exists, create one lazily for cropping
         if not processor:
@@ -871,19 +860,6 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
             self._on_stop_requested()
-        if self.is_monitoring:
-            reply = QMessageBox.question(
-                self, "Confirm Exit",
-                "Monitoring is active. Are you sure you want to exit?\n\n"
-                "Files will be archived if auto-archive is enabled.",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            if reply == QMessageBox.No:
-                event.ignore()
-                return
-            self._stop_monitoring()
-
         # Final autosave before exit (if we have unarchived results)
         if self.current_results and self._session_dirty:
             self._trigger_autosave()
@@ -905,12 +881,6 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_autosave_timer') and self._autosave_timer:
             self._autosave_timer.stop()
 
-        # Stop file watcher first
-        if self.file_watcher:
-            self.file_watcher.stop()
-            self.file_watcher.wait(1000)
-            self.file_watcher = None
-
         # Wait for processing thread to finish
         if hasattr(self, 'processing_thread') and self.processing_thread:
             if self.processing_thread.isRunning():
@@ -928,12 +898,6 @@ class MainWindow(QMainWindow):
                 self.organize_thread.wait(3000)
             self.organize_thread = None
 
-        # Wait for monitor thread to finish
-        if hasattr(self, 'monitor_thread') and self.monitor_thread:
-            if self.monitor_thread.isRunning():
-                self.monitor_thread.wait(1000)
-            self.monitor_thread = None
-
         # Release the processor (holds YOLO model and EasyOCR)
         if self.processor:
             self.processor = None
@@ -950,7 +914,7 @@ class MainWindow(QMainWindow):
         # during review it looks exactly like "it reset / auto-archived".
         dlog("PROCESS_REQUESTED (clears results!)", input_dir=input_dir,
              discarding=fingerprint(self.current_results),
-             was_processing=self.is_processing, monitoring=self.is_monitoring)
+             was_processing=self.is_processing)
         self.is_processing = True
         self.status_label.setText(f"Processing: {input_dir}")
         self.processing_panel.set_processing(True)
@@ -982,7 +946,7 @@ class MainWindow(QMainWindow):
         # Create and start organize thread
         self.organize_thread = OrganizeThread(
             input_dir,
-            use_gpu=self.settings.processing.use_gpu
+            use_gpu=self.settings.processing.gpu_acceleration
         )
         self.organize_thread.progress_updated.connect(self._on_organize_progress)
         self.organize_thread.organize_complete.connect(self._on_organize_complete)
@@ -1107,24 +1071,60 @@ class MainWindow(QMainWindow):
         import yaml
         from .crop_dialog import EbayCropDialog
 
-        # Load current config
-        config_path = Path(__file__).parent.parent / "config.yaml"
-        if config_path.exists():
-            with open(config_path) as f:
+        # Load current config: prefer the user's saved copy (writable dir), else
+        # the bundled default. Always SAVE to the writable dir (the bundle is
+        # read-only when frozen).
+        from resource_path import app_base, user_data_dir
+        user_config = user_data_dir() / "config.yaml"
+        bundled_config = app_base() / "config.yaml"
+        load_path = user_config if user_config.exists() else bundled_config
+        if load_path.exists():
+            with open(load_path) as f:
                 config = yaml.safe_load(f)
         else:
             config = {}
 
-        dialog = EbayCropDialog(config, self)
+        preview_ctx = self._build_crop_preview_ctx()
+        dialog = EbayCropDialog(config, self, preview_ctx=preview_ctx)
         if dialog.exec():
-            # Save updated config
+            # Save updated config to the writable location
             updated_config = dialog.get_config()
+            config_path = user_config
             with open(config_path, 'w') as f:
                 yaml.dump(updated_config, f, default_flow_style=False, sort_keys=False)
             QMessageBox.information(
                 self, "Settings Saved",
                 "Crop settings have been saved.\nChanges will apply to future processing."
             )
+
+    def _build_crop_preview_ctx(self):
+        """Build a crop-settings preview from the currently selected bill, reusing
+        the already-loaded processor. Returns None if unavailable — never forces a
+        model load just to preview."""
+        processor = self.processor
+        if not processor and getattr(self, 'processing_thread', None):
+            processor = self.processing_thread.processor
+        if not processor:
+            return None
+        result = getattr(self.preview_panel, 'current_result', None)
+        if not result:
+            return None
+        front = result.get('front_file')
+        back = result.get('back_file')
+        if not front:
+            return None
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QApplication
+        from crop_preview import build_context_from_paths
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            return build_context_from_paths(
+                processor, Path(front), Path(back) if back else None)
+        except Exception as e:
+            print(f"Crop preview unavailable: {e}")
+            return None
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def _toggle_review_filter(self, checked: bool):
         """Toggle showing only review items."""
@@ -1399,11 +1399,12 @@ class MainWindow(QMainWindow):
         self.processing_thread = ProcessingThread(
             input_dir=input_dir,
             output_dir=output_dir,
-            use_gpu=self.settings.processing.use_gpu,
+            use_gpu=self.settings.processing.gpu_acceleration,
             verify_pairs=self.settings.processing.verify_pairs,
             crop_all=self.settings.processing.crop_all,
             auto_crop=self.settings.processing.auto_crop,
-            extract_plate_info=self.settings.processing.extract_plate_info
+            extract_plate_info=self.settings.processing.extract_plate_info,
+            debug_logging=self.settings.processing.debug_logging
         )
         self.processing_thread.progress_updated.connect(self._on_progress_updated)
         self.processing_thread.result_ready.connect(self._on_result_ready)
@@ -1425,7 +1426,7 @@ class MainWindow(QMainWindow):
         self.results_list.add_result(result)
         # Mark session as dirty for autosave
         self._mark_session_dirty()
-        # Force UI to update immediately (important for monitor mode)
+        # Force UI to update immediately (keeps the UI responsive during processing)
         QApplication.processEvents()
 
     @Slot(dict)
@@ -1545,32 +1546,40 @@ class MainWindow(QMainWindow):
         try:
             from process_production import ProductionProcessor, Config
 
-            # Find the YOLO model
-            model_path = Path(__file__).parent.parent / "models" / "best.pt"
+            # Find the YOLO model (resolve against the app base so it works both
+            # from source and when frozen by PyInstaller). The ONNX backend loads
+            # best.onnx derived from this path; best.pt only needs to exist.
+            from resource_path import app_base
+            base = app_base()
+            model_path = base / "models" / "best.pt"
             if not model_path.exists():
-                # Try alternate location
-                model_path = Path(__file__).parent.parent / "best.pt"
-            if not model_path.exists():
+                model_path = base / "best.pt"
+            if not model_path.exists() and (base / "best.onnx").exists():
+                model_path = base / "best.pt"  # ONNX sibling drives inference
+            if not model_path.exists() and not (base / "best.onnx").exists():
                 if not silent:
                     QMessageBox.warning(
                         self, "Model Not Found",
-                        "Could not find YOLO model (best.pt).\n\n"
-                        "Please ensure the model file is in the models/ directory."
+                        "Could not find YOLO model (best.onnx / best.pt).\n\n"
+                        "Please ensure the model file is bundled with the app."
                     )
                 self.status_label.setText("Ready")
                 return None
 
-            # Load config from config.yaml (for crop settings, etc.)
-            script_dir = Path(__file__).parent.parent
-            config_path = script_dir / "config.yaml"
+            # Load config from config.yaml (crop settings). Prefer the user's
+            # saved copy (writable dir) over the bundled default.
+            from resource_path import user_data_dir
+            script_dir = base
             patterns_dir = script_dir / "patterns"
+            user_config = user_data_dir() / "config.yaml"
+            config_path = user_config if user_config.exists() else (script_dir / "config.yaml")
 
             cfg = Config(config_path) if config_path.exists() else None
 
             # Create processor with config
             self.processor = ProductionProcessor(
                 yolo_model_path=model_path,
-                use_gpu=self.settings.processing.use_gpu,
+                use_gpu=self.settings.processing.gpu_acceleration,
                 cfg=cfg,
                 patterns_dir=patterns_dir if patterns_dir.exists() else None
             )
@@ -1755,7 +1764,7 @@ class MainWindow(QMainWindow):
                     result[key] = val.lower() == "true"
 
         # Determine if processing is complete
-        processing_complete = not self.is_processing and not self.is_monitoring
+        processing_complete = not self.is_processing
 
         # Get current selection index
         selected = self.results_list.tree.currentItem()
@@ -1791,292 +1800,21 @@ class MainWindow(QMainWindow):
         self.recovery_manager.clear_recovery()
         self._session_dirty = False
 
-    # =========================================================================
-    # Monitor Mode Methods
-    # =========================================================================
-
-    def _on_monitor_mode_changed(self, enabled: bool):
-        """Handle monitor mode checkbox toggle."""
-        if enabled:
-            # Update display with configured directories
-            watch_dir = self.settings.monitor.watch_directory
-            output_dir = self.settings.monitor.output_directory
-            self.processing_panel.set_monitor_dirs(watch_dir, output_dir)
-
-    def _start_monitoring(self):
-        """Start monitor mode."""
-        from .file_watcher import FileWatcher
-        from .monitor_thread import MonitorThread
-
-        # Validate settings
-        watch_dir = self.settings.monitor.watch_directory
-        output_dir = self.settings.monitor.output_directory
-
-        if not watch_dir:
-            QMessageBox.warning(
-                self, "Configuration Required",
-                "Please configure the watch directory in Settings > Monitor."
-            )
-            return
-
-        # Expand user path (handle ~ on all platforms)
-        watch_path = Path(watch_dir).expanduser().resolve()
-        print(f"[MainWindow] Monitor watch path: {watch_path}")
-
-        if not watch_path.exists():
-            QMessageBox.warning(
-                self, "Directory Not Found",
-                f"Watch directory does not exist:\n{watch_dir}\n\n"
-                "Please create the directory or configure a different path."
-            )
-            return
-
-        if not output_dir:
-            output_dir = str(watch_path / "fancy_bills")
-        else:
-            output_dir = str(Path(output_dir).expanduser().resolve())
-
-        print(f"[MainWindow] Monitor output path: {output_dir}")
-
-        # Switch to current session and clear previous results
-        dlog("MONITOR_START (clears results!)",
-             discarding=fingerprint(self.current_results))
-        self.results_list.select_current_session()
-        self.current_results = []
-        self.results_list.clear()
-        self.preview_panel.clear()
-        self._current_input_dir = str(watch_path)
-        self._session_dirty = False
-
-        # Create monitor thread
-        self.monitor_thread = MonitorThread(
-            watch_dir=watch_path,
-            output_dir=Path(output_dir),
-            use_gpu=self.settings.processing.use_gpu,
-            verify_pairs=self.settings.processing.verify_pairs,
-            crop_all=self.settings.processing.crop_all,
-            extract_plate_info=self.settings.processing.extract_plate_info
-        )
-
-        # Connect signals
-        self.monitor_thread.progress_updated.connect(self._on_progress_updated)
-        self.monitor_thread.result_ready.connect(self._on_result_ready)
-        self.monitor_thread.processing_complete.connect(self._on_monitor_complete)
-        self.monitor_thread.error_occurred.connect(self._on_processing_error)
-        self.monitor_thread.status_updated.connect(self._on_monitor_status)
-
-        # Create file watcher
-        self.file_watcher = FileWatcher(
-            watch_dir=watch_path,
-            poll_interval=self.settings.monitor.poll_interval,
-            settle_time=self.settings.monitor.file_settle_time
-        )
-
-        # Connect file watcher to monitor thread
-        self.file_watcher.new_file_detected.connect(self.monitor_thread.handle_new_file)
-        self.file_watcher.error_occurred.connect(self._on_processing_error)
-
-        # Start threads
-        print("[MainWindow] Starting monitor thread...")
-        self.monitor_thread.start()
-        print("[MainWindow] Starting file watcher...")
-        self.file_watcher.start()
-
-        print("[MainWindow] Monitor mode started successfully")
-
-        # Update UI state
-        self.is_monitoring = True
-        self.processing_panel.set_monitoring(True)
-        self.status_label.setText(f"Monitoring: {watch_dir}")
-
-    def _stop_monitoring(self):
-        """Stop monitor mode and optionally archive files."""
-        dlog("MONITOR_STOP", is_monitoring=self.is_monitoring,
-             auto_archive=self.settings.monitor.auto_archive,
-             state=fingerprint(self.current_results))
-        if not self.is_monitoring:
-            return
-
-        # Stop the file watcher
-        if self.file_watcher:
-            self.file_watcher.stop()
-            self.file_watcher.wait(2000)
-            self.file_watcher = None
-
-        # Stop the monitor thread
-        if self.monitor_thread:
-            self.monitor_thread.stop()
-            self.monitor_thread.wait(5000)
-
-            # Grab processor for alignment feature
-            self.processor = self.monitor_thread.processor
-
-            # Archive if enabled
-            print(f"[MainWindow] Auto-archive enabled: {self.settings.monitor.auto_archive}, pairs: {self.monitor_thread.pair_count}")
-            if self.settings.monitor.auto_archive and self.monitor_thread.pair_count > 0:
-                self._archive_batch()
-
-            self.monitor_thread = None
-
-        # Update UI state
-        self.is_monitoring = False
-        self.processing_panel.set_monitoring(False)
-        self.status_label.setText("Monitoring stopped")
-
-        # Refresh batch list to show newly archived batch
-        self.results_list.refresh_batch_list()
-
-    @Slot(str)
-    def _on_monitor_status(self, message: str):
-        """Handle status updates from monitor thread."""
-        self.status_label.setText(message)
-
-    @Slot(str)
     def _on_batch_changed(self, batch_path: str):
         """Handle batch selection change in results list."""
-        print(f"[MainWindow] _on_batch_changed: batch_path='{batch_path}'")
         if batch_path:
             # Viewing archived batch - set input directory to allow reprocessing
             self.preview_panel.clear()
             self.status_label.setText(f"Viewing archived batch: {Path(batch_path).name}")
-            # Set input directory to archived batch path for reprocessing
-            print(f"[MainWindow] Setting input_dir to: {batch_path}")
             self.processing_panel.set_input_dir(batch_path)
         else:
             # Back to current session. Selecting an archive had replaced the
-            # results display with the archive's dicts; without re-installing
-            # the live results here, the list stays stuck on the archive even
-            # though current_results (still autosaved) holds the live session.
-            # Re-sharing current_results also restores object identity so edits
-            # flow back to the authoritative list again.
+            # results display with the archive's dicts; re-install the live
+            # results so the list returns to the authoritative session.
             self.preview_panel.clear()
             self.results_list.set_results(self.current_results)
             self.status_label.setText("Current session")
             dlog("session.restored_to_list", state=fingerprint(self.current_results))
-
-    @Slot(dict)
-    def _on_monitor_complete(self, summary: dict):
-        """Handle monitor mode completion."""
-        total = summary.get('total', 0)
-        fancy = summary.get('fancy_count', 0)
-        review = summary.get('review_count', 0)
-        pending_fronts = summary.get('pending_fronts', 0)
-        pending_backs = summary.get('pending_backs', 0)
-
-        status = f"Monitoring stopped: {total} pairs processed, {fancy} fancy"
-        if pending_fronts or pending_backs:
-            status += f" ({pending_fronts + pending_backs} unpaired files)"
-
-        self.status_label.setText(status)
-        self.progress_label.setText("")
-
-        # Trigger immediate autosave on monitor completion
-        self._trigger_autosave()
-
-        # Auto-export if enabled and we have results
-        if self.current_results:
-            self._auto_export(summary)
-
-    def _archive_batch(self):
-        """Move (or copy) processed files to a timestamped archive directory."""
-        import shutil
-        from datetime import datetime
-
-        dlog("ARCHIVE_monitor.START", has_thread=bool(self.monitor_thread),
-             state=fingerprint(self.current_results))
-        if not self.monitor_thread:
-            return
-
-        archive_base = self.settings.monitor.archive_directory
-        if not archive_base:
-            archive_base = str(Path(self.settings.monitor.watch_directory) / "archive")
-
-        archive_path = Path(archive_base)
-        archive_path.mkdir(parents=True, exist_ok=True)
-
-        # Create timestamped batch directory
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        batch_dir = archive_path / f"batch_{timestamp}"
-        batch_dir.mkdir(parents=True, exist_ok=True)
-
-        # Use copy or move based on settings
-        copy_mode = self.settings.processing.archive_copy_mode
-        file_op = shutil.copy2 if copy_mode else shutil.move
-        op_name = "copying" if copy_mode else "moving"
-
-        # Move/copy all session files (processed + unpaired)
-        all_files = self.monitor_thread.get_all_session_files()
-        print(f"[MainWindow] Archiving ({op_name}) {len(all_files)} files to {batch_dir}")
-        moved_count = 0
-        path_mapping = {}  # old_path -> new_path
-
-        for file_path in all_files:
-            if file_path.exists():
-                try:
-                    dest = batch_dir / file_path.name
-                    file_op(str(file_path), str(dest))
-                    path_mapping[str(file_path)] = str(dest)
-                    moved_count += 1
-                except Exception as e:
-                    print(f"[MainWindow] Error {op_name} {file_path.name}: {e}")
-                    self.status_label.setText(f"Error {op_name} {file_path.name}: {e}")
-            else:
-                print(f"[MainWindow] File no longer exists: {file_path}")
-
-        # Move/copy fancy_bills output to batch archive
-        output_dir = Path(self.settings.monitor.output_directory or
-                         (Path(self.settings.monitor.watch_directory) / "fancy_bills")).expanduser().resolve()
-
-        fancy_moved = 0
-        if output_dir.exists():
-            fancy_items = list(output_dir.glob("*"))
-            if fancy_items:
-                # Create fancy_bills subfolder in batch archive
-                batch_fancy_dir = batch_dir / "fancy_bills"
-                batch_fancy_dir.mkdir(parents=True, exist_ok=True)
-
-                for item_path in fancy_items:
-                    try:
-                        dest = batch_fancy_dir / item_path.name
-                        if item_path.is_dir():
-                            if copy_mode:
-                                shutil.copytree(str(item_path), str(dest))
-                            else:
-                                shutil.move(str(item_path), str(dest))
-                        else:
-                            file_op(str(item_path), str(dest))
-                        fancy_moved += 1
-                    except Exception as e:
-                        print(f"[MainWindow] Error {op_name} {item_path.name}: {e}")
-
-                print(f"[MainWindow] Archived ({op_name}) {fancy_moved} items (files/folders) to {batch_fancy_dir}")
-
-        # Update result paths to point to new archive locations
-        for result in self.current_results:
-            front_file = result.get('front_file', '')
-            back_file = result.get('back_file', '')
-            if front_file and front_file in path_mapping:
-                result['front_file'] = path_mapping[front_file]
-            if back_file and back_file in path_mapping:
-                result['back_file'] = path_mapping[back_file]
-
-        # Update the results list with new paths
-        self.results_list.update_result_paths(path_mapping)
-
-        # Export batch CSV (with updated paths)
-        if self.current_results:
-            csv_path = batch_dir / "results.csv"
-            self._export_batch_csv(csv_path)
-
-        action = "Copied" if copy_mode else "Archived"
-        self.status_label.setText(
-            f"{action} {moved_count} files + {fancy_moved} fancy crops to {batch_dir.name}"
-        )
-
-        # Clear recovery file after successful archive
-        self._clear_recovery_after_archive()
-
-        return batch_dir
 
     def _archive_manual_batch(self):
         """Move (or copy) processed files to a timestamped archive directory (for manual processing)."""
@@ -2092,8 +1830,8 @@ class MainWindow(QMainWindow):
         input_dir = self.processing_thread.input_dir
         output_dir = self.processing_thread.output_dir
 
-        # Use monitor archive directory, or create one based on input dir
-        archive_base = self.settings.monitor.archive_directory
+        # Use the configured archive directory, or one based on the input dir
+        archive_base = self.settings.processing.archive_directory
         if not archive_base:
             archive_base = str(input_dir.parent / "archive")
 
@@ -2220,6 +1958,13 @@ def run_gui():
     app = QApplication(sys.argv)
     app.setApplicationName("Dollar Bill Processor")
     app.setOrganizationName("DollarBillProcessor")
+
+    # App / window / taskbar icon (bundled under assets/).
+    from PySide6.QtGui import QIcon
+    from resource_path import app_base
+    _icon_path = app_base() / "assets" / "icon.png"
+    if _icon_path.exists():
+        app.setWindowIcon(QIcon(str(_icon_path)))
 
     # Apply theme and font size from settings
     from .theme_manager import apply_theme, get_combined_stylesheet

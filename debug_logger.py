@@ -116,6 +116,20 @@ def dlog(event: str, **context) -> None:
         pass
 
 
+def dlog_raw(text: str) -> None:
+    """Log pre-formatted text verbatim (one log line per input line).
+
+    Used for the processing timing output ([TIMING]/[VERIFY]/[BATCH SUMMARY])
+    so it lands in debug_log.txt where the packaged (no-console) app can show it.
+    """
+    try:
+        logger = _init_logger()
+        for line in (str(text).splitlines() or [""]):
+            logger.info("%s", line)
+    except Exception:
+        pass
+
+
 def dlog_exc(event: str, **context) -> None:
     """Like dlog() but also records the current exception traceback."""
     try:

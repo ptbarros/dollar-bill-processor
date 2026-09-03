@@ -1,0 +1,197 @@
+name: Build installers
+
+# Push a version tag (e.g. v1.4.0) to build + publish a GitHub Release with the
+# Windows installer and Linux AppImage. workflow_dispatch builds the artifacts
+# for testing without creating a release.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: "Install dependencies (default = OpenVINO)"
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # The DEFAULT Windows build uses OpenVINO: YOLO runs on the Intel iGPU
+          # (Iris/Iris Xe = big win; older UHD = CPU-equivalent, no regression;
+          # F-series/no-iGPU/AMD = graceful CPU fallback), OCR on the OpenVINO CPU
+          # device. Most Windows machines are Intel, so this is the best default.
+          # Same `onnxruntime` import name, so rapidocr keeps working; collect_all
+          # bundles the OpenVINO runtime DLLs (they live in onnxruntime/capi).
+          pip uninstall -y onnxruntime onnxruntime-gpu onnxruntime-directml || true
+          pip install "onnxruntime-openvino>=1.17.0"
+          python -c "import onnxruntime as o; p=o.get_available_providers(); print('providers:',p); assert 'OpenVINOExecutionProvider' in p, 'OpenVINO EP missing'"
+          # App uses PySide6; drop PyQt/QScintilla so PyInstaller doesn't trip
+          # over two Qt bindings (syntax highlighting is optional in the app).
+          pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
+          pip install pyinstaller
+
+      - name: Build onedir (PyInstaller)
+        run: pyinstaller --noconfirm --clean DollarBillProcessor.spec
+
+      - name: Read app version
+        id: ver
+        shell: bash
+        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Build installer (Inno Setup, default OpenVINO edition)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} installer\DollarBillProcessor.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/DollarBillProcessor-*-setup.exe
+          if-no-files-found: error
+
+  windows-cuda:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: "Install dependencies (CUDA: torch + EasyOCR)"
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          # CUDA 12.8 wheels (Blackwell / RTX 50-series support), same as the
+          # original app's setup_windows.bat.
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+          pip install -r requirements-cuda.txt
+          # EasyOCR can drag in the non-headless opencv, which fights PySide6's Qt.
+          # Force headless to win.
+          pip uninstall -y opencv-python || true
+          pip install --force-reinstall --no-deps opencv-python-headless
+          pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
+          pip install pyinstaller
+          # Confirm CUDA-capable torch is what got installed.
+          python -c "import torch; print('torch', torch.__version__, 'cuda build:', torch.version.cuda)"
+          # Reclaim the wheel cache (~GBs) before PyInstaller doubles the footprint.
+          pip cache purge || true
+
+      - name: Build onedir (PyInstaller, CUDA spec)
+        run: pyinstaller --noconfirm --clean DollarBillProcessor-cuda.spec
+
+      - name: Read app version
+        id: ver
+        shell: bash
+        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Build installer (Inno Setup, CUDA edition)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} /DEditionTag=-cuda "/DEditionName= (CUDA)" installer\DollarBillProcessor.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-cuda
+          path: dist/DollarBillProcessor-*-cuda-setup.exe
+          if-no-files-found: error
+
+  windows-directml:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: "Install dependencies (DirectML fallback edition)"
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Secondary edition for Windows machines whose GPU OpenVINO can't use
+          # (AMD/NVIDIA discrete GPUs, no Intel iGPU): DirectML accelerates YOLO on
+          # any DirectX 12 GPU with no CUDA install. OCR stays on CPU. Same
+          # `onnxruntime` import name; collect_all bundles DirectML.dll.
+          pip uninstall -y onnxruntime onnxruntime-gpu onnxruntime-openvino || true
+          pip install "onnxruntime-directml>=1.17.0"
+          python -c "import onnxruntime as o; p=o.get_available_providers(); print('providers:',p); assert 'DmlExecutionProvider' in p, 'DirectML EP missing'"
+          pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
+          pip install pyinstaller
+
+      - name: Build onedir (PyInstaller)
+        run: pyinstaller --noconfirm --clean DollarBillProcessor.spec
+
+      - name: Read app version
+        id: ver
+        shell: bash
+        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: "Build installer (Inno Setup, DirectML edition)"
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} /DEditionTag=-directml "/DEditionName= (DirectML)" installer\DollarBillProcessor.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-directml
+          path: dist/DollarBillProcessor-*-directml-setup.exe
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies (torch-free)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
+          pip install pyinstaller
+          sudo apt-get update
+          sudo apt-get install -y imagemagick libfuse2 || sudo apt-get install -y imagemagick
+
+      - name: Build onedir + AppImage
+        run: |
+          pyinstaller --noconfirm --clean DollarBillProcessor.spec
+          bash tools/build_appimage.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: dist/DollarBillProcessor-x86_64.AppImage
+          if-no-files-found: error
+
+  release:
+    needs: [windows, windows-cuda, windows-directml, linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/windows-installer/*
+            artifacts/windows-installer-cuda/*
+            artifacts/windows-installer-directml/*
+            artifacts/linux-appimage/*
+          generate_release_notes: true
+          # Tags with a hyphen (e.g. v1.4.0-ci1) are test/pre-releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}

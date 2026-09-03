@@ -13,6 +13,7 @@ from PySide6.QtCore import QThread, Signal
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from process_production import get_timing
+from debug_logger import dlog_raw
 
 
 class ProcessingThread(QThread):
@@ -40,18 +41,30 @@ class ProcessingThread(QThread):
         crop_all: bool = False,
         auto_crop: bool = True,
         extract_plate_info: bool = False,
+        debug_logging: bool = False,
         parent=None
     ):
         super().__init__(parent)
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
         self.use_gpu = use_gpu
+        self.debug_logging = debug_logging
         self.verify_pairs = verify_pairs
         self.crop_all = crop_all
         self.auto_crop = auto_crop
         self.extract_plate_info = extract_plate_info
         self._stop_requested = False
         self.processor = None  # Will be set during run()
+
+    def _backend_desc(self):
+        """Human-readable backend line: which provider/device YOLO and OCR bound to."""
+        proc = self.processor
+        if getattr(proc, "use_onnx", False):
+            ym = getattr(proc, "yolo_model", None)
+            yolo = getattr(ym, "backend", None) or ",".join(getattr(ym, "providers", []) or [])
+            ocr = getattr(getattr(proc, "ocr_reader", None), "device", None) or "CPU"
+            return f"ONNX Runtime — YOLO {yolo} | OCR {ocr}"
+        return "torch/ultralytics (CUDA/EasyOCR)"
 
     def run(self):
         """Main processing loop."""
@@ -83,6 +96,9 @@ class ProcessingThread(QThread):
                 patterns_dir=patterns_dir if patterns_dir.exists() else None
             )
 
+            if self.debug_logging:
+                dlog_raw(f"[BACKEND] {self._backend_desc()} | gpu_acceleration={self.use_gpu}")
+
             # Validate directory - check it's not an output directory
             self.progress_updated.emit(0, 0, "Scanning directory...")
             self._validate_input_directory()
@@ -110,7 +126,10 @@ class ProcessingThread(QThread):
                 pairs = self.processor.verify_and_swap_pairs(pairs, progress_callback=verify_progress)
                 verify_time = time.time() - verify_start
                 verify_yolo_calls = get_timing().yolo_calls - verify_yolo_start
-                print(f"[VERIFY] {total} pairs verified in {verify_time:.2f}s ({verify_yolo_calls} YOLO calls, {verify_time/total:.3f}s/pair)")
+                verify_line = f"[VERIFY] {total} pairs verified in {verify_time:.2f}s ({verify_yolo_calls} YOLO calls, {verify_time/total:.3f}s/pair)"
+                print(verify_line)
+                if self.debug_logging:
+                    dlog_raw(verify_line)
 
             # Process each pair
             fancy_count = 0
@@ -337,7 +356,10 @@ class ProcessingThread(QThread):
 
                 # Print timing summary and accumulate totals
                 bill_id = f"#{pair.stack_position} {result.get('serial') or 'NO_SERIAL'}"
-                print(timing.get_summary(bill_id))
+                timing_line = timing.get_summary(bill_id)
+                print(timing_line)
+                if self.debug_logging and timing_line:
+                    dlog_raw(timing_line)
                 total_yolo_calls += timing.yolo_calls  # Already reset to 0 at start of each bill
                 total_ocr_calls += timing.ocr_calls
 
@@ -348,13 +370,22 @@ class ProcessingThread(QThread):
             processing_time = batch_time - verify_time
             avg_per_bill = processing_time / total if total > 0 else 0
             all_yolo = verify_yolo_calls + total_yolo_calls
-            print(f"\n{'='*70}")
-            print(f"[BATCH SUMMARY]")
-            print(f"  Bills: {total} | Fancy: {fancy_count} | Review: {review_count}")
-            print(f"  Verify: {'ON' if self.verify_pairs else 'OFF'} ({verify_time:.2f}s, {verify_yolo_calls} YOLO)")
-            print(f"  Processing: {processing_time:.2f}s ({avg_per_bill:.2f}s/bill avg)")
-            print(f"  Total: {batch_time:.2f}s | YOLO: {all_yolo} | OCR: {total_ocr_calls}")
-            print(f"{'='*70}\n")
+            rate = (total / processing_time * 60) if processing_time > 0 else 0
+            backend = self._backend_desc()
+            summary_block = "\n".join([
+                f"\n{'='*70}",
+                f"[BATCH SUMMARY]",
+                f"  Backend: {backend} (gpu_acceleration={self.use_gpu})",
+                f"  Bills: {total} | Fancy: {fancy_count} | Review: {review_count}",
+                f"  Verify: {'ON' if self.verify_pairs else 'OFF'} ({verify_time:.2f}s, {verify_yolo_calls} YOLO)",
+                f"  Processing: {processing_time:.2f}s ({avg_per_bill:.2f}s/bill avg)",
+                f"  Rate: {rate:.1f} bills/minute",
+                f"  Total: {batch_time:.2f}s | YOLO: {all_yolo} | OCR: {total_ocr_calls}",
+                f"{'='*70}\n",
+            ])
+            print(summary_block)
+            if self.debug_logging:
+                dlog_raw(summary_block)
 
             # Save review queue
             if self.processor.review_queue:

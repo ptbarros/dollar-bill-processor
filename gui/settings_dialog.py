@@ -9,10 +9,10 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
     QGroupBox, QFormLayout, QSpinBox, QDoubleSpinBox, QCheckBox,
     QComboBox, QLineEdit, QPushButton, QDialogButtonBox, QLabel,
-    QFileDialog, QColorDialog
+    QFileDialog, QColorDialog, QMessageBox
 )
-from PySide6.QtGui import QColor
-from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QDesktopServices
+from PySide6.QtCore import Qt, QUrl
 
 
 class ClickableInfoLabel(QLabel):
@@ -102,10 +102,10 @@ class SettingsDialog(QDialog):
         self._setup_export_tab(export_tab)
         tabs.addTab(export_tab, "Export")
 
-        # Monitor tab
-        monitor_tab = QWidget()
-        self._setup_monitor_tab(monitor_tab)
-        tabs.addTab(monitor_tab, "Monitor")
+        # Folders tab
+        folders_tab = QWidget()
+        self._setup_folders_tab(folders_tab)
+        tabs.addTab(folders_tab, "Folders")
 
         # AI tab
         ai_tab = QWidget()
@@ -172,12 +172,28 @@ class SettingsDialog(QDialog):
         hardware_layout = QFormLayout(hardware_group)
 
         self.gpu_check, gpu_container = self._create_checkbox_with_info(
-            "Use GPU acceleration (if available)",
-            "Enable CUDA/GPU processing for faster YOLO detection.\n\n"
-            "• Checked: Uses GPU if available (2-3x faster)\n"
-            "• Unchecked: Uses CPU only (slower but compatible)"
+            "Use GPU acceleration (DirectML / CUDA if available)",
+            "Let ONNX Runtime run YOLO detection on the GPU.\n\n"
+            "• Checked: auto-selects the best provider (DirectML on Windows,\n"
+            "  CUDA where available), falling back to CPU if there's no GPU.\n"
+            "• Unchecked: forces CPU only.\n\n"
+            "Uncheck to compare CPU vs GPU speed in the same build (see the\n"
+            "Rate line in the debug log)."
         )
         hardware_layout.addRow(gpu_container)
+
+        self.debug_log_check, debug_container = self._create_checkbox_with_info(
+            "Write processing debug log",
+            "Write per-bill timing and the batch summary (with backend/provider\n"
+            "and bills-per-minute) to debug_log.txt.\n\n"
+            "Use this to compare processing speed between runs and machines.\n"
+            "Turn it off for normal use to keep the log small."
+        )
+        hardware_layout.addRow(debug_container)
+
+        view_log_btn = QPushButton("View debug log…")
+        view_log_btn.clicked.connect(self._open_debug_log)
+        hardware_layout.addRow("", view_log_btn)
 
         self.verify_pairs_check, verify_container = self._create_checkbox_with_info(
             "Verify front/back pairs",
@@ -224,7 +240,7 @@ class SettingsDialog(QDialog):
             "Move processed files to a timestamped archive folder.\n\n"
             "• Checked: Files moved to archive/batch_YYYYMMDD_HHMMSS/\n"
             "• Unchecked: Files stay in original location\n\n"
-            "Uses the archive directory from Monitor settings."
+            "Set the archive folder in the Folders tab (blank = <input>/archive)."
         )
         output_layout.addRow(auto_archive_container)
 
@@ -370,67 +386,15 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(format_group)
 
-        # Templates
-        templates_group = QGroupBox("Templates (Optional)")
-        templates_layout = QFormLayout(templates_group)
-
-        self.excel_template_edit = QLineEdit()
-        excel_layout = QHBoxLayout()
-        excel_layout.addWidget(self.excel_template_edit)
-        excel_btn = QPushButton("...")
-        excel_btn.setMaximumWidth(30)
-        excel_btn.clicked.connect(self._browse_excel_template)
-        excel_layout.addWidget(excel_btn)
-        templates_layout.addRow("Excel template:", excel_layout)
-
-        self.html_template_edit = QLineEdit()
-        html_layout = QHBoxLayout()
-        html_layout.addWidget(self.html_template_edit)
-        html_btn = QPushButton("...")
-        html_btn.setMaximumWidth(30)
-        html_btn.clicked.connect(self._browse_html_template)
-        html_layout.addWidget(html_btn)
-        templates_layout.addRow("HTML template:", html_layout)
-
-        layout.addWidget(templates_group)
-
         layout.addStretch()
-
-    def _setup_monitor_tab(self, tab: QWidget):
-        """Setup the monitor mode settings tab."""
+    def _setup_folders_tab(self, tab: QWidget):
+        """Setup the Folders tab (archive + review locations)."""
         layout = QVBoxLayout(tab)
 
-        # Directories
-        dirs_group = QGroupBox("Monitor Mode Directories")
+        dirs_group = QGroupBox("Folders")
         dirs_layout = QFormLayout(dirs_group)
 
-        # Watch directory
-        self.watch_dir_edit = QLineEdit()
-        self.watch_dir_edit.setPlaceholderText("Directory where scanner saves files...")
-        watch_layout = QHBoxLayout()
-        watch_layout.addWidget(self.watch_dir_edit)
-        watch_btn = QPushButton("...")
-        watch_btn.setMaximumWidth(30)
-        watch_btn.clicked.connect(self._browse_watch_dir)
-        watch_layout.addWidget(watch_btn)
-        dirs_layout.addRow("Watch Directory:", watch_layout)
-
-        watch_hint = QLabel("Scanner saves files here - monitored for new images")
-        watch_hint.setStyleSheet("color: gray; font-size: 9px;")
-        dirs_layout.addRow("", watch_hint)
-
-        # Output directory
-        self.monitor_output_edit = QLineEdit()
-        self.monitor_output_edit.setPlaceholderText("Directory for fancy bill crops...")
-        output_layout = QHBoxLayout()
-        output_layout.addWidget(self.monitor_output_edit)
-        output_btn = QPushButton("...")
-        output_btn.setMaximumWidth(30)
-        output_btn.clicked.connect(self._browse_monitor_output)
-        output_layout.addWidget(output_btn)
-        dirs_layout.addRow("Output Directory:", output_layout)
-
-        # Archive directory
+        # Archive directory (where 'Archive after processing' moves batches)
         self.archive_dir_edit = QLineEdit()
         self.archive_dir_edit.setPlaceholderText("Directory for completed batches...")
         archive_layout = QHBoxLayout()
@@ -441,45 +405,28 @@ class SettingsDialog(QDialog):
         archive_layout.addWidget(archive_btn)
         dirs_layout.addRow("Archive Directory:", archive_layout)
 
-        archive_hint = QLabel("Processed files are moved here when monitoring stops")
+        archive_hint = QLabel("Where 'Archive after processing' moves batches (blank = <input>/archive)")
         archive_hint.setStyleSheet("color: gray; font-size: 9px;")
         dirs_layout.addRow("", archive_hint)
 
+        # Review directory
+        self.review_dir_edit = QLineEdit()
+        self.review_dir_edit.setPlaceholderText("Where 'Save for Review' copies bills...")
+        review_layout = QHBoxLayout()
+        review_layout.addWidget(self.review_dir_edit)
+        review_btn = QPushButton("...")
+        review_btn.setMaximumWidth(30)
+        review_btn.clicked.connect(self._browse_review_dir)
+        review_layout.addWidget(review_btn)
+        dirs_layout.addRow("Review Directory:", review_layout)
+
+        review_hint = QLabel("Blank = default per-user location")
+        review_hint.setStyleSheet("color: gray; font-size: 9px;")
+        dirs_layout.addRow("", review_hint)
+
         layout.addWidget(dirs_group)
-
-        # Options
-        options_group = QGroupBox("Monitor Options")
-        options_layout = QFormLayout(options_group)
-
-        self.mon_auto_archive_check = QCheckBox("Auto-archive on stop")
-        self.mon_auto_archive_check.setToolTip("Move processed files to timestamped directory when monitoring stops")
-        options_layout.addRow(self.mon_auto_archive_check)
-
-        self.poll_interval_spin = QDoubleSpinBox()
-        self.poll_interval_spin.setRange(0.1, 10.0)
-        self.poll_interval_spin.setSingleStep(0.1)
-        self.poll_interval_spin.setDecimals(1)
-        self.poll_interval_spin.setSuffix(" seconds")
-        options_layout.addRow("Poll Interval:", self.poll_interval_spin)
-
-        poll_hint = QLabel("How often to check for new files (0.5s recommended)")
-        poll_hint.setStyleSheet("color: gray; font-size: 9px;")
-        options_layout.addRow("", poll_hint)
-
-        self.settle_time_spin = QDoubleSpinBox()
-        self.settle_time_spin.setRange(0.1, 5.0)
-        self.settle_time_spin.setSingleStep(0.1)
-        self.settle_time_spin.setDecimals(1)
-        self.settle_time_spin.setSuffix(" seconds")
-        options_layout.addRow("File Settle Time:", self.settle_time_spin)
-
-        settle_hint = QLabel("Wait for file to finish writing before processing")
-        settle_hint.setStyleSheet("color: gray; font-size: 9px;")
-        options_layout.addRow("", settle_hint)
-
-        layout.addWidget(options_group)
-
         layout.addStretch()
+
 
     def _setup_ai_tab(self, tab: QWidget):
         """Setup the AI-assisted pattern generation settings tab."""
@@ -549,10 +496,10 @@ class SettingsDialog(QDialog):
         # Anthropic model
         self.anthropic_model_combo = QComboBox()
         self.anthropic_model_combo.addItems([
-            "claude-sonnet-4-20250514",
-            "claude-opus-4-20250514",
-            "claude-3-5-sonnet-20241022",
-            "claude-3-5-haiku-20241022",
+            "claude-opus-5",
+            "claude-sonnet-5",
+            "claude-haiku-4-5",
+            "claude-opus-4-8",
         ])
         self.anthropic_model_combo.setEditable(True)  # Allow custom model names
         model_layout.addRow("Anthropic Model:", self.anthropic_model_combo)
@@ -560,11 +507,10 @@ class SettingsDialog(QDialog):
         # OpenAI model
         self.openai_model_combo = QComboBox()
         self.openai_model_combo.addItems([
+            "gpt-5",
+            "gpt-5-mini",
             "gpt-4o",
             "gpt-4o-mini",
-            "gpt-4-turbo",
-            "gpt-4",
-            "o4-mini",
         ])
         self.openai_model_combo.setEditable(True)  # Allow custom model names
         model_layout.addRow("OpenAI Model:", self.openai_model_combo)
@@ -684,13 +630,27 @@ class SettingsDialog(QDialog):
             self.ai_test_result.setText(f"Error: {str(e)}")
             self.ai_test_result.setStyleSheet("color: red;")
 
+    def _open_debug_log(self):
+        """Open debug_log.txt in the OS default text viewer."""
+        from debug_logger import get_log_path
+        path = get_log_path()
+        if path and Path(path).exists():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+        else:
+            QMessageBox.information(
+                self, "Debug Log",
+                "No debug log yet.\n\nEnable \"Write processing debug log\" and "
+                "run a batch first."
+            )
+
     def _load_settings(self):
         """Load current settings into the UI."""
         # Processing
         self.confidence_spin.setValue(self.settings.processing.confidence_threshold)
         self.multipass_check.setChecked(self.settings.processing.multi_pass_detection)
         self.max_passes_spin.setValue(self.settings.processing.max_detection_passes)
-        self.gpu_check.setChecked(self.settings.processing.use_gpu)
+        self.gpu_check.setChecked(self.settings.processing.gpu_acceleration)
+        self.debug_log_check.setChecked(self.settings.processing.debug_logging)
         self.verify_pairs_check.setChecked(self.settings.processing.verify_pairs)
         self.jpeg_quality_spin.setValue(self.settings.processing.jpeg_quality)
         self.crop_all_check.setChecked(self.settings.processing.crop_all)
@@ -716,18 +676,12 @@ class SettingsDialog(QDialog):
         idx = self.format_combo.findData(self.settings.export.default_format)
         if idx >= 0:
             self.format_combo.setCurrentIndex(idx)
-        self.excel_template_edit.setText(self.settings.export.excel_template)
-        self.html_template_edit.setText(self.settings.export.html_template)
         self.auto_csv_check.setChecked(self.settings.export.auto_export_csv)
         self.auto_summary_check.setChecked(self.settings.export.auto_export_summary)
 
-        # Monitor
-        self.watch_dir_edit.setText(self.settings.monitor.watch_directory)
-        self.monitor_output_edit.setText(self.settings.monitor.output_directory)
-        self.archive_dir_edit.setText(self.settings.monitor.archive_directory)
-        self.mon_auto_archive_check.setChecked(self.settings.monitor.auto_archive)
-        self.poll_interval_spin.setValue(self.settings.monitor.poll_interval)
-        self.settle_time_spin.setValue(self.settings.monitor.file_settle_time)
+        # Folders
+        self.archive_dir_edit.setText(self.settings.processing.archive_directory)
+        self.review_dir_edit.setText(self.settings.ui.review_directory)
 
         # AI
         provider = self.settings.ai.provider
@@ -745,7 +699,8 @@ class SettingsDialog(QDialog):
         self.settings.processing.confidence_threshold = self.confidence_spin.value()
         self.settings.processing.multi_pass_detection = self.multipass_check.isChecked()
         self.settings.processing.max_detection_passes = self.max_passes_spin.value()
-        self.settings.processing.use_gpu = self.gpu_check.isChecked()
+        self.settings.processing.gpu_acceleration = self.gpu_check.isChecked()
+        self.settings.processing.debug_logging = self.debug_log_check.isChecked()
         self.settings.processing.verify_pairs = self.verify_pairs_check.isChecked()
         self.settings.processing.jpeg_quality = self.jpeg_quality_spin.value()
         self.settings.processing.crop_all = self.crop_all_check.isChecked()
@@ -766,18 +721,12 @@ class SettingsDialog(QDialog):
 
         # Export
         self.settings.export.default_format = self.format_combo.currentData()
-        self.settings.export.excel_template = self.excel_template_edit.text()
-        self.settings.export.html_template = self.html_template_edit.text()
         self.settings.export.auto_export_csv = self.auto_csv_check.isChecked()
         self.settings.export.auto_export_summary = self.auto_summary_check.isChecked()
 
-        # Monitor
-        self.settings.monitor.watch_directory = self.watch_dir_edit.text()
-        self.settings.monitor.output_directory = self.monitor_output_edit.text()
-        self.settings.monitor.archive_directory = self.archive_dir_edit.text()
-        self.settings.monitor.auto_archive = self.mon_auto_archive_check.isChecked()
-        self.settings.monitor.poll_interval = self.poll_interval_spin.value()
-        self.settings.monitor.file_settle_time = self.settle_time_spin.value()
+        # Folders
+        self.settings.processing.archive_directory = self.archive_dir_edit.text().strip()
+        self.settings.ui.review_directory = self.review_dir_edit.text().strip()
 
         # AI
         self.settings.ai.provider = self.ai_provider_combo.currentData() or ""
@@ -793,13 +742,12 @@ class SettingsDialog(QDialog):
 
     def _restore_defaults(self):
         """Restore default settings."""
-        from settings_manager import ProcessingSettings, UISettings, ExportSettings, MonitorSettings, AutosaveSettings, AISettings
+        from settings_manager import ProcessingSettings, UISettings, ExportSettings, AutosaveSettings, AISettings
 
         # Reset to defaults
         self.settings.processing = ProcessingSettings()
         self.settings.ui = UISettings()
         self.settings.export = ExportSettings()
-        self.settings.monitor = MonitorSettings()
         self.settings.autosave = AutosaveSettings()
         self.settings.ai = AISettings()
 
@@ -817,26 +765,6 @@ class SettingsDialog(QDialog):
         )
         if folder:
             self.working_dir_edit.setText(folder)
-
-    def _browse_excel_template(self):
-        """Browse for Excel template."""
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Select Excel Template",
-            str(Path.home()),
-            "Excel Files (*.xlsx)"
-        )
-        if path:
-            self.excel_template_edit.setText(path)
-
-    def _browse_html_template(self):
-        """Browse for HTML template."""
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Select HTML Template",
-            str(Path.home()),
-            "HTML Files (*.html)"
-        )
-        if path:
-            self.html_template_edit.setText(path)
 
     def _pick_fancy_color(self):
         """Open color picker for default fancy color."""
@@ -857,30 +785,6 @@ class SettingsDialog(QDialog):
         )
         self.fancy_color_btn.setText(self._fancy_color)
 
-    def _browse_watch_dir(self):
-        """Browse for watch directory."""
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select Watch Directory",
-            self.watch_dir_edit.text() or str(Path.home())
-        )
-        if folder:
-            self.watch_dir_edit.setText(folder)
-            # Auto-set output if empty
-            if not self.monitor_output_edit.text():
-                self.monitor_output_edit.setText(str(Path(folder) / "fancy_bills"))
-            # Auto-set archive if empty
-            if not self.archive_dir_edit.text():
-                self.archive_dir_edit.setText(str(Path(folder) / "archive"))
-
-    def _browse_monitor_output(self):
-        """Browse for monitor output directory."""
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select Output Directory",
-            self.monitor_output_edit.text() or str(Path.home())
-        )
-        if folder:
-            self.monitor_output_edit.setText(folder)
-
     def _browse_archive_dir(self):
         """Browse for archive directory."""
         folder = QFileDialog.getExistingDirectory(
@@ -889,3 +793,12 @@ class SettingsDialog(QDialog):
         )
         if folder:
             self.archive_dir_edit.setText(folder)
+
+    def _browse_review_dir(self):
+        """Browse for review directory."""
+        folder = QFileDialog.getExistingDirectory(
+            self, "Select Review Directory",
+            self.review_dir_edit.text() or str(Path.home())
+        )
+        if folder:
+            self.review_dir_edit.setText(folder)

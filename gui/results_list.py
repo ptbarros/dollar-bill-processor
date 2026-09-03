@@ -1152,10 +1152,12 @@ class ResultsList(QWidget):
 
         note = dialog.get_note()
 
-        # Universal review folder at project root (not inside batch output)
-        project_root = Path(__file__).parent.parent
-        review_folder = project_root / "review"
-        review_folder.mkdir(exist_ok=True)
+        # Review folder: the user-configured Review Directory if set, else the
+        # writable per-user data dir (repo root in dev; ~/.config/... when frozen).
+        from resource_path import user_data_dir
+        configured = (self.settings.ui.review_directory or "").strip()
+        review_folder = Path(configured) if configured else (user_data_dir() / "review")
+        review_folder.mkdir(parents=True, exist_ok=True)
 
         # Copy files to review folder
         files_copied = []
@@ -1294,13 +1296,14 @@ class ResultsList(QWidget):
         self.batch_combo.addItem("Current Session", "")
 
         # Get archive directory from settings
-        archive_dir = self.settings.monitor.archive_directory
+        archive_dir = self.settings.processing.archive_directory
         if not archive_dir:
-            # Fall back to default location
-            archive_dir = str(Path(self.settings.monitor.watch_directory) / "archive")
+            # Fall back to the last-used input dir's archive folder
+            last_input = self.settings.ui.last_input_dir
+            archive_dir = str(Path(last_input) / "archive") if last_input else ""
 
-        archive_path = Path(archive_dir)
-        if archive_path.exists():
+        archive_path = Path(archive_dir) if archive_dir else None
+        if archive_path and archive_path.exists():
             # Find all batch directories, sorted newest first
             batch_dirs = sorted(
                 [d for d in archive_path.iterdir() if d.is_dir() and d.name.startswith("batch_")],

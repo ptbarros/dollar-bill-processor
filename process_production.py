@@ -20,15 +20,17 @@ Usage:
 
 import cv2
 import numpy as np
-import easyocr
 import re
 import json
 import math
 from pathlib import Path
-from ultralytics import YOLO
 import csv
 import time
-import torch
+# NOTE: torch and ultralytics are intentionally NOT imported at module level.
+# The default backends are ONNX Runtime (YOLO) + RapidOCR (OCR), both torch-free,
+# so the app runs without torch installed. torch/ultralytics are imported lazily
+# only when the torch YOLO fallback is used (see yolo_backend.load_detector and
+# the non-ONNX branch of ProductionProcessor.__init__).
 from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
@@ -37,6 +39,8 @@ import shutil
 import yaml
 
 from pattern_engine_v3 import PatternEngineV3 as PatternEngine
+from yolo_backend import load_detector
+from ocr_backend import load_ocr_backend
 from debug_logger import dlog
 
 
@@ -183,6 +187,17 @@ class Config:
             print(f"Reloaded config: {self.config_path}")
 
     @property
+    def active_profile_data(self) -> dict:
+        """The crop settings that are in effect: the active named crop profile if
+        any are defined, else the flat top-level config (legacy). Named profiles
+        let the user keep separate crop setups per denomination ($1 vs $5 ...)."""
+        profiles = self.data.get('crop_profiles')
+        if profiles:
+            name = self.data.get('active_crop_profile')
+            return profiles.get(name) or next(iter(profiles.values()))
+        return self.data
+
+    @property
     def crop_regions(self) -> dict:
         """Get crop regions from config or defaults."""
         if 'crops' in self.data:
@@ -202,9 +217,10 @@ class Config:
 
     @property
     def crop_order(self) -> list:
-        """Get crop order from config or defaults."""
-        if 'crop_order' in self.data:
-            return [tuple(item) for item in self.data['crop_order']]
+        """Get crop order from the active profile / config, or defaults."""
+        src = self.active_profile_data
+        if 'crop_order' in src:
+            return [tuple(item) for item in src['crop_order']]
         return [tuple(item) for item in self.DEFAULT_CROP_ORDER]
 
     @property
@@ -213,6 +229,18 @@ class Config:
         if 'options' in self.data:
             return self.data['options'].get('jpeg_quality', 95)
         return 95
+
+    @property
+    def include_serial_overlay(self) -> bool:
+        """Whether to append the legacy serial overlay crop(s). Default on."""
+        return bool(self.active_profile_data.get('include_serial_overlay', True))
+
+    @property
+    def serial_sides(self) -> str:
+        """Which serial region(s) the serial crop targets: 'auto' (highest-conf,
+        default), 'left', 'right', or 'both'. Set in the eBay Crop Manager."""
+        val = str(self.data.get('serial_sides', 'auto')).lower()
+        return val if val in ('auto', 'left', 'right', 'both') else 'auto'
 
 
 # =============================================================================
@@ -851,37 +879,45 @@ class ProductionProcessor:
     }
 
     def __init__(self, yolo_model_path: Path, use_gpu: bool = False, cfg: Optional[Config] = None,
-                 patterns_dir: Optional[Path] = None):
+                 patterns_dir: Optional[Path] = None, onnx_model_path: Optional[Path] = None):
         self.cfg = cfg or Config()  # Use provided config or create default
         self.use_gpu = use_gpu
 
-        print(f"Loading YOLOv8 model: {yolo_model_path}")
-        self.yolo_model = YOLO(str(yolo_model_path))
+        print(f"Loading YOLOv8 model: {onnx_model_path or yolo_model_path}")
+        self.yolo_model, self.use_onnx = load_detector(
+            yolo_model_path, use_gpu=use_gpu, onnx_path=onnx_model_path)
 
-        # Determine and set device explicitly
-        if use_gpu and torch.cuda.is_available():
-            try:
-                # Test actual CUDA kernel execution to catch GPU incompatibility
-                # (e.g. Blackwell sm_120 with older PyTorch that only supports up to sm_90)
-                t = torch.randn(1, 1, 3, 3, device='cuda')
-                _ = torch.nn.functional.conv2d(t, torch.randn(1, 1, 1, 1, device='cuda'))
-                del t, _
-                torch.cuda.empty_cache()
-                print(f"  Using GPU: {torch.cuda.get_device_name(0)}")
-            except Exception as e:
-                print(f"  WARNING: CUDA kernel execution failed: {e}")
-                print(f"  Your GPU may not be supported by this PyTorch version.")
-                print(f"  Try: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128")
-                print(f"  Falling back to CPU mode.")
-                self.yolo_model.to('cpu')
-                self.use_gpu = False
-                use_gpu = False
+        if self.use_onnx:
+            # ONNX Runtime picks its own execution provider (DirectML / CUDA / CPU);
+            # there is no torch device to manage here, and torch stays unimported.
+            print(f"  Using ONNX Runtime backend: {self.yolo_model.providers}")
         else:
-            self.yolo_model.to('cpu')
-            if use_gpu and not torch.cuda.is_available():
-                print(f"  WARNING: GPU requested but CUDA not available. Using CPU.")
+            # Torch YOLO fallback: import torch lazily so the default ONNX path
+            # never pulls it in. Determine and set the device explicitly.
+            import torch
+            if use_gpu and torch.cuda.is_available():
+                try:
+                    # Test actual CUDA kernel execution to catch GPU incompatibility
+                    # (e.g. Blackwell sm_120 with older PyTorch that only supports up to sm_90)
+                    t = torch.randn(1, 1, 3, 3, device='cuda')
+                    _ = torch.nn.functional.conv2d(t, torch.randn(1, 1, 1, 1, device='cuda'))
+                    del t, _
+                    torch.cuda.empty_cache()
+                    print(f"  Using GPU: {torch.cuda.get_device_name(0)}")
+                except Exception as e:
+                    print(f"  WARNING: CUDA kernel execution failed: {e}")
+                    print(f"  Your GPU may not be supported by this PyTorch version.")
+                    print(f"  Try: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128")
+                    print(f"  Falling back to CPU mode.")
+                    self.yolo_model.to('cpu')
+                    self.use_gpu = False
+                    use_gpu = False
             else:
-                print(f"  Using CPU mode.")
+                self.yolo_model.to('cpu')
+                if use_gpu and not torch.cuda.is_available():
+                    print(f"  WARNING: GPU requested but CUDA not available. Using CPU.")
+                else:
+                    print(f"  Using CPU mode.")
 
         # Print model class names and find star class dynamically
         self.star_class_id = None
@@ -901,8 +937,8 @@ class ProductionProcessor:
         # YOLO-based aligner for GUI alignment feature
         self.yolo_aligner = YOLOBillAligner(self.yolo_model)
 
-        print(f"Loading EasyOCR (GPU={use_gpu})...")
-        self.ocr_reader = easyocr.Reader(['en'], gpu=use_gpu, verbose=False)
+        self.ocr_reader = load_ocr_backend(use_gpu=use_gpu)
+        print(f"  OCR backend: {self.ocr_reader.name}")
 
         # Load pattern engine (Lua patterns)
         print(f"Loading pattern engine...")
@@ -1966,7 +2002,7 @@ class ProductionProcessor:
 
         # Helper function to extract text from a region using OCR
         def ocr_region(img: np.ndarray, boxes: list, allowlist: str, clean_func=None,
-                       extra_bottom_pad: int = 0, upscale: int = 1) -> str:
+                       extra_bottom_pad: int = 0, upscale: int = 1, detect: bool = False) -> str:
             if not boxes or img is None or img.size == 0:
                 return ''
             h, w = img.shape[:2]
@@ -1997,7 +2033,8 @@ class ProductionProcessor:
                 ocr_results = self.ocr_reader.readtext(
                     crop,
                     allowlist=allowlist,
-                    detail=1
+                    detail=1,
+                    detect=detect,  # multi-line regions (series) need the detector
                 )
                 if ocr_results:
                     # Combine all text results
@@ -2263,7 +2300,8 @@ class ProductionProcessor:
                     front_img, series_boxes,
                     'SERIES0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ ',
                     clean_series,
-                    upscale=2  # 2x upscale helps OCR detect small suffix letter
+                    upscale=2,  # 2x upscale helps OCR detect small suffix letter
+                    detect=True  # "SERIES" + year are two lines; needs text detection
                 )
 
             # Extract front plate (class 4)
@@ -2283,7 +2321,14 @@ class ProductionProcessor:
                 bx1, by1, bx2, by2, bconf = best_box
                 h, w = front_img.shape[:2]
                 pad = 5
-                crop = front_img[max(0,by1-pad):min(h,by2+pad), max(0,bx1-pad):min(w,bx2+pad)]
+                # Extra room on the right: a trailing plate digit can sit near the
+                # detected box edge and get clipped or distorted. The check letter
+                # is on the left, so widening right only helps the digits without
+                # disturbing letter detection. 15px is the sweet spot on the test
+                # batch (recovers clipped/distorted digits with zero regressions);
+                # larger values start pulling in noise as phantom digits.
+                right_pad = 15
+                crop = front_img[max(0,by1-pad):min(h,by2+pad), max(0,bx1-pad):min(w,bx2+right_pad)]
 
                 # Try contour-based detection for FW and check letter
                 contour_result = detect_check_letter_by_contour(crop)
@@ -2436,10 +2481,26 @@ class ProductionProcessor:
                 'offset_x': 0,    # X offset from anchor (positive = right)
                 'offset_y': 0,    # Y offset from anchor (positive = down)
             },
+            # Left/right serial crops: anchored to the serial_number detection,
+            # expanded to at least min_width x min_height, shifted by the offsets.
+            'serial_left': {'min_width': 500, 'min_height': 0, 'offset_x': 0, 'offset_y': 0},
+            'serial_right': {'min_width': 500, 'min_height': 0, 'offset_x': 0, 'offset_y': 0},
+            # Per-side manual overlap adjustments for the left/center/right thirds,
+            # in pixels. Positive values grow the crop toward the center of the bill
+            # so a defect near a third boundary can be pulled fully into one crop.
+            #   left.inner   = extend the LEFT crop's right edge further right
+            #   right.inner  = extend the RIGHT crop's left edge further left
+            #   center.left  = expand the CENTER crop's left edge further left
+            #   center.right = expand the CENTER crop's right edge further right
+            'thirds': {
+                'front': {'left_inner': 0, 'right_inner': 0, 'center_left': 0, 'center_right': 0},
+                'back':  {'left_inner': 0, 'right_inner': 0, 'center_left': 0, 'center_right': 0},
+            },
             'fallback_on_missing': True,
         }
-        if hasattr(self.cfg, 'data') and 'yolo_crops' in self.cfg.data:
-            config = self.cfg.data['yolo_crops']
+        src = self.cfg.active_profile_data if hasattr(self.cfg, 'active_profile_data') else getattr(self.cfg, 'data', {})
+        if 'yolo_crops' in src:
+            config = src['yolo_crops']
             # Merge with defaults
             result = defaults.copy()
             if 'padding' in config:
@@ -2448,24 +2509,33 @@ class ProductionProcessor:
                 result['front_seal'].update(config['front_seal'])
             if 'back_seal' in config:
                 result['back_seal'].update(config['back_seal'])
+            for k in ('serial_left', 'serial_right'):
+                if k in config:
+                    result[k].update(config[k])
+            if 'thirds' in config:
+                for side in ('front', 'back'):
+                    if side in config['thirds']:
+                        result['thirds'][side].update(config['thirds'][side])
             if 'fallback_on_missing' in config:
                 result['fallback_on_missing'] = config['fallback_on_missing']
             return result
         return defaults
 
     def _generate_front_seal_crop(self, img: np.ndarray, detections: dict) -> Optional[np.ndarray]:
-        """Generate front seal crop containing seal_t, series_year, RIGHT serial_number, and front_plate.
+        """Generate the front seal crop image (see _front_seal_crop_rect for geometry)."""
+        rect = self._front_seal_crop_rect(img, detections)
+        if rect is None:
+            return None
+        x1, y1, x2, y2 = rect
+        return img[y1:y2, x1:x2]
 
-        Uses YOLO detections to find actual positions of required elements.
-        Only includes the right serial number (near the treasury seal), not the left one.
-        Falls back to percentage-based crop if detections are missing.
+    def _front_seal_crop_rect(self, img: np.ndarray, detections: dict) -> Optional[tuple]:
+        """Compute the front seal crop rectangle (x1,y1,x2,y2).
 
-        Args:
-            img: Aligned front image
-            detections: Dict of detections from _detect_all_objects()
-
-        Returns:
-            Cropped image, or None if crop cannot be generated
+        Contains seal_t, series_year, RIGHT serial_number, and front_plate. Uses
+        YOLO detections to find actual positions; only the right serial (near the
+        treasury seal) is included. Falls back to the percentage-based rect if
+        detections are missing. Returns None if no rect can be produced.
         """
         config = self._get_yolo_crop_config()
         h, w = img.shape[:2]
@@ -2543,26 +2613,26 @@ class ProductionProcessor:
                     else:
                         y1 = max(0, y2 - min_height)
 
-            return img[y1:y2, x1:x2]
+            return (x1, y1, x2, y2)
 
         # Fallback to percentage-based crop if no detections
         if config['fallback_on_missing']:
-            return self.create_crop(img, 'front', 'seal')
+            return self.create_crop_rect(img, 'front', 'seal')
 
         return None
 
     def _generate_back_seal_crop(self, img: np.ndarray, detections: dict) -> Optional[np.ndarray]:
-        """Generate back seal crop using back_plate as anchor point.
+        """Generate the back seal crop image (see _back_seal_crop_rect for geometry)."""
+        rect = self._back_seal_crop_rect(img, detections)
+        if rect is None:
+            return None
+        x1, y1, x2, y2 = rect
+        return img[y1:y2, x1:x2]
 
-        Uses back_plate position as anchor, applies configured width/height
-        and offset values to position the crop area.
-
-        Args:
-            img: Aligned back image
-            detections: Dict of detections from _detect_all_objects()
-
-        Returns:
-            Cropped image, or None if crop cannot be generated
+    def _back_seal_crop_rect(self, img: np.ndarray, detections: dict) -> Optional[tuple]:
+        """Compute the back seal crop rectangle (x1,y1,x2,y2) using back_plate as
+        anchor, with configured width/height and offsets. Falls back to the
+        percentage-based rect if back_plate is missing; None if neither works.
         """
         config = self._get_yolo_crop_config()
         h, w = img.shape[:2]
@@ -2594,27 +2664,25 @@ class ProductionProcessor:
             x2 = min(w, anchor_x + crop_width)
             y2 = min(h, anchor_y)
 
-            return img[y1:y2, x1:x2]
+            return (x1, y1, x2, y2)
 
         # Fallback to percentage-based crop if no detection
         if config['fallback_on_missing']:
-            return self.create_crop(img, 'back', 'seal')
+            return self.create_crop_rect(img, 'back', 'seal')
 
         return None
 
     def _generate_thirds_crops(self, img: np.ndarray, detections: dict, side: str) -> tuple:
-        """Generate left/center/right crops ensuring serial numbers are fully visible.
+        """Generate (left, center, right) crop images (see _thirds_rects for geometry)."""
+        rects = self._thirds_rects(img, detections, side)
+        return (img[rects['left'][1]:rects['left'][3], rects['left'][0]:rects['left'][2]],
+                img[rects['center'][1]:rects['center'][3], rects['center'][0]:rects['center'][2]],
+                img[rects['right'][1]:rects['right'][3], rects['right'][0]:rects['right'][2]])
 
-        On front side, uses serial_number detections to extend crops to include full serials.
-        On back side (no serials), uses standard thirds with overlap.
-
-        Args:
-            img: Aligned image
-            detections: Dict of detections from _detect_all_objects()
-            side: 'front' or 'back'
-
-        Returns:
-            Tuple of (left_crop, center_crop, right_crop)
+    def _thirds_rects(self, img: np.ndarray, detections: dict, side: str) -> dict:
+        """Compute left/center/right crop rectangles, extending front thirds so the
+        serial numbers are fully visible. On the back (no serials) uses standard
+        thirds with overlap. Returns {'left':rect, 'center':rect, 'right':rect}.
         """
         config = self._get_yolo_crop_config()
         h, w = img.shape[:2]
@@ -2665,12 +2733,19 @@ class ProductionProcessor:
                     # Serial is on right side
                     right_start = min(right_start, int(serial[0] - w * overlap))
 
-        # Generate crops
-        left_crop = img[0:h, 0:left_end]
-        center_crop = img[0:h, center_start:center_end]
-        right_crop = img[0:h, right_start:w]
+        # Apply manual per-side overlap adjustments (pixels). Positive grows toward
+        # the bill center so a boundary-straddling defect lands fully in one crop.
+        adj = config.get('thirds', {}).get(side, {})
+        left_end = max(0, min(w, left_end + adj.get('left_inner', 0)))
+        right_start = max(0, min(w, right_start - adj.get('right_inner', 0)))
+        center_start = max(0, min(w, center_start - adj.get('center_left', 0)))
+        center_end = max(0, min(w, center_end + adj.get('center_right', 0)))
 
-        return (left_crop, center_crop, right_crop)
+        return {
+            'left': (0, 0, left_end, h),
+            'center': (center_start, 0, center_end, h),
+            'right': (right_start, 0, w, h),
+        }
 
     def _extract_fed_letter_from_seal(self, img: np.ndarray, yolo_results=None) -> Optional[str]:
         """Extract Federal Reserve letter from the seal (seal_f).
@@ -3188,7 +3263,8 @@ class ProductionProcessor:
         ocr_results = self.ocr_reader.readtext(
             img,
             allowlist='ABCDEFGHIJKLMNPQRSTUVWXY0123456789*',
-            detail=1
+            detail=1,
+            whole_image=True,  # full-image scan needs the text detector
         )
 
         candidates = []
@@ -3271,8 +3347,8 @@ class ProductionProcessor:
         best_weight = max(w for s, w, p in candidates)
         return best_letter + base[1:], best_weight
 
-    def create_crop(self, image: np.ndarray, side: str, region: str) -> np.ndarray:
-        """Create a percentage-based crop from an image."""
+    def create_crop_rect(self, image: np.ndarray, side: str, region: str) -> tuple:
+        """Return (x1, y1, x2, y2) for a percentage-based crop region."""
         h, w = image.shape[:2]
         crop_regions = self.cfg.crop_regions
         coords = crop_regions[side][region]
@@ -3281,16 +3357,76 @@ class ProductionProcessor:
         y1 = int(coords['y'] * h)
         x2 = int((coords['x'] + coords['w']) * w)
         y2 = int((coords['y'] + coords['h']) * h)
+        return (x1, y1, x2, y2)
 
+    def create_crop(self, image: np.ndarray, side: str, region: str) -> np.ndarray:
+        """Create a percentage-based crop from an image."""
+        x1, y1, x2, y2 = self.create_crop_rect(image, side, region)
         return image[y1:y2, x1:x2]
 
-    def generate_crops(self, pair: BillPair, output_dir: Path) -> list[Path]:
+    def crop_region_rect(self, img: np.ndarray, detections: dict, side: str, region: str):
+        """Return (x1,y1,x2,y2) for one crop, mirroring generate_crops() dispatch.
+
+        Used by the crop-settings preview so the box drawn on the sample bill uses
+        the exact geometry the pipeline would apply. Returns None if unavailable.
+        """
+        if region == 'seal':
+            if side == 'front':
+                return self._front_seal_crop_rect(img, detections)
+            return self._back_seal_crop_rect(img, detections)
+        if region in ('left', 'center', 'right'):
+            rects = self._thirds_rects(img, detections, side)
+            return rects.get(region)
+        if region in ('serial_left', 'serial_right'):
+            return self._serial_crop_rect(img, detections,
+                                          'left' if region == 'serial_left' else 'right')
+        return self.create_crop_rect(img, side, region)
+
+    def _serial_crop_rect(self, img: np.ndarray, detections: dict, which: str):
+        """Rect for the left/right serial crop: anchored to that serial_number
+        detection, padded, expanded to the configured min size, and shifted by the
+        configured offsets (positive x = right, positive y = up). None if missing."""
+        boxes = detections.get('serial_number') or []
+        if not boxes:
+            return None
+        by_x = sorted(boxes, key=lambda b: b[0])   # left -> right
+        box = by_x[0] if which == 'left' else by_x[-1]
+        h, w = img.shape[:2]
+        sc = self._get_yolo_crop_config().get('serial_' + which, {})
+        min_w = sc.get('min_width', 0)
+        min_h = sc.get('min_height', 0)
+        off_x = sc.get('offset_x', 0)
+        off_y = sc.get('offset_y', 0)
+        pad = 15
+        x1, y1, x2, y2 = box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad
+        x1 += off_x; x2 += off_x
+        y1 -= off_y; y2 -= off_y     # negate so positive offset = up
+        cw, ch = x2 - x1, y2 - y1
+        if min_w > 0 and cw < min_w:
+            e = (min_w - cw) // 2
+            x1 -= e; x2 += e
+        if min_h > 0 and ch < min_h:
+            e = (min_h - ch) // 2
+            y1 -= e; y2 += e
+        x1 = max(0, x1); y1 = max(0, y1); x2 = min(w, x2); y2 = min(h, y2)
+        if x2 <= x1 or y2 <= y1:
+            return None
+        return (int(x1), int(y1), int(x2), int(y2))
+
+    def generate_crops(self, pair: BillPair, output_dir: Path, name: Optional[str] = None) -> list[Path]:
         """Generate crops for a fancy bill pair using YOLO-based dynamic cropping.
 
         Uses YOLO detections to dynamically position crops based on actual element
         locations, ensuring serial numbers, seals, and other features are fully
         captured regardless of scan border spacing.
+
+        ``name`` overrides the output filename base (default: the serial number).
+        The standalone crop tool passes the source filename when serial reading is
+        off, so crops are named without needing OCR.
         """
+        file_base = name if name is not None else pair.serial
+        if not file_base:
+            file_base = pair.front_path.stem
         timing = get_timing()
         timing.start('crops')
         crop_paths = []
@@ -3343,73 +3479,82 @@ class ProductionProcessor:
 
         crop_order = self.cfg.crop_order
         jpeg_quality = self.cfg.jpeg_quality
+        # Star notes have a '*' in the serial, ILLEGAL in Windows filenames ->
+        # cv2.imwrite silently fails. Sanitize ('*' -> 'star') so crops save.
+        safe_serial = _safe_serial_for_filename(file_base)
 
-        for i, (side, region) in enumerate(crop_order, 1):
-            if side == 'front':
-                img = front_img
-                detections = front_detections
-                thirds = front_thirds
+        # Running output index: increments per file actually written, so a crop
+        # that emits multiple images (the serial crop, left+right) or one that is
+        # skipped doesn't leave gaps in the _NN numbering.
+        seq = [0]
+
+        def _write(crop_img):
+            if crop_img is None or getattr(crop_img, 'size', 1) == 0:
+                return
+            seq[0] += 1
+            path = output_dir / f"{safe_serial}_{seq[0]:02d}.jpg"
+            ok = cv2.imwrite(str(path), crop_img, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
+            if not ok:
+                dlog("crop.imwrite.FAILED", serial=pair.serial, path=str(path))
             else:
-                img = back_img
-                detections = back_detections
-                thirds = back_thirds
+                crop_paths.append(path)
+
+        serial_regions = ('serial_left', 'serial_right')
+        serial_in_order = any(tuple(c)[1] in serial_regions for c in crop_order)
+
+        for side, region in crop_order:
+            # Left/right serial crops (anchored to the serial detection, adjustable).
+            if region in serial_regions:
+                if side != 'front':
+                    continue
+                which = 'left' if region == 'serial_left' else 'right'
+                rect = self._serial_crop_rect(front_img, front_detections, which)
+                if rect is not None:
+                    x1, y1, x2, y2 = rect
+                    _write(front_img[y1:y2, x1:x2])
+                continue
+
+            if side == 'front':
+                img, detections, thirds = front_img, front_detections, front_thirds
+            else:
+                img, detections, thirds = back_img, back_detections, back_thirds
                 if img is None:
                     continue
 
             # Route to appropriate dynamic crop method
             if region == 'seal':
-                if side == 'front':
-                    crop = self._generate_front_seal_crop(img, detections)
-                else:
-                    crop = self._generate_back_seal_crop(img, detections)
+                crop = (self._generate_front_seal_crop(img, detections) if side == 'front'
+                        else self._generate_back_seal_crop(img, detections))
             elif region in ('left', 'center', 'right'):
-                if thirds is not None:
-                    crop = {'left': thirds[0], 'center': thirds[1], 'right': thirds[2]}[region]
-                else:
-                    # Fallback to percentage-based crop
-                    crop = self.create_crop(img, side, region)
+                crop = ({'left': thirds[0], 'center': thirds[1], 'right': thirds[2]}[region]
+                        if thirds is not None else self.create_crop(img, side, region))
             else:  # 'full' or any other region
                 crop = self.create_crop(img, side, region)
 
-            # Handle case where dynamic crop failed
             if crop is None:
                 crop = self.create_crop(img, side, region)
             if crop is None:
-                # Nothing to write for this region; skip rather than crash on imwrite(None)
                 dlog("crop.SKIP_no_image", serial=pair.serial, region=f"{side}/{region}")
                 continue
+            _write(crop)
 
-            # Star notes have a '*' in the serial, which is an ILLEGAL character
-            # in Windows filenames -> cv2.imwrite silently fails (returns False,
-            # no exception) and no crop file is written. Sanitize the serial so
-            # the crop actually saves; '*' becomes 'star' to stay recognizable.
-            safe_serial = _safe_serial_for_filename(pair.serial)
-            filename = f"{safe_serial}_{i:02d}.jpg"
-            crop_path = output_dir / filename
-
-            ok = cv2.imwrite(str(crop_path), crop, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
-            if not ok:
-                dlog("crop.imwrite.FAILED", serial=pair.serial, path=str(crop_path))
-            crop_paths.append(crop_path)
-
-        # Append a serial overlay crop (digit bounding boxes + pattern overlay)
-        # per selected pattern, so listings can show which pattern(s) the bill has.
-        overlay_crops = self._generate_serial_overlay_crops(front_img, front_detections, pair)
-        safe_serial = _safe_serial_for_filename(pair.serial)
-        for n, overlay_crop in enumerate(overlay_crops):
-            i = len(crop_order) + 1 + n
-            crop_path = output_dir / f"{safe_serial}_{i:02d}.jpg"
-            ok = cv2.imwrite(str(crop_path), overlay_crop, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
-            if not ok:
-                dlog("crop.imwrite.FAILED", serial=pair.serial, path=str(crop_path))
-            else:
-                crop_paths.append(crop_path)
+        # Legacy path: configs that don't list a 'serial' crop still get one
+        # appended when the toggle is on (matches pre-list-row behavior).
+        if not serial_in_order and self.cfg.include_serial_overlay:
+            for sc in self._generate_serial_overlay_crops(
+                    front_img, front_detections, pair, serial_sides=self.cfg.serial_sides):
+                _write(sc)
 
         timing.stop('crops')
         return crop_paths
 
-    def _generate_serial_overlay_crops(self, front_img, front_detections, pair):
+    def _generate_serial_overlay_crops(self, front_img, front_detections, pair, serial_sides='auto'):
         """Build serial-region overlay crops -- one per selected pattern.
+
+        ``serial_sides`` chooses which serial region(s) to crop:
+        'auto' (default) = the highest-confidence serial (original behavior);
+        'left'/'right' = the left/right serial by x-position; 'both' = both.
+        Gas-pump still targets the shifted serial(s) regardless.
 
         Mirrors the GUI preview (``preview_panel._generate_serial_region_crops``)
         via the shared ``serial_overlay.draw_serial_overlay`` so each saved crop
@@ -3453,12 +3598,19 @@ class ProductionProcessor:
         else:
             overlay_filters = [resolve_overlay_filter(None, matched_patterns, pair.pattern_override)]
 
+        # Which serial region(s) a non-gas-pump crop targets.
+        if serial_sides in ('left', 'right', 'both'):
+            by_x = sorted(serial_boxes, key=lambda b: b[0])   # left -> right
+            side_boxes = {'left': by_x[:1], 'right': by_x[-1:], 'both': by_x}[serial_sides]
+        else:
+            side_boxes = [primary_box]   # 'auto' = original highest-confidence
+
         crops = []
         for overlay_filter in overlay_filters:
             if overlay_filter == GAS_PUMP_FILTER:
                 boxes = self._gas_pump_serial_boxes(front_img, serial_boxes, gas_pump_threshold)
             else:
-                boxes = [primary_box]
+                boxes = side_boxes
             for box in boxes:
                 crop = self._render_serial_overlay(
                     front_img, box, overlay_filter, pair.serial or '',
@@ -3534,7 +3686,9 @@ class ProductionProcessor:
         input_dir: Path,
         output_dir: Path,
         verify_pairs: bool = True,
-        crop_all: bool = False
+        crop_all: bool = False,
+        progress_callback=None,
+        write_reports: bool = True
     ) -> dict:
         """
         Process all bills in a directory.
@@ -3544,6 +3698,12 @@ class ProductionProcessor:
             output_dir: Directory for fancy bill crops
             verify_pairs: Whether to verify front/back with YOLO (slower but more accurate)
             crop_all: If True, crop ALL bills regardless of fancy status
+            progress_callback: Optional callable(index, total, label) invoked once per
+                bill pair before it is processed (index is 1-based). Used by GUI wrappers
+                such as crop_tool.py to drive a progress bar; ignored by the CLI.
+            write_reports: If True (default), writes results_*.csv / summary_*.txt /
+                non_fancy_files_*.txt into input_dir. crop_tool.py passes False so a
+                simple crop run doesn't clutter the user's bill folder.
 
         Returns:
             Dictionary with processing results
@@ -3576,7 +3736,9 @@ class ProductionProcessor:
         all_results = []
         non_fancy_files = []
 
-        for pair in pairs:
+        for idx, pair in enumerate(pairs, 1):
+            if progress_callback:
+                progress_callback(idx, len(pairs), pair.front_path.name)
             timing = get_timing()
             timing.start_bill()
 
@@ -3728,8 +3890,10 @@ class ProductionProcessor:
             for p in fancy_bills:
                 print(f"  #{p.stack_position}: {p.serial} [{', '.join(p.fancy_types)}]")
 
-        # Save results
-        self._save_results(input_dir, output_dir, all_results, fancy_bills, non_fancy_files)
+        # Save results (skipped by the standalone crop tool, which shouldn't
+        # litter the user's input folder with CSV/summary/cleanup files).
+        if write_reports:
+            self._save_results(input_dir, output_dir, all_results, fancy_bills, non_fancy_files)
 
         return {
             'total': total_bills,

@@ -1,0 +1,86 @@
+name: Build Crop Tool
+
+# Standalone eBay Crop Tool (crop_tool.py) as a single self-contained Windows
+# .exe — the cropping feature WITHOUT the full app, for sharing with other
+# collectors. Kept entirely separate from the full-app "Build installers"
+# workflow so the full program is never published here.
+#
+# Push a `croptool-v*` tag to build AND publish a GitHub Release containing only
+# the crop-tool .exe. workflow_dispatch builds the artifact for testing without
+# creating a release.
+on:
+  push:
+    tags: ['croptool-v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies (OpenVINO, torch-free)
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # OpenVINO edition: YOLO can use the Intel iGPU, graceful CPU fallback
+          # elsewhere. Same onnxruntime import name; collect_all bundles the DLLs.
+          pip uninstall -y onnxruntime onnxruntime-gpu onnxruntime-directml || true
+          pip install "onnxruntime-openvino>=1.17.0"
+          python -c "import onnxruntime as o; assert 'OpenVINOExecutionProvider' in o.get_available_providers()"
+          # crop_tool.spec excludes torch/ultralytics; drop the extra Qt binding.
+          pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
+          pip install pyinstaller
+
+      - name: Build onedir crop tool (PyInstaller)
+        # Spec copies best.onnx -> detector.bin (obscured; no best.pt shipped).
+        run: pyinstaller --noconfirm --clean crop_tool.spec
+
+      - name: Read app version
+        id: ver
+        shell: bash
+        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} installer\DollarBillCropTool.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crop-tool-windows
+          path: dist/DollarBillCropTool-*-setup.exe
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/croptool-v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: crop-tool-windows
+          path: artifacts
+      - name: Publish Crop Tool release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*-setup.exe
+          name: "Dollar Bill Crop Tool ${{ github.ref_name }}"
+          body: |
+            Standalone Crop Tool — crop a folder of bill scans using your Crop
+            Manager settings, without the full app.
+
+            Download `DollarBillCropTool-*-setup.exe` below and run the installer
+            (Start-menu shortcut + uninstaller, per-user, no admin needed). Windows
+            may show a SmartScreen warning for an unsigned app (More info → Run
+            anyway).
+          # Mark as pre-release so the crop tool never becomes the repo's
+          # "Latest" release (that's the full app). Flip to false for a final one.
+          prerelease: true
