@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec for the CUDA edition (NVIDIA GPU, torch + EasyOCR).
 
-Unlike the default torch-free build (DollarBillProcessor.spec), this bundles the
+Unlike the default torch-free build (DollarDetective.spec), this bundles the
 full torch/ultralytics/easyocr stack so YOLO detection and OCR both run on the
 CUDA GPU -- the fast path proven on the RTX box (~33s/100 bills). A runtime hook
 forces DBP_FORCE_TORCH=1 + DBP_OCR=easy. Large bundle (CUDA libs come with torch).
@@ -64,7 +64,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='DollarBillProcessor',
+    name='DollarDetective',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -78,5 +78,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name='DollarBillProcessor',
+    name='DollarDetective',
 )

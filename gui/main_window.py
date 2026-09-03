@@ -1,5 +1,5 @@
 """
-Main Window - Dollar Bill Processor GUI
+Main Window - Dollar Detective GUI
 The central window containing all GUI components.
 """
 
@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
         self._setup_autosave_timer()
         self._apply_settings()  # Apply font size and other settings
 
-        self.setWindowTitle("Dollar Bill Processor")
+        self.setWindowTitle("Dollar Detective")
 
         # Check for recovery on startup (after UI is ready)
         QTimer.singleShot(100, self._check_for_recovery)
@@ -1192,8 +1192,8 @@ class MainWindow(QMainWindow):
     def _on_about(self):
         """Show about dialog."""
         QMessageBox.about(
-            self, "About Dollar Bill Processor",
-            f"Dollar Bill Processor v{get_version_string()}\n\n"
+            self, "About Dollar Detective",
+            f"Dollar Detective v{get_version_string()}\n\n"
             "Automated detection of fancy serial numbers\n"
             "on US currency bills.\n\n"
             "Features:\n"
@@ -1956,8 +1956,8 @@ def run_gui():
     print(f"[DollarBill] Debug log: {get_log_path()}")
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Dollar Bill Processor")
-    app.setOrganizationName("DollarBillProcessor")
+    app.setApplicationName("Dollar Detective")
+    app.setOrganizationName("DollarDetective")
 
     # App / window / taskbar icon (bundled under assets/).
     from PySide6.QtGui import QIcon

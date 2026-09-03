@@ -1,5 +1,5 @@
 """
-Theme Manager - Dark/Light theme support for the Dollar Bill Processor.
+Theme Manager - Dark/Light theme support for the Dollar Detective.
 
 Provides cross-platform theming using Qt's Fusion style with custom palettes.
 """

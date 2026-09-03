@@ -37,7 +37,7 @@ jobs:
           pip install pyinstaller
 
       - name: Build onedir (PyInstaller)
-        run: pyinstaller --noconfirm --clean DollarBillProcessor.spec
+        run: pyinstaller --noconfirm --clean DollarDetective.spec
 
       - name: Read app version
         id: ver
@@ -48,12 +48,12 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} installer\DollarBillProcessor.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} installer\DollarDetective.iss
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: dist/DollarBillProcessor-*-setup.exe
+          path: dist/DollarDetective-*-setup.exe
           if-no-files-found: error
 
   windows-cuda:
@@ -83,7 +83,7 @@ jobs:
           pip cache purge || true
 
       - name: Build onedir (PyInstaller, CUDA spec)
-        run: pyinstaller --noconfirm --clean DollarBillProcessor-cuda.spec
+        run: pyinstaller --noconfirm --clean DollarDetective-cuda.spec
 
       - name: Read app version
         id: ver
@@ -94,12 +94,12 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} /DEditionTag=-cuda "/DEditionName= (CUDA)" installer\DollarBillProcessor.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} /DEditionTag=-cuda "/DEditionName= (CUDA)" installer\DollarDetective.iss
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer-cuda
-          path: dist/DollarBillProcessor-*-cuda-setup.exe
+          path: dist/DollarDetective-*-cuda-setup.exe
           if-no-files-found: error
 
   windows-directml:
@@ -126,7 +126,7 @@ jobs:
           pip install pyinstaller
 
       - name: Build onedir (PyInstaller)
-        run: pyinstaller --noconfirm --clean DollarBillProcessor.spec
+        run: pyinstaller --noconfirm --clean DollarDetective.spec
 
       - name: Read app version
         id: ver
@@ -137,12 +137,12 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} /DEditionTag=-directml "/DEditionName= (DirectML)" installer\DollarBillProcessor.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} /DEditionTag=-directml "/DEditionName= (DirectML)" installer\DollarDetective.iss
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer-directml
-          path: dist/DollarBillProcessor-*-directml-setup.exe
+          path: dist/DollarDetective-*-directml-setup.exe
           if-no-files-found: error
 
   linux:
@@ -164,13 +164,13 @@ jobs:
 
       - name: Build onedir + AppImage
         run: |
-          pyinstaller --noconfirm --clean DollarBillProcessor.spec
+          pyinstaller --noconfirm --clean DollarDetective.spec
           bash tools/build_appimage.sh
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux-appimage
-          path: dist/DollarBillProcessor-x86_64.AppImage
+          path: dist/DollarDetective-x86_64.AppImage
           if-no-files-found: error
 
   release:

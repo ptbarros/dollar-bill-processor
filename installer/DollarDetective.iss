@@ -1,9 +1,9 @@
-; Inno Setup script for Dollar Bill Processor (Windows installer).
-; Packages the PyInstaller onedir (dist\DollarBillProcessor\) into a setup .exe
+; Inno Setup script for Dollar Detective (Windows installer).
+; Packages the PyInstaller onedir (dist\DollarDetective\) into a setup .exe
 ; with Start-menu + optional desktop shortcuts and an uninstaller.
-; Build (in CI): ISCC /DMyAppVersion=1.4.0 installer\DollarBillProcessor.iss
+; Build (in CI): ISCC /DMyAppVersion=1.4.0 installer\DollarDetective.iss
 
-#define MyAppExeName "DollarBillProcessor.exe"
+#define MyAppExeName "DollarDetective.exe"
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0"
 #endif
@@ -17,13 +17,13 @@
 #ifndef EditionName
   #define EditionName ""
 #endif
-#define MyAppName "Dollar Bill Processor" + EditionName
+#define MyAppName "Dollar Detective" + EditionName
 
 [Setup]
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher=Paul Barros
-DefaultDirName={autopf}\DollarBillProcessor{#EditionTag}
+DefaultDirName={autopf}\DollarDetective{#EditionTag}
 DefaultGroupName={#MyAppName}
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -31,7 +31,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=..\assets\icon.ico
 ; Paths are relative to this .iss file (installer/), so reach up to the repo root.
 OutputDir=..\dist
-OutputBaseFilename=DollarBillProcessor-{#MyAppVersion}{#EditionTag}-setup
+OutputBaseFilename=DollarDetective-{#MyAppVersion}{#EditionTag}-setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -39,12 +39,14 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 WizardStyle=modern
 DisableProgramGroupPage=yes
+; Show the "Select Destination Location" page so users can choose the install dir.
+DisableDirPage=no
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
 
 [Files]
-Source: "..\dist\DollarBillProcessor\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\dist\DollarDetective\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

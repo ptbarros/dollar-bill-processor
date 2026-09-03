@@ -33,7 +33,10 @@ def user_data_dir() -> Path:
             base = Path.home() / "Library" / "Application Support"
         else:
             base = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
-        d = base / "DollarBillProcessor"
+        d = base / "DollarDetective"
+        # App was renamed DollarBillProcessor -> Dollar Detective; move an
+        # existing user-data dir across so upgraders keep their settings.
+        _migrate_legacy_user_data(base / "DollarBillProcessor", d)
     else:
         d = Path(__file__).resolve().parent
     try:
@@ -41,3 +44,19 @@ def user_data_dir() -> Path:
     except Exception:
         pass
     return d
+
+
+def _migrate_legacy_user_data(old: Path, new: Path) -> None:
+    """One-time move of the pre-rename user-data dir (DollarBillProcessor ->
+    DollarDetective) so upgrading users keep their settings, corrections, saved
+    patterns and session recovery. Runs only when the old dir exists and the new
+    one does not yet; any failure is swallowed so it can never block startup.
+    """
+    try:
+        if new.exists() or not old.is_dir():
+            return
+        import shutil
+        new.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(old), str(new))
+    except Exception:
+        pass

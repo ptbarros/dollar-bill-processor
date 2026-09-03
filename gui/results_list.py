@@ -290,7 +290,7 @@ class ResultsList(QWidget):
         """Restore the saved column layout (order + widths + visibility) via
         QHeaderView.restoreState, or apply defaults if there is no compatible
         saved layout."""
-        settings = QSettings("DollarBillProcessor", "ResultsList")
+        settings = QSettings("DollarDetective", "ResultsList")
         blob = settings.value("header_state")
         saved_cols = settings.value("header_state_columns", 0, type=int)
         saved_ver = settings.value("header_state_version", 0, type=int)
@@ -323,7 +323,7 @@ class ResultsList(QWidget):
 
     def _save_header_state(self, *args):
         """Persist the full column layout (order + widths + visibility)."""
-        settings = QSettings("DollarBillProcessor", "ResultsList")
+        settings = QSettings("DollarDetective", "ResultsList")
         settings.setValue("header_state", self.tree.header().saveState())
         settings.setValue("header_state_columns", self.tree.columnCount())
         settings.setValue("header_state_version", _HEADER_STATE_VERSION)
