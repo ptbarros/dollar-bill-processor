@@ -417,6 +417,8 @@ class EbayCropDialog(QDialog):
         """Width/height/offset settings for one serial crop (mirrors the seals)."""
         if not hasattr(self, 'serial_spins'):
             self.serial_spins = {}
+        if not hasattr(self, 'serial_overlay_cbs'):
+            self.serial_overlay_cbs = {}
         box = QGroupBox(title)
         lay = QHBoxLayout(box)
         spins = {}
@@ -435,6 +437,17 @@ class EbayCropDialog(QDialog):
         add("Height:", 'min_height', 0, 2000, "Minimum crop height (0 = natural size).")
         add("Offset X:", 'offset_x', -500, 500, "Positive = shift right.")
         add("Offset Y:", 'offset_y', -500, 500, "Positive = shift up.")
+
+        overlay_cb = QCheckBox("Draw pattern overlay")
+        overlay_cb.setToolTip(
+            "During processing, draw the set-pattern overlay on this serial crop —\n"
+            "one crop per pattern chosen via right-click \"Set Pattern(s)…\" in the\n"
+            "results list. Off = a plain crop of the serial. (No effect on batch/\n"
+            "standalone crops, which have no set pattern.)")
+        overlay_cb.toggled.connect(lambda _=False, w=which: self._on_serial_setting_changed(w))
+        lay.addWidget(overlay_cb)
+        self.serial_overlay_cbs[which] = overlay_cb
+
         lay.addStretch()
         self.serial_spins[which] = spins
         box.setVisible(False)
@@ -446,6 +459,7 @@ class EbayCropDialog(QDialog):
         node = self.config.setdefault('yolo_crops', {}).setdefault('serial_' + which, {})
         for key, sp in self.serial_spins[which].items():
             node[key] = sp.value()
+        node['overlay'] = self.serial_overlay_cbs[which].isChecked()
         self._refresh_preview()
 
     def _load_settings(self):
@@ -544,6 +558,7 @@ class EbayCropDialog(QDialog):
             spins['min_height'].setValue(sc.get('min_height', 0))
             spins['offset_x'].setValue(sc.get('offset_x', 0))
             spins['offset_y'].setValue(sc.get('offset_y', 0))
+            self.serial_overlay_cbs[which].setChecked(bool(sc.get('overlay', False)))
         self._loading_serial = False
 
         # Update order numbers based on enabled state

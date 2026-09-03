@@ -3413,6 +3413,47 @@ class ProductionProcessor:
             return None
         return (int(x1), int(y1), int(x2), int(y2))
 
+    def _serial_overlay_crops_for_side(self, front_img, front_detections, pair, which):
+        """Overlaid serial crops for ONE side ('left'/'right'): one crop per set
+        pattern (``pair.pattern_overrides``, else the resolved top pattern), drawn
+        on that side's serial box via the shared ``draw_serial_overlay``. Backs the
+        per-serial "draw pattern overlay" toggle. GAS_PUMP maps to the deviation-
+        coloring mode and is drawn on this side's box (so it shows whether THIS
+        serial is the shifted one)."""
+        from serial_overlay import resolve_overlay_filter, GAS_PUMP_FILTER
+
+        if front_img is None or not front_detections:
+            return []
+        serial_boxes = front_detections.get('serial_number') or []
+        if not serial_boxes:
+            return []
+        by_x = sorted(serial_boxes, key=lambda b: b[0])   # left -> right
+        side_box = by_x[0] if which == 'left' else by_x[-1]
+        matched_patterns = list(pair.fancy_types or [])
+
+        try:
+            gas_pump_threshold = self.pattern_engine.get_gas_pump_threshold()
+        except Exception:
+            gas_pump_threshold = 3.5
+
+        def _to_filter(p):
+            return GAS_PUMP_FILTER if str(p).upper() == "GAS_PUMP" else p
+
+        overrides = [p for p in (pair.pattern_overrides or []) if p]
+        if overrides:
+            overlay_filters = [_to_filter(p) for p in overrides]
+        else:
+            overlay_filters = [resolve_overlay_filter(None, matched_patterns, pair.pattern_override)]
+
+        crops = []
+        for overlay_filter in overlay_filters:
+            crop = self._render_serial_overlay(
+                front_img, side_box, overlay_filter, pair.serial or '',
+                matched_patterns, gas_pump_threshold)
+            if crop is not None:
+                crops.append(crop)
+        return crops
+
     def generate_crops(self, pair: BillPair, output_dir: Path, name: Optional[str] = None) -> list[Path]:
         """Generate crops for a fancy bill pair using YOLO-based dynamic cropping.
 
@@ -3508,10 +3549,20 @@ class ProductionProcessor:
                 if side != 'front':
                     continue
                 which = 'left' if region == 'serial_left' else 'right'
-                rect = self._serial_crop_rect(front_img, front_detections, which)
-                if rect is not None:
-                    x1, y1, x2, y2 = rect
-                    _write(front_img[y1:y2, x1:x2])
+                # Per-serial "draw pattern overlay" toggle: when on, this side's
+                # crop expands to one overlaid image per set pattern (from the
+                # right-click "Set Pattern(s)"); otherwise a plain anchored crop.
+                overlay_on = bool(self._get_yolo_crop_config()
+                                  .get('serial_' + which, {}).get('overlay', False))
+                if overlay_on:
+                    for sc in self._serial_overlay_crops_for_side(
+                            front_img, front_detections, pair, which):
+                        _write(sc)
+                else:
+                    rect = self._serial_crop_rect(front_img, front_detections, which)
+                    if rect is not None:
+                        x1, y1, x2, y2 = rect
+                        _write(front_img[y1:y2, x1:x2])
                 continue
 
             if side == 'front':
