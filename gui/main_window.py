@@ -1084,7 +1084,8 @@ class MainWindow(QMainWindow):
         else:
             config = {}
 
-        dialog = EbayCropDialog(config, self)
+        preview_ctx = self._build_crop_preview_ctx()
+        dialog = EbayCropDialog(config, self, preview_ctx=preview_ctx)
         if dialog.exec():
             # Save updated config to the writable location
             updated_config = dialog.get_config()
@@ -1095,6 +1096,35 @@ class MainWindow(QMainWindow):
                 self, "Settings Saved",
                 "Crop settings have been saved.\nChanges will apply to future processing."
             )
+
+    def _build_crop_preview_ctx(self):
+        """Build a crop-settings preview from the currently selected bill, reusing
+        the already-loaded processor. Returns None if unavailable — never forces a
+        model load just to preview."""
+        processor = self.processor
+        if not processor and getattr(self, 'processing_thread', None):
+            processor = self.processing_thread.processor
+        if not processor:
+            return None
+        result = getattr(self.preview_panel, 'current_result', None)
+        if not result:
+            return None
+        front = result.get('front_file')
+        back = result.get('back_file')
+        if not front:
+            return None
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QApplication
+        from crop_preview import build_context_from_paths
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            return build_context_from_paths(
+                processor, Path(front), Path(back) if back else None)
+        except Exception as e:
+            print(f"Crop preview unavailable: {e}")
+            return None
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def _toggle_review_filter(self, checked: bool):
         """Toggle showing only review items."""

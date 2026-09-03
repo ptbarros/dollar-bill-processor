@@ -78,3 +78,6 @@ temp_*.jpg
 # PyInstaller build outputs
 build/
 dist/
+
+# Crop tool build artifact (obscured model copy)
+detector.bin

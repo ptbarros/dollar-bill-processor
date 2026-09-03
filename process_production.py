@@ -861,12 +861,13 @@ class ProductionProcessor:
     }
 
     def __init__(self, yolo_model_path: Path, use_gpu: bool = False, cfg: Optional[Config] = None,
-                 patterns_dir: Optional[Path] = None):
+                 patterns_dir: Optional[Path] = None, onnx_model_path: Optional[Path] = None):
         self.cfg = cfg or Config()  # Use provided config or create default
         self.use_gpu = use_gpu
 
-        print(f"Loading YOLOv8 model: {yolo_model_path}")
-        self.yolo_model, self.use_onnx = load_detector(yolo_model_path, use_gpu=use_gpu)
+        print(f"Loading YOLOv8 model: {onnx_model_path or yolo_model_path}")
+        self.yolo_model, self.use_onnx = load_detector(
+            yolo_model_path, use_gpu=use_gpu, onnx_path=onnx_model_path)
 
         if self.use_onnx:
             # ONNX Runtime picks its own execution provider (DirectML / CUDA / CPU);
@@ -2462,6 +2463,17 @@ class ProductionProcessor:
                 'offset_x': 0,    # X offset from anchor (positive = right)
                 'offset_y': 0,    # Y offset from anchor (positive = down)
             },
+            # Per-side manual overlap adjustments for the left/center/right thirds,
+            # in pixels. Positive values grow the crop toward the center of the bill
+            # so a defect near a third boundary can be pulled fully into one crop.
+            #   left.inner   = extend the LEFT crop's right edge further right
+            #   right.inner  = extend the RIGHT crop's left edge further left
+            #   center.left  = expand the CENTER crop's left edge further left
+            #   center.right = expand the CENTER crop's right edge further right
+            'thirds': {
+                'front': {'left_inner': 0, 'right_inner': 0, 'center_left': 0, 'center_right': 0},
+                'back':  {'left_inner': 0, 'right_inner': 0, 'center_left': 0, 'center_right': 0},
+            },
             'fallback_on_missing': True,
         }
         if hasattr(self.cfg, 'data') and 'yolo_crops' in self.cfg.data:
@@ -2474,24 +2486,30 @@ class ProductionProcessor:
                 result['front_seal'].update(config['front_seal'])
             if 'back_seal' in config:
                 result['back_seal'].update(config['back_seal'])
+            if 'thirds' in config:
+                for side in ('front', 'back'):
+                    if side in config['thirds']:
+                        result['thirds'][side].update(config['thirds'][side])
             if 'fallback_on_missing' in config:
                 result['fallback_on_missing'] = config['fallback_on_missing']
             return result
         return defaults
 
     def _generate_front_seal_crop(self, img: np.ndarray, detections: dict) -> Optional[np.ndarray]:
-        """Generate front seal crop containing seal_t, series_year, RIGHT serial_number, and front_plate.
+        """Generate the front seal crop image (see _front_seal_crop_rect for geometry)."""
+        rect = self._front_seal_crop_rect(img, detections)
+        if rect is None:
+            return None
+        x1, y1, x2, y2 = rect
+        return img[y1:y2, x1:x2]
 
-        Uses YOLO detections to find actual positions of required elements.
-        Only includes the right serial number (near the treasury seal), not the left one.
-        Falls back to percentage-based crop if detections are missing.
+    def _front_seal_crop_rect(self, img: np.ndarray, detections: dict) -> Optional[tuple]:
+        """Compute the front seal crop rectangle (x1,y1,x2,y2).
 
-        Args:
-            img: Aligned front image
-            detections: Dict of detections from _detect_all_objects()
-
-        Returns:
-            Cropped image, or None if crop cannot be generated
+        Contains seal_t, series_year, RIGHT serial_number, and front_plate. Uses
+        YOLO detections to find actual positions; only the right serial (near the
+        treasury seal) is included. Falls back to the percentage-based rect if
+        detections are missing. Returns None if no rect can be produced.
         """
         config = self._get_yolo_crop_config()
         h, w = img.shape[:2]
@@ -2569,26 +2587,26 @@ class ProductionProcessor:
                     else:
                         y1 = max(0, y2 - min_height)
 
-            return img[y1:y2, x1:x2]
+            return (x1, y1, x2, y2)
 
         # Fallback to percentage-based crop if no detections
         if config['fallback_on_missing']:
-            return self.create_crop(img, 'front', 'seal')
+            return self.create_crop_rect(img, 'front', 'seal')
 
         return None
 
     def _generate_back_seal_crop(self, img: np.ndarray, detections: dict) -> Optional[np.ndarray]:
-        """Generate back seal crop using back_plate as anchor point.
+        """Generate the back seal crop image (see _back_seal_crop_rect for geometry)."""
+        rect = self._back_seal_crop_rect(img, detections)
+        if rect is None:
+            return None
+        x1, y1, x2, y2 = rect
+        return img[y1:y2, x1:x2]
 
-        Uses back_plate position as anchor, applies configured width/height
-        and offset values to position the crop area.
-
-        Args:
-            img: Aligned back image
-            detections: Dict of detections from _detect_all_objects()
-
-        Returns:
-            Cropped image, or None if crop cannot be generated
+    def _back_seal_crop_rect(self, img: np.ndarray, detections: dict) -> Optional[tuple]:
+        """Compute the back seal crop rectangle (x1,y1,x2,y2) using back_plate as
+        anchor, with configured width/height and offsets. Falls back to the
+        percentage-based rect if back_plate is missing; None if neither works.
         """
         config = self._get_yolo_crop_config()
         h, w = img.shape[:2]
@@ -2620,27 +2638,25 @@ class ProductionProcessor:
             x2 = min(w, anchor_x + crop_width)
             y2 = min(h, anchor_y)
 
-            return img[y1:y2, x1:x2]
+            return (x1, y1, x2, y2)
 
         # Fallback to percentage-based crop if no detection
         if config['fallback_on_missing']:
-            return self.create_crop(img, 'back', 'seal')
+            return self.create_crop_rect(img, 'back', 'seal')
 
         return None
 
     def _generate_thirds_crops(self, img: np.ndarray, detections: dict, side: str) -> tuple:
-        """Generate left/center/right crops ensuring serial numbers are fully visible.
+        """Generate (left, center, right) crop images (see _thirds_rects for geometry)."""
+        rects = self._thirds_rects(img, detections, side)
+        return (img[rects['left'][1]:rects['left'][3], rects['left'][0]:rects['left'][2]],
+                img[rects['center'][1]:rects['center'][3], rects['center'][0]:rects['center'][2]],
+                img[rects['right'][1]:rects['right'][3], rects['right'][0]:rects['right'][2]])
 
-        On front side, uses serial_number detections to extend crops to include full serials.
-        On back side (no serials), uses standard thirds with overlap.
-
-        Args:
-            img: Aligned image
-            detections: Dict of detections from _detect_all_objects()
-            side: 'front' or 'back'
-
-        Returns:
-            Tuple of (left_crop, center_crop, right_crop)
+    def _thirds_rects(self, img: np.ndarray, detections: dict, side: str) -> dict:
+        """Compute left/center/right crop rectangles, extending front thirds so the
+        serial numbers are fully visible. On the back (no serials) uses standard
+        thirds with overlap. Returns {'left':rect, 'center':rect, 'right':rect}.
         """
         config = self._get_yolo_crop_config()
         h, w = img.shape[:2]
@@ -2691,12 +2707,19 @@ class ProductionProcessor:
                     # Serial is on right side
                     right_start = min(right_start, int(serial[0] - w * overlap))
 
-        # Generate crops
-        left_crop = img[0:h, 0:left_end]
-        center_crop = img[0:h, center_start:center_end]
-        right_crop = img[0:h, right_start:w]
+        # Apply manual per-side overlap adjustments (pixels). Positive grows toward
+        # the bill center so a boundary-straddling defect lands fully in one crop.
+        adj = config.get('thirds', {}).get(side, {})
+        left_end = max(0, min(w, left_end + adj.get('left_inner', 0)))
+        right_start = max(0, min(w, right_start - adj.get('right_inner', 0)))
+        center_start = max(0, min(w, center_start - adj.get('center_left', 0)))
+        center_end = max(0, min(w, center_end + adj.get('center_right', 0)))
 
-        return (left_crop, center_crop, right_crop)
+        return {
+            'left': (0, 0, left_end, h),
+            'center': (center_start, 0, center_end, h),
+            'right': (right_start, 0, w, h),
+        }
 
     def _extract_fed_letter_from_seal(self, img: np.ndarray, yolo_results=None) -> Optional[str]:
         """Extract Federal Reserve letter from the seal (seal_f).
@@ -3298,8 +3321,8 @@ class ProductionProcessor:
         best_weight = max(w for s, w, p in candidates)
         return best_letter + base[1:], best_weight
 
-    def create_crop(self, image: np.ndarray, side: str, region: str) -> np.ndarray:
-        """Create a percentage-based crop from an image."""
+    def create_crop_rect(self, image: np.ndarray, side: str, region: str) -> tuple:
+        """Return (x1, y1, x2, y2) for a percentage-based crop region."""
         h, w = image.shape[:2]
         crop_regions = self.cfg.crop_regions
         coords = crop_regions[side][region]
@@ -3308,8 +3331,27 @@ class ProductionProcessor:
         y1 = int(coords['y'] * h)
         x2 = int((coords['x'] + coords['w']) * w)
         y2 = int((coords['y'] + coords['h']) * h)
+        return (x1, y1, x2, y2)
 
+    def create_crop(self, image: np.ndarray, side: str, region: str) -> np.ndarray:
+        """Create a percentage-based crop from an image."""
+        x1, y1, x2, y2 = self.create_crop_rect(image, side, region)
         return image[y1:y2, x1:x2]
+
+    def crop_region_rect(self, img: np.ndarray, detections: dict, side: str, region: str):
+        """Return (x1,y1,x2,y2) for one crop, mirroring generate_crops() dispatch.
+
+        Used by the crop-settings preview so the box drawn on the sample bill uses
+        the exact geometry the pipeline would apply. Returns None if unavailable.
+        """
+        if region == 'seal':
+            if side == 'front':
+                return self._front_seal_crop_rect(img, detections)
+            return self._back_seal_crop_rect(img, detections)
+        if region in ('left', 'center', 'right'):
+            rects = self._thirds_rects(img, detections, side)
+            return rects.get(region)
+        return self.create_crop_rect(img, side, region)
 
     def generate_crops(self, pair: BillPair, output_dir: Path) -> list[Path]:
         """Generate crops for a fancy bill pair using YOLO-based dynamic cropping.
@@ -3563,7 +3605,9 @@ class ProductionProcessor:
         input_dir: Path,
         output_dir: Path,
         verify_pairs: bool = True,
-        crop_all: bool = False
+        crop_all: bool = False,
+        progress_callback=None,
+        write_reports: bool = True
     ) -> dict:
         """
         Process all bills in a directory.
@@ -3573,6 +3617,12 @@ class ProductionProcessor:
             output_dir: Directory for fancy bill crops
             verify_pairs: Whether to verify front/back with YOLO (slower but more accurate)
             crop_all: If True, crop ALL bills regardless of fancy status
+            progress_callback: Optional callable(index, total, label) invoked once per
+                bill pair before it is processed (index is 1-based). Used by GUI wrappers
+                such as crop_tool.py to drive a progress bar; ignored by the CLI.
+            write_reports: If True (default), writes results_*.csv / summary_*.txt /
+                non_fancy_files_*.txt into input_dir. crop_tool.py passes False so a
+                simple crop run doesn't clutter the user's bill folder.
 
         Returns:
             Dictionary with processing results
@@ -3605,7 +3655,9 @@ class ProductionProcessor:
         all_results = []
         non_fancy_files = []
 
-        for pair in pairs:
+        for idx, pair in enumerate(pairs, 1):
+            if progress_callback:
+                progress_callback(idx, len(pairs), pair.front_path.name)
             timing = get_timing()
             timing.start_bill()
 
@@ -3757,8 +3809,10 @@ class ProductionProcessor:
             for p in fancy_bills:
                 print(f"  #{p.stack_position}: {p.serial} [{', '.join(p.fancy_types)}]")
 
-        # Save results
-        self._save_results(input_dir, output_dir, all_results, fancy_bills, non_fancy_files)
+        # Save results (skipped by the standalone crop tool, which shouldn't
+        # litter the user's input folder with CSV/summary/cleanup files).
+        if write_reports:
+            self._save_results(input_dir, output_dir, all_results, fancy_bills, non_fancy_files)
 
         return {
             'total': total_bills,

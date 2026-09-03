@@ -215,14 +215,19 @@ class OnnxYoloDetector:
         return [_Result([_Box(*d) for d in dets])]
 
 
-def load_detector(yolo_model_path, use_gpu=False):
+def load_detector(yolo_model_path, use_gpu=False, onnx_path=None):
     """Load the ONNX detector when possible, else fall back to ultralytics YOLO.
 
-    Returns (detector, is_onnx). ONNX is chosen when a sibling ``.onnx`` model
-    exists and onnxruntime imports, unless ``DBP_FORCE_TORCH=1`` is set.
+    Returns (detector, is_onnx). ONNX is chosen when the model exists and
+    onnxruntime imports, unless ``DBP_FORCE_TORCH=1`` is set.
+
+    ``onnx_path`` may be given explicitly to load an ONNX model from an arbitrary
+    path/name (e.g. an obscured ``detector.bin`` in a packaged build); otherwise
+    the sibling ``.onnx`` of ``yolo_model_path`` is used. onnxruntime loads by
+    content, so the file extension is irrelevant.
     """
     pt_path = Path(yolo_model_path)
-    onnx_path = pt_path.with_suffix(".onnx")
+    onnx_path = Path(onnx_path) if onnx_path else pt_path.with_suffix(".onnx")
     force_torch = os.environ.get("DBP_FORCE_TORCH") == "1"
 
     if onnx_path.exists() and not force_torch:
