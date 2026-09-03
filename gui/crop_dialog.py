@@ -46,6 +46,7 @@ class EbayCropDialog(QDialog):
         self.full_config = config if isinstance(config, dict) else {}
         self.preview_ctx = preview_ctx
         self._preview_cache = None   # (bill_bgr, rect, crop_bgr) for re-render on resize
+        self._preview_initialized = False  # first render is deferred to showEvent
         self._init_profiles()        # sets self.profiles, self.active_name, self.config
         self.setWindowTitle("Crop Manager")
         self.setMinimumSize(1080 if preview_ctx else 700, 560)
@@ -92,7 +93,7 @@ class EbayCropDialog(QDialog):
 
     def _save_as_profile(self):
         import copy
-        name, ok = QInputDialog.getText(self, "Save Profile As", "Profile name (e.g. $5 bills):")
+        name, ok = QInputDialog.getText(self, "New Profile", "Profile name (e.g. $5 bills):")
         name = (name or "").strip()
         if not ok or not name:
             return
@@ -145,11 +146,13 @@ class EbayCropDialog(QDialog):
         self.profile_combo.setToolTip("Switch between saved crop setups (e.g. $1, $5).")
         self.profile_combo.currentTextChanged.connect(self._on_profile_combo)
         prof.addWidget(self.profile_combo, 1)
-        saveas_btn = QPushButton("Save As…"); saveas_btn.clicked.connect(self._save_as_profile)
-        saveas_btn.setToolTip("Save the current settings as a new named profile.")
+        new_profile_btn = QPushButton("New Profile…"); new_profile_btn.clicked.connect(self._save_as_profile)
+        new_profile_btn.setToolTip("Create a new profile, seeded from the current settings.\n"
+                                   "(Your edits to the current profile are saved automatically — "
+                                   "you don't need this to keep changes.)")
         rename_btn = QPushButton("Rename"); rename_btn.clicked.connect(self._rename_profile)
         del_btn = QPushButton("Delete"); del_btn.clicked.connect(self._delete_profile)
-        prof.addWidget(saveas_btn); prof.addWidget(rename_btn); prof.addWidget(del_btn)
+        prof.addWidget(new_profile_btn); prof.addWidget(rename_btn); prof.addWidget(del_btn)
         layout.addLayout(prof)
 
         # Instructions
@@ -382,6 +385,19 @@ class EbayCropDialog(QDialog):
         self.preview_info.setStyleSheet("color:#888")
         v.addWidget(self.preview_info)
         return panel
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # The first preview render happens during __init__, before the dialog has
+        # its final laid-out geometry, so the labels report oversized sizeHint
+        # widths; the pixmap is scaled too large and then clipped to the real
+        # (smaller) label -- which looks like a zoomed-in crop of the bill's
+        # middle. Re-render once the layout has settled so the full bill fits
+        # from the first open (previously only a manual resize/maximize fixed it).
+        if not self._preview_initialized:
+            self._preview_initialized = True
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, self._refresh_preview)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
