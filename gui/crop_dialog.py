@@ -206,12 +206,12 @@ class EbayCropDialog(QDialog):
         self.thirds_group.setVisible(False)
         layout.addWidget(self.thirds_group)
 
-        # Serial overlay crop toggle
-        self.overlay_crop_check = QCheckBox(
-            "Add serial overlay crop (digit boxes + pattern highlights)")
+        # Serial crop toggle
+        self.overlay_crop_check = QCheckBox("Add Serial Crop")
         self.overlay_crop_check.setToolTip(
-            "Append a zoomed serial-number crop with the matched pattern(s) drawn "
-            "on it (one per selected pattern; gas-pump targets the shifted serial).")
+            "Append a zoomed crop of the serial number. In the main app any matched "
+            "pattern(s) are drawn on it (one crop per pattern; gas-pump targets the "
+            "shifted serial).")
         layout.addWidget(self.overlay_crop_check)
 
         # Dialog buttons

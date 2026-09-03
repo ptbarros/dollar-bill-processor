@@ -116,6 +116,10 @@ class CropToolWindow(QWidget):
         self.setWindowTitle("Dollar Bill Crop Tool")
         self.setMinimumWidth(560)
         self.worker: CropWorker | None = None
+        icon = app_base() / "assets" / "DD-Crop.png"
+        if icon.exists():
+            from PySide6.QtGui import QIcon
+            self.setWindowIcon(QIcon(str(icon)))
         self._build_ui()
 
     def _build_ui(self):
@@ -142,13 +146,10 @@ class CropToolWindow(QWidget):
         v.addWidget(folders)
 
         opts = QHBoxLayout()
-        self.crop_all_check = QCheckBox("Crop every bill (ignore fancy detection)")
-        self.crop_all_check.setChecked(True)
-        self.crop_all_check.setToolTip(
-            "On: crop all bills in the folder (recommended for rare-bill scans).\n"
-            "Off: only crop bills that match a fancy-serial pattern.")
-        opts.addWidget(self.crop_all_check)
+        # This tool always crops every bill in the folder (that's the whole point
+        # of opening it separately), so there's no "crop all" toggle.
         self.gpu_check = QCheckBox("Use GPU")
+        self.gpu_check.setChecked(True)
         self.gpu_check.setToolTip("Use GPU acceleration if available.")
         opts.addWidget(self.gpu_check)
         opts.addStretch()
@@ -255,7 +256,7 @@ class CropToolWindow(QWidget):
 
         self.worker = CropWorker(
             input_dir, output_dir,
-            crop_all=self.crop_all_check.isChecked(),
+            crop_all=True,   # standalone tool always crops the whole folder
             use_gpu=self.gpu_check.isChecked(),
         )
         self.worker.progress.connect(self._on_progress)

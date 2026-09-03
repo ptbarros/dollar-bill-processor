@@ -35,6 +35,7 @@ if not _obf.exists() or _obf.stat().st_mtime < _src_onnx.stat().st_mtime:
 datas = [
     ('detector.bin', '.'),
     ('config.yaml', '.'),
+    ('assets/DD-Crop.png', 'assets'),   # window / taskbar icon
 ]
 # patterns/ tree (needed by the pattern engine for serial-based crop naming),
 # skipping caches and the writable user dir.
@@ -64,7 +65,7 @@ excludes = [
 ]
 
 _console = os.environ.get('DBP_BUILD_CONSOLE') == '1'
-_icon = 'assets/icon.ico' if Path('assets/icon.ico').exists() else None
+_icon = 'assets/DD-Crop.ico' if Path('assets/DD-Crop.ico').exists() else None
 
 a = Analysis(
     ['crop_tool.py'],
