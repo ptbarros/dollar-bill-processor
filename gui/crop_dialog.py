@@ -8,7 +8,8 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QGroupBox, QPushButton, QDialogButtonBox, QLabel, QSpinBox,
-    QHeaderView, QCheckBox, QAbstractItemView, QMessageBox, QWidget, QFrame
+    QHeaderView, QCheckBox, QAbstractItemView, QMessageBox, QWidget, QFrame,
+    QComboBox, QInputDialog
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor
@@ -36,12 +37,17 @@ class EbayCropDialog(QDialog):
         {'side': 'front', 'region': 'serial_right', 'name': 'Right Serial', 'has_settings': True},
     ]
 
+    # Keys that belong to a crop profile (per-denomination settings). Everything
+    # else in config.yaml (crops %, options, ...) stays global.
+    PROFILE_KEYS = ('crop_order', 'yolo_crops', 'include_serial_overlay')
+
     def __init__(self, config, parent=None, preview_ctx=None):
         super().__init__(parent)
-        self.config = config
+        self.full_config = config if isinstance(config, dict) else {}
         self.preview_ctx = preview_ctx
         self._preview_cache = None   # (bill_bgr, rect, crop_bgr) for re-render on resize
-        self.setWindowTitle("eBay Crop Manager")
+        self._init_profiles()        # sets self.profiles, self.active_name, self.config
+        self.setWindowTitle("Crop Manager")
         self.setMinimumSize(1080 if preview_ctx else 700, 560)
         # Give the dialog a full window frame with min/maximize buttons (a modal
         # child dialog otherwise shows only a close button on some window managers).
@@ -49,12 +55,102 @@ class EbayCropDialog(QDialog):
                             | Qt.WindowSystemMenuHint | Qt.WindowCloseButtonHint)
         self._setup_ui()
         self._load_settings()
+        self._refresh_profile_combo()
+
+    def _init_profiles(self):
+        """Load named crop profiles, migrating a legacy flat config into 'Default'."""
+        profiles = self.full_config.get('crop_profiles')
+        if profiles:
+            self.profiles = {name: dict(p) for name, p in profiles.items()}
+            self.active_name = self.full_config.get('active_crop_profile')
+            if self.active_name not in self.profiles:
+                self.active_name = next(iter(self.profiles))
+        else:
+            flat = {k: self.full_config[k] for k in self.PROFILE_KEYS if k in self.full_config}
+            self.profiles = {'Default': flat}
+            self.active_name = 'Default'
+        # The dialog edits the active profile's flat dict in place.
+        self.config = self.profiles[self.active_name]
+
+    def _refresh_profile_combo(self):
+        self.profile_combo.blockSignals(True)
+        self.profile_combo.clear()
+        self.profile_combo.addItems(list(self.profiles.keys()))
+        self.profile_combo.setCurrentText(self.active_name)
+        self.profile_combo.blockSignals(False)
+
+    def _on_profile_combo(self, name):
+        if name and name in self.profiles and name != self.active_name:
+            self._switch_profile(name)
+
+    def _switch_profile(self, name):
+        self._sync_to_config()                          # capture table/seal edits first
+        self.profiles[self.active_name] = self.config
+        self.active_name = name
+        self.config = self.profiles[name]
+        self._load_settings()                           # rebuild table + panels
+
+    def _save_as_profile(self):
+        import copy
+        name, ok = QInputDialog.getText(self, "Save Profile As", "Profile name (e.g. $5 bills):")
+        name = (name or "").strip()
+        if not ok or not name:
+            return
+        if name in self.profiles:
+            QMessageBox.warning(self, "Name in use", f"A profile named “{name}” already exists.")
+            return
+        self._sync_to_config()                          # capture current edits first
+        self.profiles[self.active_name] = self.config
+        self.profiles[name] = copy.deepcopy(self.config)
+        self.active_name = name
+        self.config = self.profiles[name]
+        self._refresh_profile_combo()
+
+    def _rename_profile(self):
+        name, ok = QInputDialog.getText(self, "Rename Profile", "New name:", text=self.active_name)
+        name = (name or "").strip()
+        if not ok or not name or name == self.active_name:
+            return
+        if name in self.profiles:
+            QMessageBox.warning(self, "Name in use", f"A profile named “{name}” already exists.")
+            return
+        self.profiles[name] = self.profiles.pop(self.active_name)
+        self.active_name = name
+        self.config = self.profiles[name]
+        self._refresh_profile_combo()
+
+    def _delete_profile(self):
+        if len(self.profiles) <= 1:
+            QMessageBox.information(self, "Can't delete", "There must be at least one profile.")
+            return
+        if QMessageBox.question(self, "Delete Profile",
+                                f"Delete the “{self.active_name}” profile?") != QMessageBox.Yes:
+            return
+        del self.profiles[self.active_name]
+        self.active_name = next(iter(self.profiles))
+        self.config = self.profiles[self.active_name]
+        self._refresh_profile_combo()
+        self._load_settings()
 
     def _setup_ui(self):
         """Setup the dialog UI."""
         outer = QHBoxLayout(self)
         layout = QVBoxLayout()
         outer.addLayout(layout, 1)
+
+        # Profile bar: switch between named crop setups (e.g. $1 vs $5).
+        prof = QHBoxLayout()
+        prof.addWidget(QLabel("Profile:"))
+        self.profile_combo = QComboBox()
+        self.profile_combo.setToolTip("Switch between saved crop setups (e.g. $1, $5).")
+        self.profile_combo.currentTextChanged.connect(self._on_profile_combo)
+        prof.addWidget(self.profile_combo, 1)
+        saveas_btn = QPushButton("Save As…"); saveas_btn.clicked.connect(self._save_as_profile)
+        saveas_btn.setToolTip("Save the current settings as a new named profile.")
+        rename_btn = QPushButton("Rename"); rename_btn.clicked.connect(self._rename_profile)
+        del_btn = QPushButton("Delete"); del_btn.clicked.connect(self._delete_profile)
+        prof.addWidget(saveas_btn); prof.addWidget(rename_btn); prof.addWidget(del_btn)
+        layout.addLayout(prof)
 
         # Instructions
         instructions = QLabel(
@@ -646,47 +742,47 @@ class EbayCropDialog(QDialog):
         if reply == QMessageBox.Yes:
             self._load_settings()
 
-    def _save_and_close(self):
-        """Save settings to config and close."""
-        # Build new crop_order list
+    def _sync_to_config(self):
+        """Write the table (crop order) + seal spinboxes into the active profile.
+        (Serial and thirds settings write live via their own handlers.) Called
+        before switching profiles and on OK so nothing is lost."""
         crop_order = []
         for i in range(self.crop_table.rowCount()):
             enabled_check = self.crop_table.cellWidget(i, 0)
             if enabled_check and enabled_check.isChecked():
                 crop = self.crop_table.item(i, 1).data(Qt.UserRole)
                 crop_order.append([crop['side'], crop['region']])
-
         self.config['crop_order'] = crop_order
-        # Serial crops now live in crop_order as serial_left/serial_right. Keep the
-        # legacy include_serial_overlay flag off so the old appended overlay path
-        # doesn't double up (the rows drive it now).
+        # Serial crops live in crop_order now; keep the legacy overlay flag off.
         self.config['include_serial_overlay'] = False
 
-        # Save seal settings
-        if 'yolo_crops' not in self.config:
-            self.config['yolo_crops'] = {}
+        yc = self.config.setdefault('yolo_crops', {})
+        fs = yc.setdefault('front_seal', {})
+        fs['min_width'] = self.front_seal_width.value()
+        fs['min_height'] = self.front_seal_height.value()
+        fs['offset_x'] = self.front_seal_offset_x.value()
+        fs['offset_y'] = self.front_seal_offset_y.value()
+        bs = yc.setdefault('back_seal', {})
+        bs['width'] = self.back_seal_width.value()
+        bs['height'] = self.back_seal_height.value()
+        bs['offset_x'] = self.back_seal_offset_x.value()
+        bs['offset_y'] = self.back_seal_offset_y.value()
 
-        if 'front_seal' not in self.config['yolo_crops']:
-            self.config['yolo_crops']['front_seal'] = {}
-
-        self.config['yolo_crops']['front_seal']['min_width'] = self.front_seal_width.value()
-        self.config['yolo_crops']['front_seal']['min_height'] = self.front_seal_height.value()
-        self.config['yolo_crops']['front_seal']['offset_x'] = self.front_seal_offset_x.value()
-        self.config['yolo_crops']['front_seal']['offset_y'] = self.front_seal_offset_y.value()
-
-        if 'back_seal' not in self.config['yolo_crops']:
-            self.config['yolo_crops']['back_seal'] = {}
-
-        self.config['yolo_crops']['back_seal']['width'] = self.back_seal_width.value()
-        self.config['yolo_crops']['back_seal']['height'] = self.back_seal_height.value()
-        self.config['yolo_crops']['back_seal']['offset_x'] = self.back_seal_offset_x.value()
-        self.config['yolo_crops']['back_seal']['offset_y'] = self.back_seal_offset_y.value()
-
+    def _save_and_close(self):
+        """Save settings to config and close."""
+        self._sync_to_config()
         self.accept()
 
     def get_config(self):
-        """Return the modified config."""
-        return self.config
+        """Return the full config with the edited crop profiles folded in."""
+        self._sync_to_config()
+        self.profiles[self.active_name] = self.config
+        out = dict(self.full_config)
+        for k in self.PROFILE_KEYS:
+            out.pop(k, None)   # these live inside the profiles now
+        out['crop_profiles'] = self.profiles
+        out['active_crop_profile'] = self.active_name
+        return out
 
 
 # Test dialog standalone

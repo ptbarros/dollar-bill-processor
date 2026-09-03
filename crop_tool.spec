@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for the standalone Crop Tool (onefile, torch-free).
+"""PyInstaller spec for the standalone Crop Tool (onedir, torch-free).
 
-Produces a single self-contained executable of crop_tool.py for distributing the
-eBay cropping feature on its own — without the full Dollar Bill Processor app.
+Produces dist\\DollarBillCropTool\\ (a onedir bundle) that Inno Setup wraps into
+a Windows installer — the cropping feature on its own, without the full app.
 
 Model obscurity (Tier 0+1):
   - Ships ONLY an ONNX model, renamed to ``detector.bin`` (this spec copies it
@@ -81,13 +81,13 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-# Onefile: bundle binaries + datas straight into the EXE (no COLLECT).
+# Onedir: EXE + a folder of binaries/datas (COLLECT), wrapped by Inno Setup into
+# a single installer. Faster startup than onefile (no per-launch unpack).
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='DollarBillCropTool',
     debug=False,
     bootloader_ignore_signals=False,
@@ -95,4 +95,12 @@ exe = EXE(
     upx=False,
     console=_console,
     icon=_icon,
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    name='DollarBillCropTool',
 )

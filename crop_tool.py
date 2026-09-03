@@ -25,7 +25,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QLineEdit, QPushButton, QFileDialog, QProgressBar, QCheckBox, QMessageBox,
-    QPlainTextEdit, QGroupBox,
+    QPlainTextEdit, QGroupBox, QComboBox,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
@@ -155,7 +155,7 @@ class CropToolWindow(QWidget):
         v = QVBoxLayout(self)
 
         intro = QLabel(
-            "Crop a folder of scanned bills using your eBay Crop Manager settings.\n"
+            "Crop a folder of scanned bills using your Crop Manager settings.\n"
             "Meant for individually scanned bills that skip the feed scanner.")
         intro.setWordWrap(True)
         v.addWidget(intro)
@@ -173,6 +173,17 @@ class CropToolWindow(QWidget):
         out_btn = QPushButton("Browse…"); out_btn.clicked.connect(lambda: self._browse(self.out_edit))
         g.addWidget(out_btn, 1, 2)
         v.addWidget(folders)
+
+        # Crop profile: pick which saved crop setup to use (e.g. $1 vs $5). Edit
+        # the profiles in Crop settings.
+        prof = QHBoxLayout()
+        prof.addWidget(QLabel("Crop profile:"))
+        self.profile_combo = QComboBox()
+        self.profile_combo.setToolTip("Which saved crop setup to use. Manage these in Crop settings…")
+        self.profile_combo.currentTextChanged.connect(self._on_profile_selected)
+        prof.addWidget(self.profile_combo, 1)
+        prof.addStretch()
+        v.addLayout(prof)
 
         opts = QHBoxLayout()
         # This tool always crops every bill in the folder (that's the whole point
@@ -207,6 +218,49 @@ class CropToolWindow(QWidget):
         self.log.setReadOnly(True)
         self.log.setMaximumHeight(160)
         v.addWidget(self.log)
+
+        self._refresh_profiles()
+
+    # --- crop profiles ----------------------------------------------------
+    def _read_config(self) -> dict:
+        import yaml
+        p = _active_config_path()
+        if p.exists():
+            try:
+                return yaml.safe_load(open(p)) or {}
+            except Exception:
+                return {}
+        return {}
+
+    def _refresh_profiles(self):
+        """Populate the profile dropdown from the active config."""
+        cfg = self._read_config()
+        profiles = cfg.get('crop_profiles') or {}
+        names = list(profiles.keys()) or ['Default']
+        active = cfg.get('active_crop_profile')
+        if active not in names:
+            active = names[0]
+        self.profile_combo.blockSignals(True)
+        self.profile_combo.clear()
+        self.profile_combo.addItems(names)
+        self.profile_combo.setCurrentText(active)
+        self.profile_combo.setEnabled(len(names) > 1 or bool(profiles))
+        self.profile_combo.blockSignals(False)
+
+    def _on_profile_selected(self, name):
+        """Persist the chosen active profile so the run uses it."""
+        if not name:
+            return
+        import yaml
+        cfg = self._read_config()
+        if not cfg.get('crop_profiles'):
+            return   # nothing to switch until profiles are saved in Crop settings
+        cfg['active_crop_profile'] = name
+        user_cfg = user_data_dir() / "config.yaml"
+        user_cfg.parent.mkdir(parents=True, exist_ok=True)
+        with open(user_cfg, 'w') as f:
+            yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+        self._append_log(f"Active crop profile: {name}")
 
     # --- helpers ----------------------------------------------------------
     def _browse(self, edit: QLineEdit):
@@ -269,6 +323,7 @@ class CropToolWindow(QWidget):
             with open(user_cfg, "w") as f:
                 yaml.dump(dialog.get_config(), f, default_flow_style=False, sort_keys=False)
             self._append_log(f"Saved crop settings to {user_cfg}")
+            self._refresh_profiles()   # profiles / active may have changed
 
     def _append_log(self, msg: str):
         self.log.appendPlainText(msg)

@@ -36,7 +36,7 @@ jobs:
           pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
           pip install pyinstaller
 
-      - name: Build onefile crop tool (PyInstaller)
+      - name: Build onedir crop tool (PyInstaller)
         # Spec copies best.onnx -> detector.bin (obscured; no best.pt shipped).
         run: pyinstaller --noconfirm --clean crop_tool.spec
 
@@ -45,14 +45,16 @@ jobs:
         shell: bash
         run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
-      - name: Name the exe with version
-        shell: bash
-        run: mv "dist/DollarBillCropTool.exe" "dist/DollarBillCropTool-${{ steps.ver.outputs.version }}.exe"
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} installer\DollarBillCropTool.iss
 
       - uses: actions/upload-artifact@v4
         with:
           name: crop-tool-windows
-          path: dist/DollarBillCropTool-*.exe
+          path: dist/DollarBillCropTool-*-setup.exe
           if-no-files-found: error
 
   release:
@@ -69,14 +71,16 @@ jobs:
       - name: Publish Crop Tool release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*.exe
+          files: artifacts/*-setup.exe
           name: "Dollar Bill Crop Tool ${{ github.ref_name }}"
           body: |
-            Standalone eBay Crop Tool — crop a folder of bill scans using the
-            eBay Crop Manager settings, without the full app.
+            Standalone Crop Tool — crop a folder of bill scans using your Crop
+            Manager settings, without the full app.
 
-            Download `DollarBillCropTool-*.exe` below and run it. Windows may show
-            a SmartScreen warning for an unsigned app (More info → Run anyway).
+            Download `DollarBillCropTool-*-setup.exe` below and run the installer
+            (Start-menu shortcut + uninstaller, per-user, no admin needed). Windows
+            may show a SmartScreen warning for an unsigned app (More info → Run
+            anyway).
           # Mark as pre-release so the crop tool never becomes the repo's
           # "Latest" release (that's the full app). Flip to false for a final one.
           prerelease: true

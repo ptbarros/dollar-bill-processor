@@ -187,6 +187,17 @@ class Config:
             print(f"Reloaded config: {self.config_path}")
 
     @property
+    def active_profile_data(self) -> dict:
+        """The crop settings that are in effect: the active named crop profile if
+        any are defined, else the flat top-level config (legacy). Named profiles
+        let the user keep separate crop setups per denomination ($1 vs $5 ...)."""
+        profiles = self.data.get('crop_profiles')
+        if profiles:
+            name = self.data.get('active_crop_profile')
+            return profiles.get(name) or next(iter(profiles.values()))
+        return self.data
+
+    @property
     def crop_regions(self) -> dict:
         """Get crop regions from config or defaults."""
         if 'crops' in self.data:
@@ -206,9 +217,10 @@ class Config:
 
     @property
     def crop_order(self) -> list:
-        """Get crop order from config or defaults."""
-        if 'crop_order' in self.data:
-            return [tuple(item) for item in self.data['crop_order']]
+        """Get crop order from the active profile / config, or defaults."""
+        src = self.active_profile_data
+        if 'crop_order' in src:
+            return [tuple(item) for item in src['crop_order']]
         return [tuple(item) for item in self.DEFAULT_CROP_ORDER]
 
     @property
@@ -220,9 +232,8 @@ class Config:
 
     @property
     def include_serial_overlay(self) -> bool:
-        """Whether to append the serial overlay crop(s). Toggled in the eBay
-        Crop Manager; default on."""
-        return bool(self.data.get('include_serial_overlay', True))
+        """Whether to append the legacy serial overlay crop(s). Default on."""
+        return bool(self.active_profile_data.get('include_serial_overlay', True))
 
     @property
     def serial_sides(self) -> str:
@@ -2487,8 +2498,9 @@ class ProductionProcessor:
             },
             'fallback_on_missing': True,
         }
-        if hasattr(self.cfg, 'data') and 'yolo_crops' in self.cfg.data:
-            config = self.cfg.data['yolo_crops']
+        src = self.cfg.active_profile_data if hasattr(self.cfg, 'active_profile_data') else getattr(self.cfg, 'data', {})
+        if 'yolo_crops' in src:
+            config = src['yolo_crops']
             # Merge with defaults
             result = defaults.copy()
             if 'padding' in config:

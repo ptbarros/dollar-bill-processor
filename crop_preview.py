@@ -43,12 +43,18 @@ class CropPreviewContext:
             return None, None, None
 
         keys = ('yolo_crops', 'crops', 'serial_sides')
+        # Suppress profiles during the override so the flat values below are what
+        # active_profile_data resolves to (the dialog passes the active profile's
+        # settings directly in `config`).
+        suppress = ('crop_profiles', 'active_crop_profile')
         data = self.p.cfg.data
-        saved = {k: data.get(k) for k in keys}
+        saved = {k: data.get(k) for k in keys + suppress}
         try:
             for k in keys:
                 if k in config and config[k] is not None:
                     data[k] = config[k]
+            for k in suppress:
+                data.pop(k, None)
             rect = self.p.crop_region_rect(img, self.dets[side], side, region)
         finally:
             for k, v in saved.items():

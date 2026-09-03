@@ -169,7 +169,7 @@ class MainWindow(QMainWindow):
         patterns_action.triggered.connect(self._on_pattern_manager)
         edit_menu.addAction(patterns_action)
 
-        crops_action = QAction("eBay &Crop Manager...", self)
+        crops_action = QAction("&Crop Manager...", self)
         crops_action.triggered.connect(self._on_crop_manager)
         edit_menu.addAction(crops_action)
 
