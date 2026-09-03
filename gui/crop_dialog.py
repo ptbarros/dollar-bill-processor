@@ -108,12 +108,23 @@ class EbayCropDialog(QDialog):
         if name in self.profiles:
             QMessageBox.warning(self, "Name in use", f"A profile named “{name}” already exists.")
             return
+        # Every profile is tied to a denomination (it drives the serial format),
+        # so require the choice up front.
+        labels = [f"${d}" for d in self.DENOMINATIONS]
+        label, ok2 = QInputDialog.getItem(
+            self, "Denomination", f"Denomination for “{name}”:", labels, 0, False)
+        if not ok2:
+            return
+        denom = self.DENOMINATIONS[labels.index(label)]
+
         self._sync_to_config()                          # capture current edits first
         self.profiles[self.active_name] = self.config
         self.profiles[name] = copy.deepcopy(self.config)
+        self.profiles[name]['denomination'] = denom
         self.active_name = name
         self.config = self.profiles[name]
         self._refresh_profile_combo()
+        self._load_settings()                           # reflect the new denom + settings
 
     def _rename_profile(self):
         name, ok = QInputDialog.getText(self, "Rename Profile", "New name:", text=self.active_name)

@@ -71,6 +71,9 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Dollar Detective")
 
+        # Show the active profile's denomination on the Process button.
+        self._refresh_process_denomination()
+
         # Check for recovery on startup (after UI is ready)
         QTimer.singleShot(100, self._check_for_recovery)
 
@@ -1092,10 +1095,41 @@ class MainWindow(QMainWindow):
             config_path = user_config
             with open(config_path, 'w') as f:
                 yaml.dump(updated_config, f, default_flow_style=False, sort_keys=False)
+            # Active profile (and its denomination) may have changed -> update the
+            # Process button label.
+            self._refresh_process_denomination()
             QMessageBox.information(
                 self, "Settings Saved",
                 "Crop settings have been saved.\nChanges will apply to future processing."
             )
+
+    def _active_denomination(self) -> int:
+        """Denomination of the active crop profile (drives the serial format and
+        the Process button label). Reads the same config the pipeline uses."""
+        try:
+            import yaml
+            from resource_path import app_base, user_data_dir
+            user_config = user_data_dir() / "config.yaml"
+            path = user_config if user_config.exists() else app_base() / "config.yaml"
+            if not path.exists():
+                return 1
+            with open(path) as f:
+                cfg = yaml.safe_load(f) or {}
+            active = cfg.get('active_crop_profile')
+            profiles = cfg.get('crop_profiles') or {}
+            prof = profiles.get(active, {}) if active else {}
+            val = prof.get('denomination',
+                           (cfg.get('options') or {}).get('denomination', 1))
+            return int(val)
+        except Exception:
+            return 1
+
+    def _refresh_process_denomination(self):
+        """Update the Process button to show the active denomination."""
+        try:
+            self.processing_panel.set_denomination(self._active_denomination())
+        except Exception:
+            pass
 
     def _build_crop_preview_ctx(self):
         """Build a crop-settings preview from the currently selected bill, reusing

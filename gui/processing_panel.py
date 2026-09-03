@@ -254,6 +254,15 @@ class ProcessingPanel(QWidget):
         """Set the output directory."""
         self.output_edit.setText(path)
 
+    def set_denomination(self, denom):
+        """Show the active profile's denomination on the Process button so it's
+        visible right before processing (e.g. 'Process $5')."""
+        try:
+            d = int(denom)
+        except (TypeError, ValueError):
+            d = 1
+        self.process_btn.setText(f"Process ${d}")
+
     def set_processing(self, is_processing: bool):
         """Update UI for processing state."""
         self.process_btn.setEnabled(not is_processing)
