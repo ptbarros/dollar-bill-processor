@@ -624,17 +624,17 @@ class YOLOBillAligner:
 
         # Check if bill is upside down using seal positions
         if check_flip and seal_t_box and seal_f_box and bill_box:
-            bx1, _, bx2, _, _ = bill_box
-            bill_cx = (bx1 + bx2) / 2
-
             seal_t_cx = (seal_t_box[0] + seal_t_box[2]) / 2
             seal_f_cx = (seal_f_box[0] + seal_f_box[2]) / 2
 
-            # Treasury seal should be on right, Federal Reserve on left
-            t_on_right = seal_t_cx > bill_cx
-            f_on_left = seal_f_cx < bill_cx
-
-            if not t_on_right or not f_on_left:
+            # A correctly oriented note has the Treasury seal to the RIGHT of the
+            # Federal Reserve seal -- true for every denomination. Compare the two
+            # seals to EACH OTHER rather than to the bill-box center: on a
+            # denomination the model wasn't trained on (e.g. $5) the bill_front
+            # box fragments into partial left/right boxes, so the old
+            # seal-vs-bill-center test flipped bills at random depending on which
+            # fragment won. The seals are detected reliably regardless.
+            if seal_t_cx < seal_f_cx:
                 # Bill is upside down - rotate 180 degrees
                 img = cv2.rotate(img, cv2.ROTATE_180)
                 info['flipped'] = True
