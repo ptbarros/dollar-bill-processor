@@ -6,6 +6,7 @@ data; excludes the heavy torch/ultralytics/easyocr stack (the app runs on
 onnxruntime + rapidocr). Reusable on Windows (produces .exe) and Linux.
 """
 import os
+import sys
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 
@@ -84,3 +85,12 @@ coll = COLLECT(
     upx=False,
     name='DollarDetective',
 )
+
+# macOS: wrap the onedir into a proper .app bundle (Windows/Linux ignore this).
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        coll,
+        name='Dollar Detective.app',
+        icon=None,   # .icns not generated yet; uses the default app icon
+        bundle_identifier='com.paulbarros.dollardetective',
+    )

@@ -173,8 +173,37 @@ jobs:
           path: dist/DollarDetective-x86_64.AppImage
           if-no-files-found: error
 
+  macos:
+    runs-on: macos-14           # Apple Silicon (arm64) runner
+    continue-on-error: true     # best-effort: a macOS quirk must not block the Windows/Linux release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies (torch-free)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
+          pip install pyinstaller
+
+      - name: Build .app + .dmg (unsigned)
+        run: |
+          pyinstaller --noconfirm --clean DollarDetective.spec
+          hdiutil create -volname "Dollar Detective" \
+            -srcfolder "dist/Dollar Detective.app" \
+            -ov -format UDZO dist/DollarDetective-arm64.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: dist/DollarDetective-arm64.dmg
+          if-no-files-found: error
+
   release:
-    needs: [windows, windows-cuda, windows-directml, linux]
+    needs: [windows, windows-cuda, windows-directml, linux, macos]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -191,6 +220,7 @@ jobs:
             artifacts/windows-installer-cuda/*
             artifacts/windows-installer-directml/*
             artifacts/linux-appimage/*
+            artifacts/macos-app/*
           generate_release_notes: true
           # Tags with a hyphen (e.g. v1.4.0-ci1) are test/pre-releases.
           prerelease: ${{ contains(github.ref_name, '-') }}
