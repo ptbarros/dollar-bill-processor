@@ -112,6 +112,7 @@ DisplayName: Friendly Name With Spaces
 Description: What this pattern matches
 Tier: 1-10 (1=rarest, 10=common)
 Examples: ["12345678", "87654321"]
+DataFile: my_list.csv    -- OPTIONAL: load a big lookup list; see ctx.data below
 --]]
 ```
 
@@ -140,6 +141,25 @@ NOTE: patterns based ONLY on the serial digits (repeaters, ladders, palindromes,
 numeric ranges like "serial value over 96000000" via `tonumber(ctx.digits)`, etc.)
 do NOT need `ctx.metadata` -- the serial is already OCR'd and handed to you as
 `ctx.digits`. Use `ctx.metadata` only for plate / series / seal / gas-pump features.
+
+### ctx.data / ctx.data_by_key (big lookup lists via a DataFile)
+To match against a LARGE list (hundreds to tens of thousands of values -- ZIP
+codes, special dates, low-run tables, known serials), do NOT paste the list into
+the Lua. Declare `DataFile: name.csv` in the header and the app loads it for you:
+- `ctx.data`: the CSV rows as a list of tables, columns named by the header row
+  (e.g. a low-run row is `{{series="2013", district="B", quantity="6.4"}}`).
+  Iterate with `for _, row in ipairs(ctx.data) do ... end`.
+- `ctx.data_by_key`: a dictionary keyed by the FIRST CSV column -- an O(1)
+  membership test. With a `zip` column, `ctx.data_by_key["90210"]` is truthy
+  only if 90210 is in the file.
+ALWAYS guard first: `if not ctx.data_by_key then return {{matched = false}} end`
+(the file may be missing). The CSV is a real dataset the USER supplies and drops
+next to the pattern -- you only write the matching logic and name the file in
+`DataFile:`. NEVER try to generate or inline thousands of values yourself; if a
+pattern needs such a list, use a DataFile and tell the user what CSV to provide
+(a first column of the values, with a header row).
+Example -- match when the middle 5 digits are a valid ZIP:
+`if ctx.data_by_key and ctx.data_by_key[ctx.digits:sub(2, 6)] then ... end`
 
 ### Return Value
 The match function must return a table with:
