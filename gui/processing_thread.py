@@ -74,7 +74,12 @@ class ProcessingThread(QThread):
 
             # Find config and model
             script_dir = Path(__file__).parent.parent
-            config_path = script_dir / "config.yaml"
+            # The Crop Manager saves to the user-writable config dir; prefer it so
+            # crop/denomination/profile changes actually apply. In a frozen build
+            # script_dir is the read-only bundle (the default config only).
+            from resource_path import user_data_dir
+            _user_cfg = user_data_dir() / "config.yaml"
+            config_path = _user_cfg if _user_cfg.exists() else script_dir / "config.yaml"
             patterns_dir = script_dir / "patterns"
             model_path = script_dir / "best.pt"
 
@@ -465,7 +470,12 @@ class OrganizeThread(QThread):
 
             # Find config and model
             script_dir = Path(__file__).parent.parent
-            config_path = script_dir / "config.yaml"
+            # The Crop Manager saves to the user-writable config dir; prefer it so
+            # crop/denomination/profile changes actually apply. In a frozen build
+            # script_dir is the read-only bundle (the default config only).
+            from resource_path import user_data_dir
+            _user_cfg = user_data_dir() / "config.yaml"
+            config_path = _user_cfg if _user_cfg.exists() else script_dir / "config.yaml"
             patterns_dir = script_dir / "patterns"
             model_path = script_dir / "best.pt"
 
