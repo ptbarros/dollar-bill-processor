@@ -1,4 +1,4 @@
-# Dollar Bill Processor - TODO
+# Dollar Detective - TODO
 
 ## Pending Features
 

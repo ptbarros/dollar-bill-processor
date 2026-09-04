@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLineEdit,
-    QProgressBar, QLabel, QFileDialog, QFrame
+    QProgressBar, QLabel, QFileDialog, QFrame, QComboBox
 )
 from PySide6.QtCore import Qt, Signal, Slot
 
@@ -22,6 +22,7 @@ class ProcessingPanel(QWidget):
     # Signals
     process_requested = Signal(str, str)  # input_dir, output_dir
     organize_requested = Signal(str)  # input_dir - organize folder before processing
+    profile_changed = Signal(str)  # active crop profile picked from the toolbar
     stop_requested = Signal()
     archive_requested = Signal()  # Archive the current batch
 
@@ -106,30 +107,18 @@ class ProcessingPanel(QWidget):
         self.process_btn.clicked.connect(self._on_process)
         layout.addWidget(self.process_btn)
 
-        # Organize button - pre-process folder for faster subsequent processing
-        self.organize_btn = QPushButton("Organize")
-        self.organize_btn.setMinimumWidth(80)
-        self.organize_btn.setToolTip(
-            "Pre-process folder: classify front/back, fix orientation, deskew, rename.\n"
-            "This makes subsequent processing faster."
-        )
-        self.organize_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FF9800;
-                color: white;
-                font-weight: bold;
-                padding: 8px 16px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #F57C00;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-            }
-        """)
-        self.organize_btn.clicked.connect(self._on_organize)
-        layout.addWidget(self.organize_btn)
+        # Active crop-profile picker (replaces the old Organize button; Organize
+        # moved to Edit -> Organize Folder). Switching here changes the profile
+        # and denomination used for the next Process run.
+        self.profile_label = QLabel("Profile:")
+        layout.addWidget(self.profile_label)
+        self.profile_combo = QComboBox()
+        self.profile_combo.setMinimumWidth(120)
+        self.profile_combo.setToolTip(
+            "Active crop profile (and its denomination) used for processing.\n"
+            "Create and edit profiles in the Crop Manager.")
+        self.profile_combo.currentIndexChanged.connect(self._on_profile_combo_changed)
+        layout.addWidget(self.profile_combo)
 
         self.stop_btn = QPushButton("Stop")
         self.stop_btn.setMinimumWidth(60)
@@ -240,6 +229,25 @@ class ProcessingPanel(QWidget):
         print(f"[ProcessingPanel] Emitting organize_requested({input_dir})")
         self.organize_requested.emit(input_dir)
 
+    def trigger_organize(self):
+        """Public entry point for the Edit -> Organize Folder menu action."""
+        self._on_organize()
+
+    def set_profiles(self, names, active_name):
+        """Populate the toolbar profile picker and select the active profile."""
+        self.profile_combo.blockSignals(True)
+        self.profile_combo.clear()
+        for n in names:
+            self.profile_combo.addItem(n)
+        if active_name and active_name in list(names):
+            self.profile_combo.setCurrentText(active_name)
+        self.profile_combo.blockSignals(False)
+
+    def _on_profile_combo_changed(self, _idx):
+        name = self.profile_combo.currentText()
+        if name:
+            self.profile_changed.emit(name)
+
     def _on_stop(self):
         """Handle stop button click."""
         self.stop_requested.emit()
@@ -266,7 +274,7 @@ class ProcessingPanel(QWidget):
     def set_processing(self, is_processing: bool):
         """Update UI for processing state."""
         self.process_btn.setEnabled(not is_processing)
-        self.organize_btn.setEnabled(not is_processing)
+        self.profile_combo.setEnabled(not is_processing)
         self.stop_btn.setEnabled(is_processing)
 
         self.browse_input_btn.setEnabled(not is_processing)
