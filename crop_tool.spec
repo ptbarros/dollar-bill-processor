@@ -19,6 +19,7 @@ Build (from the repo root, in the torch-free build venv):
 Set DBP_BUILD_CONSOLE=1 to keep a console window for debugging.
 """
 import os
+import sys
 import shutil
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
@@ -104,3 +105,12 @@ coll = COLLECT(
     upx=False,
     name='DollarBillCropTool',
 )
+
+# macOS: wrap the onedir into a proper .app bundle (Windows/Linux ignore this).
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        coll,
+        name='Dollar Bill Crop Tool.app',
+        icon=None,   # .icns not generated yet; uses the default app icon
+        bundle_identifier='com.paulbarros.dollarbillcroptool',
+    )

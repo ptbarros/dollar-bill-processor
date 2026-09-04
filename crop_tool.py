@@ -143,7 +143,11 @@ class CropWorker(QThread):
 class CropToolWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Dollar Bill Crop Tool")
+        try:
+            from version import get_version_string
+            self.setWindowTitle(f"Dollar Bill Crop Tool {get_version_string()}")
+        except Exception:
+            self.setWindowTitle("Dollar Bill Crop Tool")
         self.setMinimumWidth(560)
         self.worker: CropWorker | None = None
         icon = app_base() / "assets" / "DD-Crop.png"
