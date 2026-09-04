@@ -336,6 +336,16 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(appearance_group)
 
+        # Updates
+        updates_group = QGroupBox("Updates")
+        updates_layout = QVBoxLayout(updates_group)
+        self.check_updates_check = QCheckBox("Check for updates on startup")
+        self.check_updates_check.setToolTip(
+            "On launch, quietly check GitHub for a newer release and offer to "
+            "install it. You can always check manually via Help → Check for Updates.")
+        updates_layout.addWidget(self.check_updates_check)
+        layout.addWidget(updates_group)
+
         # Default Working Directory
         dirs_group = QGroupBox("Default Working Directory")
         dirs_layout = QFormLayout(dirs_group)
@@ -668,6 +678,7 @@ class SettingsDialog(QDialog):
         if idx >= 0:
             self.theme_combo.setCurrentIndex(idx)
         self.font_size_spin.setValue(self.settings.ui.font_size)
+        self.check_updates_check.setChecked(self.settings.ui.check_updates_on_startup)
         self._fancy_color = self.settings.ui.default_fancy_color or "#2e7d32"
         self._update_fancy_color_button()
         self.working_dir_edit.setText(self.settings.ui.default_working_dir)
@@ -716,6 +727,7 @@ class SettingsDialog(QDialog):
         # UI
         self.settings.ui.theme = self.theme_combo.currentData()
         self.settings.ui.font_size = self.font_size_spin.value()
+        self.settings.ui.check_updates_on_startup = self.check_updates_check.isChecked()
         self.settings.ui.default_fancy_color = self._fancy_color
         self.settings.ui.default_working_dir = self.working_dir_edit.text()
 

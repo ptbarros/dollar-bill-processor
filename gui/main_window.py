@@ -77,6 +77,10 @@ class MainWindow(QMainWindow):
         # Check for recovery on startup (after UI is ready)
         QTimer.singleShot(100, self._check_for_recovery)
 
+        # Background check for app updates (silent unless one is available).
+        if getattr(self.settings.ui, 'check_updates_on_startup', True):
+            QTimer.singleShot(1500, lambda: self._start_update_check(manual=False))
+
     def _setup_ui(self):
         """Setup the main UI layout."""
         central_widget = QWidget()
@@ -235,6 +239,10 @@ class MainWindow(QMainWindow):
         about_action = QAction("&About...", self)
         about_action.triggered.connect(self._on_about)
         help_menu.addAction(about_action)
+
+        check_updates_action = QAction("Check for &Updates...", self)
+        check_updates_action.triggered.connect(lambda: self._start_update_check(manual=True))
+        help_menu.addAction(check_updates_action)
 
     def _setup_shortcuts(self):
         """Setup keyboard shortcuts for navigation and zoom."""
@@ -1124,6 +1132,28 @@ class MainWindow(QMainWindow):
                 self, "Settings Saved",
                 "Crop settings have been saved.\nChanges will apply to future processing."
             )
+
+    def _start_update_check(self, manual: bool = False):
+        """Kick off a background GitHub update check. manual=True shows an
+        'up to date' message when nothing is newer; the startup check is silent."""
+        try:
+            from .updater_ui import check_in_background
+            self._update_thread = check_in_background(
+                self, lambda info: self._on_update_check_result(info, manual))
+        except Exception:
+            pass
+
+    def _on_update_check_result(self, info, manual: bool):
+        """Handle the update-check result on the UI thread."""
+        try:
+            from .updater_ui import prompt_and_apply, show_up_to_date
+            from version import __version__
+            if info is not None:
+                prompt_and_apply(self, info)
+            elif manual:
+                show_up_to_date(self, __version__)
+        except Exception:
+            pass
 
     def _active_denomination(self) -> int:
         """Denomination of the active crop profile (drives the serial format and
