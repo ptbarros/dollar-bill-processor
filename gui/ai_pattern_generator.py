@@ -145,7 +145,7 @@ real processing -- when a pattern is quick-tested against a bare serial they are
 absent. ALWAYS guard before use, e.g. `if ctx.metadata.series_year and ctx.metadata.series_year ~= "" then ...`.
 - `ctx.metadata.series_year`: series as a string, e.g. "2013" (empty "" if not detected). Use `tonumber(...)` to compare, e.g. mule/series-range checks.
 - `ctx.metadata.front_plate`: front plate face-check letter + number as a string, e.g. "E 84" (empty if not detected).
-- `ctx.metadata.back_plate`: back plate number as a string (empty if not detected). Mule notes are 1988+ series with a small back plate.
+- `ctx.metadata.back_plate`: back plate number as a string (empty if not detected). (Note: true "mule" notes are a micro/macro plate-number FONT-SIZE mismatch between face and back on small-size notes, roughly the 1930s-1950s, and vary by denomination -- not a simple modern rule; don't infer mules from the plate number alone.)
 - `ctx.metadata.seal_x`, `ctx.metadata.seal_y`: treasury-seal overprint offset vs the "ONE" beneath it, as a percentage (0 = aligned).
 - `ctx.metadata.seal_containment`: percent of the seal inside the "ONE" bounding box (100 = normal, < 97 = shifted / seal-shift note).
 - `ctx.metadata.baseline_variance`: largest vertical digit misalignment in pixels (the gas-pump signal).

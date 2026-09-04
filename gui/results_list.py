@@ -214,7 +214,7 @@ class ResultsList(QWidget):
 
         # Results tree
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "GPT", "Shift X%", "Shift Y%", "Seal %", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule?", "Mismatch?", "Status"])
+        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "GPT", "Shift X%", "Shift Y%", "Seal %", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule? (exp)", "Mismatch?", "Status"])
         self.tree.setAlternatingRowColors(True)
         self.tree.setRootIsDecorated(False)
         self.tree.setSortingEnabled(True)
@@ -237,7 +237,7 @@ class ResultsList(QWidget):
             9: "Bill series year (e.g., 2017A)",
             10: "Front plate number",
             11: "Back plate number",
-            12: "Potential mule bill (mismatched front/back plates)",
+            12: "EXPERIMENTAL hint, not a verdict: an old-era note (pre-1960s series) whose back-plate font reads small. True mules are a micro/macro plate-number font mismatch and vary by denomination -- verify with the plate magnifier (press M). Modern notes never flag.",
             13: "Mismatched serial numbers (two different serials detected on front)",
             14: "Status flags: ✓=queued, V=viewed, C=cropped, R=sent for review",
         }
@@ -621,7 +621,7 @@ class ResultsList(QWidget):
             # Mule detection column
             potential_mule = result.get('potential_mule', False)
             if potential_mule:
-                item.setText(12, "Yes")
+                item.setText(12, "Check")  # experimental hint -> verify with magnifier (M)
             else:
                 item.setText(12, "")
 

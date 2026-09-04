@@ -99,8 +99,8 @@ Detects overprint misalignment by comparing treasury seal to "ONE" text undernea
 
 Settings → Processing → "Extract plate and series info"
 - Extracts series_year, front_plate, back_plate
-- Mule detection: 1988+ series with back_plate height ≤14px
-- Press **M** for plate magnifier popup
+- Mule detection (EXPERIMENTAL hint, not a verdict): flags a pre-1960s series (1928 ≤ year < 1960) whose back-plate YOLO box height ≤14px (a "small font" proxy). Shown as "Check" in the "Mule? (exp)" column. **This is a weak heuristic** — a true mule is a micro/macro plate-number *font-size mismatch* between face and back on small-size notes (~1930s–50s), denomination/plate-number specific and not reliably readable from a scan. The magnifier is the real tool.
+- Press **M** for plate magnifier popup (front/back plates side-by-side to eyeball the micro/macro font — the actual mule check)
 
 ## Performance Optimization
 

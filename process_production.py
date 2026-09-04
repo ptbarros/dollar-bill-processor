@@ -2488,25 +2488,34 @@ class ProductionProcessor:
                     upscale=2
                 )
 
-                # Mule detection: A mule is a MISMATCH between front/back plate eras
-                # - Pre-1988: back plates had small font (normal)
-                # - 1988+: back plates transitioned to large font
-                # - Mule = 1988+ series with old-style small font back plate
+                # Mule detection (EXPERIMENTAL -- era-gated hint, not a verdict).
+                #
+                # A true "mule" is a note whose tiny plate serial numbers are
+                # DIFFERENT SIZES (micro vs macro font) on the face vs. the back --
+                # a product of the BEP's plate-number font transition on small-size
+                # notes, roughly the 1930s-1950s. It is NOT simply a physical
+                # plate-size difference, and the authoritative test is a
+                # per-denomination / plate-number lookup that we can't reliably read
+                # from a scan. So this is only a WEAK HINT: flag old-era notes whose
+                # back-plate font reads small (one mule ingredient), and let the user
+                # confirm with the plate magnifier (press M). Modern notes never
+                # flag. See the "Mule?" column tooltip.
 
-                # Check if this is a "large font era" bill (1988+)
-                is_large_font_era = False
+                # Series year within the small-size, mule-plausible era (pre-1960s).
+                in_mule_era = False
                 series = result.get('series_year', '')
                 if series:
                     year_match = re.search(r'(\d{4})', series)
                     if year_match:
                         year = int(year_match.group(1))
-                        is_large_font_era = year >= 1988
+                        in_mule_era = 1928 <= year < 1960
 
-                # Small font detected by YOLO box height (small font ~13px, large font ~15px+)
+                # Small (micro) back-plate font, inferred from YOLO box height
+                # (~13px small vs ~15px+ large). Noisy -- a hint, not a measurement.
                 small_font_back = box_height <= 14
 
-                # Mule = large font era bill with small font back plate (mismatch)
-                result['potential_mule'] = is_large_font_era and small_font_back
+                # Experimental hint: an old-era note with a small back-plate font.
+                result['potential_mule'] = in_mule_era and small_font_back
 
         return result
 
