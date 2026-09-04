@@ -34,7 +34,7 @@ hiddenimports = ['yaml', 'pandas', 'openpyxl', 'docx', 'PIL', 'updater', 'gui.up
 #   - lupa: versioned native lua lib
 #   - anthropic / openai: AI pattern generation (lazily imported in the AI tab);
 #     collect_all pulls their compiled deps (pydantic_core, jiter) + metadata
-for pkg in ('torch', 'torchvision', 'ultralytics', 'easyocr', 'lupa', 'anthropic', 'openai'):
+for pkg in ('torch', 'torchvision', 'ultralytics', 'easyocr', 'lupa', 'anthropic', 'openai', 'cv2'):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b
