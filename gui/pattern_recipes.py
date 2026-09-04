@@ -749,8 +749,111 @@ end
         return examples[:5]
 
 
+class ContainsRecipe(PatternRecipe):
+    """Recipe for 'contains a specific sequence of digits' (e.g. a year like 1959)."""
+
+    @property
+    def name(self) -> str:
+        return "contains"
+
+    @property
+    def display_name(self) -> str:
+        return "Contains Digits (e.g. a year)"
+
+    @property
+    def description(self) -> str:
+        return "Match serials that contain a specific sequence of digits (like a year)"
+
+    def get_parameter_definitions(self) -> list[ParameterDef]:
+        return [
+            ParameterDef(
+                name="sequence",
+                label="Digits to find",
+                widget_type="text",
+                default="1959",
+                description="The digits to look for, e.g. 1959 or a birth year"
+            ),
+            ParameterDef(
+                name="where",
+                label="Where",
+                widget_type="dropdown",
+                options=["Anywhere", "At the start", "At the end"],
+                default="Anywhere",
+                description="Match the digits anywhere in the serial, or only at the start/end"
+            ),
+        ]
+
+    def _clean_sequence(self, params: dict) -> str:
+        """Keep only digits, cap at 8 (the serial length)."""
+        return "".join(c for c in str(params.get("sequence", "")) if c.isdigit())[:8]
+
+    def generate_lua(self, params: dict, pattern_name: str, pattern_desc: str,
+                     tier: int, color: str = "orange") -> str:
+        seq = self._clean_sequence(params)
+        where = params.get("where", "Anywhere")
+        examples = self.generate_examples(params)
+
+        if where == "At the start":
+            constraint = "    if s ~= 1 then return {matched = false} end\n"
+            where_msg = "starts with"
+        elif where == "At the end":
+            constraint = "    if e ~= #ctx.digits then return {matched = false} end\n"
+            where_msg = "ends with"
+        else:
+            constraint = ""
+            where_msg = "contains"
+
+        script = f'''--[[
+Pattern: {pattern_name}
+Description: {pattern_desc}
+Tier: {tier}
+Examples: {json.dumps(examples)}
+--]]
+
+function match(ctx)
+    local target = "{seq}"
+    if target == "" then return {{matched = false}} end
+
+    -- find the sequence literally (plain search, not a Lua pattern)
+    local s, e = ctx.digits:find(target, 1, true)
+    if not s then return {{matched = false}} end
+{constraint}
+    return {{
+        matched = true,
+        group_boxes = {{{{from = s - 1, to = e - 1, color = "{color}"}}}},
+        message = "Serial {where_msg} " .. target
+    }}
+end
+'''
+        return script
+
+    def generate_examples(self, params: dict) -> list[str]:
+        seq = self._clean_sequence(params)
+        where = params.get("where", "Anywhere")
+        if not seq:
+            return []
+        pad = 8 - len(seq)
+        if pad < 0:
+            return []
+
+        raw = []
+        if where == "At the start":
+            raw = [seq + "0" * pad, seq + "1" * pad, seq + ("0" * max(pad - 1, 0)) + "7"]
+        elif where == "At the end":
+            raw = ["0" * pad + seq, "1" * pad + seq, ("3" + "0" * max(pad - 1, 0)) + seq]
+        else:  # Anywhere: slide the sequence across the serial
+            raw = ["0" * off + seq + "0" * (pad - off) for off in range(pad + 1)]
+
+        out = []
+        for e in raw:
+            if len(e) == 8 and e not in out:
+                out.append(e)
+        return out[:5]
+
+
 # Registry of all available recipes
 RECIPE_REGISTRY: list[PatternRecipe] = [
+    ContainsRecipe(),
     LadderRecipe(),
     DigitSetRecipe(),
     RepeatingRecipe(),

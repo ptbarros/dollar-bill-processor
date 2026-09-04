@@ -2516,6 +2516,16 @@ class CustomPatternDialog(QDialog):
             self.param_widgets[param_def.name] = widget
             row_layout.addWidget(widget)
 
+        elif param_def.widget_type == "text":
+            widget = QLineEdit()
+            if param_def.default is not None:
+                widget.setText(str(param_def.default))
+            if param_def.description:
+                widget.setPlaceholderText(param_def.description)
+            widget.textChanged.connect(self._on_wizard_param_changed)
+            self.param_widgets[param_def.name] = widget
+            row_layout.addWidget(widget)
+
         elif param_def.widget_type == "checkbox_group":
             # Create a horizontal layout with checkboxes
             check_layout = QVBoxLayout()
@@ -2598,6 +2608,8 @@ class CustomPatternDialog(QDialog):
                 params[name] = widget.currentText()
             elif isinstance(widget, QSpinBox):
                 params[name] = widget.value()
+            elif isinstance(widget, QLineEdit):
+                params[name] = widget.text()
             elif isinstance(widget, dict):
                 # Checkbox group or radio group
                 first_widget = next(iter(widget.values()))
