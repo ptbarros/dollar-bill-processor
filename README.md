@@ -1,318 +1,311 @@
-# Dollar Bill Serial Number Processor
+# Dollar Detective
 
-A production-ready system for automated processing of scanned dollar bills to identify fancy serial numbers and prepare bills for eBay listing.
+**A desktop app for spotting "fancy" serial numbers on US paper currency.** Feed it
+scanned dollar bills, and it finds the serial numbers, reads them, and flags the
+collectible ones — radars, repeaters, ladders, low serials, birthdays, ZIP codes,
+and a few hundred more patterns — so you don't have to eyeball every note.
 
-## Current Status: v1.0 - Hybrid YOLO Detection ✅
+![Version](https://img.shields.io/badge/version-1.4.8-brightgreen)
+![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-blue)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
+![Built with AI](https://img.shields.io/badge/built%20with-Claude%20(AI)-8A2BE2)
 
-### What Works Now
-
-**Hybrid YOLOv8 + EasyOCR Pipeline:**
-- ✅ **100% detection rate** on test dataset (10/10 bills)
-- ⚡ **176 bills/minute** on CPU (0.34s per bill)
-- 🚀 **10x faster** than pure EasyOCR approach
-- 📊 **For 3,000 bills:** ~17 minutes processing time
-
-**Technical Stack:**
-- Template alignment for position normalization
-- YOLOv8 Nano for serial number bounding box detection
-- EasyOCR for text extraction
-- Automatic bounding box expansion to capture full serials (Letter + 8 digits + Letter/*)
-- Fancy number detection (6 pattern types)
-
-**Supported Fancy Numbers:**
-- SOLID (11111111)
-- REPEATER (12341234)
-- RADAR (12344321)
-- LADDER (12345678)
-- LOW_SERIAL (≤ 100)
-- BINARY (01010101)
-- STAR NOTES (F12345678*)
+> ### 🤖 Open source, and written by AI — up front about both
+> Dollar Detective is **open source**, and essentially all of its code was written
+> by an AI assistant (Anthropic's Claude) working from a hobbyist's ideas and
+> testing. There's no team behind it — just one person, his family testers, and a
+> lot of back-and-forth with an AI. It's shared as-is, for fun and for other
+> collectors. See [License](#license) and [Disclaimer](#disclaimer).
 
 ---
 
-## Quick Start
+## Contents
 
-### Installation
+- [What it does](#what-it-does)
+- [Screenshots](#screenshots)
+- [Download & install](#download--install)
+  - [Windows](#windows)
+  - [macOS](#macos-apple-silicon)
+  - [Linux](#linux)
+- [Updating](#updating)
+- [Fancy serial patterns](#fancy-serial-patterns)
+- [The standalone Crop Tool](#the-standalone-crop-tool)
+- [Performance](#performance)
+- [Running from source (developers)](#running-from-source-developers)
+- [How it works](#how-it-works)
+- [Roadmap](#roadmap)
+- [Disclaimer](#disclaimer)
+- [Acknowledgements](#acknowledgements)
+- [License](#license)
+
+---
+
+## What it does
+
+Point it at a folder of scanned bills and it will:
+
+- **Find and read serial numbers** — locates the serial regions with an object-
+  detection model, then reads them with OCR, correcting common currency-font
+  confusions (I↔T, O↔0↔Q, G↔6, etc.).
+- **Classify fancy serials** — checks each serial against a large built-in library
+  (100+ core patterns plus the full *Green Guide* collection): solids, radars,
+  repeaters, ladders, binaries, low serials, star notes, birthdays/dates, ZIP
+  codes, and many more.
+- **Show its work** — draws overlays on each bill highlighting the digits and the
+  relationships that make a serial fancy (arcs, group boxes, colored highlights).
+- **Handle multiple denominations** — $1 and $2 (one district letter) plus $5 and
+  up (two leading letters), selectable per crop profile.
+- **Detect print quirks collectors care about** — "gas pump" digit misalignment,
+  treasury-seal shift/overprint offset, and plate/series info (with basic mule
+  detection).
+- **Organize & crop** — auto-classify front/back, fix upside-down scans, correct
+  skew, and (optionally) produce ready-to-share crops of just the keepers.
+- **Extend without code** — build your own patterns with a point-and-click wizard,
+  write them in Lua, or describe them in plain English and let a built-in AI
+  generator write the pattern for you (you bring your own API key).
+
+It runs **entirely on your computer** — your scans never leave your machine.
+
+---
+
+## Screenshots
+
+> _Screenshots coming soon._ Drop images into `docs/screenshots/` and uncomment the
+> lines below.
+
+<!-- ![Main window](docs/screenshots/main-window.png) -->
+<!-- ![Pattern overlay on a serial](docs/screenshots/pattern-overlay.png) -->
+<!-- ![Pattern Manager](docs/screenshots/pattern-manager.png) -->
+<!-- ![Crop Tool](docs/screenshots/crop-tool.png) -->
+
+| Main window | Pattern overlay | Pattern Manager |
+|:-----------:|:---------------:|:---------------:|
+| _placeholder_ | _placeholder_ | _placeholder_ |
+
+---
+
+## Download & install
+
+Grab the latest installer for your OS from the
+**[Releases page](https://github.com/ptbarros/dollar-bill-processor/releases/latest)**.
+
+Dollar Detective is **not code-signed** (signing certificates are expensive for a
+free hobby project), so Windows and macOS will show a one-time "unknown developer"
+warning. The steps below explain how to get past it. This is normal for small
+open-source apps — but as always, only run installers you downloaded from the
+official Releases page above.
+
+### Windows
+
+Three editions are published — they differ only in how they accelerate detection:
+
+| Installer | Use when |
+|-----------|----------|
+| `DollarDetective-<version>-setup.exe` | **Default.** Best for most PCs (Intel graphics acceleration, safe CPU fallback everywhere). |
+| `DollarDetective-<version>-directml-setup.exe` | You have an AMD or NVIDIA GPU and no Intel graphics. |
+| `DollarDetective-<version>-cuda-setup.exe` | You have an NVIDIA GPU and want maximum speed. Larger download. |
+
+**Install:** download the `.exe` and run it. It's a per-user install — **no admin
+rights needed**.
+
+**Getting past the SmartScreen warning:** Windows may show
+_"Windows protected your PC."_ Click **More info → Run anyway**. (This appears
+because the app isn't signed, not because anything is wrong with it.)
+
+### macOS (Apple Silicon)
+
+Download `DollarDetective-arm64.dmg`, open it, and drag **Dollar Detective** to your
+Applications folder.
+
+**Getting past Gatekeeper (required on first launch):** because the app is
+unsigned, double-clicking may appear to do nothing. Do one of the following **once**:
+
+- **Right-click** the app → **Open** → confirm **Open** in the dialog, **or**
+- Run this in Terminal (adjust the path if you didn't move it to Applications):
+  ```bash
+  xattr -dr com.apple.quarantine "/Applications/Dollar Detective.app"
+  ```
+
+After that first launch it opens normally. _(Intel Macs aren't currently built —
+this is an Apple-Silicon build.)_
+
+### Linux
+
+Download `DollarDetective-x86_64.AppImage`, make it executable, and run it:
 
 ```bash
-# Create virtual environment
+chmod +x DollarDetective-x86_64.AppImage
+./DollarDetective-x86_64.AppImage
+```
+
+If you get a **FUSE** error, run it in extract-and-run mode instead:
+
+```bash
+./DollarDetective-x86_64.AppImage --appimage-extract-and-run
+```
+
+---
+
+## Updating
+
+Dollar Detective checks GitHub for a newer release on startup (you can also trigger
+it from **Help → Check for Updates**). When one is available it shows what's new.
+
+- **Windows:** it can download and launch the matching installer for you.
+- **macOS / Linux:** it opens the Releases page so you can grab the new build.
+
+You can turn the startup check off in **Settings → Interface**.
+
+---
+
+## Fancy serial patterns
+
+A "fancy" serial number is one collectors find desirable because of a pattern in its
+digits. Dollar Detective ships with a large library and lets you add your own:
+
+- **Built-in library** — the common families (solid, radar, repeater, ladder,
+  binary, low serial, star note, and more) plus the full **[Green Guide](#acknowledgements)**
+  collection of named patterns.
+- **Pattern Wizard** — build patterns by picking a recipe (ladder, pairs,
+  palindrome, binary, …) with no coding.
+- **Lua scripting** — for full control, patterns are small [Lua](https://www.lua.org/)
+  scripts with a simple, sandboxed API and rich visualization (highlights,
+  connectors, group boxes).
+- **AI generation** — describe a pattern in plain English and let the built-in
+  generator write the Lua for you. Requires your own Anthropic or OpenAI API key
+  (configured in **Settings → AI**); nothing is sent anywhere without your key.
+- **Enable/disable & share** — turn individual patterns or whole libraries on and
+  off in the **Pattern Manager**, and export/import your selection to share with a
+  friend.
+
+---
+
+## The standalone Crop Tool
+
+There's also a **separate, lightweight Crop Tool** — just the cropping feature,
+without the full app — for quickly cropping a folder of scans using your saved crop
+settings. It's published on its own under the
+[Releases page](https://github.com/ptbarros/dollar-bill-processor/releases) with
+`croptool-` tags, for Windows, macOS, and Linux. Same install/Gatekeeper notes as
+above apply.
+
+---
+
+## Performance
+
+Speed depends heavily on your hardware and which edition you install. These are
+**real measurements on a 100-bill batch** from machines we've tested — treat them as
+a rough guide, not a guarantee:
+
+| Machine | Edition | ~100 bills | Rate |
+|---------|---------|-----------:|-----:|
+| NVIDIA RTX 5060 + Intel i5-14400F | **CUDA** (NVIDIA) | ~33 sec | ~180 bills/min |
+| Laptop with Intel Iris Xe graphics (i7-1185G7) | **Default** (Intel-graphics accelerated) | ~65 sec | ~108 bills/min |
+| The same RTX 5060 box, on the non-CUDA build | **DirectML** (Lite) | ~2.8 min | ~37 bills/min |
+| Older desktop, Intel UHD 630 graphics (i5-9500T) | **Default** (falls back to CPU) | ~3 min | ~32 bills/min |
+
+Takeaways:
+
+- An **NVIDIA GPU with the CUDA edition is by far the fastest** (~180 bills/min).
+- On a **modern Intel laptop/desktop** (Iris / Iris Xe / Arc graphics), the default
+  edition uses the built-in Intel graphics and is very quick (~100 bills/min) — no
+  discrete GPU needed.
+- **Older Intel graphics, AMD, or F-series (no integrated graphics)** chips fall back
+  to the CPU and land around **30–50 bills/min** — still perfectly usable for a
+  stack of a few hundred bills, just slower.
+- The GPU acceleration toggle is in **Settings → Processing** if you want to compare.
+
+---
+
+## Running from source (developers)
+
+You'll need **Python 3.12**. From the repo root:
+
+```bash
+# Create and activate a virtual environment
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate            # Windows: venv\Scripts\activate
 
-# Install dependencies
+# Install dependencies (torch-free stack: ONNX Runtime + RapidOCR)
 pip install -r requirements.txt
+
+# Launch the GUI
+python run_gui.py
 ```
 
-### Basic Usage
-
-```bash
-# Process bills in current directory
-./run_yolo.sh
-
-# Process bills in specific directory
-python process_bills_yolo.py best.pt /path/to/scans
-```
-
-### Output
-
-Creates CSV file: `serial_numbers_YYYYMMDD_HHMMSS.csv`
-
-```csv
-filename,serial,fancy_types,confidence,time,is_fancy,error
-Dollar_01.jpg,F16936637I,[],0.99,0.44,False,
-Dollar_03.jpg,B12341234G,"['REPEATER']",0.95,0.45,True,
-```
+For the CUDA/torch build (NVIDIA), use `requirements-cuda.txt` instead. The Windows,
+macOS, and Linux installers are built by GitHub Actions from the `*.spec` files when
+a version tag is pushed — see `.github/workflows/`.
 
 ---
 
-## Project Structure
+## How it works
 
-```
-dollar-bill-processor/
-├── README.md                    # This file
-├── requirements.txt             # Python dependencies
-├── .gitignore                   # Git ignore rules
-├── process_bills_yolo.py        # Main processing script
-├── train_yolo.py                # Model training script
-├── run_yolo.sh                  # Convenience wrapper
-├── best.pt                      # Trained YOLOv8 model (6.2 MB)
-├── reference_bill.jpg           # Reference image for template alignment
-└── yolov8/                      # Training dataset (259 labeled images)
-    ├── train/                   # 159 training images
-    ├── valid/                   # 50 validation images
-    └── data_local.yaml          # Dataset configuration
-```
+- **Detection:** a small YOLO-family object-detection model (run via
+  [ONNX Runtime](https://onnxruntime.ai/)) locates the serial-number regions on each
+  aligned bill. The default builds are **torch-free** for a small footprint; an
+  optional CUDA edition uses PyTorch for NVIDIA GPUs.
+- **OCR:** [RapidOCR](https://github.com/RapidAI/RapidOCR) (default) or EasyOCR
+  (CUDA edition) reads the characters, with currency-font confusion correction and
+  seal-based verification of the district letter.
+- **Classification:** each serial is run through the Lua pattern engine, which
+  evaluates the enabled patterns and returns matches plus visualization data.
+- **UI:** built with [PySide6](https://doc.qt.io/qtforpython/) (Qt for Python).
 
 ---
 
-## Training Your Own Model
+## Roadmap
 
-If you need to retrain with more data:
+Currently free, actively tinkered on when time allows. Ideas on the table (no
+promises or timelines):
 
-```bash
-python train_yolo.py
-# Default: 100 epochs, nano model, CPU
-# Takes 5-15 minutes on CPU, <2 minutes on GPU
-
-# Custom training
-python train_yolo.py 50           # 50 epochs
-python train_yolo.py 100 s        # Small model
-python train_yolo.py 100 n gpu    # Use GPU
-```
-
-**Model will be saved to:** `best.pt` (auto-copied to project root)
+- More denominations and better handling of busy $5+ backgrounds
+- Refinements to the crop/organize workflow
+- A possible "review from the couch" companion for phones/tablets
 
 ---
 
-## Performance Benchmarks
+## Disclaimer
 
-**Measured on CPU (Intel/AMD):**
-
-| Bills | Processing Time | Rate |
-|-------|-----------------|------|
-| 10    | ~3 seconds      | 176/min |
-| 100   | ~34 seconds     | 176/min |
-| 1,000 | ~6 minutes      | 176/min |
-| 3,000 | **~17 minutes** | 176/min |
-
-**With GPU (NVIDIA):** ~10-30x faster
-
-To enable GPU:
-1. Ensure CUDA toolkit installed
-2. Edit `process_bills_yolo.py` line 443: `use_gpu=True`
+Dollar Detective is a **hobby project for currency collectors**. It is **not
+affiliated with, endorsed by, or connected to** the U.S. Department of the Treasury,
+the Bureau of Engraving and Printing, or any government agency. Pattern
+classifications and value/rarity hints are **for entertainment and collecting
+interest only** — they are not appraisals. Always verify anything important
+yourself. The software is provided **as-is, with no warranty**.
 
 ---
 
-## Known Limitations
+## Acknowledgements
 
-### OCR Letter Confusions
-Some letters may be misread due to currency font styling:
-- I ↔ T
-- O ↔ Q, 0
-- G ↔ 6, C
-
-**Impact:** 100% detection rate maintained, but occasional letter substitutions in serial.
-
-**Example:**
-- Actual: `F16936637I`
-- Detected: `F16936637T`
-
-This is acceptable for the workflow as bills are still identified and located.
-
-### YOLO Bounding Box Training
-The model was trained on Roboflow with tight bounding boxes around digits. The code compensates by adding 30% horizontal padding to capture the surrounding letters.
-
-**If retraining:** Draw bounding boxes that include both letters and all 8 digits for better accuracy.
-
----
-
-## Troubleshooting
-
-### "No serial number detected"
-
-**Causes:**
-- Damaged or heavily worn bills
-- Extreme scanner position drift
-- Bill scanned upside-down
-
-**Solutions:**
-- Ensure bills are face-up during scanning
-- Check `debug_output/` folder for aligned images
-- Manually review those bills
-
-### Slow Processing
-
-**Solutions:**
-- Enable GPU acceleration (see Performance section)
-- Process in smaller batches
-- Close other applications using CPU
-
-### Training Errors
-
-**Check:**
-- Dataset exists in `yolov8/` folder
-- Paths in `data_local.yaml` are correct
-- Sufficient disk space for model output (~50 MB)
-
----
-
-## Next Phase: Production Pipeline 🚧
-
-### Planned Features (Phase 1)
-
-**Goal:** Streamline father-in-law's workflow for processing 1,000+ bills
-
-1. **Auto-detect Front/Back**
-   - Fronts: Have serial numbers
-   - Backs: No serial numbers
-   - Smart pairing for mixed scans
-
-2. **Automated Cropping** (Fancy Bills Only)
-   - 10 crops per bill (front + back)
-   - Percentage-based coordinates (scanner-agnostic)
-   - Naming: `SERIAL_01.jpg` through `SERIAL_10.jpg`
-
-3. **Stack Position Tracking**
-   - Report: "Fancy bills at positions: 7, 23, 41"
-   - Physical location in scanned stack
-
-4. **Custom Pattern Matching**
-   - YAML config file for custom patterns
-   - User-editable without code changes
-   - Birthday patterns, series years, etc.
-
-5. **Batch Cleanup**
-   - List non-fancy scans for deletion
-   - Keep only fancy bill crops
-   - Massive storage savings
-
-### Future Enhancements (Phase 2+)
-
-- **Upside-down Detection:** Auto-rotate bills scanned incorrectly
-- **Comparison Tool:** Blink comparator for misprint detection
-- **GUI:** Click-based interface for non-technical users
-- **Multi-denomination:** Support $5, $10, $20, etc.
-
----
-
-## Technical Details
-
-### Template Alignment
-- Uses ORB (Oriented FAST and Rotated BRIEF) feature detection
-- Affine transformation to normalize bill position
-- Handles scanner drift and slight rotations
-- Reference: `reference_bill.jpg`
-
-### YOLOv8 Detection
-- Model: YOLOv8 Nano (fastest, smallest)
-- Input: Full aligned bill image
-- Output: 2 bounding boxes per bill (upper right + lower left serials)
-- Confidence threshold: Default (0.25)
-
-### Bounding Box Expansion
-```python
-# YOLO boxes are too tight (digits only)
-# Expand by 30% horizontally to capture letters
-padding_x = int(box_width * 0.30)
-x1_expanded = max(0, x1 - padding_x)
-x2_expanded = min(width, x2 + padding_x)
-```
-
-### OCR Configuration
-```python
-easyocr.Reader(['en'], gpu=False)
-reader.readtext(
-    crop,
-    allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789*',
-    detail=1
-)
-```
-
----
-
-## Development History
-
-**Session 1:** Initial development
-- Color-based detection (failed)
-- Tesseract OCR (70% accuracy)
-- Switched to EasyOCR (90% accuracy)
-- Template alignment implementation
-
-**Session 2:** YOLOv8 Integration
-- Trained model on Roboflow (259 images)
-- Local training pipeline
-- Hybrid approach development
-- Bounding box expansion fix
-- **Achieved 100% detection rate**
-
-**Session 3:** Production pipeline (upcoming)
-- Clean project structure
-- Version control setup
-- Phase 1 development
-
----
-
-## Dataset Attribution
-
-**Training Data:** Roboflow project "dollar-bill-serial-number"
-- 159 training images
-- 50 validation images
-- License: CC BY 4.0
-- URL: https://universe.roboflow.com/turt1e/dollar-bill-serial-number/dataset/3
-
----
-
-## Contributing
-
-This is a personal project for family use. If you're working on this:
-
-### Branch Strategy
-```
-main                          # Stable, working code
-  └─ feature/production-pipeline   # Phase 1 development
-```
-
-### Commit Messages
-```
-feat: Add auto front/back detection
-fix: Handle upside-down bills
-docs: Update README with new features
-```
+- **The Green Guide** — many of the named patterns are based on definitions from the
+  well-known collectors' guide to fancy serial numbers. Pattern *names and
+  descriptions* originate with that work and are credited to its author(s).
+- **Training data** — the detection model was trained with help from the Roboflow
+  project ["dollar-bill-serial-number"](https://universe.roboflow.com/turt1e/dollar-bill-serial-number)
+  (CC BY 4.0).
+- **Built with** [PySide6](https://doc.qt.io/qtforpython/),
+  [ONNX Runtime](https://onnxruntime.ai/),
+  [RapidOCR](https://github.com/RapidAI/RapidOCR),
+  [lupa/Lua](https://github.com/scoder/lupa), and
+  [Anthropic's Claude](https://www.anthropic.com/) (which wrote the code).
 
 ---
 
 ## License
 
-Private family project. Not licensed for public distribution.
+Copyright (C) 2026 Paul Barros.
 
----
+Dollar Detective is free and open source software, licensed under the
+**[GNU Affero General Public License v3.0](LICENSE)** (AGPL-3.0).
 
-## Contact
+In plain terms: you're free to use, study, share, and modify it — but **anything you
+build from this code must also be released as open source under this same license,
+including if you run a modified version as a network service.** You can't take this
+code, make a few changes, and ship it as a closed-source or paid product. See the
+[LICENSE](LICENSE) file for the full terms.
 
-Questions about this project? Start a new chat with context:
-- Link to this directory
-- Description of current task
-- Reference to specific file/function
-
-**Status:** Ready for Phase 1 development
-**Last Updated:** January 2026
+> **Note on pattern content:** the code is AGPL-3.0, but many of the *pattern
+> definitions* (names and descriptions) originate with **The Green Guide** (see
+> [Acknowledgements](#acknowledgements)) and may carry their own copyright
+> independent of the software license.
