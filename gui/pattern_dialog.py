@@ -197,6 +197,20 @@ class PatternDialog(QDialog):
         disable_all_btn.clicked.connect(self._disable_all)
         btn_layout.addWidget(disable_all_btn)
 
+        btn_layout.addSpacing(12)
+
+        export_sel_btn = QPushButton("Export Selection…")
+        export_sel_btn.setToolTip("Save which patterns are enabled/disabled to a file "
+                                  "you can back up or share (e.g. send to a friend).")
+        export_sel_btn.clicked.connect(self._export_selection)
+        btn_layout.addWidget(export_sel_btn)
+
+        import_sel_btn = QPushButton("Import Selection…")
+        import_sel_btn.setToolTip("Load an enabled/disabled selection from a file — "
+                                  "matches someone else's pattern setup exactly.")
+        import_sel_btn.clicked.connect(self._import_selection)
+        btn_layout.addWidget(import_sel_btn)
+
         left_layout.addLayout(btn_layout)
 
         splitter.addWidget(left_panel)
@@ -1528,7 +1542,14 @@ class PatternDialog(QDialog):
         self.engine.save_config()
 
     def _enable_all(self):
-        """Enable all patterns and libraries."""
+        """Enable all patterns and libraries (guarded)."""
+        if QMessageBox.question(
+                self, "Enable All Patterns",
+                "This ENABLES every pattern, replacing your current selection.\n\n"
+                "Tip: use “Export Selection…” first so you can restore your setup.\n\n"
+                "Continue?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
         for i in range(self.pattern_tree.topLevelItemCount()):
             lib_item = self.pattern_tree.topLevelItem(i)
             lib_item.setCheckState(0, Qt.Checked)  # Library checkbox
@@ -1537,13 +1558,98 @@ class PatternDialog(QDialog):
                 pattern_item.setCheckState(2, Qt.Checked)  # Column 2 = Enabled
 
     def _disable_all(self):
-        """Disable all patterns and libraries."""
+        """Disable all patterns and libraries (guarded)."""
+        if QMessageBox.question(
+                self, "Disable All Patterns",
+                "This DISABLES every pattern, replacing your current selection.\n\n"
+                "Tip: use “Export Selection…” first so you can restore your setup.\n\n"
+                "Continue?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
         for i in range(self.pattern_tree.topLevelItemCount()):
             lib_item = self.pattern_tree.topLevelItem(i)
             lib_item.setCheckState(0, Qt.Unchecked)  # Library checkbox
             for j in range(lib_item.childCount()):
                 pattern_item = lib_item.child(j)
                 pattern_item.setCheckState(2, Qt.Unchecked)  # Column 2 = Enabled
+
+    def _export_selection(self):
+        """Save the current enabled/disabled selection to a shareable JSON file."""
+        from PySide6.QtWidgets import QFileDialog
+        import json
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Pattern Selection", "pattern_selection.json",
+            "Pattern selection (*.json)")
+        if not path:
+            return
+        if not path.lower().endswith(".json"):
+            path += ".json"
+        # Effective on/off state of every loaded pattern, so it reproduces exactly
+        # on another machine regardless of that machine's defaults.
+        states = {name: bool(getattr(p, "enabled", True))
+                  for name, p in self.engine.lua_patterns.items()}
+        data = {
+            "format": "dollar-detective-pattern-selection",
+            "version": 1,
+            "pattern_states": states,
+            "library_states": dict(getattr(self.settings, "library_states", {}) or {}),
+        }
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, sort_keys=True)
+        except Exception as e:
+            QMessageBox.critical(self, "Export failed", str(e))
+            return
+        QMessageBox.information(
+            self, "Selection exported",
+            f"Saved {len(states)} pattern settings to:\n{path}\n\n"
+            "Share this file to give someone your exact pattern setup.")
+
+    def _import_selection(self):
+        """Load an enabled/disabled selection from a JSON file and apply it."""
+        from PySide6.QtWidgets import QFileDialog
+        import json
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import Pattern Selection", "", "Pattern selection (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            QMessageBox.critical(self, "Import failed", f"Could not read the file:\n{e}")
+            return
+        if not isinstance(data, dict) or data.get("format") != "dollar-detective-pattern-selection":
+            QMessageBox.warning(self, "Import failed",
+                                "That doesn't look like a Dollar Detective pattern-selection file.")
+            return
+        pstates = data.get("pattern_states", {}) or {}
+        lstates = data.get("library_states", {}) or {}
+        enabled_count = sum(1 for v in pstates.values() if v)
+        if QMessageBox.question(
+                self, "Import Pattern Selection",
+                f"Apply this selection ({enabled_count} of {len(pstates)} patterns enabled)?\n\n"
+                "This replaces your current enabled/disabled setup.",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
+        # Library states first, then per-pattern (per-pattern is authoritative).
+        for lib, en in lstates.items():
+            try:
+                self.settings.set_library_enabled(lib, bool(en))
+            except Exception:
+                pass
+        applied = 0
+        for name, en in pstates.items():
+            if name in self.engine.lua_patterns:
+                self.engine.set_pattern_enabled(name, bool(en))
+                applied += 1
+        self.settings.save()
+        self._load_patterns()   # rebuild the tree to reflect the imported states
+        missing = len(pstates) - applied
+        QMessageBox.information(
+            self, "Selection imported",
+            f"Applied {applied} pattern settings."
+            + (f"\n({missing} patterns in the file aren't installed here.)" if missing else ""))
 
     def _save_and_close(self):
         """Save pattern states and close."""
