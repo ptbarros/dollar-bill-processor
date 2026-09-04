@@ -71,7 +71,8 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Dollar Detective")
 
-        # Show the active profile's denomination on the Process button.
+        # Populate the toolbar profile picker + show the active denomination.
+        self._refresh_profile_picker()
         self._refresh_process_denomination()
 
         # Check for recovery on startup (after UI is ready)
@@ -94,6 +95,7 @@ class MainWindow(QMainWindow):
         self.processing_panel = ProcessingPanel()
         self.processing_panel.process_requested.connect(self._on_process_requested)
         self.processing_panel.organize_requested.connect(self._on_organize_requested)
+        self.processing_panel.profile_changed.connect(self._on_profile_changed)
         self.processing_panel.stop_requested.connect(self._on_stop_requested)
         self.processing_panel.archive_requested.connect(self._on_archive_requested)
         self.main_layout.addWidget(self.processing_panel)
@@ -179,6 +181,14 @@ class MainWindow(QMainWindow):
         crops_action = QAction("&Crop Manager...", self)
         crops_action.triggered.connect(self._on_crop_manager)
         edit_menu.addAction(crops_action)
+
+        edit_menu.addSeparator()
+
+        organize_action = QAction("&Organize Folder...", self)
+        organize_action.setToolTip("Pre-process the input folder: classify front/back, "
+                                   "fix orientation, deskew, rename. Speeds up re-processing.")
+        organize_action.triggered.connect(lambda: self.processing_panel.trigger_organize())
+        edit_menu.addAction(organize_action)
 
         # View menu
         view_menu = menubar.addMenu("&View")
@@ -1125,8 +1135,9 @@ class MainWindow(QMainWindow):
             config_path = user_config
             with open(config_path, 'w') as f:
                 yaml.dump(updated_config, f, default_flow_style=False, sort_keys=False)
-            # Active profile (and its denomination) may have changed -> update the
-            # Process button label.
+            # Active profile (and its denomination) may have changed -> sync the
+            # toolbar picker + the Process button label.
+            self._refresh_profile_picker()
             self._refresh_process_denomination()
             QMessageBox.information(
                 self, "Settings Saved",
@@ -1180,6 +1191,46 @@ class MainWindow(QMainWindow):
         """Update the Process button to show the active denomination."""
         try:
             self.processing_panel.set_denomination(self._active_denomination())
+        except Exception:
+            pass
+
+    def _refresh_profile_picker(self):
+        """Populate the toolbar profile picker from config (names + active)."""
+        try:
+            import yaml
+            from resource_path import app_base, user_data_dir
+            user_config = user_data_dir() / "config.yaml"
+            path = user_config if user_config.exists() else app_base() / "config.yaml"
+            names, active = [], None
+            if path.exists():
+                with open(path) as f:
+                    cfg = yaml.safe_load(f) or {}
+                names = list((cfg.get('crop_profiles') or {}).keys())
+                active = cfg.get('active_crop_profile')
+            if not names:
+                names, active = ['Default'], active or 'Default'
+            self.processing_panel.set_profiles(names, active)
+        except Exception:
+            pass
+
+    def _on_profile_changed(self, name):
+        """Toolbar profile picker changed -> make it the active profile in the
+        user config and refresh the Process button's denomination. This is the
+        same active_crop_profile the Crop Manager sets, so the two stay in sync."""
+        try:
+            import yaml
+            from resource_path import app_base, user_data_dir
+            user_config = user_data_dir() / "config.yaml"
+            path = user_config if user_config.exists() else app_base() / "config.yaml"
+            if not path.exists():
+                return
+            with open(path) as f:
+                cfg = yaml.safe_load(f) or {}
+            if name in (cfg.get('crop_profiles') or {}):
+                cfg['active_crop_profile'] = name
+                with open(user_config, 'w') as f:
+                    yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+            self._refresh_process_denomination()
         except Exception:
             pass
 

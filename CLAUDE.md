@@ -1,4 +1,4 @@
-# Dollar Bill Processor - Project Memory
+# Dollar Detective - Project Memory
 
 ## Overview
 GUI application for processing dollar bill images, detecting serial numbers via OCR, and classifying them against collectible "fancy serial number" patterns.

@@ -117,7 +117,8 @@ class CropWorker(QThread):
                         serial, _conf, is_ud, _bvar, star, align_info = processor.extract_serial(
                             pair.front_path, cached_detections=pair.front_cache)
                         if serial and star and not serial.endswith('*'):
-                            serial = serial[:-1] + '*' if len(serial) == 10 else serial + '*'
+                            _tlen = processor._serial_format()[3]
+                            serial = serial[:-1] + '*' if len(serial) == _tlen else serial + '*'
                         pair.serial = serial or pair.front_path.stem
                         pair.is_upside_down = is_ud
                         pair.front_align_angle = align_info.get('angle', 0.0)
