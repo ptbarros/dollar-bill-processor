@@ -3067,9 +3067,18 @@ class ProductionProcessor:
         if len(chars) < 3:
             return result
 
-        # Mark first and last as letters, rest as digits
+        # Mark the leading prefix letter(s) and the trailing letter as letters,
+        # the rest as digits. $1/$2 have one leading letter; $5+ have two (series
+        # + district), so key off the configured prefix length. For prefix_len 1
+        # this is identical to the old "first and last" rule. Correct letter/digit
+        # split matters for both gas-pump deviation (digits only) and the pattern
+        # overlay (which maps highlight positions onto the non-letter boxes).
+        try:
+            prefix_len = self.cfg.serial_prefix_length
+        except Exception:
+            prefix_len = 1
         for i, char in enumerate(chars):
-            char['is_letter'] = (i == 0 or i == len(chars) - 1)
+            char['is_letter'] = (i < prefix_len or i == len(chars) - 1)
 
         # Calculate median center from digits only (not letters)
         digits = [c for c in chars if not c['is_letter']]
