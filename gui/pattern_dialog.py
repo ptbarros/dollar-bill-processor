@@ -2774,11 +2774,20 @@ class CustomPatternDialog(QDialog):
             self.ai_status_label.setText(msg)
             QApplication.processEvents()
 
+        # If the script editor already holds a pattern, pass it so a request like
+        # "change this to X" edits the current script instead of starting over.
+        current_script = ""
+        try:
+            current_script = self.script_edit.toPlainText().strip()
+        except Exception:
+            pass
+
         result = generator.generate(
             description=description,
             should_match=should_match,
             should_not_match=should_not_match,
             pattern_name=pattern_name,
+            current_script=current_script,
             progress_callback=progress_callback
         )
 

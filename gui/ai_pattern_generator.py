@@ -39,6 +39,7 @@ class AIPatternGenerator:
                  should_match: list[str] = None,
                  should_not_match: list[str] = None,
                  pattern_name: str = "",
+                 current_script: str = "",
                  progress_callback: Callable[[str], None] = None) -> AIGenerationResult:
         """
         Generate a Lua pattern from a natural language description.
@@ -60,7 +61,8 @@ class AIPatternGenerator:
             return AIGenerationResult(success=False, error="Please provide a pattern description")
 
         # Build the prompt
-        prompt = self._build_prompt(description, should_match, should_not_match, pattern_name)
+        prompt = self._build_prompt(description, should_match, should_not_match,
+                                    pattern_name, current_script)
 
         # Call the appropriate API
         if self.provider == "anthropic":
@@ -79,8 +81,21 @@ class AIPatternGenerator:
     def _build_prompt(self, description: str,
                       should_match: list[str] = None,
                       should_not_match: list[str] = None,
-                      pattern_name: str = "") -> str:
+                      pattern_name: str = "",
+                      current_script: str = "") -> str:
         """Build the full prompt for the AI."""
+
+        # When an existing script is supplied, this is an EDIT: give the AI the
+        # current script so a request like "change this to X" works, and tell it
+        # to preserve the rest (esp. the header's DataFile: and Examples lines).
+        modify_section = ""
+        if current_script and current_script.strip():
+            modify_section = (
+                "\n**You are MODIFYING the existing script below.** Apply the change "
+                "described above and return the COMPLETE updated script, keeping "
+                "everything else intact — especially the header's `DataFile:` line "
+                "(if any) and the `Examples:` line. Current script:\n"
+                "```lua\n" + current_script.strip() + "\n```\n")
 
         # Build examples section
         examples_section = ""
@@ -273,6 +288,7 @@ Create a complete Lua pattern script for the following:
 
 **Description:** {description}
 {f"**Suggested Name:** {pattern_name}" if pattern_name else ""}
+{modify_section}
 {examples_section}
 
 ## Response Format
