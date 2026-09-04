@@ -48,6 +48,7 @@ class UpdateInfo:
     current_version: str              # __version__
     release_url: str                  # release html_url (browser fallback)
     assets: List[dict] = field(default_factory=list)  # [{name, url}]
+    notes: str = ""                   # release body (markdown "What's Changed")
 
     def asset_for_current_edition(self) -> Optional[dict]:
         return _asset_for_edition(self.assets, detect_edition())
@@ -132,6 +133,7 @@ def check_for_update(timeout: int = 6) -> Optional[UpdateInfo]:
         current_version=__version__,
         release_url=best_rel.get("html_url", RELEASES_PAGE),
         assets=assets,
+        notes=(best_rel.get("body") or "").strip(),
     )
 
 

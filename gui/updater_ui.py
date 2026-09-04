@@ -52,21 +52,50 @@ def prompt_and_apply(parent, info):
     can_autoinstall = (sys.platform == "win32" and asset
                        and asset["name"].endswith(".exe"))
 
-    box = QMessageBox(parent)
-    box.setWindowTitle("Update available")
-    box.setIcon(QMessageBox.Information)
-    box.setText(f"Dollar Detective {info.latest_version} is available.\n"
-                f"You have {info.current_version}.")
-    if can_autoinstall:
-        box.setInformativeText(
-            "Download and install it now? The app will close to finish installing.")
-        accept = box.addButton("Download && Install", QMessageBox.AcceptRole)
-    else:
-        box.setInformativeText("Open the download page in your browser?")
-        accept = box.addButton("Open Download Page", QMessageBox.AcceptRole)
-    box.addButton("Later", QMessageBox.RejectRole)
-    box.exec()
-    if box.clickedButton() is not accept:
+    from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+                                   QTextBrowser, QPushButton)
+
+    dlg = QDialog(parent)
+    dlg.setWindowTitle("Update available")
+    dlg.setMinimumWidth(480)
+    v = QVBoxLayout(dlg)
+
+    header = QLabel(f"<b>Dollar Detective {info.latest_version}</b> is available "
+                    f"(you have {info.current_version}).")
+    header.setWordWrap(True)
+    v.addWidget(header)
+
+    # "What's new" -- the release's notes (GitHub auto-generated "What's Changed").
+    if info.notes:
+        v.addWidget(QLabel("What's new:"))
+        notes = QTextBrowser()
+        notes.setOpenExternalLinks(True)
+        try:
+            notes.setMarkdown(info.notes)
+        except Exception:
+            notes.setPlainText(info.notes)
+        notes.setMinimumHeight(200)
+        v.addWidget(notes, 1)
+
+    ask = QLabel("Download and install it now? The app will close to finish installing."
+                 if can_autoinstall else "Open the download page in your browser?")
+    ask.setWordWrap(True)
+    v.addWidget(ask)
+
+    row = QHBoxLayout()
+    row.addStretch()
+    later_btn = QPushButton("Later")
+    accept_btn = QPushButton("Download && Install" if can_autoinstall else "Open Download Page")
+    accept_btn.setDefault(True)
+    row.addWidget(later_btn)
+    row.addWidget(accept_btn)
+    v.addLayout(row)
+
+    accepted = {"v": False}
+    later_btn.clicked.connect(dlg.reject)
+    accept_btn.clicked.connect(lambda: (accepted.__setitem__("v", True), dlg.accept()))
+    dlg.exec()
+    if not accepted["v"]:
         return
 
     if not can_autoinstall:

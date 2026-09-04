@@ -209,9 +209,30 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history + tags for the changelog
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Build changelog (What's new)
+        shell: bash
+        run: |
+          set +e
+          # Previous version tag (v*), if any, so notes cover just this release.
+          PREV=$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_REF_NAME}^" 2>/dev/null)
+          {
+            echo "## What's new in ${GITHUB_REF_NAME}"
+            echo ""
+            if [ -n "$PREV" ]; then
+              git log --no-merges --pretty='- %s' "${PREV}..${GITHUB_REF_NAME}"
+            else
+              git log --no-merges --pretty='- %s' -30
+            fi
+          } | grep -v -i -E '^- bump version|^## ' > /tmp/body.txt
+          # Re-add the heading (grep above stripped it to drop stray '## ' lines).
+          { echo "## What's new in ${GITHUB_REF_NAME}"; echo ""; cat /tmp/body.txt; } > RELEASE_NOTES.md
+          echo "----- release notes -----"; cat RELEASE_NOTES.md
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -221,6 +242,7 @@ jobs:
             artifacts/windows-installer-directml/*
             artifacts/linux-appimage/*
             artifacts/macos-app/*
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
+          generate_release_notes: true   # appends the auto "Full Changelog" link
           # Tags with a hyphen (e.g. v1.4.0-ci1) are test/pre-releases.
           prerelease: ${{ contains(github.ref_name, '-') }}
