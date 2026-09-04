@@ -434,6 +434,18 @@ class SettingsDialog(QDialog):
         review_hint.setStyleSheet("color: gray; font-size: 9px;")
         dirs_layout.addRow("", review_hint)
 
+        # Output subfolder name (auto-filled as <input>/<name> when picking a folder)
+        self.output_subfolder_edit = QLineEdit()
+        self.output_subfolder_edit.setPlaceholderText("fancy_bills")
+        dirs_layout.addRow("Output Subfolder:", self.output_subfolder_edit)
+
+        output_sub_hint = QLabel(
+            "Name auto-appended to the input folder for output "
+            "(<input>/<name>). Blank = fancy_bills")
+        output_sub_hint.setStyleSheet("color: gray; font-size: 9px;")
+        output_sub_hint.setWordWrap(True)
+        dirs_layout.addRow("", output_sub_hint)
+
         layout.addWidget(dirs_group)
         layout.addStretch()
 
@@ -693,6 +705,7 @@ class SettingsDialog(QDialog):
         # Folders
         self.archive_dir_edit.setText(self.settings.processing.archive_directory)
         self.review_dir_edit.setText(self.settings.ui.review_directory)
+        self.output_subfolder_edit.setText(self.settings.processing.output_subfolder)
 
         # AI
         provider = self.settings.ai.provider
@@ -739,6 +752,7 @@ class SettingsDialog(QDialog):
         # Folders
         self.settings.processing.archive_directory = self.archive_dir_edit.text().strip()
         self.settings.ui.review_directory = self.review_dir_edit.text().strip()
+        self.settings.processing.output_subfolder = self.output_subfolder_edit.text().strip() or "fancy_bills"
 
         # AI
         self.settings.ai.provider = self.ai_provider_combo.currentData() or ""

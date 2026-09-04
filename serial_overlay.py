@@ -38,6 +38,19 @@ PATTERN_COLORS = {
 GAS_PUMP_FILTER = "__gas_pump__"
 NONE_FILTER = "__none__"
 
+
+def _quad_bezier_points(p0, ctrl, p1, segments=24):
+    """Sample a quadratic Bezier (p0 -> ctrl -> p1) into an int32 point array for
+    cv2.polylines, giving a smooth arc instead of an angular 3-point tent."""
+    pts = []
+    for i in range(segments + 1):
+        t = i / segments
+        mt = 1.0 - t
+        x = mt * mt * p0[0] + 2 * mt * t * ctrl[0] + t * t * p1[0]
+        y = mt * mt * p0[1] + 2 * mt * t * ctrl[1] + t * t * p1[1]
+        pts.append((int(round(x)), int(round(y))))
+    return np.array(pts, np.int32)
+
 # eBay rejects uploads whose shorter side is under 500px. The serial overlay
 # crop is naturally wide-and-short (~786x154), so its height falls under this.
 EBAY_MIN_DIMENSION = 500
@@ -248,9 +261,27 @@ def draw_serial_overlay(
                 elif conn_style == 'arrow':
                     cv2.arrowedLine(crop, pt1, pt2, conn_color, 2, cv2.LINE_AA, tipLength=0.15)
                 else:
-                    # Default arc connector: curved line above digits
-                    pts = np.array([pt1, (mid_x, mid_y), pt2], np.int32)
-                    cv2.polylines(crop, [pts], False, conn_color, 2, cv2.LINE_AA)
+                    # Default arc connector: a smooth curve arching ABOVE the
+                    # digits, matching the pattern-preview look. Anchor the
+                    # endpoints to the top of each digit (not its vertical
+                    # center) so the arc never slices through the glyphs, and
+                    # sample a quadratic Bezier for a smooth curve instead of a
+                    # 3-point tent. Peak is clamped to stay on-image, so a tight
+                    # crop just yields a shallower arc rather than a crash.
+                    r1 = digit_rects.get(pos1)
+                    r2 = digit_rects.get(pos2)
+                    if r1 and r2:
+                        x1c = (r1[0] + r1[2]) // 2
+                        x2c = (r2[0] + r2[2]) // 2
+                        top_y = min(r1[1], r2[1])
+                    else:  # fallback: no rects -> use centers
+                        x1c, x2c = pt1[0], pt2[0]
+                        top_y = min(pt1[1], pt2[1])
+                    end_y = max(1, top_y - 3)              # just above the tops
+                    peak_y = max(1, end_y - arc_height)    # clamp on-image
+                    arc_pts = _quad_bezier_points(
+                        (x1c, end_y), (mid_x, peak_y), (x2c, end_y))
+                    cv2.polylines(crop, [arc_pts], False, conn_color, 2, cv2.LINE_AA)
 
     # Draw group boxes (boxes spanning multiple digits)
     if is_pattern_mode and pattern_group_boxes:

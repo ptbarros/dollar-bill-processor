@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLineEdit,
-    QProgressBar, QLabel, QFileDialog, QFrame, QComboBox
+    QProgressBar, QLabel, QFileDialog, QFrame, QComboBox, QMessageBox
 )
 from PySide6.QtCore import Qt, Signal, Slot
 
@@ -189,8 +189,8 @@ class ProcessingPanel(QWidget):
 
             # Auto-update output if it's empty or still matches the old auto-generated path
             current_output = self.output_edit.text()
-            if not current_output or (old_input and current_output == str(Path(old_input) / "fancy_bills")):
-                self.output_edit.setText(str(Path(folder) / "fancy_bills"))
+            if not current_output or (old_input and current_output == self._default_output_for(old_input)):
+                self.output_edit.setText(self._default_output_for(folder))
 
     def _browse_output(self):
         """Browse for output folder."""
@@ -214,7 +214,7 @@ class ProcessingPanel(QWidget):
             return
 
         if not output_dir:
-            output_dir = str(Path(input_dir) / "fancy_bills")
+            output_dir = self._default_output_for(input_dir)
             self.output_edit.setText(output_dir)
 
         self.process_requested.emit(input_dir, output_dir)
@@ -230,7 +230,35 @@ class ProcessingPanel(QWidget):
         self.organize_requested.emit(input_dir)
 
     def trigger_organize(self):
-        """Public entry point for the Edit -> Organize Folder menu action."""
+        """Public entry point for the Edit -> Organize Folder menu action.
+
+        Unlike the raw handler, this explains what Organize does (restoring the
+        info the old toolbar button showed) and confirms before running."""
+        input_dir = self.input_edit.text().strip()
+        if not input_dir:
+            QMessageBox.information(
+                self, "Organize Folder",
+                "Choose an input folder first, then run Organize Folder to "
+                "pre-process it.")
+            return
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Question)
+        box.setWindowTitle("Organize Folder")
+        box.setText("Pre-process this folder to speed up re-processing?")
+        box.setInformativeText(
+            "Organize scans the input folder and, in place, will:\n"
+            "  • classify each image as front or back\n"
+            "  • fix upside-down images and correct skew\n"
+            "  • rename files to Dollar_NNN.jpg (odd = front, even = back)\n\n"
+            "Afterwards, processing runs faster because the verify and "
+            "alignment steps can be skipped.\n\n"
+            f"Folder:\n{input_dir}")
+        box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        box.button(QMessageBox.Ok).setText("Organize")
+        box.setDefaultButton(QMessageBox.Cancel)
+        if box.exec() != QMessageBox.Ok:
+            return
         self._on_organize()
 
     def set_profiles(self, names, active_name):
@@ -256,11 +284,21 @@ class ProcessingPanel(QWidget):
         """Set the input directory."""
         self.input_edit.setText(path)
         if not self.output_edit.text():
-            self.output_edit.setText(str(Path(path) / "fancy_bills"))
+            self.output_edit.setText(self._default_output_for(path))
 
     def set_output_dir(self, path: str):
         """Set the output directory."""
         self.output_edit.setText(path)
+
+    def _output_subfolder(self) -> str:
+        """The configurable output subfolder name (Settings -> Folders),
+        defaulting to 'fancy_bills'."""
+        name = (get_settings().processing.output_subfolder or "").strip()
+        return name or "fancy_bills"
+
+    def _default_output_for(self, input_dir: str) -> str:
+        """The auto-generated output path for an input folder."""
+        return str(Path(input_dir) / self._output_subfolder())
 
     def set_denomination(self, denom):
         """Show the active profile's denomination on the Process button so it's

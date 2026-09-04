@@ -34,6 +34,7 @@ class ProcessingSettings:
     archive_directory: str = ""  # Where processed batches are archived (was under Monitor)
     archive_copy_mode: bool = False  # Copy instead of move when archiving (for testing)
     extract_plate_info: bool = True  # Extract series year, front plate, back plate (cheap + accurate with RapidOCR)
+    output_subfolder: str = "fancy_bills"  # Auto-filled output subfolder name (<input>/<name>)
 
 
 @dataclass
@@ -171,6 +172,7 @@ class SettingsManager:
                 data.get('monitor', {}).get('archive_directory', '')
             self.processing.archive_copy_mode = proc.get('archive_copy_mode', False)
             self.processing.extract_plate_info = proc.get('extract_plate_info', True)
+            self.processing.output_subfolder = (proc.get('output_subfolder') or 'fancy_bills').strip() or 'fancy_bills'
 
         # Load UI settings
         if 'ui' in data:
@@ -349,6 +351,7 @@ class SettingsManager:
                 'archive_directory': self.processing.archive_directory,
                 'archive_copy_mode': self.processing.archive_copy_mode,
                 'extract_plate_info': self.processing.extract_plate_info,
+                'output_subfolder': self.processing.output_subfolder,
             },
             'ui': {
                 'default_working_dir': self.ui.default_working_dir,

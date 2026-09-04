@@ -4175,9 +4175,17 @@ end
 
         self.digit_preview.set_serial(serial)
 
-        # Check if we should run Lua script test (Script tab or Test tab with Lua pattern)
+        # Tabs: 0=Simple Rule, 1=Wizard, 2=AI, 3=Lua Script, 4=Test, 5=API Docs.
+        # The Quick Test lives on the Test tab, so run the Lua script test when
+        # we're on the Test or Lua Script tab, or the pattern is Lua-based / the
+        # script has a real header block. (The old code assumed a stale tab
+        # layout where Script=1/Test=2, so the Test tab matched nothing and the
+        # preview showed the serial with no match feedback.)
         current_tab = self.tab_widget.currentIndex()
-        is_lua_mode = current_tab == 1 or (current_tab == 2 and self.is_lua_pattern)
+        script_text = self.script_edit.toPlainText() if HAS_V3_ENGINE else ""
+        has_custom_script = script_text.strip().startswith('--[[')
+        is_lua_mode = HAS_V3_ENGINE and (
+            current_tab in (3, 4) or self.is_lua_pattern or has_custom_script)
 
         if is_lua_mode:
             # Lua script test

@@ -166,6 +166,9 @@ class MainWindow(QMainWindow):
 
         # Edit menu
         edit_menu = menubar.addMenu("&Edit")
+        # Qt hides QAction tooltips inside menus by default; show them on hover
+        # so items like "Organize Folder..." explain themselves.
+        edit_menu.setToolTipsVisible(True)
 
         settings_action = QAction("&Settings...", self)
         settings_action.setShortcut(QKeySequence("Ctrl+,"))
@@ -2113,7 +2116,22 @@ def run_gui():
     window = MainWindow()
     window.show()
 
-    sys.exit(app.exec())
+    exit_code = app.exec()
+
+    # Qt widgets, the Lua runtimes (lupa) held by the several PatternEngine
+    # instances, and onnxruntime all get torn down non-deterministically during
+    # normal interpreter shutdown, which can segfault (core dump + a slow exit)
+    # *after* all real work is done. Everything that must persist has already
+    # been flushed by closeEvent (final autosave) and _cleanup_resources
+    # (threads/processor stopped), and the debug log flushes per line, so skip
+    # the crash-prone native teardown with a hard exit.
+    import os
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except Exception:
+        pass
+    os._exit(exit_code if isinstance(exit_code, int) else 0)
 
 
 if __name__ == "__main__":
