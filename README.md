@@ -175,8 +175,9 @@ digits. Dollar Detective ships with a large library and lets you add your own:
   generator write the Lua for you. Requires your own Anthropic or OpenAI API key
   (configured in **Settings → AI**); nothing is sent anywhere without your key.
 - **Enable/disable & share** — turn individual patterns or whole libraries on and
-  off in the **Pattern Manager**, and export/import your selection to share with a
-  friend.
+  off in the **Pattern Manager**. Share your *setup* (which patterns are on/off) via
+  Export/Import Selection, or share the *patterns themselves* — including any data
+  file they use — as a single `.ddpat` bundle via Export/Import Bundle.
 
 ---
 
