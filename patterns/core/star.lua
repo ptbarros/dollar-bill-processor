@@ -2,6 +2,7 @@
 Pattern: STAR
 Description: Star note (replacement bill)
 Tier: 4
+Overlay: none
 Examples: ["A12345678*"]
 Odds: ~3% of print run
 Price: Face value to $5+ (depends on other patterns)
@@ -19,14 +20,13 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Highlight all digit positions (the star itself isn't in the digit positions)
-    local positions = {0, 1, 2, 3, 4, 5, 6, 7}
-
+    -- A star note's fanciness is the * suffix, not the digits, so draw nothing on
+    -- the digits -- boxing every digit was just noise. (STAR is also hidden from
+    -- the overlay picker via "Overlay: none"; this keeps the crop clean even when
+    -- STAR is forced via right-click "Set Pattern...".)
     return {
         matched = true,
-        highlights = {
-            highlight(positions, "yellow", "star note")
-        },
+        highlights = {},
         connectors = {},
         message = "Star note (replacement bill)"
     }

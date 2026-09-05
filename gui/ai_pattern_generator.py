@@ -185,7 +185,12 @@ The match function must return a table with:
 - `message`: optional string describing the match
 
 ### Available Colors
-purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, teal, red, gray
+Prefer the strong palette: blue, orange, magenta, red, purple, hotpink (plus black for
+max contrast, gray for muted/prefix digits). Colors are for VISIBILITY, not to signal the
+pattern type. To distinguish sub-groups within one pattern, use *different* color names;
+the overlay auto-remaps them onto a contrast-tested rotation, so they'll always be strong
+and mutually distinct. (Older names cyan/teal/lime/green/yellow/gold/coral/salmon/white
+still work but are aliased to the nearest strong color.)
 
 ### Connector Styles
 arc, line, dashed, bracket, arrow

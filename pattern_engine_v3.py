@@ -54,6 +54,10 @@ class LuaPatternInfo:
     data: Any = None              # Loaded data (list of dicts for CSV, any for JSON)
     data_by_key: dict = None      # Dict keyed by first column (CSV only)
     book_ref: str = ""            # CS- reference number (e.g., "CS-100")
+    show_overlay: bool = True     # False => hide from the serial-overlay picker
+                                  # (Overlay: none in the header). For patterns
+                                  # whose match has nothing useful to draw on the
+                                  # digits (STAR, SEAL_SHIFT, low-run, ...).
 
 
 class PatternEngineV3:
@@ -193,7 +197,11 @@ class PatternEngineV3:
                 examples=metadata.get('examples', []),
                 odds=metadata.get('odds', ''),
                 price=metadata.get('price', ''),
-                book_ref=metadata.get('bookref', '')
+                book_ref=metadata.get('bookref', ''),
+                # "Overlay: none/off/false/no" hides the pattern from the serial
+                # overlay picker (still matches + shows in results). Default shown.
+                show_overlay=str(metadata.get('overlay', '')).strip().lower()
+                not in ('none', 'off', 'false', 'no', '0'),
             )
 
             # Load external data file if specified

@@ -2,6 +2,7 @@
 Pattern: SEAL_SHIFT
 DisplayName: Seal Shift
 Description: Overprint elements shifted from normal position
+Overlay: none
 Tier: 5
 Examples: []
 Odds: Rare - printing variance

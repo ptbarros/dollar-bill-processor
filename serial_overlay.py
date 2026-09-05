@@ -15,28 +15,83 @@ The tricky, historically bug-prone bits live here now:
 import cv2
 import numpy as np
 
-# Color map for pattern highlights (CSS name -> BGR)
+# Color map for overlay highlights (name -> BGR).
+#
+# Colors are chosen for CONTRAST/VISIBILITY on the bill, NOT to signal pattern
+# type (the Patterns column already identifies the pattern). All of the "core"
+# colors below were contrast-tested against the measured bill background -- cream
+# paper RGB(231,231,199) and green serial ink RGB(75,143,68) -- for strong
+# perceptual contrast (CIELAB deltaE) against BOTH, and for being mutually
+# distinguishable when several appear at once (e.g. radar pairs).
+#
+# Recommended rotation order (most visible + most distinct first):
+#   blue -> orange -> magenta -> red -> purple -> hotpink   (+ black for max
+#   contrast on busy backgrounds; gray for muted prefix letters).
+#
+# Weak colors on this background (yellow/gold on cream, cyan/teal/green on the
+# green ink, white on paper) are RETIRED: kept as keys so existing/user/AI
+# patterns don't break, but aliased to the nearest strong color so they still
+# render clearly instead of fading out.
 PATTERN_COLORS = {
-    'purple': (128, 0, 128),    # Flipper digits
-    'blue': (255, 0, 0),        # Binary
-    'cyan': (255, 255, 0),      # Trinary
-    'orange': (0, 165, 255),    # Radar pairs
-    'coral': (80, 127, 255),    # Radar pair 2
-    'gold': (0, 215, 255),      # Radar pair 3 / Quads
-    'salmon': (114, 128, 250),  # Radar pair 4
-    'magenta': (255, 0, 255),   # Repeater
-    'yellow': (0, 255, 255),    # Solid/near-solid
-    # 'lime'/'green' were retired (too close to the green serial digits) and now
-    # render as cyan; kept as aliases so existing patterns/scripts don't break.
-    'lime': (255, 255, 0),      # -> cyan (was Ladder green)
-    'green': (255, 255, 0),     # -> cyan (was AI-usage green)
-    'teal': (128, 128, 0),      # Pairs
-    'red': (0, 0, 255),         # Broken/invalid
-    'gray': (128, 128, 128),    # Muted/prefix
+    # --- core contrast-optimized palette ---
+    'blue':    (220, 60, 30),    # royalblue  (RGB 30,60,220)  strongest
+    'orange':  (0, 140, 255),    #            (RGB 255,140,0)
+    'magenta': (200, 0, 255),    #            (RGB 255,0,200)
+    'red':     (30, 30, 230),    #            (RGB 230,30,30)
+    'purple':  (230, 60, 160),   #            (RGB 160,60,230)
+    'hotpink': (150, 60, 255),   #            (RGB 255,60,150)
+    'pink':    (150, 60, 255),   # alias -> hotpink
+    'black':   (10, 10, 10),     # max contrast on any background
+    'gray':    (128, 128, 128),  # muted / prefix letters (intentionally low-key)
+    # --- retired weak colors, aliased to the nearest strong one ---
+    'cyan':    (220, 60, 30),    # -> blue   (cyan blends into the green ink)
+    'teal':    (220, 60, 30),    # -> blue
+    'lime':    (220, 60, 30),    # -> blue   (greens clash with the serial ink)
+    'green':   (220, 60, 30),    # -> blue
+    'yellow':  (0, 140, 255),    # -> orange (yellow vanishes on cream)
+    'gold':    (0, 140, 255),    # -> orange
+    'amber':   (0, 140, 255),    # -> orange
+    'coral':   (30, 30, 230),    # -> red
+    'salmon':  (150, 60, 255),   # -> hotpink
+    'white':   (10, 10, 10),     # -> black  (white blends into the paper)
 }
 
 GAS_PUMP_FILTER = "__gas_pump__"
 NONE_FILTER = "__none__"
+
+
+# Contrast-optimized rotation order (most visible + most distinct first). Color
+# is assigned by first-appearance within an overlay, NOT by pattern type. 'gray'
+# is reserved for muted/prefix and never rotated.
+#
+# Order is tuned so (a) the first four are the maximally-distinct set for the
+# common <=4-group patterns, and (b) adjacent slots stay far apart in CIELAB
+# (min adjacent deltaE ~92) -- the two closest pairs, magenta+hotpink and
+# blue+purple, are never neighbors, and black sits between purple and hotpink as
+# a separator. So similar colors don't land next to each other on the bill.
+_ROTATION = ('blue', 'orange', 'magenta', 'red', 'purple', 'black', 'hotpink')
+
+
+def _build_color_rotation(highlights, connectors, group_boxes):
+    """Map each distinct requested color name (in first-seen order) to a strong
+    rotation color, so drawn colors are always high-contrast and distinct. 'gray'
+    is passed through untouched (it stays muted)."""
+    seen = []
+
+    def note(nm):
+        if nm and nm != 'gray' and nm not in seen:
+            seen.append(nm)
+
+    for ph in (highlights or []):
+        for h in ph.get('highlights', []):
+            note(h.get('color'))
+    for c in (connectors or []):
+        note(c.get('color'))
+    for gb in (group_boxes or []):
+        note(gb.get('color'))
+
+    return {nm: PATTERN_COLORS[_ROTATION[i % len(_ROTATION)]]
+            for i, nm in enumerate(seen)}
 
 
 def _quad_bezier_points(p0, ctrl, p1, segments=24):
@@ -153,15 +208,9 @@ def draw_serial_overlay(
     else:
         off_x, off_y = 0, 0
 
-    # Draw serial bounding box only in gas pump mode
-    if is_gas_pump_mode and tight_box_rel is not None:
-        bx1, by1, bx2, by2 = tight_box_rel
-        cv2.rectangle(
-            crop,
-            (int(bx1 * zoom), int(by1 * zoom)),
-            (int(bx2 * zoom), int(by2 * zoom)),
-            bbox_color, 2,
-        )
+    # (The outer serial bounding rectangle used to be drawn here in gas-pump mode,
+    # but it's just clutter now that gas-pump mode boxes only the shifted digit(s).
+    # bbox_color is kept in the signature for compatibility.)
 
     # Get pattern-based digit highlights for specific pattern mode
     pattern_highlights = []
@@ -174,6 +223,18 @@ def draw_serial_overlay(
             pattern_highlights = viz_data.get('highlights', [])
             pattern_connectors = viz_data.get('connectors', [])
             pattern_group_boxes = viz_data.get('group_boxes', [])
+
+    # Remap the colors a pattern REQUESTED onto the contrast-optimized rotation, so
+    # the drawn colors are always strong and mutually distinct regardless of which
+    # names the pattern author picked (color = visibility, not a pattern-type
+    # signal). Distinct sub-groups within one pattern stay distinct.
+    color_map = _build_color_rotation(
+        pattern_highlights, pattern_connectors, pattern_group_boxes)
+
+    def _resolve(name):
+        if name in color_map:
+            return color_map[name]
+        return PATTERN_COLORS.get(name, PATTERN_COLORS['blue'])
 
     # Store digit box info for drawing connectors and group boxes
     digit_centers = {}  # digit_idx -> (center_x, center_y)
@@ -190,23 +251,35 @@ def draw_serial_overlay(
         dx2 = int((digit_box['x2'] + off_x) * zoom)
         dy2 = int((digit_box['y2'] + off_y) * zoom)
 
+        # The digit boxes come from gas-pump segmentation, which are TIGHT glyph
+        # contours (needed for accurate baseline/deviation). For DISPLAY only, give
+        # the drawn box a little breathing room so it doesn't hug the digit. This is
+        # decoupled from the gas-pump measurement, which still uses the tight box.
+        ch, cw = crop.shape[:2]
+        bpad = max(2, min(8, int(round((dy2 - dy1) * 0.14))))
+        pdx1, pdy1 = max(0, dx1 - bpad), max(0, dy1 - bpad)
+        pdx2, pdy2 = min(cw - 1, dx2 + bpad), min(ch - 1, dy2 + bpad)
+
         # Map digit_box index to pattern highlight index (skip letters)
         digit_idx = sum(1 for db in digit_boxes[:idx] if not db['is_letter'])
 
-        # Store center and rect for connectors and group boxes
+        # Store center (true center) and rect (padded, so group boxes + arcs line
+        # up with the drawn boxes) for connectors and group boxes.
         if not digit_box['is_letter']:
             digit_centers[digit_idx] = ((dx1 + dx2) // 2, (dy1 + dy2) // 2)
-            digit_rects[digit_idx] = (dx1, dy1, dx2, dy2)
+            digit_rects[digit_idx] = (pdx1, pdy1, pdx2, pdy2)
 
         if is_gas_pump_mode:
-            # Gas pump mode: show all boxes with deviation coloring
-            if digit_box['is_letter']:
-                color = (128, 128, 128)  # Gray
-            elif digit_box['deviation'] >= gas_pump_threshold:
-                color = (0, 0, 255)  # Red (BGR) - shifted
-            else:
-                color = (0, 255, 0)  # Green (BGR) - normal
-            cv2.rectangle(crop, (dx1, dy1), (dx2, dy2), color, 2)
+            # Gas pump mode: box ONLY the misaligned digit(s), in red. Aligned
+            # digits and the prefix/suffix letters are left un-boxed so the shifted
+            # digit stands out on its own -- its box sits visibly higher/lower than
+            # its neighbors. (Boxing every digit green + the letters gray was just
+            # clutter for what is really a one- or two-digit signal.) Lower the Gas
+            # Pump slider to reveal borderline digits.
+            if (not digit_box['is_letter']
+                    and digit_box['deviation'] >= gas_pump_threshold):
+                cv2.rectangle(crop, (pdx1, pdy1), (pdx2, pdy2),
+                              PATTERN_COLORS['red'], 2)
 
         elif is_pattern_mode:
             # Pattern mode: only show boxes for digits that match the pattern
@@ -214,9 +287,8 @@ def draw_serial_overlay(
                 ph = pattern_highlights[digit_idx]
                 if ph['highlights']:
                     first_highlight = ph['highlights'][0]
-                    pattern_color = first_highlight.get('color', 'cyan')
-                    color = PATTERN_COLORS.get(pattern_color, (0, 255, 0))
-                    cv2.rectangle(crop, (dx1, dy1), (dx2, dy2), color, 2)
+                    color = _resolve(first_highlight.get('color', 'blue'))
+                    cv2.rectangle(crop, (pdx1, pdy1), (pdx2, pdy2), color, 2)
 
     # Draw connector lines for relational patterns (e.g., RADAR pairs)
     if is_pattern_mode and pattern_connectors:
@@ -231,7 +303,7 @@ def draw_serial_overlay(
             if pos1 in digit_centers and pos2 in digit_centers:
                 pt1 = digit_centers[pos1]
                 pt2 = digit_centers[pos2]
-                conn_color = PATTERN_COLORS.get(conn.get('color', 'orange'), (0, 165, 255))
+                conn_color = _resolve(conn.get('color', 'orange'))
                 conn_style = conn.get('style', 'arc')
 
                 # Calculate arc - height proportional to distance, but capped
@@ -292,19 +364,22 @@ def draw_serial_overlay(
             # vanished.
             from_pos = int(gb.get('from', 0))
             to_pos = int(gb.get('to', 0))
-            gb_color = PATTERN_COLORS.get(gb.get('color', 'magenta'), (255, 0, 255))
+            gb_color = _resolve(gb.get('color', 'magenta'))
             thickness = int(gb.get('thickness', 3))
 
             if from_pos in digit_rects and to_pos in digit_rects:
                 r1 = digit_rects[from_pos]
                 r2 = digit_rects[to_pos]
 
-                # Combine rects: min x1/y1, max x2/y2 with padding
-                padding = 4
-                gx1 = int(min(r1[0], r2[0]) - padding)
-                gy1 = int(min(r1[1], r2[1]) - padding)
-                gx2 = int(max(r1[2], r2[2]) + padding)
-                gy2 = int(max(r1[3], r2[3]) + padding)
+                # digit_rects are already display-padded; add a small extra gap so
+                # the group box sits just outside the per-digit boxes. Clamp to the
+                # crop so the top/left edge never falls off-image.
+                ch, cw = crop.shape[:2]
+                padding = 2
+                gx1 = max(0, int(min(r1[0], r2[0]) - padding))
+                gy1 = max(0, int(min(r1[1], r2[1]) - padding))
+                gx2 = min(cw - 1, int(max(r1[2], r2[2]) + padding))
+                gy2 = min(ch - 1, int(max(r1[3], r2[3]) + padding))
 
                 cv2.rectangle(crop, (gx1, gy1), (gx2, gy2), gb_color, thickness)
 

@@ -44,13 +44,15 @@ end
 - **highlights**: Individual digit boxes
 - **connectors**: Lines between digits (styles: arc, line, bracket, arrow, dashed)
 - **group_boxes**: Box spanning multiple digits (preferred for groups)
-- **Colors**: purple, blue, cyan, orange, coral, gold, salmon, magenta, yellow, teal, red, gray
+- **Colors**: pick from the strong palette `blue, orange, magenta, red, purple, hotpink` (+ `black` for max contrast, `gray` for muted/prefix). Colors are for VISIBILITY, not to signal pattern type. Use *different* names to distinguish sub-groups within one pattern; the overlay auto-remaps requested names onto a contrast-tested rotation (first-seen → blue, then orange, magenta, …) so drawn colors are always strong and mutually distinct. Legacy/weak names (`cyan, teal, lime, green, yellow, gold, coral, salmon, white`) still work but are aliased to the nearest strong color. Palette derived by contrast-testing vs the measured bill background — see `serial_overlay.PATTERN_COLORS`.
 
 ### Pattern Dialog Features
 - **Pattern Wizard**: GUI-based recipe creation (Ladder, Binary, Pairs, Palindrome, etc.)
 - **AI Generate**: Natural language to Lua via Anthropic/OpenAI APIs
 - **Test Tab**: Quick test, batch test cases, debug logging with `log()` function
 - **Copy for AI**: Exports API docs + template for external AI tools
+- **Export/Import Selection**: shares the enabled/disabled on-off list (JSON) — NOT the pattern definitions; only works if the recipient already has those patterns.
+- **Export/Import Bundle**: shares the actual patterns as a single `.ddpat` file (a zip). Export packs the selected pattern(s) — or all user patterns if none selected — plus any `DataFile` CSV/JSON they use. Import copies them into `user_patterns_dir` (data files written as siblings; `DataFile:` header normalized to the basename so it resolves), handles name collisions (skip/overwrite), then `engine.reload()`. Logic in `pattern_bundle.py`; wired via `_export_bundle`/`_import_bundle` in `gui/pattern_dialog.py`.
 
 ### Key Files
 | File | Purpose |
@@ -58,6 +60,7 @@ end
 | `pattern_engine_v3.py` | Lua pattern engine |
 | `pattern_sandbox.py` | Secure Lua execution |
 | `gui/pattern_dialog.py` | Pattern Manager + CustomPatternDialog |
+| `pattern_bundle.py` | Pattern bundle (.ddpat) export/import |
 | `gui/pattern_recipes.py` | Recipe-based creation |
 | `gui/ai_pattern_generator.py` | AI pattern generation |
 | `settings_manager.py` | User settings persistence |

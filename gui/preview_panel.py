@@ -1994,6 +1994,18 @@ class PreviewPanel(QWidget):
         """Reload the pattern engine to pick up changes from Pattern Manager."""
         self.pattern_engine.reload()
 
+    def _pattern_shows_overlay(self, name: str) -> bool:
+        """Whether a pattern should appear in the serial-overlay picker.
+
+        Patterns whose header declares "Overlay: none" (STAR, SEAL_SHIFT, low-run,
+        etc.) still match and show in results, but have nothing useful to draw on
+        the digits, so they're kept out of the overlay cycle/menu."""
+        try:
+            info = self.pattern_engine.lua_patterns.get(name)
+            return getattr(info, 'show_overlay', True) if info is not None else True
+        except Exception:
+            return True
+
     def _format_pattern_with_library(self, name: str) -> str:
         """Format a pattern name as 'Display Name (library)'."""
         info = self.pattern_engine.get_pattern_info(name)
@@ -2071,7 +2083,7 @@ class PreviewPanel(QWidget):
             if fancy_types_str:
                 matched_patterns = []
                 for name in [p.strip() for p in fancy_types_str.split(',')]:
-                    if name:
+                    if name and self._pattern_shows_overlay(name):
                         matched_patterns.append((name, self._format_pattern_with_library(name)))
             else:
                 matched_patterns = []

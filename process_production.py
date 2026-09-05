@@ -3086,42 +3086,63 @@ class ProductionProcessor:
             prefix_len = self.cfg.serial_prefix_length
         except Exception:
             prefix_len = 1
+        # A serial is [prefix_len letters][8 digits][suffix letter OR star]. Anchor
+        # on the 8 digits rather than "last char = suffix": the star suffix on a
+        # star note is faint and inconsistently segmented, so keying the suffix off
+        # "last char" would steal the last DIGIT whenever the star isn't captured
+        # (its box vanished and it dropped out of the gas-pump measurement). Marking
+        # everything at/after prefix_len+8 as non-digit handles both cases -- star
+        # captured (it's the suffix) or not (nothing trails the 8 digits).
+        n_digits = 8
         for i, char in enumerate(chars):
-            char['is_letter'] = (i < prefix_len or i == len(chars) - 1)
+            char['is_letter'] = (i < prefix_len) or (i >= prefix_len + n_digits)
 
         # Calculate median center from digits only (not letters)
         digits = [c for c in chars if not c['is_letter']]
         if len(digits) < 2:
             return result
 
-        centers = [d['center'] for d in digits]
-        median_center = np.median(centers)
-
-        # First pass: compute deviations against initial median
         GAS_PUMP_THRESHOLD = 3.5
-        max_deviation = 0.0
 
-        for char in chars:
-            if char['is_letter']:
-                char['deviation'] = 0.0
-            else:
-                char['deviation'] = abs(char['center'] - median_center)
-                max_deviation = max(max_deviation, char['deviation'])
+        def _shift_deviation(char, med_top, med_bot):
+            """Vertical shift the glyph's TOP and BOTTOM agree on.
 
-        # Refined baseline: remove the most-deviated digit and recompute
-        # This gives a tighter "good digit" baseline, producing more accurate
-        # deviations when 2+ digits are shifted (gas pump effect)
-        if len(digits) >= 4 and max_deviation >= 1.0:
-            worst_digit = max(digits, key=lambda d: d['deviation'])
-            refined_centers = [d['center'] for d in digits if d is not worst_digit]
-            refined_median = np.median(refined_centers)
-            max_deviation = 0.0
+            A real gas-pump shift moves the WHOLE digit up/down, so its top and
+            bottom move together by the same amount and direction. Glyph-shape
+            quirks do not: the pointed apex of a '4' raises only the top (its
+            baseline stays put), and the optical overshoot of round digits (0/8)
+            pushes the top up while pushing the bottom down. So we take the shift
+            both edges agree on -- if they move in opposite directions (or one
+            doesn't move), it's shape, not a shift, and the deviation is ~0. This
+            kills the long-standing '4 looks like a gas pump' false positive while
+            keeping the same deviation scale for genuine shifts."""
+            td = char['top'] - med_top
+            bd = char['bottom'] - med_bot
+            if (td >= 0) == (bd >= 0):          # same direction
+                return min(abs(td), abs(bd))
+            return 0.0                          # top/bottom disagree -> shape quirk
+
+        def _compute(reference_digits):
+            med_top = np.median([d['top'] for d in reference_digits])
+            med_bot = np.median([d['bottom'] for d in reference_digits])
+            mx = 0.0
             for char in chars:
                 if char['is_letter']:
                     char['deviation'] = 0.0
                 else:
-                    char['deviation'] = abs(char['center'] - refined_median)
-                    max_deviation = max(max_deviation, char['deviation'])
+                    char['deviation'] = _shift_deviation(char, med_top, med_bot)
+                    mx = max(mx, char['deviation'])
+            return mx
+
+        # First pass against all digits.
+        max_deviation = _compute(digits)
+
+        # Refined baseline: drop the most-deviated digit and recompute against the
+        # remaining "good" digits (tighter baseline when 2+ digits are shifted).
+        if len(digits) >= 4 and max_deviation >= 1.0:
+            worst_digit = max(digits, key=lambda d: d['deviation'])
+            refined = [d for d in digits if d is not worst_digit]
+            max_deviation = _compute(refined)
 
         # Build digit_boxes from final deviations
         for char in chars:
