@@ -1,5 +1,6 @@
 --[[
 Pattern: LOW_RUN_6M
+DisplayName: Low Run 6.4M
 Description: Match bills from 6.4 million BEP print runs
 Tier: 5
 DataFile: low_runs.csv

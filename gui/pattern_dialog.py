@@ -213,6 +213,27 @@ class PatternDialog(QDialog):
 
         left_layout.addLayout(btn_layout)
 
+        # Pattern-bundle buttons (share the actual patterns, not just the on/off
+        # list — includes any DataFile CSV/JSON a pattern needs).
+        bundle_layout = QHBoxLayout()
+        export_bundle_btn = QPushButton("Export Bundle…")
+        export_bundle_btn.setToolTip(
+            "Save the selected pattern(s) — including any data file they use — to a "
+            "single shareable .ddpat file. Select patterns in the list first, or "
+            "export all your patterns.")
+        export_bundle_btn.clicked.connect(self._export_bundle)
+        bundle_layout.addWidget(export_bundle_btn)
+
+        import_bundle_btn = QPushButton("Import Bundle…")
+        import_bundle_btn.setToolTip(
+            "Load patterns from a shared .ddpat bundle — copies the patterns (and "
+            "their data files) into your library.")
+        import_bundle_btn.clicked.connect(self._import_bundle)
+        bundle_layout.addWidget(import_bundle_btn)
+
+        bundle_layout.addStretch()
+        left_layout.addLayout(bundle_layout)
+
         splitter.addWidget(left_panel)
 
         # Right panel - Details and testing
@@ -281,6 +302,13 @@ class PatternDialog(QDialog):
         self.view_script_btn.clicked.connect(self._view_lua_script)
         self.lua_script_layout.addWidget(self.view_script_btn)
 
+        self.duplicate_pattern_btn = QPushButton("Duplicate...")
+        self.duplicate_pattern_btn.setToolTip(
+            "Make an editable copy of this pattern (works on read-only core "
+            "patterns too — the copy becomes your own editable pattern)")
+        self.duplicate_pattern_btn.clicked.connect(self._duplicate_current_pattern)
+        self.lua_script_layout.addWidget(self.duplicate_pattern_btn)
+
         self.delete_pattern_btn = QPushButton("Delete")
         self.delete_pattern_btn.setToolTip("Delete this user pattern")
         self.delete_pattern_btn.setStyleSheet("QPushButton { color: #d32f2f; }")
@@ -306,6 +334,7 @@ class PatternDialog(QDialog):
         # Initially hidden
         self.lua_script_label.hide()
         self.view_script_btn.hide()
+        self.duplicate_pattern_btn.hide()
         self.delete_pattern_btn.hide()
         self.generate_serial_btn.hide()
         self.test_serial_edit.hide()
@@ -880,6 +909,7 @@ class PatternDialog(QDialog):
 
             self.lua_script_label.show()
             self.view_script_btn.show()
+            self.duplicate_pattern_btn.show()  # works on core + user patterns
             self.generate_serial_btn.show()
             self.generate_serial_btn.setEnabled(True)
             self.test_serial_edit.show()
@@ -899,6 +929,7 @@ class PatternDialog(QDialog):
             self._current_lua_editable = False
             self.lua_script_label.hide()
             self.view_script_btn.hide()
+            self.duplicate_pattern_btn.hide()
             self.delete_pattern_btn.hide()
             self.generate_serial_btn.hide()
             self.test_serial_edit.hide()
@@ -1291,6 +1322,21 @@ class PatternDialog(QDialog):
 
         QMessageBox.information(self, "Saved", f"Threshold for {name} set to {value}")
 
+    def _duplicate_current_pattern(self):
+        """Duplicate the selected pattern into an editable user copy.
+
+        Same flow as the right-click "Duplicate Pattern..." — works on read-only
+        core patterns too (the copy becomes an editable user pattern)."""
+        name = getattr(self, '_current_lua_pattern', None)
+        if not name:
+            return
+        lua_info = self.engine.lua_patterns.get(name) if HAS_V3_ENGINE else None
+        if lua_info is None:
+            QMessageBox.information(self, "Duplicate Pattern",
+                                    "Select a pattern to duplicate first.")
+            return
+        self._create_pattern_copy(lua_info)
+
     def _delete_user_pattern(self):
         """Delete the currently selected user pattern after confirmation."""
         if not self._current_lua_pattern or not self._current_lua_editable:
@@ -1650,6 +1696,125 @@ class PatternDialog(QDialog):
             self, "Selection imported",
             f"Applied {applied} pattern settings."
             + (f"\n({missing} patterns in the file aren't installed here.)" if missing else ""))
+
+    def _selected_pattern_names(self) -> list:
+        """Names of the Lua patterns currently selected (highlighted) in the tree."""
+        names = []
+        for item in self.pattern_tree.selectedItems():
+            data = item.data(0, Qt.UserRole)
+            if isinstance(data, dict) and not data.get('is_library') and data.get('name'):
+                if data['name'] in self.engine.lua_patterns:
+                    names.append(data['name'])
+        return names
+
+    def _export_bundle(self):
+        """Export the selected pattern(s) — plus any data files — to a .ddpat bundle."""
+        from PySide6.QtWidgets import QFileDialog
+        import pattern_bundle
+
+        names = self._selected_pattern_names()
+        if not names:
+            # Nothing selected -> offer to export all of the user's own patterns.
+            user_names = [n for n, p in self.engine.lua_patterns.items()
+                          if getattr(p, "library", "user") == "user"]
+            if not user_names:
+                QMessageBox.information(
+                    self, "Export Bundle",
+                    "Select one or more patterns in the list to export, or create "
+                    "some of your own first.")
+                return
+            if QMessageBox.question(
+                    self, "Export Bundle",
+                    f"No patterns are selected. Export all {len(user_names)} of your "
+                    "own patterns?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes) != QMessageBox.Yes:
+                return
+            names = user_names
+
+        default_name = (names[0] if len(names) == 1 else "patterns") + pattern_bundle.BUNDLE_EXT
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Pattern Bundle", default_name,
+            f"Pattern bundle (*{pattern_bundle.BUNDLE_EXT})")
+        if not path:
+            return
+        if not path.lower().endswith(pattern_bundle.BUNDLE_EXT):
+            path += pattern_bundle.BUNDLE_EXT
+
+        try:
+            summary = pattern_bundle.export_bundle(self.engine, names, path)
+        except Exception as e:
+            QMessageBox.critical(self, "Export failed", str(e))
+            return
+
+        msg = (f"Exported {summary['count']} pattern(s)"
+               + (f" and {summary['data_files']} data file(s)" if summary['data_files'] else "")
+               + f" to:\n{summary['path']}\n\nShare this file — the recipient uses "
+                 "“Import Bundle…” to add these patterns.")
+        if summary["missing_data"]:
+            miss = ", ".join(f"{n} ({df})" for n, df in summary["missing_data"])
+            msg += f"\n\nNote: data file(s) not found, so those patterns may not work "\
+                   f"for the recipient: {miss}"
+        QMessageBox.information(self, "Bundle exported", msg)
+
+    def _import_bundle(self):
+        """Import patterns (and their data files) from a shared .ddpat bundle."""
+        from PySide6.QtWidgets import QFileDialog
+        import pattern_bundle
+
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import Pattern Bundle", "",
+            f"Pattern bundle (*{pattern_bundle.BUNDLE_EXT} *.zip)")
+        if not path:
+            return
+
+        try:
+            manifest = pattern_bundle.read_manifest(path)
+        except Exception as e:
+            QMessageBox.warning(self, "Import failed", str(e))
+            return
+
+        total = len(manifest.get("patterns", []))
+        if not total:
+            QMessageBox.information(self, "Import Bundle", "The bundle has no patterns.")
+            return
+
+        collisions = pattern_bundle.bundle_collisions(self.engine, manifest)
+        overwrite = False
+        if collisions:
+            preview = ", ".join(collisions[:6]) + ("…" if len(collisions) > 6 else "")
+            choice = QMessageBox.question(
+                self, "Import Bundle",
+                f"This bundle has {total} pattern(s). {len(collisions)} already exist "
+                f"here:\n{preview}\n\nOverwrite the existing ones? "
+                "(Choose No to keep yours and add only the new ones.)",
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel, QMessageBox.No)
+            if choice == QMessageBox.Cancel:
+                return
+            overwrite = (choice == QMessageBox.Yes)
+        else:
+            if QMessageBox.question(
+                    self, "Import Bundle",
+                    f"Add {total} pattern(s) from this bundle to your library?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes) != QMessageBox.Yes:
+                return
+
+        try:
+            summary = pattern_bundle.import_bundle(self.engine, path, overwrite=overwrite)
+        except Exception as e:
+            QMessageBox.critical(self, "Import failed", str(e))
+            return
+
+        self._load_patterns()  # rebuild the tree to show the imported patterns
+
+        parts = [f"Imported {len(summary['imported'])} pattern(s)"]
+        if summary["data_files"]:
+            parts.append(f"with {summary['data_files']} data file(s)")
+        tail = ""
+        if summary["skipped"]:
+            tail += f"\nSkipped {len(summary['skipped'])} that already existed."
+        if summary["errors"]:
+            tail += "\n\nProblems:\n- " + "\n- ".join(summary["errors"][:8])
+        QMessageBox.information(self, "Bundle imported", " ".join(parts) + "." + tail)
 
     def _save_and_close(self):
         """Save pattern states and close."""
@@ -2088,23 +2253,56 @@ class DigitPreviewWidget(QWidget):
                     position_colors[pos + 1] = color
 
         # Color mapping
+        # Mirrors the contrast-optimized palette in serial_overlay.PATTERN_COLORS
+        # (chosen for visibility on the bill, not to signal pattern type). Weak
+        # colors are aliased to the nearest strong one so previews match the crop.
         color_map = {
-            'purple': QColor("#9C27B0"),
-            'blue': QColor("#2196F3"),
-            'cyan': QColor("#00BCD4"),
-            'orange': QColor("#FF9800"),
-            'coral': QColor("#FF7043"),
-            'gold': QColor("#FFD700"),
-            'salmon': QColor("#FA8072"),
-            'magenta': QColor("#E91E63"),
-            'yellow': QColor("#FFEB3B"),
-            # 'lime'/'green' retired -> render as cyan (kept as aliases).
-            'lime': QColor("#00BCD4"),
-            'green': QColor("#00BCD4"),
-            'teal': QColor("#009688"),
-            'red': QColor("#F44336"),
+            'blue': QColor("#1E3CDC"),     # royalblue (strongest)
+            'orange': QColor("#FF8C00"),
+            'magenta': QColor("#FF00C8"),
+            'red': QColor("#E61E1E"),
+            'purple': QColor("#A03CE6"),
+            'hotpink': QColor("#FF3C96"),
+            'pink': QColor("#FF3C96"),      # -> hotpink
+            'black': QColor("#0A0A0A"),
             'gray': QColor("#9E9E9E"),
+            # retired weak colors -> nearest strong one
+            'cyan': QColor("#1E3CDC"),      # -> blue
+            'teal': QColor("#1E3CDC"),      # -> blue
+            'lime': QColor("#1E3CDC"),      # -> blue
+            'green': QColor("#1E3CDC"),     # -> blue
+            'yellow': QColor("#FF8C00"),    # -> orange
+            'gold': QColor("#FF8C00"),      # -> orange
+            'amber': QColor("#FF8C00"),     # -> orange
+            'coral': QColor("#E61E1E"),     # -> red
+            'salmon': QColor("#FF3C96"),    # -> hotpink
+            'white': QColor("#0A0A0A"),     # -> black
         }
+
+        # Remap requested color names onto the strong rotation by first-seen order
+        # (same idea as serial_overlay._build_color_rotation), so preview colors are
+        # contrast-strong and mutually distinct regardless of which names the pattern
+        # picked. 'gray' stays muted and is never rotated.
+        _rotation = ('blue', 'orange', 'magenta', 'red', 'purple', 'black', 'hotpink')
+        _seen = []
+
+        def _note(nm):
+            if nm and nm != 'gray' and nm not in _seen:
+                _seen.append(nm)
+
+        for _h in self.highlights:
+            _note(_h.get('color'))
+        for _c in self.connectors:
+            _note(_c.get('color'))
+        for _gb in self.group_boxes:
+            _note(_gb.get('color'))
+        _rot_map = {nm: color_map[_rotation[i % len(_rotation)]]
+                    for i, nm in enumerate(_seen)}
+
+        def _resolve(nm):
+            if nm in _rot_map:
+                return _rot_map[nm]
+            return color_map.get(nm, color_map['gray'])
 
         # Draw characters (prefix letter + 8 digits + suffix letter)
         font = painter.font()
@@ -2130,7 +2328,7 @@ class DigitPreviewWidget(QWidget):
                 # Background and border for each digit box
                 if i in position_colors:
                     # Highlighted digit - use highlight color for border
-                    hl_color = color_map.get(position_colors[i], QColor("#9E9E9E"))
+                    hl_color = _resolve(position_colors[i])
                     painter.setBrush(QBrush(bg_color.lighter(105)))
                     painter.setPen(QPen(hl_color, 3))
                     painter.drawRoundedRect(rect, 5, 5)
@@ -2161,7 +2359,7 @@ class DigitPreviewWidget(QWidget):
                         from_rect.height() + 2 * padding
                     )
 
-                    pen = QPen(color_map.get(color, QColor("#FFD700")), thickness)
+                    pen = QPen(_resolve(color), thickness)
                     painter.setPen(pen)
                     painter.setBrush(Qt.NoBrush)
                     painter.drawRoundedRect(span_rect, 8, 8)
@@ -2183,7 +2381,7 @@ class DigitPreviewWidget(QWidget):
                     to_x = to_rect.center().x()
                     y = start_y - 5
 
-                    pen = QPen(color_map.get(color, QColor("#9E9E9E")), 2)
+                    pen = QPen(_resolve(color), 2)
                     if style == 'dashed':
                         pen.setStyle(Qt.DashLine)
                     painter.setPen(pen)
