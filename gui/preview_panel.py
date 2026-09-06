@@ -1260,7 +1260,10 @@ class PreviewPanel(QWidget):
 
         # Two serial region images (2x zoomed) with pattern mode label between
         self.serial_image_1 = ImageLabel()
-        self.serial_image_1.setMinimumSize(300, 80)
+        # Modest min width so the results/preview divider has real travel -- two
+        # serial images sit side by side, so a large min here made the preview
+        # side ~750px wide and the splitter barely moved. They stretch to fill.
+        self.serial_image_1.setMinimumSize(170, 80)
         self.serial_image_1.setMaximumHeight(120)
         self.serial_image_1.pattern_selected.connect(self._on_pattern_overlay_selected)
         serial_images_layout.addWidget(self.serial_image_1, 1)
@@ -1287,7 +1290,7 @@ class PreviewPanel(QWidget):
         serial_images_layout.addWidget(self.pattern_mode_label)
 
         self.serial_image_2 = ImageLabel()
-        self.serial_image_2.setMinimumSize(300, 80)
+        self.serial_image_2.setMinimumSize(170, 80)
         self.serial_image_2.setMaximumHeight(120)
         self.serial_image_2.pattern_selected.connect(self._on_pattern_overlay_selected)
         serial_images_layout.addWidget(self.serial_image_2, 1)
@@ -1391,12 +1394,25 @@ class PreviewPanel(QWidget):
         patterns_layout.setSpacing(8)
         self.patterns_label = QLabel("-")
         self.patterns_label.setWordWrap(True)
-        patterns_layout.addWidget(self.patterns_label, 1)
+        self.patterns_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        # Scroll a long match list within a bounded height so a bill with many
+        # matches doesn't push the rows below (Rarity/Price/Status/File) off-screen.
+        patterns_scroll = QScrollArea()
+        patterns_scroll.setWidgetResizable(True)
+        patterns_scroll.setWidget(self.patterns_label)
+        patterns_scroll.setFrameShape(QScrollArea.NoFrame)
+        patterns_scroll.setMaximumHeight(76)
+        patterns_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        patterns_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        patterns_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        patterns_layout.addWidget(patterns_scroll, 1)
         self.reclassify_btn = QPushButton("Re-classify")
         self.reclassify_btn.setToolTip("Re-run pattern matching with current patterns (useful after adding new patterns)")
-        self.reclassify_btn.setMaximumWidth(80)
+        # No width cap -- 80px clipped the text to "e-classi". Let it size to fit;
+        # keep it from stretching so it stays compact next to the patterns list.
+        self.reclassify_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.reclassify_btn.clicked.connect(self._on_reclassify)
-        patterns_layout.addWidget(self.reclassify_btn)
+        patterns_layout.addWidget(self.reclassify_btn, 0, Qt.AlignTop)
         patterns_widget = QWidget()
         patterns_widget.setLayout(patterns_layout)
         details_layout.addWidget(patterns_widget, 1, 1)
