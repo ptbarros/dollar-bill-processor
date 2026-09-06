@@ -62,7 +62,7 @@ function match(ctx)
         },
         highlights = {
             {positions = triple_positions, color = "orange"},
-            {positions = single_positions, color = "gray"}
+            {positions = single_positions, color = "charcoal", style = "x"}
         },
         message = quad_digit .. "x4 quad within " .. triple_digit .. "x3 triple (CS-Quad in Triple)"
     }

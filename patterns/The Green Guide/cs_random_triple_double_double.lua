@@ -56,7 +56,9 @@ function match(ctx)
             {positions = pos_triple, color = "gold"},
             {positions = pos_p1, color = "orange"},
             {positions = pos_p2, color = "coral"},
-            {positions = pos_single, color = "gray"}
+            -- the one leftover digit is NOT part of the pattern: mark it with an X
+            -- rather than a muted box (a box reads like a faint match)
+            {positions = pos_single, color = "charcoal", style = "x"}
         },
         message = triple_digit .. "x3 + " .. pair_digits[1] .. "x2 + " .. pair_digits[2] .. "x2 + " .. single_digit .. " (CS-Random Triple Double Double)"
     }

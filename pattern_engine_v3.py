@@ -466,12 +466,17 @@ class PatternEngineV3:
             positions = h.get('positions', [])
             color = h.get('color', 'gray')
             label = h.get('label', '')
+            # 'box' (default), 'x' (X only, no box), or 'boxed_x' (box + X). Used to
+            # mark an EXCLUDED/leftover digit with an X instead of a box, which
+            # can't be mistaken for a match the way a muted box can.
+            style = h.get('style', '')
 
             for pos in positions:
                 if 0 <= pos < 8:
                     all_highlights[pos]['highlights'].append({
                         'pattern': pattern_name,
                         'color': color,
+                        'style': style,
                         'reason': label or f'{pattern_name} match'
                     })
 

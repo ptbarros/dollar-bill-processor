@@ -2242,15 +2242,18 @@ class DigitPreviewWidget(QWidget):
         start_x = (self.width() - total_width) // 2
         start_y = 18
 
-        # Build color map for each digit position (0-7 maps to character position 1-8)
+        # Build color + style map for each digit position (0-7 -> char pos 1-8)
         position_colors = {}
+        position_styles = {}
         for h in self.highlights:
             positions = h.get('positions', [])
             color = h.get('color', 'gray')
+            style = (h.get('style') or 'box').lower()
             for pos in positions:
                 if 0 <= pos < 8:
                     # Offset by 1 for prefix letter
                     position_colors[pos + 1] = color
+                    position_styles[pos + 1] = style
 
         # Color mapping
         # Mirrors the contrast-optimized palette in serial_overlay.PATTERN_COLORS
@@ -2266,6 +2269,7 @@ class DigitPreviewWidget(QWidget):
             'pink': QColor("#FF3C96"),      # -> hotpink
             'black': QColor("#0A0A0A"),
             'gray': QColor("#9E9E9E"),
+            'charcoal': QColor("#3C3C3C"),
             # retired weak colors -> nearest strong one
             'cyan': QColor("#1E3CDC"),      # -> blue
             'teal': QColor("#1E3CDC"),      # -> blue
@@ -2287,7 +2291,7 @@ class DigitPreviewWidget(QWidget):
         _seen = []
 
         def _note(nm):
-            if nm and nm != 'gray' and nm not in _seen:
+            if nm and nm not in ('gray', 'charcoal') and nm not in _seen:
                 _seen.append(nm)
 
         for _h in self.highlights:
@@ -2329,9 +2333,20 @@ class DigitPreviewWidget(QWidget):
                 if i in position_colors:
                     # Highlighted digit - use highlight color for border
                     hl_color = _resolve(position_colors[i])
-                    painter.setBrush(QBrush(bg_color.lighter(105)))
-                    painter.setPen(QPen(hl_color, 3))
-                    painter.drawRoundedRect(rect, 5, 5)
+                    style = position_styles.get(i, 'box')
+                    if style in ('x', 'boxed_x'):
+                        # X marks an EXCLUDED digit (box optional for 'boxed_x').
+                        painter.setBrush(Qt.NoBrush)
+                        painter.setPen(QPen(hl_color, 3))
+                        if style == 'boxed_x':
+                            painter.drawRoundedRect(rect, 5, 5)
+                        r = rect.adjusted(3, 3, -3, -3)
+                        painter.drawLine(r.topLeft(), r.bottomRight())
+                        painter.drawLine(r.bottomLeft(), r.topRight())
+                    else:
+                        painter.setBrush(QBrush(bg_color.lighter(105)))
+                        painter.setPen(QPen(hl_color, 3))
+                        painter.drawRoundedRect(rect, 5, 5)
 
                 # Draw digit in green
                 painter.setPen(QPen(digit_color))

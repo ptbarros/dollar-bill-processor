@@ -50,7 +50,7 @@ function match(ctx)
         highlights = {
             {positions = quint_positions, color = "gold"},
             {positions = pair_positions, color = "orange"},
-            {positions = single_positions, color = "gray"}
+            {positions = single_positions, color = "charcoal", style = "x"}
         },
         message = quint_digit .. "x5 scattered + " .. pair_digit .. " pair (CS-Random Quint and Pair)"
     }

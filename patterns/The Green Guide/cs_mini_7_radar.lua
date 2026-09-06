@@ -34,7 +34,7 @@ function match(ctx)
                         {positions = {base, base + 6}, color = "orange"},
                         {positions = {base + 1, base + 5}, color = "coral"},
                         {positions = {base + 2, base + 4}, color = "cyan"},
-                        {positions = {mid}, color = "gray"}
+                        {positions = {mid}, color = "charcoal", style = "x"}
                     },
                     connectors = {
                         {from = base, to = base + 6, color = "orange", style = "arc"},

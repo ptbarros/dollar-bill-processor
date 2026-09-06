@@ -179,7 +179,7 @@ Example -- match when the middle 5 digits are a valid ZIP:
 ### Return Value
 The match function must return a table with:
 - `matched`: boolean (required - true if pattern matches)
-- `highlights`: list of {{positions = {{0, 7}}, color = "orange"}}
+- `highlights`: list of {{positions = {{0, 7}}, color = "orange"}}. Optional per-highlight `style`: "box" (default), "x" (X mark, no box), or "boxed_x" (box + X). Use `style = "x"` with color "gray"/"charcoal" to mark an EXCLUDED/leftover digit (clearer than a muted box), e.g. {{positions = {{5}}, color = "charcoal", style = "x"}}
 - `connectors`: list of {{from = 0, to = 7, color = "orange", style = "arc"}}
 - `group_boxes`: list of {{from = 0, to = 2, color = "gold"}}
 - `message`: optional string describing the match

@@ -41,7 +41,7 @@ end
 ```
 
 ### Visualization
-- **highlights**: Individual digit boxes
+- **highlights**: Individual digit boxes. Optional `style` per highlight: `"box"` (default), `"x"` (an X mark, no box), or `"boxed_x"` (box + X) — use `style="x"` with `color="gray"`/`"charcoal"` to mark an EXCLUDED/leftover digit clearly (an X can't be mistaken for a match the way a muted box can). e.g. `{positions={5}, color="charcoal", style="x"}`
 - **connectors**: Lines between digits (styles: arc, line, bracket, arrow, dashed)
 - **group_boxes**: Box spanning multiple digits (preferred for groups)
 - **Colors**: pick from the strong palette `blue, orange, magenta, red, purple, hotpink` (+ `black` for max contrast, `gray` for muted/prefix). Colors are for VISIBILITY, not to signal pattern type. Use *different* names to distinguish sub-groups within one pattern; the overlay auto-remaps requested names onto a contrast-tested rotation (first-seen → blue, then orange, magenta, …) so drawn colors are always strong and mutually distinct. Legacy/weak names (`cyan, teal, lime, green, yellow, gold, coral, salmon, white`) still work but are aliased to the nearest strong color. Palette derived by contrast-testing vs the measured bill background — see `serial_overlay.PATTERN_COLORS`.

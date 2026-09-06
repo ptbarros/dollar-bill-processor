@@ -43,6 +43,7 @@ PATTERN_COLORS = {
     'pink':    (150, 60, 255),   # alias -> hotpink
     'black':   (10, 10, 10),     # max contrast on any background
     'gray':    (128, 128, 128),  # muted / prefix letters (intentionally low-key)
+    'charcoal': (60, 60, 60),    # darker muted -- good for an "excluded" X mark
     # --- retired weak colors, aliased to the nearest strong one ---
     'cyan':    (220, 60, 30),    # -> blue   (cyan blends into the green ink)
     'teal':    (220, 60, 30),    # -> blue
@@ -60,9 +61,14 @@ GAS_PUMP_FILTER = "__gas_pump__"
 NONE_FILTER = "__none__"
 
 
+# Muted/neutral colors are exempt from the rotation -- they carry "de-emphasized
+# / excluded" meaning (e.g. a gray or charcoal X mark) and must stay that color.
+_ROTATION_EXEMPT = ('gray', 'charcoal')
+
 # Contrast-optimized rotation order (most visible + most distinct first). Color
-# is assigned by first-appearance within an overlay, NOT by pattern type. 'gray'
-# is reserved for muted/prefix and never rotated.
+# is assigned by first-appearance within an overlay, NOT by pattern type. Muted
+# colors (_ROTATION_EXEMPT) are reserved for muted/prefix/excluded and never
+# rotated.
 #
 # Order is tuned so (a) the first four are the maximally-distinct set for the
 # common <=4-group patterns, and (b) adjacent slots stay far apart in CIELAB
@@ -79,7 +85,7 @@ def _build_color_rotation(highlights, connectors, group_boxes):
     seen = []
 
     def note(nm):
-        if nm and nm != 'gray' and nm not in seen:
+        if nm and nm not in _ROTATION_EXEMPT and nm not in seen:
             seen.append(nm)
 
     for ph in (highlights or []):
@@ -288,7 +294,15 @@ def draw_serial_overlay(
                 if ph['highlights']:
                     first_highlight = ph['highlights'][0]
                     color = _resolve(first_highlight.get('color', 'blue'))
-                    cv2.rectangle(crop, (pdx1, pdy1), (pdx2, pdy2), color, 2)
+                    style = (first_highlight.get('style') or 'box').lower()
+                    # 'x' = X only (excluded digit), 'boxed_x' = box + X, else box.
+                    if style in ('x', 'boxed_x'):
+                        if style == 'boxed_x':
+                            cv2.rectangle(crop, (pdx1, pdy1), (pdx2, pdy2), color, 2)
+                        cv2.line(crop, (pdx1 + 2, pdy1 + 2), (pdx2 - 2, pdy2 - 2), color, 2, cv2.LINE_AA)
+                        cv2.line(crop, (pdx1 + 2, pdy2 - 2), (pdx2 - 2, pdy1 + 2), color, 2, cv2.LINE_AA)
+                    else:
+                        cv2.rectangle(crop, (pdx1, pdy1), (pdx2, pdy2), color, 2)
 
     # Draw connector lines for relational patterns (e.g., RADAR pairs)
     if is_pattern_mode and pattern_connectors:

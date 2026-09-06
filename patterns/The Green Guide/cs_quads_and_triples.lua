@@ -75,7 +75,7 @@ function match(ctx)
 
     local highlights = {}
     if #remaining_pos > 0 then
-        table.insert(highlights, {positions = remaining_pos, color = "gray"})
+        table.insert(highlights, {positions = remaining_pos, color = "charcoal", style = "x"})
     end
 
     return {

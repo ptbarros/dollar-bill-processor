@@ -33,7 +33,7 @@ function match(ctx)
                     highlights = {
                         {positions = {base, base + 1, base + 2}, color = "orange"},
                         {positions = {base + 4, base + 5, base + 6}, color = "orange"},
-                        {positions = {sep}, color = "gray"}
+                        {positions = {sep}, color = "charcoal", style = "x"}
                     },
                     connectors = {
                         {from = base, to = base + 4, color = "orange", style = "arc"},

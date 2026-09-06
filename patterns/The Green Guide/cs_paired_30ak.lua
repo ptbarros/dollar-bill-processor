@@ -66,7 +66,7 @@ function match(ctx)
             {positions = triple_positions, color = "orange"},
             {positions = pair1_positions, color = "coral"},
             {positions = pair2_positions, color = "cyan"},
-            {positions = single_positions, color = "gray"}
+            {positions = single_positions, color = "charcoal", style = "x"}
         },
         message = "3OAK of " .. triple_digit .. " + pairs of " .. pair_digits[1] .. "," .. pair_digits[2] .. " (CS-Paired 3OAK)"
     }

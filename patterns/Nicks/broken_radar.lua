@@ -26,7 +26,7 @@ function match(ctx)
             {positions = {0, 7}, color = "orange"},
             {positions = {1, 6}, color = "orange"},
             {positions = {2, 5}, color = "orange"},
-            {positions = {3, 4}, color = "gray"}
+            {positions = {3, 4}, color = "charcoal", style = "x"}
         },
         connectors = {
             {from = 0, to = 7, color = "orange", style = "arc"},

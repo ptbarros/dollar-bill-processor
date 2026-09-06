@@ -28,7 +28,7 @@ function match(ctx)
                 highlights = {
                     {positions = {base, base + 1}, color = "orange"},
                     {positions = {base + 3, base + 4}, color = "orange"},
-                    {positions = {sep}, color = "gray"}
+                    {positions = {sep}, color = "charcoal", style = "x"}
                 },
                 connectors = {
                     {from = base, to = base + 3, color = "orange", style = "arc"},

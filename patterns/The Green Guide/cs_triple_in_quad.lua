@@ -69,7 +69,7 @@ function match(ctx)
         },
         highlights = {
             {positions = quad_positions, color = "gold"},
-            {positions = single_positions, color = "gray"}
+            {positions = single_positions, color = "charcoal", style = "x"}
         },
         message = triple_digit .. "x3 triple within " .. quad_digit .. "x4 scattered (CS-Triple in Quad)"
     }

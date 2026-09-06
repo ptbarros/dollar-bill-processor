@@ -62,7 +62,7 @@ function match(ctx)
         },
         highlights = {
             {positions = pair_positions, color = "orange"},
-            {positions = single_positions, color = "gray"}
+            {positions = single_positions, color = "charcoal", style = "x"}
         },
         connectors = {
             {from = pair_positions[1], to = pair_positions[2], color = "orange", style = "arc"}

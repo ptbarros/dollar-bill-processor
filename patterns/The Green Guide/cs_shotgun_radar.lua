@@ -52,7 +52,7 @@ function match(ctx)
         table.insert(connectors, {from = p.left_pos, to = p.right_pos, color = color, style = "arc"})
     end
     -- Gray for the non-matching pair
-    table.insert(highlights, {positions = {nm.left_pos, nm.right_pos}, color = "gray"})
+    table.insert(highlights, {positions = {nm.left_pos, nm.right_pos}, color = "charcoal", style = "x"})
 
     return {
         matched = true,
