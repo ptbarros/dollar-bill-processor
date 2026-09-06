@@ -49,12 +49,12 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} installer\DollarBillCropTool.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} installer\DollarDetectiveCrop.iss
 
       - uses: actions/upload-artifact@v4
         with:
           name: crop-tool-windows
-          path: dist/DollarBillCropTool-*-setup.exe
+          path: dist/DollarDetectiveCrop-*-setup.exe
           if-no-files-found: error
 
   linux:
@@ -77,15 +77,15 @@ jobs:
       - name: Build onedir + AppImage
         run: |
           pyinstaller --noconfirm --clean crop_tool.spec
-          APP_NAME=DollarBillCropTool \
-          APP_DISPLAY="Dollar Bill Crop Tool" \
+          APP_NAME=DollarDetectiveCrop \
+          APP_DISPLAY="Dollar Detective Crop" \
           APP_ICON=assets/DD-Crop.png \
           bash tools/build_appimage.sh
 
       - uses: actions/upload-artifact@v4
         with:
           name: crop-tool-linux
-          path: dist/DollarBillCropTool-x86_64.AppImage
+          path: dist/DollarDetectiveCrop-x86_64.AppImage
           if-no-files-found: error
 
   macos:
@@ -107,14 +107,14 @@ jobs:
       - name: Build .app + .dmg (unsigned)
         run: |
           pyinstaller --noconfirm --clean crop_tool.spec
-          hdiutil create -volname "Dollar Bill Crop Tool" \
-            -srcfolder "dist/Dollar Bill Crop Tool.app" \
-            -ov -format UDZO dist/DollarBillCropTool-arm64.dmg
+          hdiutil create -volname "Dollar Detective Crop" \
+            -srcfolder "dist/Dollar Detective Crop.app" \
+            -ov -format UDZO dist/DollarDetectiveCrop-arm64.dmg
 
       - uses: actions/upload-artifact@v4
         with:
           name: crop-tool-macos
-          path: dist/DollarBillCropTool-arm64.dmg
+          path: dist/DollarDetectiveCrop-arm64.dmg
           if-no-files-found: error
 
   release:
@@ -134,22 +134,22 @@ jobs:
             artifacts/crop-tool-windows/*
             artifacts/crop-tool-linux/*
             artifacts/crop-tool-macos/*
-          name: "Dollar Bill Crop Tool ${{ github.ref_name }}"
+          name: "Dollar Detective Crop ${{ github.ref_name }}"
           body: |
             Standalone Crop Tool — crop a folder of bill scans using your Crop
             Manager settings, without the full app.
 
-            **Windows:** download `DollarBillCropTool-*-setup.exe` and run the
+            **Windows:** download `DollarDetectiveCrop-*-setup.exe` and run the
             installer (Start-menu shortcut + uninstaller, per-user, no admin
             needed). Windows may show a SmartScreen warning for an unsigned app
             (More info -> Run anyway).
 
-            **Linux:** download `DollarBillCropTool-x86_64.AppImage`, then
+            **Linux:** download `DollarDetectiveCrop-x86_64.AppImage`, then
             `chmod +x` it and run.
 
-            **macOS (Apple Silicon):** download `DollarBillCropTool-arm64.dmg`,
+            **macOS (Apple Silicon):** download `DollarDetectiveCrop-arm64.dmg`,
             open it, and drag the app out. It's unsigned, so first launch needs
-            `xattr -dr com.apple.quarantine "/path/to/Dollar Bill Crop Tool.app"`
+            `xattr -dr com.apple.quarantine "/path/to/Dollar Detective Crop.app"`
             (or right-click -> Open) to get past Gatekeeper.
           # Mark as pre-release so the crop tool never becomes the repo's
           # "Latest" release (that's the full app). Flip to false for a final one.

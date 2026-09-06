@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec for the standalone Crop Tool (onedir, torch-free).
 
-Produces dist\\DollarBillCropTool\\ (a onedir bundle) that Inno Setup wraps into
+Produces dist\\DollarDetectiveCrop\\ (a onedir bundle) that Inno Setup wraps into
 a Windows installer — the cropping feature on its own, without the full app.
 
 Model obscurity (Tier 0+1):
@@ -15,7 +15,7 @@ None of this is unbreakable — a determined person can still unpack a PyInstall
 exe — but it stops casual copying, which is the intent.
 
 Build (from the repo root, in the torch-free build venv):
-    pyinstaller crop_tool.spec            # -> dist/DollarBillCropTool(.exe)
+    pyinstaller crop_tool.spec            # -> dist/DollarDetectiveCrop(.exe)
 Set DBP_BUILD_CONSOLE=1 to keep a console window for debugging.
 """
 import os
@@ -89,7 +89,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='DollarBillCropTool',
+    name='DollarDetectiveCrop',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -103,14 +103,14 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name='DollarBillCropTool',
+    name='DollarDetectiveCrop',
 )
 
 # macOS: wrap the onedir into a proper .app bundle (Windows/Linux ignore this).
 if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
-        name='Dollar Bill Crop Tool.app',
+        name='Dollar Detective Crop.app',
         icon=None,   # .icns not generated yet; uses the default app icon
-        bundle_identifier='com.paulbarros.dollarbillcroptool',
+        bundle_identifier='com.paulbarros.dollardetectivecrop',
     )

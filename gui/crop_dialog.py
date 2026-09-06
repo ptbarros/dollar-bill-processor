@@ -44,10 +44,14 @@ class EbayCropDialog(QDialog):
     # two-letter serial prefix (series + district); $1/$2 use one letter.
     DENOMINATIONS = (1, 2, 5, 10, 20, 50, 100)
 
-    def __init__(self, config, parent=None, preview_ctx=None):
+    def __init__(self, config, parent=None, preview_ctx=None, standalone=False):
         super().__init__(parent)
         self.full_config = config if isinstance(config, dict) else {}
         self.preview_ctx = preview_ctx
+        # standalone = opened from the Dollar Detective Crop tool, which doesn't
+        # classify patterns, so the per-serial overlay can't draw one -- there the
+        # toggle is relabeled to describe what it actually does: a 2x close-up crop.
+        self.standalone = standalone
         self._preview_cache = None   # (bill_bgr, rect, crop_bgr) for re-render on resize
         self._preview_initialized = False  # first render is deferred to showEvent
         self._init_profiles()        # sets self.profiles, self.active_name, self.config
@@ -505,16 +509,26 @@ class EbayCropDialog(QDialog):
 
         # ...overlay toggle on its own line below (a long label that otherwise
         # ran off the row until the window was widened).
-        overlay_cb = QCheckBox("Draw pattern overlay (2× close-up)")
-        overlay_cb.setToolTip(
-            "During processing, draw the set-pattern overlay on this serial crop —\n"
-            "one crop per pattern chosen via right-click \"Set Pattern(s)…\" in the\n"
-            "results list.\n\n"
-            "On = a tight, 2× magnified close-up of the serial so the overlay\n"
-            "(boxes, arcs, X marks) is crisp and the serial is the focus.\n"
-            "Off = a plain crop at the bill's native scale (wider, less zoomed).\n"
-            "That size/zoom difference between on and off is intentional, not a bug.\n\n"
-            "(No effect on batch/standalone crops, which have no set pattern.)")
+        if self.standalone:
+            # The standalone tool never draws overlays (it doesn't classify), so
+            # the toggle here only controls the crop's zoom -- name it for that.
+            overlay_cb = QCheckBox("2× zoom (close-up crop)")
+            overlay_cb.setToolTip(
+                "On = a tight, 2× magnified close-up of the serial.\n"
+                "Off = a plain crop at the bill's native scale (wider, less zoomed).\n\n"
+                "(Pattern overlays are only drawn in the main app, which classifies\n"
+                "the serials; the standalone tool just crops.)")
+        else:
+            overlay_cb = QCheckBox("Draw pattern overlay (2× close-up)")
+            overlay_cb.setToolTip(
+                "During processing, draw the set-pattern overlay on this serial crop —\n"
+                "one crop per pattern chosen via right-click \"Set Pattern(s)…\" in the\n"
+                "results list.\n\n"
+                "On = a tight, 2× magnified close-up of the serial so the overlay\n"
+                "(boxes, arcs, X marks) is crisp and the serial is the focus.\n"
+                "Off = a plain crop at the bill's native scale (wider, less zoomed).\n"
+                "That size/zoom difference between on and off is intentional, not a bug.\n\n"
+                "(No effect on batch/standalone crops, which have no set pattern.)")
         overlay_cb.toggled.connect(lambda _=False, w=which: self._on_serial_setting_changed(w))
         outer.addWidget(overlay_cb)
         self.serial_overlay_cbs[which] = overlay_cb

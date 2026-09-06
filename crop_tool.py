@@ -145,9 +145,9 @@ class CropToolWindow(QWidget):
         super().__init__()
         try:
             from version import get_version_string
-            self.setWindowTitle(f"Dollar Bill Crop Tool {get_version_string()}")
+            self.setWindowTitle(f"Dollar Detective Crop {get_version_string()}")
         except Exception:
-            self.setWindowTitle("Dollar Bill Crop Tool")
+            self.setWindowTitle("Dollar Detective Crop")
         self.setMinimumWidth(560)
         self.worker: CropWorker | None = None
         icon = app_base() / "assets" / "DD-Crop.png"
@@ -321,7 +321,7 @@ class CropToolWindow(QWidget):
         preview_ctx = self._build_preview_ctx()
         if preview_ctx is None:
             self._append_log("Tip: set a valid input folder to preview crops on a sample bill.")
-        dialog = EbayCropDialog(config, self, preview_ctx=preview_ctx)
+        dialog = EbayCropDialog(config, self, preview_ctx=preview_ctx, standalone=True)
         if dialog.exec():
             user_cfg = user_data_dir() / "config.yaml"
             user_cfg.parent.mkdir(parents=True, exist_ok=True)

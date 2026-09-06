@@ -1,26 +1,26 @@
-; Inno Setup script for the standalone Dollar Bill Crop Tool (Windows installer).
-; Packages the PyInstaller onedir (dist\DollarBillCropTool\) into a setup .exe
+; Inno Setup script for the standalone Dollar Detective Crop tool (Windows installer).
+; Packages the PyInstaller onedir (dist\DollarDetectiveCrop\) into a setup .exe
 ; with Start-menu + optional desktop shortcuts and an uninstaller.
-; Build (in CI): ISCC /DMyAppVersion=1.4.1 installer\DollarBillCropTool.iss
+; Build (in CI): ISCC /DMyAppVersion=1.5.1 installer\DollarDetectiveCrop.iss
 
-#define MyAppExeName "DollarBillCropTool.exe"
+#define MyAppExeName "DollarDetectiveCrop.exe"
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0"
 #endif
-#define MyAppName "Dollar Bill Crop Tool"
+#define MyAppName "Dollar Detective Crop"
 
 [Setup]
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher=Paul Barros
-DefaultDirName={autopf}\DollarBillCropTool
+DefaultDirName={autopf}\DollarDetectiveCrop
 DefaultGroupName={#MyAppName}
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=..\assets\DD-Crop.ico
 ; Paths are relative to this .iss file (installer/), so reach up to the repo root.
 OutputDir=..\dist
-OutputBaseFilename=DollarBillCropTool-{#MyAppVersion}-setup
+OutputBaseFilename=DollarDetectiveCrop-{#MyAppVersion}-setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -33,7 +33,7 @@ DisableProgramGroupPage=yes
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
 
 [Files]
-Source: "..\dist\DollarBillCropTool\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\dist\DollarDetectiveCrop\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
