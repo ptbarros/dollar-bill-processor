@@ -39,7 +39,7 @@ class EbayCropDialog(QDialog):
 
     # Keys that belong to a crop profile (per-denomination settings). Everything
     # else in config.yaml (crops %, options, ...) stays global.
-    PROFILE_KEYS = ('crop_order', 'yolo_crops', 'include_serial_overlay', 'denomination')
+    PROFILE_KEYS = ('crop_order', 'yolo_crops', 'include_serial_overlay', 'denomination', 'min_dimension')
     # Denominations offered in the profile's denomination selector. $5+ use the
     # two-letter serial prefix (series + district); $1/$2 use one letter.
     DENOMINATIONS = (1, 2, 5, 10, 20, 50, 100)
@@ -98,6 +98,11 @@ class EbayCropDialog(QDialog):
         if getattr(self, '_loading_denom', False):
             return
         self.config['denomination'] = self.denom_combo.currentData()
+
+    def _on_min_dim_changed(self):
+        if getattr(self, '_loading_denom', False):
+            return
+        self.config['min_dimension'] = self.min_dim_spin.value()
 
     def _save_as_profile(self):
         import copy
@@ -185,6 +190,23 @@ class EbayCropDialog(QDialog):
             self.denom_combo.addItem(f"${d}", d)
         self.denom_combo.currentIndexChanged.connect(self._on_denomination_changed)
         prof.addWidget(self.denom_combo)
+
+        # Global minimum crop dimension: ANY crop whose shorter side is under this
+        # gets black-bar padding so it clears eBay's 500px floor (not just overlay
+        # serial crops). 0 disables padding.
+        prof.addSpacing(12)
+        prof.addWidget(QLabel("Min crop size:"))
+        self.min_dim_spin = QSpinBox()
+        self.min_dim_spin.setRange(0, 4000)
+        self.min_dim_spin.setSingleStep(50)
+        self.min_dim_spin.setSuffix(" px")
+        self.min_dim_spin.setToolTip(
+            "Minimum size (px) for every saved crop. Any crop whose shorter side is\n"
+            "under this is centered on a black canvas to reach it -- so eBay won't\n"
+            "reject it for being under 500px. Applies to ALL crops. 0 = no padding.")
+        self.min_dim_spin.valueChanged.connect(self._on_min_dim_changed)
+        prof.addWidget(self.min_dim_spin)
+        prof.addStretch()
         layout.addLayout(prof)
 
         # Instructions
@@ -483,12 +505,16 @@ class EbayCropDialog(QDialog):
 
         # ...overlay toggle on its own line below (a long label that otherwise
         # ran off the row until the window was widened).
-        overlay_cb = QCheckBox("Draw pattern overlay")
+        overlay_cb = QCheckBox("Draw pattern overlay (2× close-up)")
         overlay_cb.setToolTip(
             "During processing, draw the set-pattern overlay on this serial crop —\n"
             "one crop per pattern chosen via right-click \"Set Pattern(s)…\" in the\n"
-            "results list. Off = a plain crop of the serial. (No effect on batch/\n"
-            "standalone crops, which have no set pattern.)")
+            "results list.\n\n"
+            "On = a tight, 2× magnified close-up of the serial so the overlay\n"
+            "(boxes, arcs, X marks) is crisp and the serial is the focus.\n"
+            "Off = a plain crop at the bill's native scale (wider, less zoomed).\n"
+            "That size/zoom difference between on and off is intentional, not a bug.\n\n"
+            "(No effect on batch/standalone crops, which have no set pattern.)")
         overlay_cb.toggled.connect(lambda _=False, w=which: self._on_serial_setting_changed(w))
         outer.addWidget(overlay_cb)
         self.serial_overlay_cbs[which] = overlay_cb
@@ -513,6 +539,8 @@ class EbayCropDialog(QDialog):
             self._loading_denom = True
             idx = self.denom_combo.findData(self.config.get('denomination', 1))
             self.denom_combo.setCurrentIndex(idx if idx >= 0 else 0)
+            if hasattr(self, 'min_dim_spin'):
+                self.min_dim_spin.setValue(int(self.config.get('min_dimension', 500) or 0))
             self._loading_denom = False
 
         # Get current crop order from config

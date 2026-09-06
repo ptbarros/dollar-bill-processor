@@ -236,6 +236,18 @@ class Config:
         return bool(self.active_profile_data.get('include_serial_overlay', True))
 
     @property
+    def min_crop_dimension(self) -> int:
+        """Global minimum crop dimension (px). Any saved crop whose shorter side is
+        under this gets centered on a black canvas so both sides reach it (eBay
+        rejects uploads under 500px). Applies to EVERY crop, not just overlay
+        serials. Set in the Crop Manager; 0 disables padding. Default 500."""
+        try:
+            v = int(self.active_profile_data.get('min_dimension', 500))
+        except (TypeError, ValueError):
+            v = 500
+        return max(0, v)
+
+    @property
     def serial_sides(self) -> str:
         """Which serial region(s) the serial crop targets: 'auto' (highest-conf,
         default), 'left', 'right', or 'both'. Set in the eBay Crop Manager."""
@@ -3675,9 +3687,17 @@ class ProductionProcessor:
         # skipped doesn't leave gaps in the _NN numbering.
         seq = [0]
 
+        min_dim = self.cfg.min_crop_dimension
+
         def _write(crop_img):
             if crop_img is None or getattr(crop_img, 'size', 1) == 0:
                 return
+            # Global minimum-dimension padding: black-bar ANY crop under the min so
+            # it clears eBay's 500px floor -- not just the overlay serial crops.
+            # (pad_to_min is a no-op when the crop already meets the minimum.)
+            if min_dim > 0:
+                from serial_overlay import pad_to_min
+                crop_img = pad_to_min(crop_img, min_size=min_dim)
             seq[0] += 1
             path = output_dir / f"{safe_serial}_{seq[0]:02d}.jpg"
             ok = cv2.imwrite(str(path), crop_img, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
@@ -3834,9 +3854,9 @@ class ProductionProcessor:
 
     def _render_serial_overlay(self, front_img, box, overlay_filter, serial,
                                matched_patterns, gas_pump_threshold):
-        """Crop one serial region and draw one overlay onto it; return a padded
-        BGR crop (eBay 500px min) or None."""
-        from serial_overlay import draw_serial_overlay, pad_to_min
+        """Crop one serial region and draw one overlay onto it; return the BGR
+        crop (min-dimension padding is applied globally in _write) or None."""
+        from serial_overlay import draw_serial_overlay
 
         x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
         h, w = front_img.shape[:2]
@@ -3876,7 +3896,7 @@ class ProductionProcessor:
                  pattern=str(overlay_filter), error=str(e))
             # Still emit the plain (zoomed) serial crop rather than nothing.
 
-        return pad_to_min(crop)
+        return crop
 
     def process_directory(
         self,
