@@ -153,10 +153,19 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies (torch-free)
+      - name: Install dependencies (torch-free + OpenVINO)
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # Like the default Windows edition: swap plain onnxruntime for the
+          # OpenVINO wheel so YOLO runs on the Intel iGPU and OCR on the OpenVINO
+          # CPU device (~1.5x end-to-end on Intel). Same `onnxruntime` import
+          # name, so rapidocr keeps working; collect_all bundles the OpenVINO
+          # runtime libs (they live in onnxruntime/capi). Graceful CPU fallback
+          # on non-Intel / no-iGPU hosts.
+          pip uninstall -y onnxruntime onnxruntime-gpu onnxruntime-directml || true
+          pip install "onnxruntime-openvino>=1.17.0"
+          python -c "import onnxruntime as o; p=o.get_available_providers(); print('providers:',p); assert 'OpenVINOExecutionProvider' in p, 'OpenVINO EP missing'"
           pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
           pip install pyinstaller
           sudo apt-get update

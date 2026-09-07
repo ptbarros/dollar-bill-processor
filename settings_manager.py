@@ -72,6 +72,8 @@ class UISettings:
     gas_pump_overlay_enabled: bool = False
     # Layout mode: "classic", "wide_preview", "details_right"
     layout_mode: str = "classic"
+    # Height (px) of the Bill Details pane below the preview (draggable divider).
+    details_pane_height: int = 220
     # Check GitHub for a newer release on startup (in-app updater)
     check_updates_on_startup: bool = True
 
@@ -197,6 +199,7 @@ class SettingsManager:
             self.ui.serial_bbox_color = ui.get('serial_bbox_color', '#00ff00')
             self.ui.gas_pump_overlay_enabled = ui.get('gas_pump_overlay_enabled', False)
             self.ui.layout_mode = ui.get('layout_mode', 'classic')
+            self.ui.details_pane_height = ui.get('details_pane_height', 220)
             self.ui.check_updates_on_startup = ui.get('check_updates_on_startup', True)
 
         # Load export settings
@@ -374,6 +377,7 @@ class SettingsManager:
                 'serial_bbox_color': self.ui.serial_bbox_color,
                 'gas_pump_overlay_enabled': self.ui.gas_pump_overlay_enabled,
                 'layout_mode': self.ui.layout_mode,
+                'details_pane_height': self.ui.details_pane_height,
                 'check_updates_on_startup': self.ui.check_updates_on_startup,
             },
             'export': {

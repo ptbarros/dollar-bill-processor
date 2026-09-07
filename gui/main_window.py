@@ -129,6 +129,11 @@ class MainWindow(QMainWindow):
             saved_layout = LAYOUT_CLASSIC
         self.layout_manager.apply_layout(saved_layout)
 
+        # Restore the saved Details divider height once the splitter is laid out
+        # (deferred so sizes() reflects real geometry, not the pre-show default).
+        QTimer.singleShot(0, lambda: self.preview_panel.set_details_pane_height(
+            self.settings.ui.details_pane_height))
+
     def _setup_menus(self):
         """Setup the menu bar."""
         menubar = self.menuBar()
@@ -890,6 +895,11 @@ class MainWindow(QMainWindow):
         """Save window geometry to settings."""
         geo = self.geometry()
         self.settings.update_window_geometry(geo.x(), geo.y(), geo.width(), geo.height())
+        # Persist the Details divider position (skip if 0 -- e.g. details_right,
+        # where Details isn't a pane of the content splitter).
+        h = self.preview_panel.get_details_pane_height()
+        if h > 0:
+            self.settings.ui.details_pane_height = h
         self.settings.save()
 
     def closeEvent(self, event):
@@ -1294,6 +1304,11 @@ class MainWindow(QMainWindow):
 
         # Apply the layout
         self.layout_manager.apply_layout(layout_id)
+
+        # Re-apply the saved Details divider height (a layout rebuild resets the
+        # content splitter to its default sizes).
+        QTimer.singleShot(0, lambda: self.preview_panel.set_details_pane_height(
+            self.settings.ui.details_pane_height))
 
         # Save preference
         self.settings.ui.layout_mode = layout_id

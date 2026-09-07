@@ -941,6 +941,10 @@ class ImageLabel(QLabel):
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip("Left-click: cycle overlays | Hold left-click: menu | Right-click: flip 180°")
         self._matched_patterns = []  # List of (internal_name, display_name) tuples
+        # Patterns this bill matched but that declare Overlay: none (nothing to
+        # draw on the digits). Shown greyed/read-only in the menu so they're
+        # discoverable -- NOT added to the click-cycle. (internal, display) tuples.
+        self._excluded_patterns = []
         self._current_pattern_index = 0  # For cycling: 0=gas_pump, 1+=patterns, last=none
 
         # For long-press detection
@@ -964,6 +968,17 @@ class ImageLabel(QLabel):
             if name != "GAS_PUMP"
         ]
         self._current_pattern_index = 0  # Reset to gas pump when patterns change
+
+    def set_excluded_patterns(self, patterns: list):
+        """Set the matched-but-non-overlay patterns (shown greyed in the menu).
+
+        Args:
+            patterns: List of (internal_name, display_name) tuples.
+        """
+        self._excluded_patterns = [
+            (name, display) for name, display in (patterns or [])
+            if name != "GAS_PUMP"
+        ]
 
     def _get_cycle_options(self):
         """Get the list of internal pattern names to cycle through."""
@@ -1003,6 +1018,16 @@ class ImageLabel(QLabel):
             for internal_name, display_name in self._matched_patterns:
                 action = menu.addAction(display_name)
                 action.setData(internal_name)
+
+        # Matched-but-no-overlay patterns (e.g. STAR, SEAL_SHIFT): shown greyed
+        # and non-selectable so it's clear the bill DID match them -- they're just
+        # excluded from the overlay because there's nothing to draw on the digits.
+        # This is discoverability only; they never enter the click-cycle.
+        if self._excluded_patterns:
+            menu.addSeparator()
+            for _internal_name, display_name in self._excluded_patterns:
+                action = menu.addAction(f"{display_name} — no overlay")
+                action.setEnabled(False)
 
         menu.addSeparator()
 
@@ -1374,8 +1399,6 @@ class PreviewPanel(QWidget):
         zoom_tip.setStyleSheet("color: gray;")
         preview_layout.addWidget(zoom_tip)
 
-        layout.addWidget(preview_container, 1)
-
         # Details section (toggleable via View menu)
         self.details_group = QGroupBox("Bill Details")
         details_layout = QGridLayout(self.details_group)
@@ -1395,17 +1418,10 @@ class PreviewPanel(QWidget):
         self.patterns_label = QLabel("-")
         self.patterns_label.setWordWrap(True)
         self.patterns_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        # Scroll a long match list within a bounded height so a bill with many
-        # matches doesn't push the rows below (Rarity/Price/Status/File) off-screen.
-        patterns_scroll = QScrollArea()
-        patterns_scroll.setWidgetResizable(True)
-        patterns_scroll.setWidget(self.patterns_label)
-        patterns_scroll.setFrameShape(QScrollArea.NoFrame)
-        patterns_scroll.setMaximumHeight(76)
-        patterns_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        patterns_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        patterns_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
-        patterns_layout.addWidget(patterns_scroll, 1)
+        # The whole Bill Details block is inside a scroll area (details_scroll),
+        # so let the match list expand naturally here -- overflow scrolls together
+        # with the rest of Details rather than in a tiny nested box.
+        patterns_layout.addWidget(self.patterns_label, 1)
         self.reclassify_btn = QPushButton("Re-classify")
         self.reclassify_btn.setToolTip("Re-run pattern matching with current patterns (useful after adding new patterns)")
         # No width cap -- 80px clipped the text to "e-classi". Let it size to fit;
@@ -1447,7 +1463,36 @@ class PreviewPanel(QWidget):
         self.file_label.setWordWrap(True)
         details_layout.addWidget(self.file_label, 6, 1)
 
-        layout.addWidget(self.details_group)
+        # Wrap Bill Details in a scroll area so the block has a SMALL minimum
+        # height regardless of content. A QGroupBox's effective minimum is the max
+        # of its own minimum and its layout's minimum, so a bill with many matches
+        # (tall Rarity/Price lists) would otherwise force the splitter open and
+        # steal height from the preview. Inside a scroll area the minimum stays
+        # small and tall content scrolls within its slice instead of growing.
+        self.details_scroll = QScrollArea()
+        self.details_scroll.setWidgetResizable(True)
+        self.details_scroll.setFrameShape(QScrollArea.NoFrame)
+        self.details_scroll.setWidget(self.details_group)
+        self.details_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.details_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.details_scroll.setMinimumHeight(0)
+
+        # Preview (+ serial) and Details live in a vertical splitter so the
+        # divider between them is user-draggable (drag Details down to a sliver)
+        # and, crucially, the split holds its pixel sizes as you arrow through
+        # bills -- the preview no longer jumps when a bill's Details block grows
+        # or shrinks (many matches, wrapped Rarity/Price/File lines).
+        self.content_splitter = QSplitter(Qt.Vertical)
+        self.content_splitter.addWidget(preview_container)
+        self.content_splitter.addWidget(self.details_scroll)
+        # Preview absorbs any resize growth; Details keeps whatever height the
+        # user dragged it to. Details is collapsible to a sliver; preview is not.
+        self.content_splitter.setStretchFactor(0, 1)
+        self.content_splitter.setStretchFactor(1, 0)
+        self.content_splitter.setCollapsible(0, False)
+        self.content_splitter.setCollapsible(1, True)
+        self.content_splitter.setSizes([650, 220])
+        layout.addWidget(self.content_splitter, 1)
 
     def _on_view_mode_clicked(self, mode: str):
         """Handle view mode button click."""
@@ -2022,6 +2067,22 @@ class PreviewPanel(QWidget):
         except Exception:
             return True
 
+    def _split_overlay_patterns(self, names):
+        """Split matched pattern names into (cyclable, excluded) tuple-lists.
+
+        cyclable = patterns that draw a serial overlay (feed the click-cycle).
+        excluded = matched patterns with Overlay: none (STAR, SEAL_SHIFT, ...),
+        shown greyed in the menu for discoverability. Both are lists of
+        (internal_name, display_name) tuples.
+        """
+        cyclable, excluded = [], []
+        for name in names:
+            if not name:
+                continue
+            entry = (name, self._format_pattern_with_library(name))
+            (cyclable if self._pattern_shows_overlay(name) else excluded).append(entry)
+        return cyclable, excluded
+
     def _format_pattern_with_library(self, name: str) -> str:
         """Format a pattern name as 'Display Name (library)'."""
         info = self.pattern_engine.get_pattern_info(name)
@@ -2096,15 +2157,11 @@ class PreviewPanel(QWidget):
         if self.serial_frame.isVisible():
             # Update matched patterns for context menu (list of (internal_name, display_name) tuples)
             fancy_types_str = result.get('fancy_types', '')
-            if fancy_types_str:
-                matched_patterns = []
-                for name in [p.strip() for p in fancy_types_str.split(',')]:
-                    if name and self._pattern_shows_overlay(name):
-                        matched_patterns.append((name, self._format_pattern_with_library(name)))
-            else:
-                matched_patterns = []
-            self.serial_image_1.set_matched_patterns(matched_patterns)
-            self.serial_image_2.set_matched_patterns(matched_patterns)
+            names = [p.strip() for p in fancy_types_str.split(',')] if fancy_types_str else []
+            matched_patterns, excluded_patterns = self._split_overlay_patterns(names)
+            for widget in (self.serial_image_1, self.serial_image_2):
+                widget.set_matched_patterns(matched_patterns)
+                widget.set_excluded_patterns(excluded_patterns)
 
             # Reconcile the overlay (filter + label + cycler index) with THIS bill
             # so the label doesn't stay stuck on a pattern the new bill lacks.
@@ -2238,10 +2295,13 @@ class PreviewPanel(QWidget):
             status_parts.append("Needs Review")
         self.status_label.setText(', '.join(status_parts) if status_parts else "OK")
 
-        # Update matched patterns for overlay cycling (list of (internal_name, display_name) tuples)
-        matched_tuples = [(name, self._format_pattern_with_library(name)) for name in matches]
-        self.serial_image_1.set_matched_patterns(matched_tuples)
-        self.serial_image_2.set_matched_patterns(matched_tuples)
+        # Update matched patterns for overlay cycling. Split off Overlay: none
+        # patterns so they don't re-enter the cycle after a re-classify -- they
+        # show greyed in the menu instead (matching the show_bill path).
+        matched_tuples, excluded_tuples = self._split_overlay_patterns(matches)
+        for widget in (self.serial_image_1, self.serial_image_2):
+            widget.set_matched_patterns(matched_tuples)
+            widget.set_excluded_patterns(excluded_tuples)
 
         # Refresh serial region crops to show updated overlays
         if self.serial_frame.isVisible() and self._current_front_file:
@@ -2340,7 +2400,8 @@ class PreviewPanel(QWidget):
 
     def set_details_visible(self, visible: bool):
         """Show or hide the bill details panel."""
-        self.details_group.setVisible(visible)
+        # Toggle the scroll wrapper (its child group would stay behind otherwise).
+        getattr(self, 'details_scroll', self.details_group).setVisible(visible)
 
     def is_serial_region_visible(self) -> bool:
         """Check if serial region panel is visible."""
@@ -2348,7 +2409,28 @@ class PreviewPanel(QWidget):
 
     def is_details_visible(self) -> bool:
         """Check if bill details panel is visible."""
-        return self.details_group.isVisible()
+        return getattr(self, 'details_scroll', self.details_group).isVisible()
+
+    def get_details_pane_height(self) -> int:
+        """Current pixel height of the Details pane in the content splitter.
+
+        Returns 0 when Details isn't a pane of the splitter (e.g. the
+        details_right layout pulls it out), so callers can skip persisting it.
+        """
+        sp = getattr(self, 'content_splitter', None)
+        if sp is not None and sp.count() >= 2:
+            return sp.sizes()[-1]
+        return 0
+
+    def set_details_pane_height(self, height: int):
+        """Restore the Details pane to a saved pixel height (preview gets the rest)."""
+        sp = getattr(self, 'content_splitter', None)
+        if sp is None or sp.count() < 2 or height <= 0:
+            return
+        total = sum(sp.sizes()) or sp.height()
+        if total <= height:
+            return  # not laid out yet / nonsensical -- keep defaults
+        sp.setSizes([max(1, total - height), height])
 
     def _get_active_viewer(self):
         """Get the currently active viewer based on view mode."""

@@ -215,9 +215,12 @@ class LayoutManager:
         details_layout.setContentsMargins(0, 0, 0, 0)
         details_layout.setSpacing(0)
 
-        if hasattr(self.preview_panel, 'details_group'):
-            self.preview_panel.details_group.setParent(None)
-            details_layout.addWidget(self.preview_panel.details_group)
+        # Reparent the scrollable Details wrapper (falls back to the bare group).
+        details_widget = getattr(self.preview_panel, 'details_scroll', None) \
+            or getattr(self.preview_panel, 'details_group', None)
+        if details_widget is not None:
+            details_widget.setParent(None)
+            details_layout.addWidget(details_widget)
 
         bottom_splitter.addWidget(self._details_container)
 
@@ -236,23 +239,25 @@ class LayoutManager:
         return main_splitter
 
     def _restore_preview_panel_widgets(self):
-        """Restore details_group back into preview_panel's layout."""
+        """Restore details_group back into preview_panel's internal splitter."""
         if not self._details_container:
             return
 
-        # Get the preview panel's internal layout
-        if not hasattr(self.preview_panel, 'layout'):
-            return
-
-        preview_layout = self.preview_panel.layout()
-        if not preview_layout:
-            return
-
-        # Restore details_group
-        if hasattr(self.preview_panel, 'details_group'):
-            details_group = self.preview_panel.details_group
-            details_group.setParent(None)
-            # Add at the end of preview panel layout
-            preview_layout.addWidget(details_group)
+        # Restore details_group into the preview panel's vertical content
+        # splitter (preview_container | details_group) so the draggable divider
+        # between preview and details is preserved. Fall back to appending to the
+        # panel's layout if the splitter isn't present (older structure).
+        details_widget = getattr(self.preview_panel, 'details_scroll', None) \
+            or getattr(self.preview_panel, 'details_group', None)
+        if details_widget is not None:
+            details_widget.setParent(None)
+            splitter = getattr(self.preview_panel, 'content_splitter', None)
+            if splitter is not None:
+                splitter.addWidget(details_widget)
+                splitter.setStretchFactor(splitter.count() - 1, 0)
+                splitter.setCollapsible(splitter.count() - 1, True)
+                splitter.setSizes([650, 220])
+            elif self.preview_panel.layout():
+                self.preview_panel.layout().addWidget(details_widget)
 
         self._details_container = None
