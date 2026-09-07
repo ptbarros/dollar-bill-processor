@@ -975,6 +975,18 @@ class ResultsList(QWidget):
             note_action.triggered.connect(lambda: self._set_note(result))
             menu.addAction(note_action)
 
+            # "Suggest Note" - auto-derive the line-3 feature note from the match
+            suggest_action = QAction("Suggest Note", self)
+            suggest_action.setToolTip("Auto-fill the note from the pattern (ladder digits, "
+                                      "grouping, low-run size)")
+            suggest_action.triggered.connect(lambda: self._suggest_note(result))
+            menu.addAction(suggest_action)
+        else:
+            # Multi-select: fill empty notes on all selected bills at once.
+            suggest_multi = QAction("Suggest Notes (fill empty)", self)
+            suggest_multi.triggered.connect(lambda: self._suggest_notes_multi(selected_results))
+            menu.addAction(suggest_multi)
+
         menu.addSeparator()
 
         # === Single-item actions ===
@@ -1099,6 +1111,18 @@ class ResultsList(QWidget):
         dlog("action.note", front_file=front_file,
              position=result.get('position'), value=note)
 
+        self.apply_note(front_file, note)
+
+    def apply_note(self, front_file: str, note: str):
+        """Set (or clear) a bill's note by front_file and trigger autosave.
+
+        Shared by the right-click "Set Note" dialog and the Label Preview tool so
+        both write through the same path (authoritative list + tree item data +
+        status_changed for autosave).
+        """
+        if not front_file:
+            return
+
         # Update the authoritative results list
         for r in self.results:
             if r.get('front_file') == front_file:
@@ -1121,6 +1145,82 @@ class ResultsList(QWidget):
                 break
 
         # Emit status_changed to trigger autosave
+        self.status_changed.emit()
+
+    def _compute_suggestion(self, result: dict) -> str:
+        """The auto-derived line-3 note for a bill (or '' if none applies)."""
+        from .label_suggest import suggest_annotation
+        serial = result.get('serial', '') or ''
+        if not serial:
+            return ''
+        known = [p.strip() for p in (result.get('fancy_types', '') or '').split(',') if p.strip()]
+        try:
+            matches = self.pattern_engine.classify(serial)
+        except Exception:
+            matches = []
+        return suggest_annotation(serial, matches, known_names=known)
+
+    def _suggest_note(self, result: dict):
+        """Right-click 'Suggest Note': fill this bill's note from its pattern."""
+        from PySide6.QtWidgets import QMessageBox
+        sug = self._compute_suggestion(result)
+        if not sug:
+            QMessageBox.information(self, "Suggest Note",
+                                    "No note suggestion for this bill's pattern.")
+            return
+        existing = (result.get('note', '') or '').strip()
+        if existing and QMessageBox.question(
+                self, "Suggest Note",
+                f"Replace the existing note with the suggestion?\n\nSuggested: {sug}",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
+        self.apply_note(result.get('front_file'), sug)
+
+    def _suggest_notes_multi(self, results: list):
+        """Right-click 'Suggest Notes': fill EMPTY notes on selected bills."""
+        from PySide6.QtWidgets import QMessageBox
+        filled = skipped = 0
+        for r in results:
+            if (r.get('note', '') or '').strip():
+                skipped += 1
+                continue
+            sug = self._compute_suggestion(r)
+            if not sug:
+                continue
+            self.apply_note(r.get('front_file'), sug)
+            filled += 1
+        msg = f"Filled {filled} note(s) from pattern data."
+        if skipped:
+            msg += f"\nSkipped {skipped} that already had a note."
+        QMessageBox.information(self, "Suggest Notes", msg)
+
+    def apply_label_lines(self, front_file: str, lines):
+        """Set (or clear) a bill's per-bill label override and trigger autosave.
+
+        `lines` is a list of label text lines (label-only edits from the Label
+        Preview tool) or None to clear the override and fall back to auto text.
+        Writes through the same path as notes (authoritative list + tree item +
+        status_changed).
+        """
+        if not front_file:
+            return
+        for r in self.results:
+            if r.get('front_file') == front_file:
+                if lines:
+                    r['label_lines'] = list(lines)
+                elif 'label_lines' in r:
+                    del r['label_lines']
+                break
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            item_result = item.data(0, Qt.UserRole)
+            if item_result and item_result.get('front_file') == front_file:
+                if lines:
+                    item_result['label_lines'] = list(lines)
+                elif 'label_lines' in item_result:
+                    del item_result['label_lines']
+                item.setData(0, Qt.UserRole, item_result)
+                break
         self.status_changed.emit()
 
     def _open_correction_dialog(self, result: dict):

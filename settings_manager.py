@@ -74,6 +74,8 @@ class UISettings:
     details_pane_height: int = 220
     # Check GitHub for a newer release on startup (in-app updater)
     check_updates_on_startup: bool = True
+    # Force label text to UPPERCASE in the Label Preview / PDF export
+    label_uppercase: bool = False
 
 
 @dataclass
@@ -134,6 +136,9 @@ class SettingsManager:
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
         self.pattern_colors: Dict[str, str] = {}  # Pattern name -> hex color
         self.overlay_colors: Dict[str, str] = {}  # Overlay palette slot (e.g. "orange") -> hex override
+        self.label_template: Dict = {}  # Legacy single template (migrated into label_profiles)
+        self.label_profiles: Dict[str, Dict] = {}  # name -> label template dict (size + fields)
+        self.active_label_profile: str = ""  # currently selected profile name
         self.pattern_labels: Dict[str, str] = {}  # Pattern name -> custom display label override
         self.pattern_catalogs: Dict[str, str] = {}  # Pattern name -> catalog location (e.g., "A1", "B2")
         self.pattern_overrides: Dict[str, Dict[str, Any]] = {}  # e.g., {'GAS_PUMP': {'baseline_variance_min': 3.6}}
@@ -200,6 +205,7 @@ class SettingsManager:
             self.ui.layout_mode = ui.get('layout_mode', 'classic')
             self.ui.details_pane_height = ui.get('details_pane_height', 220)
             self.ui.check_updates_on_startup = ui.get('check_updates_on_startup', True)
+            self.ui.label_uppercase = ui.get('label_uppercase', False)
 
         # Load export settings
         if 'export' in data:
@@ -255,6 +261,15 @@ class SettingsManager:
         # Load pattern colors
         self.pattern_colors = data.get('pattern_colors', {})
         self.overlay_colors = data.get('overlay_colors', {})
+        self.label_template = data.get('label_template', {}) or {}
+        self.label_profiles = data.get('label_profiles', {}) or {}
+        self.active_label_profile = data.get('active_label_profile', '') or ''
+        # Migrate the old single template into a named profile the first time.
+        if not self.label_profiles:
+            self.label_profiles = {'2x1': self.label_template or {}}
+            self.active_label_profile = '2x1'
+        if self.active_label_profile not in self.label_profiles:
+            self.active_label_profile = next(iter(self.label_profiles), '2x1')
         self.pattern_labels = data.get('pattern_labels', {})
 
         # Load pattern catalogs
@@ -379,6 +394,7 @@ class SettingsManager:
                 'layout_mode': self.ui.layout_mode,
                 'details_pane_height': self.ui.details_pane_height,
                 'check_updates_on_startup': self.ui.check_updates_on_startup,
+                'label_uppercase': self.ui.label_uppercase,
             },
             'export': {
                 'default_format': self.export.default_format,
@@ -409,6 +425,9 @@ class SettingsManager:
             'pattern_states': self.pattern_states,
             'pattern_colors': self.pattern_colors,
             'overlay_colors': self.overlay_colors,
+            'label_template': self.label_template,
+            'label_profiles': self.label_profiles,
+            'active_label_profile': self.active_label_profile,
             'pattern_labels': self.pattern_labels,
             'pattern_catalogs': self.pattern_catalogs,
             'pattern_overrides': self.pattern_overrides,
@@ -495,6 +514,57 @@ class SettingsManager:
             self.pattern_labels[pattern_name] = label
         elif pattern_name in self.pattern_labels:
             del self.pattern_labels[pattern_name]
+
+    def get_label_profiles(self) -> Dict[str, Dict]:
+        """All saved label profiles ({name: template dict})."""
+        if not self.label_profiles:
+            self.label_profiles = {'2x1': self.label_template or {}}
+            self.active_label_profile = '2x1'
+        return dict(self.label_profiles)
+
+    def get_active_label_profile(self) -> str:
+        """Name of the currently selected label profile."""
+        profiles = self.get_label_profiles()
+        if self.active_label_profile not in profiles:
+            self.active_label_profile = next(iter(profiles), '2x1')
+        return self.active_label_profile
+
+    def set_active_label_profile(self, name: str):
+        if name in self.label_profiles:
+            self.active_label_profile = name
+
+    def get_label_template(self, name: str = None) -> Dict:
+        """The template dict for a profile (default: the active one)."""
+        profiles = self.get_label_profiles()
+        if name is None:
+            name = self.get_active_label_profile()
+        return dict(profiles.get(name, {}))
+
+    def save_label_profile(self, name: str, template: Dict):
+        """Create/replace a profile and make it active."""
+        if not name:
+            return
+        self.label_profiles[name] = dict(template or {})
+        self.active_label_profile = name
+
+    def delete_label_profile(self, name: str) -> bool:
+        """Remove a profile (never the last one). Returns True if removed."""
+        if name in self.label_profiles and len(self.label_profiles) > 1:
+            del self.label_profiles[name]
+            if self.active_label_profile == name:
+                self.active_label_profile = next(iter(self.label_profiles))
+            return True
+        return False
+
+    def rename_label_profile(self, old: str, new: str) -> bool:
+        """Rename a profile, preserving order and active selection."""
+        if old not in self.label_profiles or not new or new in self.label_profiles:
+            return False
+        self.label_profiles = {(new if k == old else k): v
+                               for k, v in self.label_profiles.items()}
+        if self.active_label_profile == old:
+            self.active_label_profile = new
+        return True
 
     def get_overlay_colors(self) -> Dict[str, str]:
         """User overrides for overlay palette slots ({slot: '#rrggbb'})."""

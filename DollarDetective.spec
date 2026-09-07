@@ -33,7 +33,20 @@ hiddenimports = ['yaml', 'pandas', 'openpyxl', 'docx', 'PIL', 'updater', 'gui.up
 #   - anthropic / openai: AI pattern generation; imported lazily in the AI tab,
 #     so they must be forced in. Pull compiled deps (pydantic_core, jiter) and
 #     read their own version via package metadata -> collect_all grabs all three.
-for pkg in ('rapidocr_onnxruntime', 'onnxruntime', 'lupa', 'anthropic', 'openai', 'cv2'):
+_collect_pkgs = ['rapidocr_onnxruntime', 'onnxruntime', 'lupa', 'anthropic', 'openai']
+
+# cv2 (opencv): cv2 is imported at module level, so PyInstaller's built-in cv2
+# hook already collects it correctly (it EXECs cv2's config to place the native
+# extension at the right path). Adding an explicit collect_all('cv2') ON TOP puts
+# a SECOND copy of the extension/.dylibs at a different location. Windows/Linux
+# loaders tolerate that, but macOS's strict dyld can't resolve it and `import cv2`
+# fails at runtime ("Missing required dependencies: opencv-python-headless"). So on
+# macOS rely solely on the built-in hook; keep the belt-and-suspenders collect_all
+# on Windows/Linux where it's proven and harmless.
+if sys.platform != 'darwin':
+    _collect_pkgs.append('cv2')
+
+for pkg in _collect_pkgs:
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b

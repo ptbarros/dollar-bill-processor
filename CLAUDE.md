@@ -52,7 +52,8 @@ end
 - **Test Tab**: Quick test, batch test cases, debug logging with `log()` function
 - **Copy for AI**: Exports API docs + template for external AI tools
 - **Export/Import Selection**: shares the enabled/disabled on-off list (JSON) — NOT the pattern definitions; only works if the recipient already has those patterns.
-- **Export/Import Bundle**: shares the actual patterns as a single `.ddpat` file (a zip). Export packs the selected pattern(s) — or all user patterns if none selected — plus any `DataFile` CSV/JSON they use. Import copies them into `user_patterns_dir` (data files written as siblings; `DataFile:` header normalized to the basename so it resolves), handles name collisions (skip/overwrite), then `engine.reload()`. Logic in `pattern_bundle.py`; wired via `_export_bundle`/`_import_bundle` in `gui/pattern_dialog.py`.
+- **Export/Import Bundle**: shares the actual patterns as a single `.ddpat` file (a zip). Export packs the selected pattern(s) — or all user patterns if none selected — plus any `DataFile` CSV/JSON they use, plus each pattern's custom display-**label** override (manifest `pattern_labels`, so relabeling travels with the patterns). Import copies patterns into `user_patterns_dir` (data files written as siblings; `DataFile:` header normalized to the basename so it resolves), applies the bundled labels via `settings.set_pattern_label`, handles name collisions (skip/overwrite), then `engine.reload()`. Logic in `pattern_bundle.py`; wired via `_export_bundle`/`_import_bundle` in `gui/pattern_dialog.py`.
+- **Label overrides — bulk + backup**: Pattern Manager "Labels:" row has **Strip "CS-"** (bulk-remove the leading `CS-` from every effective label → per-pattern overrides), **Back Up…**/**Restore…** (JSON of `settings.pattern_labels`, format `dollar-detective-pattern-labels`; restore offers Merge/Replace). Overrides live in `user_settings.yaml` keyed by internal pattern name.
 
 ### Key Files
 | File | Purpose |
@@ -60,7 +61,10 @@ end
 | `pattern_engine_v3.py` | Lua pattern engine |
 | `pattern_sandbox.py` | Secure Lua execution |
 | `gui/pattern_dialog.py` | Pattern Manager + CustomPatternDialog |
-| `pattern_bundle.py` | Pattern bundle (.ddpat) export/import |
+| `pattern_bundle.py` | Pattern bundle (.ddpat) export/import (patterns + data files + label overrides) |
+| `gui/label_render.py` | Label drawing + profile template (LabelTemplate/LabelField: size, base font, fields, per-field fonts) — single source for preview + PDF/Word export (wrap, overflow) |
+| `gui/label_preview_dialog.py` | Label Preview & Print tool (Tools → Label Preview, Ctrl+Shift+L); per-bill edits + profile picker |
+| `gui/label_fields_dialog.py` | Label PROFILE editor (Edit… in Label Preview): label size, base font, fields, captions, per-field fonts |
 | `gui/pattern_recipes.py` | Recipe-based creation |
 | `gui/ai_pattern_generator.py` | AI pattern generation |
 | `settings_manager.py` | User settings persistence |

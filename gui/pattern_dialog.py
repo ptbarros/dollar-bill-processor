@@ -234,6 +234,34 @@ class PatternDialog(QDialog):
         bundle_layout.addStretch()
         left_layout.addLayout(bundle_layout)
 
+        # Label-override tools (bulk rename + backup/restore). Display-label
+        # overrides live in user_settings.yaml keyed by pattern name; these make
+        # a big relabel (e.g. dropping the "CS-" prefix across the Green Guide)
+        # one click and back-up-able so the work can't be lost.
+        labels_layout = QHBoxLayout()
+        labels_layout.addWidget(QLabel("Labels:"))
+        strip_cs_btn = QPushButton('Strip "CS-"')
+        strip_cs_btn.setToolTip(
+            'Remove the leading "CS-" from every pattern label at once (sets a '
+            'display-label override per pattern). Reversible via Reset or Restore.')
+        strip_cs_btn.clicked.connect(self._strip_cs_labels)
+        labels_layout.addWidget(strip_cs_btn)
+
+        backup_labels_btn = QPushButton("Back Up…")
+        backup_labels_btn.setToolTip(
+            "Save all your custom pattern labels to a JSON file you can keep as a "
+            "backup or move to another machine.")
+        backup_labels_btn.clicked.connect(self._backup_labels)
+        labels_layout.addWidget(backup_labels_btn)
+
+        restore_labels_btn = QPushButton("Restore…")
+        restore_labels_btn.setToolTip("Load custom pattern labels from a backup file.")
+        restore_labels_btn.clicked.connect(self._restore_labels)
+        labels_layout.addWidget(restore_labels_btn)
+
+        labels_layout.addStretch()
+        left_layout.addLayout(labels_layout)
+
         splitter.addWidget(left_panel)
 
         # Right panel - Details and testing
@@ -1767,6 +1795,147 @@ class PatternDialog(QDialog):
             f"Applied {applied} pattern settings."
             + (f"\n({missing} patterns in the file aren't installed here.)" if missing else ""))
 
+    def _default_label_for(self, name) -> str:
+        """The default display label for a pattern (Lua DisplayName or friendly)."""
+        p = self.engine.lua_patterns.get(name)
+        if p and getattr(p, 'display_name', ''):
+            return p.display_name
+        return self._make_friendly_name(name)
+
+    def _strip_cs_labels(self):
+        """Bulk-remove the leading "CS-" prefix from every pattern's label.
+
+        For each pattern whose effective label starts with "CS-", store a
+        display-label override with the prefix removed. This is the Green Guide
+        relabel (e.g. "CS-Triple" -> "Triple") in one click instead of ~190
+        manual edits. Reversible per-pattern via Reset, or wholesale via Restore.
+        """
+        import re
+        targets = []  # (name, new_label)
+        for name in self.engine.lua_patterns:
+            default_label = self._default_label_for(name)
+            effective = self.settings.get_pattern_label(name) or default_label
+            stripped = re.sub(r'^\s*CS[\-\s]+', '', effective).strip()
+            if stripped and stripped != effective:
+                targets.append((name, stripped))
+
+        if not targets:
+            QMessageBox.information(
+                self, "Strip \"CS-\"",
+                "No pattern labels start with \"CS-\", so there's nothing to change.")
+            return
+
+        if QMessageBox.question(
+                self, "Strip \"CS-\" Prefix",
+                f"Remove the \"CS-\" prefix from {len(targets)} pattern label(s)?\n\n"
+                "Each becomes a display-label override (e.g. \"CS-Triple\" -> "
+                "\"Triple\"). You can undo one with the Reset button, or all of "
+                "them by restoring a backup.\n\nTip: use \"Back Up…\" first if you "
+                "want a safety copy.",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
+
+        for name, new_label in targets:
+            # If the stripped text happens to equal the default, clearing keeps
+            # things tidy; otherwise store the override.
+            default_label = self._default_label_for(name)
+            self.settings.set_pattern_label(
+                name, "" if new_label == default_label else new_label)
+        self.settings.save()
+        self._load_patterns()
+        # Refresh the details pane if a pattern is still selected.
+        self._on_selection_changed()
+        QMessageBox.information(
+            self, "Strip \"CS-\"",
+            f"Renamed {len(targets)} pattern label(s).")
+
+    def _backup_labels(self):
+        """Save all custom display-label overrides to a shareable JSON file."""
+        from PySide6.QtWidgets import QFileDialog
+        import json
+        labels = dict(getattr(self.settings, 'pattern_labels', {}) or {})
+        if not labels:
+            QMessageBox.information(
+                self, "Back Up Labels",
+                "You don't have any custom pattern labels yet, so there's nothing "
+                "to back up.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Back Up Pattern Labels", "pattern_labels.json",
+            "Pattern labels (*.json)")
+        if not path:
+            return
+        if not path.lower().endswith(".json"):
+            path += ".json"
+        data = {
+            "format": "dollar-detective-pattern-labels",
+            "version": 1,
+            "pattern_labels": labels,
+        }
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, sort_keys=True)
+        except Exception as e:
+            QMessageBox.critical(self, "Back Up failed", str(e))
+            return
+        QMessageBox.information(
+            self, "Labels backed up",
+            f"Saved {len(labels)} custom label(s) to:\n{path}")
+
+    def _restore_labels(self):
+        """Load custom display-label overrides from a backup JSON file."""
+        from PySide6.QtWidgets import QFileDialog, QMessageBox as _QMB
+        import json
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Restore Pattern Labels", "", "Pattern labels (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            QMessageBox.critical(self, "Restore failed", f"Could not read the file:\n{e}")
+            return
+        if not isinstance(data, dict) or data.get("format") != "dollar-detective-pattern-labels":
+            QMessageBox.warning(
+                self, "Restore failed",
+                "That doesn't look like a Dollar Detective pattern-labels backup.")
+            return
+        labels = data.get("pattern_labels", {}) or {}
+        if not labels:
+            QMessageBox.information(self, "Restore Labels", "The backup has no labels in it.")
+            return
+
+        box = _QMB(self)
+        box.setWindowTitle("Restore Pattern Labels")
+        box.setIcon(_QMB.Question)
+        box.setText(f"The backup has {len(labels)} custom label(s).")
+        box.setInformativeText(
+            "Merge: add/overwrite from the backup, keep your other labels.\n"
+            "Replace: discard your current labels and use only the backup.")
+        merge_btn = box.addButton("Merge", _QMB.AcceptRole)
+        replace_btn = box.addButton("Replace", _QMB.DestructiveRole)
+        box.addButton("Cancel", _QMB.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked not in (merge_btn, replace_btn):
+            return
+
+        if clicked is replace_btn:
+            self.settings.pattern_labels.clear()
+        for name, label in labels.items():
+            self.settings.set_pattern_label(name, label or "")
+        self.settings.save()
+        self._load_patterns()
+        self._on_selection_changed()
+        installed = sum(1 for n in labels if n in self.engine.lua_patterns)
+        missing = len(labels) - installed
+        QMessageBox.information(
+            self, "Labels restored",
+            f"Restored {len(labels)} label(s)."
+            + (f"\n({missing} are for patterns not installed here; kept in case "
+               "you add them later.)" if missing else ""))
+
     def _selected_pattern_names(self) -> list:
         """Names of the Lua patterns currently selected (highlighted) in the tree."""
         names = []
@@ -1810,14 +1979,18 @@ class PatternDialog(QDialog):
         if not path.lower().endswith(pattern_bundle.BUNDLE_EXT):
             path += pattern_bundle.BUNDLE_EXT
 
+        labels = {n: self.settings.get_pattern_label(n) for n in names
+                  if self.settings.get_pattern_label(n)}
         try:
-            summary = pattern_bundle.export_bundle(self.engine, names, path)
+            summary = pattern_bundle.export_bundle(
+                self.engine, names, path, pattern_labels=labels)
         except Exception as e:
             QMessageBox.critical(self, "Export failed", str(e))
             return
 
         msg = (f"Exported {summary['count']} pattern(s)"
                + (f" and {summary['data_files']} data file(s)" if summary['data_files'] else "")
+               + (f" with {summary['labels']} custom label(s)" if summary.get('labels') else "")
                + f" to:\n{summary['path']}\n\nShare this file — the recipient uses "
                  "“Import Bundle…” to add these patterns.")
         if summary["missing_data"]:
@@ -1874,11 +2047,20 @@ class PatternDialog(QDialog):
             QMessageBox.critical(self, "Import failed", str(e))
             return
 
+        # Apply any display-label overrides that travelled with the bundle.
+        bundled_labels = summary.get("pattern_labels", {}) or {}
+        if bundled_labels:
+            for name, label in bundled_labels.items():
+                self.settings.set_pattern_label(name, label)
+            self.settings.save()
+
         self._load_patterns()  # rebuild the tree to show the imported patterns
 
         parts = [f"Imported {len(summary['imported'])} pattern(s)"]
         if summary["data_files"]:
             parts.append(f"with {summary['data_files']} data file(s)")
+        if bundled_labels:
+            parts.append(f"and {len(bundled_labels)} custom label(s)")
         tail = ""
         if summary["skipped"]:
             tail += f"\nSkipped {len(summary['skipped'])} that already existed."

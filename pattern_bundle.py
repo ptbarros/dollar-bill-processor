@@ -50,11 +50,15 @@ def _resolve_data_file(engine, info) -> Path | None:
     return p if p.exists() else None
 
 
-def export_bundle(engine, pattern_names, out_path) -> dict:
+def export_bundle(engine, pattern_names, out_path, pattern_labels=None) -> dict:
     """Write the named patterns (and their data files) to a ``.ddpat`` bundle.
 
+    ``pattern_labels`` (optional) is a ``{name: custom_label}`` map of the user's
+    display-label overrides; entries for the exported patterns are stored in the
+    manifest so relabeling travels with the patterns.
+
     Returns a summary dict: count, data_files, missing_data (list of
-    (pattern, declared_datafile) whose file couldn't be found), path."""
+    (pattern, declared_datafile) whose file couldn't be found), labels, path."""
     out_path = Path(out_path)
     entries = []
     missing_data = []
@@ -102,12 +106,20 @@ def export_bundle(engine, pattern_names, out_path) -> dict:
                 "data_file_name": data_name,
             })
 
+        # Carry display-label overrides for the exported patterns only.
+        labels = {}
+        if pattern_labels:
+            exported_names = {e["name"] for e in entries}
+            labels = {n: lbl for n, lbl in pattern_labels.items()
+                      if n in exported_names and lbl}
+
         manifest = {
             "format": BUNDLE_FORMAT,
             "version": BUNDLE_VERSION,
             "app_version": __version__,
             "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "patterns": entries,
+            "pattern_labels": labels,
         }
         z.writestr("manifest.json", json.dumps(manifest, indent=2))
 
@@ -115,6 +127,7 @@ def export_bundle(engine, pattern_names, out_path) -> dict:
         "count": len(entries),
         "data_files": len(used_data_names),
         "missing_data": missing_data,
+        "labels": len(labels),
         "path": str(out_path),
     }
 
@@ -152,7 +165,9 @@ def import_bundle(engine, bundle_path, overwrite=False) -> dict:
 
     Existing patterns (by name or target filename) are skipped unless
     ``overwrite`` is True. Calls ``engine.reload()`` at the end. Returns a summary
-    dict: imported, skipped, errors, data_files."""
+    dict: imported, skipped, errors, data_files, pattern_labels (the display-label
+    overrides from the manifest for the patterns actually imported -- the caller
+    applies these to settings)."""
     dest = Path(engine.user_patterns_dir)
     dest.mkdir(parents=True, exist_ok=True)
 
@@ -199,9 +214,14 @@ def import_bundle(engine, bundle_path, overwrite=False) -> dict:
                 errors.append(f"{name}: {e}")
 
     engine.reload()
+    # Labels from the manifest, but only for patterns we actually imported.
+    manifest_labels = manifest.get("pattern_labels", {}) or {}
+    imported_labels = {n: manifest_labels[n] for n in imported
+                       if n in manifest_labels and manifest_labels[n]}
     return {
         "imported": imported,
         "skipped": skipped,
         "errors": errors,
         "data_files": len(data_written),
+        "pattern_labels": imported_labels,
     }

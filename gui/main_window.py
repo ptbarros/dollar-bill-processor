@@ -267,6 +267,12 @@ class MainWindow(QMainWindow):
         serial_lookup_action.triggered.connect(lambda: self._open_serial_lookup())
         tools_menu.addAction(serial_lookup_action)
 
+        label_preview_action = QAction("&Label Preview && Print...", self)
+        label_preview_action.setShortcut("Ctrl+Shift+L")
+        label_preview_action.setToolTip("Preview printable labels for queued bills, flag overflow, edit line 3, save PDF")
+        label_preview_action.triggered.connect(lambda: self._open_label_preview())
+        tools_menu.addAction(label_preview_action)
+
         overlay_colors_action = QAction("&Overlay Colors...", self)
         overlay_colors_action.setToolTip("Retune the overlay palette colors (e.g. darken orange, lighten blue)")
         overlay_colors_action.triggered.connect(self._open_overlay_colors)
@@ -953,6 +959,95 @@ class MainWindow(QMainWindow):
         dlg.raise_()
         dlg.activateWindow()
         dlg.serial_edit.setFocus()
+
+    def _build_label_items(self, results: list) -> list:
+        """Build LabelData for the Label Preview tool from result dicts.
+
+        Reuses the same pattern/catalog resolution as the .txt/.docx generators
+        (`_selected_patterns` + `_pattern_display_name`) so the preview matches the
+        exported labels.
+        """
+        from .label_render import LabelData
+        from .label_suggest import suggest_annotation
+        # Denomination is a config/profile-level value (same for the batch).
+        try:
+            denom = self._active_denomination()
+        except Exception:
+            denom = None
+        engine = getattr(self.results_list, 'pattern_engine', None)
+        items = []
+        for result in results:
+            selected = self._selected_patterns(result)
+            if not selected:
+                selected = ['No Pattern']
+            pattern_display = ', '.join(self._pattern_display_name(p) for p in selected)
+            catalog = ', '.join(
+                c for c in (self.settings.get_pattern_catalog(p, '') for p in selected
+                            if p != 'No Pattern') if c
+            )
+            # Auto-derived line-3 suggestion from the pattern match (ladder digits,
+            # grouping, etc.) — offered via "Suggest line 3", never auto-applied.
+            serial = result.get('serial', '') or ''
+            suggested = ''
+            # The bill's already-matched patterns (from processing, with image
+            # metadata) — needed for low-run, which a bare re-classify can't see.
+            known = [p.strip() for p in (result.get('fancy_types', '') or '').split(',') if p.strip()]
+            if engine and serial:
+                try:
+                    matches = engine.classify(serial)
+                    prefer = [p for p in selected if p != 'No Pattern']
+                    suggested = suggest_annotation(serial, matches, prefer_names=prefer,
+                                                   known_names=known)
+                except Exception:
+                    suggested = ''
+
+            # A saved per-bill label override (label-only edits) prints verbatim.
+            override = result.get('label_lines')
+            items.append(LabelData(
+                serial=result.get('serial', '') or '',
+                series=str(result.get('series_year', '') or ''),
+                pattern=pattern_display,
+                note=result.get('note', '') or '',
+                catalog=catalog,
+                position=str(result.get('position', '') or ''),
+                denomination=f"${denom}" if denom else '',
+                front_plate=result.get('front_plate', '') or '',
+                back_plate=result.get('back_plate', '') or '',
+                front_file=result.get('front_file', '') or '',
+                suggested_note=suggested,
+                lines=list(override) if isinstance(override, list) else None,
+            ))
+        return items
+
+    def _open_label_preview(self, results: list = None):
+        """Open the Label Preview & Print tool.
+
+        Operates on the passed results, else queued (checked) bills, else all
+        current results. Notes edited in the dialog are written back to the run.
+        """
+        if results is None:
+            queued = [r for r in self.results_list.results if r.get('checked')]
+            if queued:
+                results = queued
+                source = f"{len(queued)} queued bill(s)"
+            else:
+                results = list(self.results_list.results)
+                source = f"all {len(results)} bill(s) (none queued)"
+        else:
+            source = f"{len(results)} bill(s)"
+
+        if not results:
+            self.statusBar().showMessage("No bills to label", 3000)
+            return
+
+        from .label_preview_dialog import LabelPreviewDialog
+        items = self._build_label_items(results)
+        dlg = LabelPreviewDialog(
+            items, self.settings,
+            on_lines_changed=self.results_list.apply_label_lines,
+            on_note_changed=self.results_list.apply_note,
+            source_desc=source, parent=self)
+        dlg.exec()
 
     def closeEvent(self, event):
         """Handle window close."""

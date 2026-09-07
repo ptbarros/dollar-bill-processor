@@ -14,33 +14,72 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 
 def check_dependencies():
-    """Check that required dependencies are installed."""
+    """Check that required dependencies are installed / importable.
+
+    Captures the ACTUAL import error for each (not just "missing"), so a packaged
+    build that fails to load a native module -- e.g. cv2 on macOS -- reports why
+    (arch mismatch, missing dylib, ...) instead of a misleading "not installed".
+    """
+    checks = [("PySide6", "PySide6"), ("cv2", "opencv-python-headless"),
+              ("yaml", "pyyaml")]
     missing = []
-
-    try:
-        import PySide6
-    except ImportError:
-        missing.append("PySide6")
-
-    try:
-        import cv2
-    except ImportError:
-        missing.append("opencv-python-headless")
-
-    try:
-        import yaml
-    except ImportError:
-        missing.append("pyyaml")
+    errors = {}
+    for module, pip_name in checks:
+        try:
+            __import__(module)
+        except Exception as e:  # ImportError, or a native-load OSError, etc.
+            missing.append(pip_name)
+            errors[pip_name] = f"{type(e).__name__}: {e}"
 
     if missing:
+        frozen = getattr(sys, "frozen", False)
+        try:
+            from version import __version__
+            print(f"Dollar Detective {__version__}")
+        except Exception:
+            pass
         print("Missing required dependencies:")
         for dep in missing:
             print(f"  - {dep}")
-        print("\nInstall with:")
-        print(f"  pip install {' '.join(missing)}")
+            if errors.get(dep):
+                print(f"      cause: {errors[dep]}")
+        if frozen:
+            # In a packaged app this is a bundling problem, not a user pip issue.
+            print("\nThis is a packaged build, so the library should already be "
+                  "inside it.\nPlease send the 'cause:' line(s) above to the developer.")
+        else:
+            print("\nInstall with:")
+            print(f"  pip install {' '.join(missing)}")
         return False
 
     return True
+
+
+def _verify_imports() -> int:
+    """Import the critical runtime deps and report PASS/FAIL with tracebacks.
+
+    Enabled via DBP_VERIFY_IMPORTS=1. Meant to be run against a *frozen* build in
+    CI so a bundle that can't load cv2/onnxruntime/etc. is caught before release.
+    """
+    import traceback
+    try:
+        from version import __version__
+        print(f"Dollar Detective {__version__} — import verification")
+    except Exception:
+        pass
+    mods = ["PySide6.QtWidgets", "cv2", "numpy", "onnxruntime",
+            "rapidocr_onnxruntime", "yaml", "PIL"]
+    ok = True
+    for m in mods:
+        try:
+            __import__(m)
+            print(f"  OK   {m}")
+        except Exception as e:
+            ok = False
+            print(f"  FAIL {m}: {type(e).__name__}: {e}")
+            traceback.print_exc()
+    print("VERIFY " + ("PASS" if ok else "FAIL"))
+    return 0 if ok else 1
 
 
 def _selftest(image_path: str) -> int:
@@ -87,6 +126,9 @@ def _selftest(image_path: str) -> int:
 def main():
     """Main entry point."""
     import os
+    if os.environ.get("DBP_VERIFY_IMPORTS") == "1":
+        sys.exit(_verify_imports())
+
     selftest_img = os.environ.get("DBP_SELFTEST")
     if selftest_img:
         sys.exit(_selftest(selftest_img))
