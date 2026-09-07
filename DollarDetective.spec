@@ -63,6 +63,10 @@ excludes = [
 # user data dir). Set DBP_BUILD_CONSOLE=1 to keep a console for debugging.
 _console = os.environ.get('DBP_BUILD_CONSOLE') == '1'
 
+# macOS: a runtime hook loads cv2's native extension directly, sidestepping the
+# opencv bootstrap that recurses in the split Frameworks/Resources .app layout.
+_runtime_hooks = ['pyi_rth_cv2.py'] if sys.platform == 'darwin' else []
+
 a = Analysis(
     ['run_gui.py'],
     pathex=[],
@@ -71,7 +75,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=_runtime_hooks,
     excludes=excludes,
     noarchive=False,
 )

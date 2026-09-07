@@ -78,8 +78,24 @@ def _verify_imports() -> int:
             ok = False
             print(f"  FAIL {m}: {type(e).__name__}: {e}")
             traceback.print_exc()
+            if m == "cv2":
+                _dump_cv2_layout()
     print("VERIFY " + ("PASS" if ok else "FAIL"))
     return 0 if ok else 1
+
+
+def _dump_cv2_layout():
+    """List where cv2's files actually landed in a frozen bundle (diagnostics)."""
+    base = getattr(sys, "_MEIPASS", None)
+    if not base:
+        return
+    import os
+    print(f"  --- cv2 layout under {base} ---")
+    for root, _dirs, files in os.walk(base):
+        for f in files:
+            low = f.lower()
+            if "cv2" in low or low.endswith(("config.py", "config-3.py")):
+                print(f"      {os.path.join(root, f)}")
 
 
 def _selftest(image_path: str) -> int:
