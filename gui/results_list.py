@@ -64,16 +64,34 @@ class NumericTreeWidgetItem(QTreeWidgetItem):
         column = self.treeWidget().sortColumn() if self.treeWidget() else 0
         if column in self.NUMERIC_COLUMNS:
             try:
-                # Handle signed numbers like "+5.2" or "-3.1"
-                self_val = float(self.text(column).replace('+', ''))
-                other_val = float(other.text(column).replace('+', ''))
-                return self_val < other_val
+                # Parse the leading number, tolerating a trailing label like the
+                # GPT column's "4.0 strong" and signed values like "+5.2" / "-3.1".
+                def _lead(t):
+                    m = re.match(r'\s*([-+]?[\d.]+)', t)
+                    return float(m.group(1).replace('+', '')) if m else float('-inf')
+                return _lead(self.text(column)) < _lead(other.text(column))
             except ValueError:
                 pass
         elif column in self.NATURAL_COLUMNS:
             return _natural_sort_key(self.text(column)) < _natural_sort_key(other.text(column))
         # Fall back to string comparison (avoid super().__lt__ which can recurse)
         return self.text(column) < other.text(column)
+
+
+# Gas-pump severity: the "strong" tier boundary as a multiple of the detect
+# threshold (the slider value). Keep in sync with patterns/core/gas_pump.lua.
+GAS_PUMP_STRONG_RATIO = 1.3
+
+
+def _gpt_cell_text(px_dev: float, threshold: float) -> str:
+    """GPT column text with a severity tier appended once past the detect
+    threshold: below threshold = plain number (not a gas pump); at/above =
+    "<px> mild", and at/above threshold*ratio = "<px> strong". The number stays
+    first so the column still sorts numerically (see NumericTreeWidgetItem)."""
+    base = f"{px_dev:.1f}"
+    if threshold and px_dev >= threshold:
+        return f"{base} strong" if px_dev >= threshold * GAS_PUMP_STRONG_RATIO else f"{base} mild"
+    return base
 
 
 class SetPatternsDialog(QDialog):
@@ -84,15 +102,18 @@ class SetPatternsDialog(QDialog):
     user tick several at once without the menu closing after each pick.
     """
 
-    def __init__(self, patterns, selected, parent=None):
+    def __init__(self, patterns, selected, parent=None, labels=None):
         super().__init__(parent)
         self.setWindowTitle("Set Pattern(s)")
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Select pattern(s) — one crop per pattern, all on the label:"))
 
+        # Show friendly display names on the checkboxes, but store/return the
+        # internal pattern IDs (so labels & crops resolve correctly).
+        labels = labels or {}
         self._checks = []
         for p in patterns:
-            cb = QCheckBox(p)
+            cb = QCheckBox(labels.get(p, p))
             cb.setChecked(p in selected)
             layout.addWidget(cb)
             self._checks.append((p, cb))
@@ -130,6 +151,7 @@ class ResultsList(QWidget):
     batch_changed = Signal(str)  # Emits batch path when changed (empty for current session)
     crop_requested = Signal(list)  # Emits list of results to crop
     status_changed = Signal()  # Emits when review status fields change (viewed, cropped, etc.)
+    serial_lookup_requested = Signal()  # Emits when the Serial Lookup button is clicked
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -196,6 +218,12 @@ class ResultsList(QWidget):
         self.status_filter.addItem("Not Yet Viewed", "unviewed")
         self.status_filter.currentIndexChanged.connect(self._apply_filters)
         filter_layout.addWidget(self.status_filter)
+
+        # Serial Lookup button -- type any serial and see the patterns it matches
+        self.serial_lookup_btn = QPushButton("Serial Lookup")
+        self.serial_lookup_btn.setToolTip("Type a serial number and see which patterns it matches (Ctrl+L)")
+        self.serial_lookup_btn.clicked.connect(lambda: self.serial_lookup_requested.emit())
+        filter_layout.addWidget(self.serial_lookup_btn)
 
         # Re-classify All button
         self.reclassify_all_btn = QPushButton("Re-classify All")
@@ -573,7 +601,11 @@ class ResultsList(QWidget):
             baseline_variance = result.get('baseline_variance', '0.0')
             try:
                 px_dev = float(baseline_variance)
-                item.setText(4, f"{px_dev:.1f}")
+                try:
+                    gp_threshold = self.pattern_engine.get_gas_pump_threshold()
+                except Exception:
+                    gp_threshold = 3.5
+                item.setText(4, _gpt_cell_text(px_dev, gp_threshold))
             except (ValueError, TypeError):
                 item.setText(4, str(baseline_variance))
 
@@ -992,7 +1024,8 @@ class ResultsList(QWidget):
         """Open the checkbox dialog to choose the bill's pattern(s)."""
         patterns = [p.strip() for p in (result.get('fancy_types', '') or '').split(',') if p.strip()]
         selected = self._current_pattern_overrides(result)
-        dialog = SetPatternsDialog(patterns, selected, self)
+        labels = {p: self._get_display_name(p) for p in patterns}
+        dialog = SetPatternsDialog(patterns, selected, self, labels=labels)
         if dialog.exec():
             self._set_pattern_overrides(result, dialog.selected_patterns())
 
@@ -1505,7 +1538,11 @@ class ResultsList(QWidget):
         for i in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(i)
             if item and item.text(0) == str(position):
-                item.setText(4, f"{px_dev:.1f}")
+                try:
+                    gp_threshold = self.pattern_engine.get_gas_pump_threshold()
+                except Exception:
+                    gp_threshold = 3.5
+                item.setText(4, _gpt_cell_text(px_dev, gp_threshold))
                 # Also update the underlying result data
                 for result in self.results:
                     if result.get('position') == position:

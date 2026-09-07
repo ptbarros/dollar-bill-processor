@@ -1129,6 +1129,7 @@ class PreviewPanel(QWidget):
     align_requested = Signal(str)  # Request alignment for image path
     px_dev_updated = Signal(int, float)  # (position, fresh_px_dev) - emitted when viewing a bill
     crop_requested = Signal()  # Request to crop the current bill
+    overlay_colors_requested = Signal()  # Request to open the Overlay Colors tool
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1334,16 +1335,11 @@ class PreviewPanel(QWidget):
         control_bar = QHBoxLayout()
         control_bar.setSpacing(12)
 
-        # Color picker button with label
-        color_label = QLabel("Box Color:")
-        control_bar.addWidget(color_label)
-
-        self.bbox_color_btn = QPushButton()
-        self.bbox_color_btn.setFixedSize(24, 24)
-        self.bbox_color_btn.setToolTip("Click to change bounding box color")
-        self.bbox_color_btn.clicked.connect(self._on_bbox_color_clicked)
-        self._update_bbox_color_button()
-        control_bar.addWidget(self.bbox_color_btn)
+        # Overlay palette editor -- retune the pattern-overlay colors (eyestrain).
+        self.overlay_colors_btn = QPushButton("Overlay Colors…")
+        self.overlay_colors_btn.setToolTip("Retune the overlay palette colors (e.g. darken orange, lighten blue)")
+        self.overlay_colors_btn.clicked.connect(lambda: self.overlay_colors_requested.emit())
+        control_bar.addWidget(self.overlay_colors_btn)
 
         control_bar.addSpacing(20)
 
@@ -1648,12 +1644,6 @@ class PreviewPanel(QWidget):
                 else:
                     return []
 
-            # Get bounding box color from settings
-            settings = get_settings()
-            bbox_color_hex = settings.ui.serial_bbox_color
-            # Convert hex to BGR for OpenCV
-            bbox_color = tuple(int(bbox_color_hex.lstrip('#')[i:i+2], 16) for i in (4, 2, 0))
-
             # Check cache - reuse aligned image and serial boxes if same file
             cache_key = image_path
             if not hasattr(self, '_serial_crop_cache'):
@@ -1742,7 +1732,9 @@ class PreviewPanel(QWidget):
 
                     serial = self.current_result.get('serial', '') if self.current_result else ''
 
-                    draw_serial_overlay(
+                    # Capture the return: the overlay may grow the crop upward to
+                    # give nested connector arcs headroom (see draw_serial_overlay).
+                    crop = draw_serial_overlay(
                         crop,
                         gp_result['digit_boxes'],
                         zoom=zoom,
@@ -1752,7 +1744,6 @@ class PreviewPanel(QWidget):
                         pattern_engine=self.pattern_engine,
                         gas_pump_threshold=self._gas_pump_threshold,
                         tight_box_rel=(x1 - crop_x1, y1 - crop_y1, x2 - crop_x1, y2 - crop_y1),
-                        bbox_color=bbox_color,
                     )
 
                 # Convert to QPixmap
@@ -2628,40 +2619,15 @@ class PreviewPanel(QWidget):
         # Restore auto-align state
         self._auto_align_enabled = saved_auto_align
 
-    def _update_bbox_color_button(self):
-        """Update the bounding box color button to show the current color."""
-        settings = get_settings()
-        color_hex = settings.ui.serial_bbox_color
-        self.bbox_color_btn.setStyleSheet(
-            f"background-color: {color_hex}; border: 1px solid #555; border-radius: 3px;"
-        )
-
-    def _on_bbox_color_clicked(self):
-        """Handle bounding box color button click - open color picker."""
-        settings = get_settings()
-        current_color = QColor(settings.ui.serial_bbox_color)
-
-        color = QColorDialog.getColor(
-            current_color,
-            self,
-            "Select Bounding Box Color"
-        )
-
-        if color.isValid():
-            # Save the new color
-            settings.ui.serial_bbox_color = color.name()
-            settings.save()
-
-            # Update the button appearance
-            self._update_bbox_color_button()
-
-            # Refresh the serial crops to show the new color
-            if self._current_front_file:
-                serial_crops, _ = self._generate_serial_region_crops(self._current_front_file)
-                if len(serial_crops) >= 1:
-                    self.serial_image_1.set_pixmap(serial_crops[0])
-                if len(serial_crops) >= 2:
-                    self.serial_image_2.set_pixmap(serial_crops[1])
+    def refresh_serial_overlay(self):
+        """Re-render the current bill's serial crops (e.g. after an overlay-color
+        change) so the new palette is drawn without reprocessing the bill."""
+        if self.serial_frame.isVisible() and self._current_front_file:
+            serial_crops, _ = self._generate_serial_region_crops(self._current_front_file)
+            if len(serial_crops) >= 1:
+                self.serial_image_1.set_pixmap(serial_crops[0])
+            if len(serial_crops) >= 2:
+                self.serial_image_2.set_pixmap(serial_crops[1])
 
     def _on_pattern_overlay_toggled(self, checked: bool):
         """Handle pattern overlay toggle - show/hide digit boxes."""

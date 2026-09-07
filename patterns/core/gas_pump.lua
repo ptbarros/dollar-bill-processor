@@ -26,6 +26,14 @@ function match(ctx)
         return {matched = false}
     end
 
+    -- Severity tier: "strong" once the shift is >= threshold * 1.3, else "mild".
+    -- Honest caveat: the mild/strong split is a soft hint -- the measurement
+    -- can't reliably separate a "clear" from an "extreme" shift (the top end
+    -- saturates). "gas pump vs not" (the threshold above) is the reliable line.
+    -- Keep the 1.3 ratio in sync with GAS_PUMP_STRONG_RATIO in gui/results_list.py.
+    local strong = metadata.gas_pump_strong_threshold or (threshold * 1.3)
+    local tier = (variance >= strong) and "strong" or "mild"
+
     -- Highlight all digits since we don't know which one is misaligned
     local positions = {0, 1, 2, 3, 4, 5, 6, 7}
 
@@ -35,6 +43,6 @@ function match(ctx)
             highlight(positions, "red", "misaligned")
         },
         connectors = {},
-        message = string.format("Gas pump error (variance: %.1fpx)", variance)
+        message = string.format("Gas pump error (%s, variance: %.1fpx)", tier, variance)
     }
 end

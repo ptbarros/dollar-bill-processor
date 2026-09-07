@@ -248,6 +248,23 @@ class PatternDialog(QDialog):
         self.pattern_name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
         details_layout.addWidget(self.pattern_name_label)
 
+        # Editable display label -- a settings-layer override so you can relabel
+        # even a read-only core pattern (e.g. STAR -> "Star Note") WITHOUT editing
+        # its .lua. It's the one cosmetic field safe to change; it applies
+        # everywhere a display name is shown (results column, printable labels,
+        # Set-Pattern dialog). Reset restores the pattern's default label.
+        label_row = QHBoxLayout()
+        label_row.addWidget(QLabel("Label:"))
+        self.label_edit = QLineEdit()
+        self.label_edit.setToolTip("Custom display label for this pattern (applies to the results column, printable labels, and dialogs)")
+        self.label_edit.editingFinished.connect(self._on_label_edited)
+        label_row.addWidget(self.label_edit, 1)
+        self.label_reset_btn = QPushButton("Reset")
+        self.label_reset_btn.setToolTip("Reset to the pattern's default label")
+        self.label_reset_btn.clicked.connect(self._on_label_reset)
+        label_row.addWidget(self.label_reset_btn)
+        details_layout.addLayout(label_row)
+
         self.pattern_desc_label = QLabel("-")
         self.pattern_desc_label.setWordWrap(True)
         details_layout.addWidget(self.pattern_desc_label)
@@ -564,8 +581,11 @@ class PatternDialog(QDialog):
                 has_lua = lua_info is not None
                 tier = defn.get('tier', 10)
 
-                # Use display_name from Lua info if available, otherwise auto-generate
-                if has_lua and lua_info.display_name:
+                # Label priority: user override -> Lua DisplayName -> auto-friendly.
+                override = self.settings.get_pattern_label(name)
+                if override:
+                    friendly_name = override
+                elif has_lua and lua_info.display_name:
                     friendly_name = lua_info.display_name
                 else:
                     # Auto-generate: LOW_RUN_6M -> Low Run 6M
@@ -824,12 +844,20 @@ class PatternDialog(QDialog):
         if has_lua and HAS_V3_ENGINE and hasattr(self.engine, 'lua_patterns'):
             lua_info = self.engine.lua_patterns.get(name)
 
-        # Use display name if available, otherwise auto-generate friendly name
-        if lua_info and lua_info.display_name:
-            display_name = lua_info.display_name
-        else:
-            display_name = self._make_friendly_name(name)
-        self.pattern_name_label.setText(display_name)
+        # Default label (Lua DisplayName or auto-friendly) and effective label
+        # (user override wins). The header + edit field show the effective label.
+        default_label = (lua_info.display_name if (lua_info and lua_info.display_name)
+                         else self._make_friendly_name(name))
+        override = self.settings.get_pattern_label(name)
+        effective_label = override or default_label
+        self._selected_pattern_name = name
+        self._selected_pattern_default_label = default_label
+        self._selected_has_lua = has_lua
+        self.pattern_name_label.setText(effective_label)
+        self.label_edit.blockSignals(True)
+        self.label_edit.setText(effective_label)
+        self.label_edit.blockSignals(False)
+        self.label_reset_btn.setEnabled(bool(override))
 
         # Use Lua description if available and better
         if lua_info and lua_info.description:
@@ -936,6 +964,43 @@ class PatternDialog(QDialog):
 
         # Update pattern preview
         self._update_pattern_preview(name, lua_info)
+
+    def _on_label_edited(self):
+        """Persist the edited display-label override for the selected pattern."""
+        name = getattr(self, '_selected_pattern_name', None)
+        if not name:
+            return
+        default_label = getattr(self, '_selected_pattern_default_label', '')
+        text = self.label_edit.text().strip()
+        # Store an override only when it differs from the default; else clear it.
+        self.settings.set_pattern_label(name, text if (text and text != default_label) else "")
+        self.settings.save()
+        effective = text or default_label
+        self.pattern_name_label.setText(effective)
+        self.label_reset_btn.setEnabled(bool(self.settings.get_pattern_label(name)))
+        self._refresh_selected_tree_label(effective)
+
+    def _on_label_reset(self):
+        """Clear the selected pattern's label override (back to default)."""
+        name = getattr(self, '_selected_pattern_name', None)
+        if not name:
+            return
+        self.settings.set_pattern_label(name, "")
+        self.settings.save()
+        default_label = getattr(self, '_selected_pattern_default_label', '')
+        self.label_edit.blockSignals(True)
+        self.label_edit.setText(default_label)
+        self.label_edit.blockSignals(False)
+        self.pattern_name_label.setText(default_label)
+        self.label_reset_btn.setEnabled(False)
+        self._refresh_selected_tree_label(default_label)
+
+    def _refresh_selected_tree_label(self, effective_label):
+        """Update the current tree row to show the (possibly overridden) label."""
+        item = self.pattern_tree.currentItem() if hasattr(self, 'pattern_tree') else None
+        if item is not None:
+            suffix = " [Lua]" if getattr(self, '_selected_has_lua', False) else ""
+            item.setText(0, f"{effective_label}{suffix}")
 
     def _update_pattern_preview(self, name: str, lua_info):
         """Update the pattern preview widget for the selected pattern."""
@@ -1375,6 +1440,11 @@ class PatternDialog(QDialog):
             self.test_serial_edit.hide()
             # Clear details panel
             self.pattern_name_label.setText("Select a pattern")
+            self._selected_pattern_name = None
+            self.label_edit.blockSignals(True)
+            self.label_edit.clear()
+            self.label_edit.blockSignals(False)
+            self.label_reset_btn.setEnabled(False)
             self.pattern_desc_label.setText("")
             self.pattern_tier_label.setText("Tier: -")
             self.pattern_odds_label.setText("Odds: -")
@@ -2188,8 +2258,17 @@ class DigitPreviewWidget(QWidget):
         self.highlights = []
         self.connectors = []
         self.group_boxes = []
-        self.setMinimumHeight(100)
+        # Optional {name: BGR} palette (from serial_overlay.build_palette) for the
+        # Overlay Colors tool's live preview; None => use the global palette.
+        self._palette_override = None
+        # Tall enough for arc headroom (start_y=40) + box_height(63) + bottom pad.
+        self.setMinimumHeight(125)
         self.setMinimumWidth(550)
+
+    def set_palette_override(self, palette_bgr):
+        """Preview a hypothetical palette ({name: BGR}) without touching globals."""
+        self._palette_override = palette_bgr
+        self.update()
 
     def set_serial(self, serial: str):
         """Set the serial number to display."""
@@ -2240,7 +2319,10 @@ class DigitPreviewWidget(QWidget):
         num_chars = 10  # prefix + 8 digits + suffix
         total_width = num_chars * box_width + (num_chars - 1) * spacing
         start_x = (self.width() - total_width) // 2
-        start_y = 18
+        # Headroom above the boxes for connector arcs -- arcs draw at start_y - 5
+        # and bulge up by up to arc_height, so start_y must clear that or a wide
+        # arc clips off the top edge (the old start_y=18 peaked around y=-7).
+        start_y = 40
 
         # Build color + style map for each digit position (0-7 -> char pos 1-8)
         position_colors = {}
@@ -2255,39 +2337,20 @@ class DigitPreviewWidget(QWidget):
                     position_colors[pos + 1] = color
                     position_styles[pos + 1] = style
 
-        # Color mapping
-        # Mirrors the contrast-optimized palette in serial_overlay.PATTERN_COLORS
-        # (chosen for visibility on the bill, not to signal pattern type). Weak
-        # colors are aliased to the nearest strong one so previews match the crop.
-        color_map = {
-            'blue': QColor("#1E3CDC"),     # royalblue (strongest)
-            'orange': QColor("#FF8C00"),
-            'magenta': QColor("#FF00C8"),
-            'red': QColor("#E61E1E"),
-            'purple': QColor("#A03CE6"),
-            'hotpink': QColor("#FF3C96"),
-            'pink': QColor("#FF3C96"),      # -> hotpink
-            'black': QColor("#0A0A0A"),
-            'gray': QColor("#9E9E9E"),
-            'charcoal': QColor("#3C3C3C"),
-            # retired weak colors -> nearest strong one
-            'cyan': QColor("#1E3CDC"),      # -> blue
-            'teal': QColor("#1E3CDC"),      # -> blue
-            'lime': QColor("#1E3CDC"),      # -> blue
-            'green': QColor("#1E3CDC"),     # -> blue
-            'yellow': QColor("#FF8C00"),    # -> orange
-            'gold': QColor("#FF8C00"),      # -> orange
-            'amber': QColor("#FF8C00"),     # -> orange
-            'coral': QColor("#E61E1E"),     # -> red
-            'salmon': QColor("#FF3C96"),    # -> hotpink
-            'white': QColor("#0A0A0A"),     # -> black
-        }
+        # Color mapping -- derived from the SINGLE source of truth
+        # (serial_overlay.PATTERN_COLORS, including any user overrides from the
+        # Overlay Colors tool), converting BGR -> QColor, so the preview always
+        # matches the drawn crop with no second palette to keep in sync.
+        import serial_overlay
+        _palette = self._palette_override or serial_overlay.PATTERN_COLORS
+        color_map = {nm: QColor(bgr[2], bgr[1], bgr[0])
+                     for nm, bgr in _palette.items()}
 
         # Remap requested color names onto the strong rotation by first-seen order
         # (same idea as serial_overlay._build_color_rotation), so preview colors are
         # contrast-strong and mutually distinct regardless of which names the pattern
         # picked. 'gray' stays muted and is never rotated.
-        _rotation = ('blue', 'orange', 'magenta', 'red', 'purple', 'black', 'hotpink')
+        _rotation = serial_overlay._ROTATION
         _seen = []
 
         def _note(nm):
@@ -2381,6 +2444,17 @@ class DigitPreviewWidget(QWidget):
 
         # Draw connectors (arcs above the boxes)
         # Note: digit positions 0-7 map to box_rects indices 1-8 (offset for prefix letter)
+        # Stagger by nesting depth so concentric arcs (e.g. radar mirror pairs)
+        # stack as clean nested curves instead of converging at their endpoints:
+        # an arc that CONTAINS other arcs is lifted higher. Endpoints then float
+        # slightly above the box tops (with a short stub back to the box).
+        spans = []
+        for conn in self.connectors:
+            fp, tp = conn.get('from', 0), conn.get('to', 0)
+            if 0 <= fp < 8 and 0 <= tp < 8:
+                spans.append((min(fp, tp), max(fp, tp)))
+
+        box_top = start_y - 2
         for conn in self.connectors:
             from_pos = conn.get('from', 0)
             to_pos = conn.get('to', 0)
@@ -2392,19 +2466,29 @@ class DigitPreviewWidget(QWidget):
                 to_rect = box_rects[to_pos + 1]
 
                 if from_rect and to_rect:
+                    lo, hi = min(from_pos, to_pos), max(from_pos, to_pos)
+                    # Nesting level = how many other arcs this one contains.
+                    level = sum(1 for (l2, h2) in spans
+                                if lo <= l2 and h2 <= hi and (l2, h2) != (lo, hi))
                     from_x = from_rect.center().x()
                     to_x = to_rect.center().x()
-                    y = start_y - 5
+                    arc_height = 11
+                    # Lift endpoints by nesting level; clamp so the peak keeps a
+                    # small top margin no matter how deep the nesting goes.
+                    y = max(5 + arc_height, (start_y - 6) - level * 6)
 
                     pen = QPen(_resolve(color), 2)
                     if style == 'dashed':
                         pen.setStyle(Qt.DashLine)
                     painter.setPen(pen)
 
+                    # Short stubs tie each lifted endpoint back down to its box top.
+                    if y < box_top:
+                        painter.drawLine(from_x, box_top, from_x, y)
+                        painter.drawLine(to_x, box_top, to_x, y)
+
                     # Draw arc
                     mid_x = (from_x + to_x) // 2
-                    arc_height = min(20, abs(to_pos - from_pos) * 5)
-
                     path = QPainterPath()
                     path.moveTo(from_x, y)
                     path.quadTo(mid_x, y - arc_height, to_x, y)

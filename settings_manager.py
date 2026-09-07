@@ -66,8 +66,6 @@ class UISettings:
     # Crosshair settings
     crosshair_color: str = "#ff0000"  # Red default
     crosshair_thickness: int = 1
-    # Serial region bounding box
-    serial_bbox_color: str = "#00ff00"  # Green default
     # Gas pump overlay
     gas_pump_overlay_enabled: bool = False
     # Layout mode: "classic", "wide_preview", "details_right"
@@ -135,6 +133,8 @@ class SettingsManager:
         self.ai = AISettings()
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
         self.pattern_colors: Dict[str, str] = {}  # Pattern name -> hex color
+        self.overlay_colors: Dict[str, str] = {}  # Overlay palette slot (e.g. "orange") -> hex override
+        self.pattern_labels: Dict[str, str] = {}  # Pattern name -> custom display label override
         self.pattern_catalogs: Dict[str, str] = {}  # Pattern name -> catalog location (e.g., "A1", "B2")
         self.pattern_overrides: Dict[str, Dict[str, Any]] = {}  # e.g., {'GAS_PUMP': {'baseline_variance_min': 3.6}}
         self.custom_patterns: Dict[str, Dict] = {}  # User-defined YAML patterns
@@ -196,7 +196,6 @@ class SettingsManager:
             self.ui.show_bill_details = ui.get('show_bill_details', True)
             self.ui.crosshair_color = ui.get('crosshair_color', '#ff0000')
             self.ui.crosshair_thickness = ui.get('crosshair_thickness', 1)
-            self.ui.serial_bbox_color = ui.get('serial_bbox_color', '#00ff00')
             self.ui.gas_pump_overlay_enabled = ui.get('gas_pump_overlay_enabled', False)
             self.ui.layout_mode = ui.get('layout_mode', 'classic')
             self.ui.details_pane_height = ui.get('details_pane_height', 220)
@@ -255,6 +254,8 @@ class SettingsManager:
 
         # Load pattern colors
         self.pattern_colors = data.get('pattern_colors', {})
+        self.overlay_colors = data.get('overlay_colors', {})
+        self.pattern_labels = data.get('pattern_labels', {})
 
         # Load pattern catalogs
         self.pattern_catalogs = data.get('pattern_catalogs', {})
@@ -374,7 +375,6 @@ class SettingsManager:
                 'show_bill_details': self.ui.show_bill_details,
                 'crosshair_color': self.ui.crosshair_color,
                 'crosshair_thickness': self.ui.crosshair_thickness,
-                'serial_bbox_color': self.ui.serial_bbox_color,
                 'gas_pump_overlay_enabled': self.ui.gas_pump_overlay_enabled,
                 'layout_mode': self.ui.layout_mode,
                 'details_pane_height': self.ui.details_pane_height,
@@ -408,6 +408,8 @@ class SettingsManager:
             },
             'pattern_states': self.pattern_states,
             'pattern_colors': self.pattern_colors,
+            'overlay_colors': self.overlay_colors,
+            'pattern_labels': self.pattern_labels,
             'pattern_catalogs': self.pattern_catalogs,
             'pattern_overrides': self.pattern_overrides,
             'custom_patterns': self.custom_patterns,
@@ -477,6 +479,30 @@ class SettingsManager:
             self.pattern_colors[pattern_name] = color
         elif pattern_name in self.pattern_colors:
             del self.pattern_colors[pattern_name]
+
+    def get_pattern_label(self, pattern_name: str, default: str = "") -> str:
+        """User's custom display-label override for a pattern (or default).
+
+        Lets a user relabel even a read-only core pattern (e.g. STAR -> "Star
+        Note") without editing its .lua -- a cosmetic override that can't affect
+        matching. Consumed by PatternEngine.get_pattern_info so it applies
+        everywhere a display name is shown (results column, labels, dialogs)."""
+        return self.pattern_labels.get(pattern_name, default)
+
+    def set_pattern_label(self, pattern_name: str, label: str):
+        """Set/clear a pattern's custom display label (empty clears the override)."""
+        if label:
+            self.pattern_labels[pattern_name] = label
+        elif pattern_name in self.pattern_labels:
+            del self.pattern_labels[pattern_name]
+
+    def get_overlay_colors(self) -> Dict[str, str]:
+        """User overrides for overlay palette slots ({slot: '#rrggbb'})."""
+        return dict(self.overlay_colors)
+
+    def set_overlay_colors(self, colors: Dict[str, str]):
+        """Replace all overlay palette overrides (empty/None clears them)."""
+        self.overlay_colors = {k: v for k, v in (colors or {}).items() if v}
 
     def get_pattern_catalog(self, pattern_name: str, default: str = "") -> str:
         """Get catalog location for a pattern (e.g., 'A1', 'B2', '12')."""

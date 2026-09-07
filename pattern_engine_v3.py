@@ -654,9 +654,12 @@ class PatternEngineV3:
         """Get info about a pattern."""
         if name in self.lua_patterns:
             info = self.lua_patterns[name]
+            # User label override (settings layer) wins over the .lua DisplayName,
+            # so a read-only core pattern can be relabeled without editing it.
+            label_override = self.settings.get_pattern_label(name) if self.settings else ""
             result = {
                 'name': info.name,
-                'display_name': info.display_name or self._make_friendly_name(info.name),
+                'display_name': label_override or info.display_name or self._make_friendly_name(info.name),
                 'library': info.library,
                 'description': info.description,
                 'tier': info.tier,

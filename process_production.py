@@ -3880,7 +3880,9 @@ class ProductionProcessor:
         crop = cv2.resize(crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
 
         try:
-            draw_serial_overlay(
+            # Capture the return: the overlay may grow the crop upward to give
+            # nested connector arcs headroom (see draw_serial_overlay).
+            crop = draw_serial_overlay(
                 crop,
                 gp_result.get('digit_boxes', []),
                 zoom=zoom,

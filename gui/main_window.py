@@ -44,6 +44,12 @@ class MainWindow(QMainWindow):
 
         # Load settings
         self.settings = get_settings()
+        # Apply any saved overlay-color overrides to the shared palette at startup.
+        try:
+            import serial_overlay
+            serial_overlay.set_overlay_overrides(self.settings.get_overlay_colors())
+        except Exception:
+            pass
         self.correction_manager = CorrectionManager()
         self.recovery_manager = get_recovery_manager()
 
@@ -114,6 +120,8 @@ class MainWindow(QMainWindow):
         self.preview_panel.px_dev_updated.connect(self.results_list.update_px_dev)
         self.preview_panel.crop_requested.connect(self._on_crop_current)
         self.results_list.crop_requested.connect(self._on_crop_selected)
+        self.results_list.serial_lookup_requested.connect(self._open_serial_lookup)
+        self.preview_panel.overlay_colors_requested.connect(self._open_overlay_colors)
         # Apply saved visibility settings
         self.preview_panel.set_serial_region_visible(self.settings.ui.show_serial_region)
         self.preview_panel.set_details_visible(self.settings.ui.show_bill_details)
@@ -250,6 +258,19 @@ class MainWindow(QMainWindow):
 
         # Connect callback to sync column menu when hiding via header right-click
         self.results_list.set_column_visibility_callback(self._on_column_hidden_from_header)
+
+        # Tools menu
+        tools_menu = menubar.addMenu("&Tools")
+        serial_lookup_action = QAction("&Serial Lookup...", self)
+        serial_lookup_action.setShortcut("Ctrl+L")
+        serial_lookup_action.setToolTip("Type a serial number and see which patterns it matches")
+        serial_lookup_action.triggered.connect(lambda: self._open_serial_lookup())
+        tools_menu.addAction(serial_lookup_action)
+
+        overlay_colors_action = QAction("&Overlay Colors...", self)
+        overlay_colors_action.setToolTip("Retune the overlay palette colors (e.g. darken orange, lighten blue)")
+        overlay_colors_action.triggered.connect(self._open_overlay_colors)
+        tools_menu.addAction(overlay_colors_action)
 
         # Help menu
         help_menu = menubar.addMenu("&Help")
@@ -901,6 +922,37 @@ class MainWindow(QMainWindow):
         if h > 0:
             self.settings.ui.details_pane_height = h
         self.settings.save()
+
+    def _open_overlay_colors(self):
+        """Open the Overlay Colors tool; apply + persist overrides on OK."""
+        from .overlay_colors_dialog import OverlayColorsDialog
+        import serial_overlay
+        dlg = OverlayColorsDialog(self.settings.get_overlay_colors(), self)
+        if dlg.exec():
+            overrides = dlg.result_overrides()
+            self.settings.set_overlay_colors(overrides)
+            self.settings.save()
+            serial_overlay.set_overlay_overrides(overrides)
+            try:
+                self.preview_panel.refresh_serial_overlay()
+            except Exception:
+                pass
+        # Cancel: nothing to revert -- the dialog previews via a local palette
+        # override and never mutates the global palette.
+
+    def _open_serial_lookup(self, initial_serial: str = ""):
+        """Open the non-modal Serial Lookup utility, reusing the shared engine."""
+        from .serial_lookup_dialog import SerialLookupDialog
+        dlg = getattr(self, '_serial_lookup_dialog', None)
+        if dlg is None:
+            dlg = SerialLookupDialog(self.results_list.pattern_engine, self)
+            self._serial_lookup_dialog = dlg
+        if initial_serial:
+            dlg.serial_edit.setText(initial_serial)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+        dlg.serial_edit.setFocus()
 
     def closeEvent(self, event):
         """Handle window close."""

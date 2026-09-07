@@ -32,30 +32,89 @@ import numpy as np
 # green ink, white on paper) are RETIRED: kept as keys so existing/user/AI
 # patterns don't break, but aliased to the nearest strong color so they still
 # render clearly instead of fading out.
-PATTERN_COLORS = {
-    # --- core contrast-optimized palette ---
+# Default BGR for each user-editable palette slot. This is the SINGLE SOURCE of
+# truth for overlay colors -- the pattern-preview widget derives its colors from
+# here too (via bgr_hex/hex_to_bgr), so there's no second palette to keep in sync.
+# The Overlay Colors tool lets the user override any slot; overrides are applied
+# with set_overlay_overrides() and PATTERN_COLORS (incl. aliases) is rebuilt.
+_BASE_COLORS = {
     'blue':    (220, 60, 30),    # royalblue  (RGB 30,60,220)  strongest
     'orange':  (0, 140, 255),    #            (RGB 255,140,0)
     'magenta': (200, 0, 255),    #            (RGB 255,0,200)
     'red':     (30, 30, 230),    #            (RGB 230,30,30)
     'purple':  (230, 60, 160),   #            (RGB 160,60,230)
     'hotpink': (150, 60, 255),   #            (RGB 255,60,150)
-    'pink':    (150, 60, 255),   # alias -> hotpink
     'black':   (10, 10, 10),     # max contrast on any background
     'gray':    (128, 128, 128),  # muted / prefix letters (intentionally low-key)
     'charcoal': (60, 60, 60),    # darker muted -- good for an "excluded" X mark
-    # --- retired weak colors, aliased to the nearest strong one ---
-    'cyan':    (220, 60, 30),    # -> blue   (cyan blends into the green ink)
-    'teal':    (220, 60, 30),    # -> blue
-    'lime':    (220, 60, 30),    # -> blue   (greens clash with the serial ink)
-    'green':   (220, 60, 30),    # -> blue
-    'yellow':  (0, 140, 255),    # -> orange (yellow vanishes on cream)
-    'gold':    (0, 140, 255),    # -> orange
-    'amber':   (0, 140, 255),    # -> orange
-    'coral':   (30, 30, 230),    # -> red
-    'salmon':  (150, 60, 255),   # -> hotpink
-    'white':   (10, 10, 10),     # -> black  (white blends into the paper)
 }
+
+# Editable slots shown in the Overlay Colors tool, in display order.
+EDITABLE_SLOTS = ['blue', 'orange', 'magenta', 'red', 'purple', 'hotpink',
+                  'black', 'gray', 'charcoal']
+
+# Retired/weak color names kept as keys (so existing/user/AI patterns don't
+# break) but aliased to the nearest strong slot -- follows that slot's override.
+_ALIASES = {
+    'pink': 'hotpink',
+    'cyan': 'blue', 'teal': 'blue', 'lime': 'blue', 'green': 'blue',
+    'yellow': 'orange', 'gold': 'orange', 'amber': 'orange',
+    'coral': 'red', 'salmon': 'hotpink', 'white': 'black',
+}
+
+_overrides = {}  # slot name -> BGR tuple (user overrides)
+PATTERN_COLORS = {}  # working palette (base + overrides + aliases); rebuilt below
+
+
+def hex_to_bgr(h):
+    """'#rrggbb' -> (b, g, r)."""
+    h = h.lstrip('#')
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return (b, g, r)
+
+
+def bgr_hex(bgr):
+    """(b, g, r) -> '#rrggbb'."""
+    b, g, r = bgr
+    return f"#{int(r):02x}{int(g):02x}{int(b):02x}"
+
+
+def default_slot_hex(name):
+    """Factory-default hex for a slot (for the tool's Reset)."""
+    return bgr_hex(_BASE_COLORS[name])
+
+
+def build_palette(overrides_hex):
+    """Return a full palette dict {name: BGR} (base + overrides + aliases) WITHOUT
+    mutating the global PATTERN_COLORS. Used by the Overlay Colors tool to preview
+    hypothetical colors before the user commits them."""
+    base = dict(_BASE_COLORS)
+    for name, h in (overrides_hex or {}).items():
+        if name in _BASE_COLORS and h:
+            base[name] = hex_to_bgr(h)
+    full = dict(base)
+    for alias, target in _ALIASES.items():
+        full[alias] = base[target]          # aliases follow their target's override
+    return full
+
+
+def _rebuild_palette():
+    """Rebuild the global PATTERN_COLORS from base + committed user overrides."""
+    global PATTERN_COLORS
+    PATTERN_COLORS = build_palette({n: bgr_hex(bgr) for n, bgr in _overrides.items()})
+
+
+def set_overlay_overrides(overrides_hex):
+    """Apply user overlay-color overrides ({slot: '#rrggbb'}) and rebuild the
+    palette. Unknown slots / empty values are ignored. Call at startup and again
+    whenever the Overlay Colors tool applies changes."""
+    global _overrides
+    _overrides = {n: hex_to_bgr(h) for n, h in (overrides_hex or {}).items()
+                  if n in _BASE_COLORS and h}
+    _rebuild_palette()
+
+
+_rebuild_palette()
 
 GAS_PUMP_FILTER = "__gas_pump__"
 NONE_FILTER = "__none__"
@@ -179,7 +238,6 @@ def draw_serial_overlay(
     pattern_engine,
     gas_pump_threshold,
     tight_box_rel=None,
-    bbox_color=(0, 165, 255),
 ):
     """Draw the pattern / gas-pump overlay onto ``crop`` in place and return it.
 
@@ -197,13 +255,13 @@ def draw_serial_overlay(
         pattern_engine: engine exposing ``get_digit_highlights``.
         gas_pump_threshold: pixel deviation threshold for gas-pump coloring.
         tight_box_rel: (x1, y1, x2, y2) of the tight serial box in unzoomed
-            padded-crop coordinates. Used both to offset digit coords and to draw
-            the gas-pump bounding rectangle. If None, digit coords are assumed to
-            already be padded-crop relative.
-        bbox_color: BGR color for the gas-pump serial bounding rectangle.
+            padded-crop coordinates, used to offset digit coords. If None, digit
+            coords are assumed to already be padded-crop relative.
 
     Returns:
-        The same ``crop`` array, annotated in place.
+        The crop array, annotated. It may be a TALLER array than the one passed
+        in (grown upward to give nested connector arcs headroom), so callers must
+        use the return value rather than the array they passed.
     """
     is_gas_pump_mode = (overlay_filter == GAS_PUMP_FILTER)
     is_pattern_mode = (overlay_filter not in (GAS_PUMP_FILTER, NONE_FILTER))
@@ -214,9 +272,6 @@ def draw_serial_overlay(
     else:
         off_x, off_y = 0, 0
 
-    # (The outer serial bounding rectangle used to be drawn here in gas-pump mode,
-    # but it's just clutter now that gas-pump mode boxes only the shifted digit(s).
-    # bbox_color is kept in the signature for compatibility.)
 
     # Get pattern-based digit highlights for specific pattern mode
     pattern_highlights = []
@@ -250,12 +305,54 @@ def draw_serial_overlay(
     # Sort digit boxes left-to-right so position indices match pattern positions.
     digit_boxes = sorted(digit_boxes, key=lambda db: db['x1'])
 
+    # --- Reserve top headroom for nested connector arcs --------------------
+    # Connector arcs are lifted by nesting depth so concentric pairs (radars)
+    # stack as clean nested curves with short stubs to each digit, matching the
+    # DigitPreviewWidget preview. Lifted arcs need room ABOVE the digits, so grow
+    # the crop upward (replicating the bill background, not a black bar) and shift
+    # every drawn y down by top_pad. The taller crop is RETURNED -- callers must
+    # use the return value, not the passed-in array.
+    ARC_H, ARC_STEP, ARC_GAP, ARC_MARGIN = 14, 12, 4, 6
+
+    conn_spans = []
+    if is_pattern_mode and pattern_connectors:
+        for _conn in pattern_connectors:
+            if 'positions' in _conn:
+                _a, _b = _conn['positions']
+            else:
+                _a, _b = _conn.get('from', 0), _conn.get('to', 0)
+            conn_spans.append((min(_a, _b), max(_a, _b)))
+
+    def _nest_level(lo, hi):
+        """How many other arcs this one contains (its concentric depth)."""
+        return sum(1 for (l2, h2) in conn_spans
+                   if lo <= l2 and h2 <= hi and (l2, h2) != (lo, hi))
+
+    top_pad = 0
+    if conn_spans:
+        tops = {}
+        _di = 0
+        for db in digit_boxes:
+            if not db['is_letter']:
+                # -8 conservatively accounts for the display box padding (bpad).
+                tops[_di] = int((db['y1'] + off_y) * zoom) - 8
+                _di += 1
+        min_peak = None
+        for (lo, hi) in conn_spans:
+            if lo in tops and hi in tops:
+                peak = min(tops[lo], tops[hi]) - ARC_GAP - _nest_level(lo, hi) * ARC_STEP - ARC_H
+                min_peak = peak if min_peak is None else min(min_peak, peak)
+        if min_peak is not None and min_peak < ARC_MARGIN:
+            top_pad = ARC_MARGIN - min_peak
+    if top_pad > 0:
+        crop = cv2.copyMakeBorder(crop, top_pad, 0, 0, 0, cv2.BORDER_REPLICATE)
+
     for idx, digit_box in enumerate(digit_boxes):
         # Convert digit coordinates to crop-relative, then apply zoom
         dx1 = int((digit_box['x1'] + off_x) * zoom)
-        dy1 = int((digit_box['y1'] + off_y) * zoom)
+        dy1 = int((digit_box['y1'] + off_y) * zoom) + top_pad
         dx2 = int((digit_box['x2'] + off_x) * zoom)
-        dy2 = int((digit_box['y2'] + off_y) * zoom)
+        dy2 = int((digit_box['y2'] + off_y) * zoom) + top_pad
 
         # The digit boxes come from gas-pump segmentation, which are TIGHT glyph
         # contours (needed for accurate baseline/deviation). For DISPLAY only, give
@@ -348,12 +445,12 @@ def draw_serial_overlay(
                     cv2.arrowedLine(crop, pt1, pt2, conn_color, 2, cv2.LINE_AA, tipLength=0.15)
                 else:
                     # Default arc connector: a smooth curve arching ABOVE the
-                    # digits, matching the pattern-preview look. Anchor the
-                    # endpoints to the top of each digit (not its vertical
-                    # center) so the arc never slices through the glyphs, and
-                    # sample a quadratic Bezier for a smooth curve instead of a
-                    # 3-point tent. Peak is clamped to stay on-image, so a tight
-                    # crop just yields a shallower arc rather than a crash.
+                    # digits, matching the DigitPreviewWidget preview. Endpoints
+                    # anchor to the digit tops (not glyph centers) so the arc never
+                    # slices through them. Lift by nesting depth so concentric arcs
+                    # stack as clean nested curves instead of converging, with short
+                    # stubs tying each lifted endpoint back down to its box. The
+                    # crop was grown upward above to give these arcs room.
                     r1 = digit_rects.get(pos1)
                     r2 = digit_rects.get(pos2)
                     if r1 and r2:
@@ -363,8 +460,13 @@ def draw_serial_overlay(
                     else:  # fallback: no rects -> use centers
                         x1c, x2c = pt1[0], pt2[0]
                         top_y = min(pt1[1], pt2[1])
-                    end_y = max(1, top_y - 3)              # just above the tops
-                    peak_y = max(1, end_y - arc_height)    # clamp on-image
+                    level = _nest_level(min(pos1, pos2), max(pos1, pos2))
+                    end_y = max(1, top_y - ARC_GAP - level * ARC_STEP)
+                    peak_y = max(1, end_y - ARC_H)
+                    box_top = top_y - 1
+                    if end_y < box_top:  # stubs from each box top up to the arc
+                        cv2.line(crop, (x1c, box_top), (x1c, end_y), conn_color, 2, cv2.LINE_AA)
+                        cv2.line(crop, (x2c, box_top), (x2c, end_y), conn_color, 2, cv2.LINE_AA)
                     arc_pts = _quad_bezier_points(
                         (x1c, end_y), (mid_x, peak_y), (x2c, end_y))
                     cv2.polylines(crop, [arc_pts], False, conn_color, 2, cv2.LINE_AA)
