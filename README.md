@@ -201,6 +201,7 @@ a rough guide, not a guarantee:
 | Machine | Edition | ~100 bills | Rate |
 |---------|---------|-----------:|-----:|
 | NVIDIA RTX 5060 + Intel i5-14400F | **CUDA** (NVIDIA) | ~33 sec | ~180 bills/min |
+| Apple **M4** MacBook Pro | **macOS** (Apple Silicon, CPU) | ~53 sec | ~135 bills/min |
 | Laptop with Intel Iris Xe graphics (i7-1185G7) | **Default** (Intel-graphics accelerated) | ~65 sec | ~108 bills/min |
 | The same RTX 5060 box, on the non-CUDA build | **DirectML** (Lite) | ~2.8 min | ~37 bills/min |
 | Older desktop, Intel UHD 630 graphics (i5-9500T) | **Default** (falls back to CPU) | ~3 min | ~32 bills/min |
@@ -208,6 +209,8 @@ a rough guide, not a guarantee:
 Takeaways:
 
 - An **NVIDIA GPU with the CUDA edition is by far the fastest** (~180 bills/min).
+- **Apple Silicon Macs are quick even on CPU** — an M4 MacBook Pro runs ~135
+  bills/min on the macOS build with no GPU acceleration at all (~0.45 sec/bill).
 - On a **modern Intel laptop/desktop** (Iris / Iris Xe / Arc graphics), the default
   edition uses the built-in Intel graphics and is very quick (~100 bills/min) — no
   discrete GPU needed.
