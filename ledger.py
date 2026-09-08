@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Optional, Union
@@ -464,6 +465,40 @@ class Ledger:
             "sessions": sess,
             "first_seen": row["first"],
             "last_seen": row["last"],
+        }
+
+    def keep_coverage(self, enabled_names) -> dict:
+        """Do the currently-enabled patterns catch the bills you actually kept?
+
+        The real validation of a lean set: of the bills you cropped, how many
+        would still be flagged by `enabled_names`. Also separates keeps that had
+        no serial pattern at all (kept for condition/print/other) from keeps a
+        pattern explains, and ranks the patterns on the *uncovered* keeps — the
+        highest-value candidates to add to the active set.
+        """
+        enabled = set(enabled_names or [])
+        c = self._conn
+        kept_ids = [r["id"] for r in c.execute("SELECT id FROM bills WHERE kept=1")]
+        with_pattern = covered = 0
+        missing = Counter()
+        for bid in kept_ids:
+            pats = [r["pattern"] for r in
+                    c.execute("SELECT pattern FROM bill_patterns WHERE bill_id=?", (bid,))]
+            if pats:
+                with_pattern += 1
+                if any(p in enabled for p in pats):
+                    covered += 1
+                else:
+                    for p in pats:
+                        missing[p] += 1
+        return {
+            "kept_total": len(kept_ids),
+            "kept_with_pattern": with_pattern,
+            "kept_no_pattern": len(kept_ids) - with_pattern,
+            "covered": covered,
+            "coverage_pct": round(covered / with_pattern, 4) if with_pattern else 1.0,
+            "active_set_size": len(enabled),
+            "missing_patterns": missing.most_common(30),
         }
 
     def report_data(self) -> dict:

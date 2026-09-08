@@ -117,6 +117,12 @@ h2{font-family:"IBM Plex Serif",serif;font-weight:600;font-size:clamp(21px,3vw,2
 .callout{margin-top:22px;background:var(--surface-2);border:1px solid var(--line-soft);border-left:3px solid var(--accent);border-radius:0 10px 10px 0;padding:16px 20px;font-size:15px;}
 .callout b{color:var(--accent);}
 .empty{margin-top:40px;padding:40px;text-align:center;background:var(--surface);border:1px dashed var(--line);border-radius:14px;color:var(--ink-soft);}
+.kc-wrap{display:grid;grid-template-columns:minmax(210px,1fr) 1.5fr;gap:22px;align-items:start;}
+@media(max-width:700px){.kc-wrap{grid-template-columns:1fr;}}
+.kc-big{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:26px 22px;box-shadow:var(--shadow);text-align:center;}
+.kc-num{font-family:"IBM Plex Serif",serif;font-weight:700;font-size:clamp(44px,8vw,66px);line-height:1;letter-spacing:-.02em;}
+.kc-lbl{font-size:14px;color:var(--ink-soft);margin-top:10px;line-height:1.4;}
+.kc-break{font-size:12.5px;color:var(--ink-faint);margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft);line-height:1.5;}
 .foot{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:var(--ink-soft);font-size:13.5px;}
 .foot h4{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 12px;font-weight:600;}
 .foot ul{margin:0;padding-left:18px;display:grid;gap:7px;max-width:76ch;}
@@ -134,6 +140,7 @@ h2{font-family:"IBM Plex Serif",serif;font-weight:600;font-size:clamp(21px,3vw,2
   <div class="ledger" id="ledger"></div>
   <p style="font-size:12.5px;color:var(--ink-faint);margin:10px 2px 0" class="mono" id="genline"></p>
 
+  <div id="keepcov"></div>
   <div id="body"></div>
 
   <div class="foot">
@@ -171,10 +178,40 @@ const cells=[
 $('#ledger').innerHTML=cells.map(c=>
   `<div class="cell"><div class="k">${c[0]}</div><div class="v num">${c[1]}</div><div class="sub">${c[2]}</div></div>`).join('');
 
+renderKeepCoverage();
 if(!DATA.total){
   $('#body').innerHTML='<div class="empty">No bills in the ledger yet. Process a folder, and this report fills in automatically.</div>';
 } else {
   buildBody();
+}
+
+function renderKeepCoverage(){
+  const kc = PAYLOAD.keep_coverage;
+  const el = $('#keepcov');
+  if(!kc || !kc.kept_total){ el.hidden = true; return; }
+  const covPct = kc.kept_with_pattern ? (kc.covered/kc.kept_with_pattern*100) : 100;
+  const col = covPct>=90 ? 'var(--keep)' : (covPct>=70 ? 'var(--gold)' : 'var(--noise)');
+  const miss = kc.missing_patterns || [];
+  el.innerHTML = `
+    <section>
+      <div class="sec-head"><span class="sec-no">◆</span><h2>Does your active set catch what you keep?</h2></div>
+      <p class="sec-note">The real test of a lean set: of the bills you actually cropped, how many your currently-enabled <b>${kc.active_set_size}</b> patterns would still flag. Below the fold is hit-rate; this is keep-rate turned into coverage.</p>
+      <div class="kc-wrap">
+        <div class="kc-big">
+          <div class="kc-num" style="color:${col}">${covPct.toFixed(0)}%</div>
+          <div class="kc-lbl">of your pattern-flagged keeps are caught by the active set</div>
+          <div class="kc-break">${fmt(kc.covered)} of ${fmt(kc.kept_with_pattern)} kept notes covered · ${fmt(kc.kept_no_pattern)} more kept with no serial pattern (condition / print / other)</div>
+        </div>
+        <div class="panel">
+          <h3>Keeper patterns your set is missing</h3>
+          <span class="tag">Kept notes each would recover — best candidates to add</span>
+          <div id="kcmiss"></div>
+        </div>
+      </div>
+    </section>`;
+  $('#kcmiss').innerHTML = miss.length
+    ? miss.map(([p,n])=>`<div class="row"><div class="nm" title="${p}">${p}</div><div class="rate" style="color:var(--noise)">${n}</div></div>`).join('')
+    : '<div class="row"><div class="nm" style="color:var(--keep)">Nothing — your active set covers every pattern-flagged keep.</div></div>';
 }
 
 function keepColor(k){

@@ -1856,6 +1856,7 @@ class MainWindow(QMainWindow):
                 "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "stats": led.stats(),
                 "report": led.report_data(),
+                "keep_coverage": led.keep_coverage(self._current_enabled_pattern_names()),
             }
         except Exception as e:
             QMessageBox.warning(self, "Insights", f"Could not read the ledger:\n{e}")
@@ -1881,6 +1882,22 @@ class MainWindow(QMainWindow):
         if not proc:
             proc = self._get_or_create_processor()
         return getattr(proc, "pattern_engine", None) if proc else None
+
+    def _current_enabled_pattern_names(self):
+        """Names of patterns currently enabled. Uses the live engine if one is
+        loaded (accurate, includes library defaults); otherwise falls back to the
+        explicit settings selection. Never loads YOLO just for this."""
+        proc = self.processor
+        if not proc and getattr(self, "processing_thread", None):
+            proc = self.processing_thread.processor
+        eng = getattr(proc, "pattern_engine", None) if proc else None
+        if eng and getattr(eng, "lua_patterns", None):
+            return {n for n, p in eng.lua_patterns.items()
+                    if getattr(p, "enabled", True)}
+        try:
+            return set(self.settings.get_enabled_patterns())
+        except Exception:
+            return set()
 
     def _on_coverage_check(self):
         """Tools -> Coverage Check. Compare the current selection (Core) against
