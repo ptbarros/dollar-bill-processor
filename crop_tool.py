@@ -379,6 +379,13 @@ class CropToolWindow(QWidget):
 
 
 def main():
+    # Frozen-build import self-check (used by CI to catch a broken macOS bundle
+    # before shipping the .dmg). Shares run_gui's verifier.
+    import os
+    if os.environ.get("DBP_VERIFY_IMPORTS") == "1":
+        from verify_imports import verify_imports
+        sys.exit(verify_imports())
+
     app = QApplication(sys.argv)
     win = CropToolWindow()
     win.show()

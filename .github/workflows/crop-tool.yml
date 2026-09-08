@@ -104,9 +104,16 @@ jobs:
           pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
           pip install pyinstaller
 
-      - name: Build .app + .dmg (unsigned)
+      - name: Build .app (unsigned)
+        run: pyinstaller --noconfirm --clean crop_tool.spec
+
+      - name: Verify frozen app can import its native deps (cv2, onnxruntime, ...)
         run: |
-          pyinstaller --noconfirm --clean crop_tool.spec
+          QT_QPA_PLATFORM=offscreen DBP_VERIFY_IMPORTS=1 \
+            "dist/Dollar Detective Crop.app/Contents/MacOS/DollarDetectiveCrop"
+
+      - name: Package .dmg (unsigned)
+        run: |
           hdiutil create -volname "Dollar Detective Crop" \
             -srcfolder "dist/Dollar Detective Crop.app" \
             -ov -format UDZO dist/DollarDetectiveCrop-arm64.dmg

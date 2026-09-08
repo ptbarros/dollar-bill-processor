@@ -55,47 +55,6 @@ def check_dependencies():
     return True
 
 
-def _verify_imports() -> int:
-    """Import the critical runtime deps and report PASS/FAIL with tracebacks.
-
-    Enabled via DBP_VERIFY_IMPORTS=1. Meant to be run against a *frozen* build in
-    CI so a bundle that can't load cv2/onnxruntime/etc. is caught before release.
-    """
-    import traceback
-    try:
-        from version import __version__
-        print(f"Dollar Detective {__version__} — import verification")
-    except Exception:
-        pass
-    mods = ["PySide6.QtWidgets", "cv2", "numpy", "onnxruntime",
-            "rapidocr_onnxruntime", "yaml", "PIL"]
-    ok = True
-    for m in mods:
-        try:
-            __import__(m)
-            print(f"  OK   {m}")
-        except Exception as e:
-            ok = False
-            print(f"  FAIL {m}: {type(e).__name__}: {e}")
-            traceback.print_exc()
-            if m == "cv2":
-                _dump_cv2_layout()
-    print("VERIFY " + ("PASS" if ok else "FAIL"))
-    return 0 if ok else 1
-
-
-def _dump_cv2_layout():
-    """List where cv2's files actually landed in a frozen bundle (diagnostics)."""
-    base = getattr(sys, "_MEIPASS", None)
-    if not base:
-        return
-    import os
-    print(f"  --- cv2 layout under {base} ---")
-    for root, _dirs, files in os.walk(base):
-        for f in files:
-            low = f.lower()
-            if "cv2" in low or low.endswith(("config.py", "config-3.py")):
-                print(f"      {os.path.join(root, f)}")
 
 
 def _selftest(image_path: str) -> int:
@@ -143,7 +102,8 @@ def main():
     """Main entry point."""
     import os
     if os.environ.get("DBP_VERIFY_IMPORTS") == "1":
-        sys.exit(_verify_imports())
+        from verify_imports import verify_imports
+        sys.exit(verify_imports())
 
     selftest_img = os.environ.get("DBP_SELFTEST")
     if selftest_img:

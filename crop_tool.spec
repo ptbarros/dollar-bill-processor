@@ -68,6 +68,11 @@ excludes = [
 _console = os.environ.get('DBP_BUILD_CONSOLE') == '1'
 _icon = 'assets/DD-Crop.ico' if Path('assets/DD-Crop.ico').exists() else None
 
+# macOS: load cv2's native extension directly (runtime hook) to avoid the opencv
+# bootstrap recursion in the split Frameworks/Resources .app layout. Same fix as
+# the main app's DollarDetective.spec.
+_runtime_hooks = ['pyi_rth_cv2.py'] if sys.platform == 'darwin' else []
+
 a = Analysis(
     ['crop_tool.py'],
     pathex=[],
@@ -76,7 +81,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=_runtime_hooks,
     excludes=excludes,
     noarchive=False,
 )
