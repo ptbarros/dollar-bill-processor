@@ -234,6 +234,30 @@ class PatternDialog(QDialog):
         bundle_layout.addStretch()
         left_layout.addLayout(bundle_layout)
 
+        # Named on/off presets — one-click switch between a lean "Core" set and
+        # the full library (or any saved selection). Great for testing a Core set
+        # while keeping the full library one click away.
+        preset_layout = QHBoxLayout()
+        preset_layout.addWidget(QLabel("Pattern set:"))
+        self.preset_combo = QComboBox()
+        self.preset_combo.setToolTip("Switch between saved enable/disable presets "
+                                     "(e.g. a lean Core set vs the full library).")
+        preset_layout.addWidget(self.preset_combo, 1)
+        apply_preset_btn = QPushButton("Apply")
+        apply_preset_btn.setToolTip("Enable/disable patterns to match the chosen set.")
+        apply_preset_btn.clicked.connect(self._apply_preset)
+        preset_layout.addWidget(apply_preset_btn)
+        save_preset_btn = QPushButton("Save Current As…")
+        save_preset_btn.setToolTip("Save the current enabled/disabled patterns as a named set.")
+        save_preset_btn.clicked.connect(self._save_preset)
+        preset_layout.addWidget(save_preset_btn)
+        del_preset_btn = QPushButton("Delete")
+        del_preset_btn.setToolTip("Delete the selected saved set.")
+        del_preset_btn.clicked.connect(self._delete_preset)
+        preset_layout.addWidget(del_preset_btn)
+        left_layout.addLayout(preset_layout)
+        self._refresh_preset_combo()
+
         # Label-override tools (bulk rename + backup/restore). Display-label
         # overrides live in user_settings.yaml keyed by pattern name; these make
         # a big relabel (e.g. dropping the "CS-" prefix across the Green Guide)
@@ -1717,6 +1741,105 @@ class PatternDialog(QDialog):
                 pattern_item = lib_item.child(j)
                 pattern_item.setCheckState(2, Qt.Unchecked)  # Column 2 = Enabled
 
+    # --- shared apply + named presets ---------------------------------------
+    def _apply_selection_states(self, pstates, lstates=None) -> int:
+        """Apply an on/off map to the engine + settings and rebuild the tree.
+        Returns how many patterns were applied (i.e. are installed here)."""
+        for lib, en in (lstates or {}).items():
+            try:
+                self.settings.set_library_enabled(lib, bool(en))
+            except Exception:
+                pass
+        applied = 0
+        for name, en in (pstates or {}).items():
+            if name in self.engine.lua_patterns:
+                self.engine.set_pattern_enabled(name, bool(en))
+                applied += 1
+        self.settings.save()
+        self._load_patterns()   # rebuild the tree to reflect the new states
+        return applied
+
+    def _current_states(self):
+        """The effective on/off state of every installed pattern."""
+        return {name: bool(getattr(p, "enabled", True))
+                for name, p in self.engine.lua_patterns.items()}
+
+    _FULL_PRESET_LABEL = "★ Full library (all patterns on)"
+
+    def _refresh_preset_combo(self):
+        combo = getattr(self, "preset_combo", None)
+        if combo is None:
+            return
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem(self._FULL_PRESET_LABEL)
+        for name in sorted(self.settings.get_selection_presets()):
+            combo.addItem(name)
+        combo.blockSignals(False)
+
+    def _apply_preset(self):
+        name = self.preset_combo.currentText()
+        if not name:
+            return
+        if name == self._FULL_PRESET_LABEL:
+            if QMessageBox.question(
+                    self, "Full Library",
+                    "Enable every installed pattern?\n\nTip: 'Save Current As…' first "
+                    "if you want to keep your current set.",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+                return
+            pstates = {n: True for n in self.engine.lua_patterns}
+            self._apply_selection_states(pstates, {})
+            QMessageBox.information(self, "Full Library",
+                                    f"Enabled all {len(pstates)} patterns.")
+            return
+        preset = self.settings.get_selection_presets().get(name)
+        if not preset:
+            return
+        applied = self._apply_selection_states(preset.get("pattern_states", {}),
+                                               preset.get("library_states", {}))
+        QMessageBox.information(self, "Pattern set applied",
+                                f"Applied '{name}' — {applied} patterns set.")
+
+    def _save_preset(self):
+        default = "" if self.preset_combo.currentText() == self._FULL_PRESET_LABEL \
+            else self.preset_combo.currentText()
+        name, ok = QInputDialog.getText(
+            self, "Save Pattern Set",
+            "Name this set (e.g. Core, Full, FIL):", text=default)
+        name = (name or "").strip()
+        if not ok or not name:
+            return
+        if name == self._FULL_PRESET_LABEL:
+            QMessageBox.warning(self, "Save Pattern Set", "That name is reserved.")
+            return
+        if name in self.settings.get_selection_presets() and QMessageBox.question(
+                self, "Save Pattern Set", f"Overwrite the existing '{name}' set?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
+        self.settings.save_selection_preset(
+            name, self._current_states(),
+            dict(getattr(self.settings, "library_states", {}) or {}))
+        self.settings.save()
+        self._refresh_preset_combo()
+        self.preset_combo.setCurrentText(name)
+        QMessageBox.information(self, "Pattern set saved", f"Saved current selection as '{name}'.")
+
+    def _delete_preset(self):
+        name = self.preset_combo.currentText()
+        if name == self._FULL_PRESET_LABEL:
+            QMessageBox.information(self, "Delete Pattern Set",
+                                    "The full library isn't a saved set — nothing to delete.")
+            return
+        if name not in self.settings.get_selection_presets():
+            return
+        if QMessageBox.question(self, "Delete Pattern Set", f"Delete the '{name}' set?",
+                                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
+        self.settings.delete_selection_preset(name)
+        self.settings.save()
+        self._refresh_preset_combo()
+
     def _export_selection(self):
         """Save the current enabled/disabled selection to a shareable JSON file."""
         from PySide6.QtWidgets import QFileDialog
@@ -1776,19 +1899,7 @@ class PatternDialog(QDialog):
                 "This replaces your current enabled/disabled setup.",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
-        # Library states first, then per-pattern (per-pattern is authoritative).
-        for lib, en in lstates.items():
-            try:
-                self.settings.set_library_enabled(lib, bool(en))
-            except Exception:
-                pass
-        applied = 0
-        for name, en in pstates.items():
-            if name in self.engine.lua_patterns:
-                self.engine.set_pattern_enabled(name, bool(en))
-                applied += 1
-        self.settings.save()
-        self._load_patterns()   # rebuild the tree to reflect the imported states
+        applied = self._apply_selection_states(pstates, lstates)
         missing = len(pstates) - applied
         QMessageBox.information(
             self, "Selection imported",

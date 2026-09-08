@@ -134,6 +134,8 @@ class SettingsManager:
         self.autosave = AutosaveSettings()
         self.ai = AISettings()
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
+        # Named enable/disable presets (e.g. "Core", "Full"): name -> {pattern_states, library_states}
+        self.selection_presets: Dict[str, Dict] = {}
         self.pattern_colors: Dict[str, str] = {}  # Pattern name -> hex color
         self.overlay_colors: Dict[str, str] = {}  # Overlay palette slot (e.g. "orange") -> hex override
         self.label_template: Dict = {}  # Legacy single template (migrated into label_profiles)
@@ -257,6 +259,7 @@ class SettingsManager:
 
         # Load pattern states
         self.pattern_states = data.get('pattern_states', {})
+        self.selection_presets = data.get('selection_presets', {}) or {}
 
         # Load pattern colors
         self.pattern_colors = data.get('pattern_colors', {})
@@ -423,6 +426,7 @@ class SettingsManager:
                 'openai_model': self.ai.openai_model,
             },
             'pattern_states': self.pattern_states,
+            'selection_presets': self.selection_presets,
             'pattern_colors': self.pattern_colors,
             'overlay_colors': self.overlay_colors,
             'label_template': self.label_template,
@@ -456,6 +460,22 @@ class SettingsManager:
     def get_enabled_patterns(self) -> List[str]:
         """Get list of explicitly enabled patterns."""
         return [name for name, enabled in self.pattern_states.items() if enabled]
+
+    # --- Named enable/disable presets (e.g. "Core", "Full library") ----------
+    def get_selection_presets(self) -> Dict[str, Dict]:
+        """All saved presets: name -> {'pattern_states': {...}, 'library_states': {...}}."""
+        return dict(self.selection_presets)
+
+    def save_selection_preset(self, name: str, pattern_states: Dict[str, bool],
+                              library_states: Dict[str, bool] = None):
+        """Store (or overwrite) a named on/off preset. Does not call save()."""
+        self.selection_presets[name] = {
+            'pattern_states': dict(pattern_states or {}),
+            'library_states': dict(library_states or {}),
+        }
+
+    def delete_selection_preset(self, name: str):
+        self.selection_presets.pop(name, None)
 
     def get_disabled_patterns(self) -> List[str]:
         """Get list of explicitly disabled patterns."""
