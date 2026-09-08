@@ -17,6 +17,7 @@ datas = [
     ('config.yaml', '.'),
     ('assets/icon.png', 'assets'),   # window / taskbar icon
     ('gui/insights_template.html', 'gui'),  # Tools -> Insights report template
+    ('essentials_default.json', '.'),  # bundled "Essentials" lean pattern preset
 ]
 # NOTE: best.onnx is deliberately NOT bundled so load_detector uses the torch
 # path even if the runtime hook were bypassed.
