@@ -407,6 +407,20 @@ class PatternEngineV3:
         """Return just pattern names."""
         return [m.name for m in self.classify(serial, metadata)]
 
+    def classify_reference(self, serial: str, allowed, metadata: dict = None) -> List[str]:
+        """Classify against a specific set of pattern names (a reference/'originals'
+        selection), ignoring the current enabled state. Temporarily enables only
+        the names in `allowed`, then restores. No settings are written."""
+        allowed = set(allowed)
+        snapshot = {name: p.enabled for name, p in self.lua_patterns.items()}
+        try:
+            for name, p in self.lua_patterns.items():
+                p.enabled = name in allowed
+            return self.classify_simple(serial, metadata)
+        finally:
+            for name, p in self.lua_patterns.items():
+                p.enabled = snapshot.get(name, p.enabled)
+
     def classify_full(self, serial: str, metadata: dict = None) -> List[str]:
         """Classify against the ENTIRE installed library, ignoring the current
         enabled/disabled selection. Temporarily enables every pattern in memory

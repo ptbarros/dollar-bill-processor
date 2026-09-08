@@ -1898,7 +1898,12 @@ class MainWindow(QMainWindow):
         if not engine:
             QMessageBox.warning(self, "Coverage Check", "The pattern engine isn't available.")
             return
-        CoverageDialog(engine, results, self).exec()
+        # Reference presets: name -> set of enabled pattern names.
+        presets = {}
+        for name, data in (self.settings.get_selection_presets() or {}).items():
+            ps = (data or {}).get("pattern_states", {}) or {}
+            presets[name] = {n for n, on in ps.items() if on}
+        CoverageDialog(engine, results, presets, self).exec()
 
     def _reset_ledger(self):
         """Close and forget the ledger handle so the next access reopens it
