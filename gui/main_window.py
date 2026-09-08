@@ -172,6 +172,18 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
+        backup_action = QAction("&Back Up Data...", self)
+        backup_action.setToolTip("Save your settings, patterns, corrections and bill ledger to one portable file")
+        backup_action.triggered.connect(self._on_backup)
+        file_menu.addAction(backup_action)
+
+        restore_action = QAction("&Restore from Backup...", self)
+        restore_action.setToolTip("Restore settings, patterns, corrections and/or the bill ledger from a backup file")
+        restore_action.triggered.connect(self._on_restore)
+        file_menu.addAction(restore_action)
+
+        file_menu.addSeparator()
+
         exit_action = QAction("E&xit", self)
         exit_action.setShortcut(QKeySequence.Quit)
         exit_action.triggered.connect(self.close)
@@ -1854,6 +1866,123 @@ class MainWindow(QMainWindow):
             webbrowser.open(out.as_uri())
         except Exception as e:
             QMessageBox.warning(self, "Insights", f"Could not build the report:\n{e}")
+
+    def _reset_ledger(self):
+        """Close and forget the ledger handle so the next access reopens it
+        (used after a restore rewrites ledger.db)."""
+        obj = getattr(self, "_ledger_obj", None)
+        if obj not in (None, "unset"):
+            try:
+                obj.close()
+            except Exception:
+                pass
+        self._ledger_obj = "unset"
+
+    def _patterns_dir_for_backup(self):
+        """The engine's real user-pattern dir if we have one, else let
+        backup_manager compute the default (which matches the engine's logic)."""
+        try:
+            proc = self.processor or (self.processing_thread.processor
+                                      if getattr(self, "processing_thread", None) else None)
+            if proc and getattr(proc, "pattern_engine", None):
+                return getattr(proc.pattern_engine, "user_patterns_dir", None)
+        except Exception:
+            pass
+        return None
+
+    def _on_backup(self):
+        """File -> Back Up Data. Package selected user data into a portable zip."""
+        from datetime import datetime
+        import backup_manager
+        from .backup_dialog import BackupDialog
+        dlg = BackupDialog(self)
+        if dlg.exec() != dlg.DialogCode.Accepted:
+            return
+        cats = dlg.selected_categories()
+        if not cats:
+            QMessageBox.information(self, "Back Up Data", "Nothing selected to back up.")
+            return
+        default_name = f"DollarDetective-backup-{datetime.now():%Y%m%d}.zip"
+        start = str(Path.home() / default_name)
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Backup", start, "Backup files (*.zip)")
+        if not path:
+            return
+        if not path.lower().endswith(".zip"):
+            path += ".zip"
+        try:
+            manifest = backup_manager.create_backup(
+                path, categories=cats, include_api_keys=dlg.include_keys(),
+                patterns_dir=self._patterns_dir_for_backup())
+        except Exception as e:
+            QMessageBox.critical(self, "Back Up Data", f"Backup failed:\n{e}")
+            return
+        included = manifest.get("categories", {})
+        lines = "\n".join(f"  • {backup_manager.CATEGORY_LABELS.get(k, k)}: "
+                          f"{v.get('count', 0)}" for k, v in included.items())
+        QMessageBox.information(
+            self, "Backup Complete",
+            f"Saved to:\n{path}\n\nIncluded:\n{lines or '  (nothing)'}")
+
+    def _on_restore(self):
+        """File -> Restore from Backup. Selectively restore from a backup zip."""
+        from datetime import datetime
+        import backup_manager
+        from .backup_dialog import RestoreDialog
+        from resource_path import user_data_dir
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open Backup", str(Path.home()), "Backup files (*.zip)")
+        if not path:
+            return
+        try:
+            manifest = backup_manager.read_manifest(path)
+        except Exception as e:
+            QMessageBox.critical(self, "Restore", f"Not a valid backup file:\n{e}")
+            return
+        if not manifest.get("categories"):
+            QMessageBox.warning(self, "Restore", "This backup contains no data.")
+            return
+
+        dlg = RestoreDialog(manifest, self)
+        if dlg.exec() != dlg.DialogCode.Accepted:
+            return
+        cats = dlg.selected_categories()
+        if not cats:
+            return
+        if QMessageBox.question(
+                self, "Restore",
+                "This will overwrite current settings/patterns with the backup. "
+                "A safety copy of your current data will be saved first.\n\nContinue?"
+        ) != QMessageBox.StandardButton.Yes:
+            return
+
+        # Safety snapshot of the current state before we overwrite anything.
+        try:
+            safety = user_data_dir() / f"pre-restore-{datetime.now():%Y%m%d_%H%M%S}.zip"
+            backup_manager.create_backup(
+                safety, include_api_keys=True,
+                patterns_dir=self._patterns_dir_for_backup())
+        except Exception as e:
+            print(f"Pre-restore safety backup failed: {e}")
+            safety = None
+
+        try:
+            report = backup_manager.restore_backup(
+                path, categories=cats, ledger_mode=dlg.ledger_mode(),
+                patterns_dir=self._patterns_dir_for_backup(),
+                live_ledger=self._get_ledger())
+        except Exception as e:
+            QMessageBox.critical(self, "Restore", f"Restore failed:\n{e}")
+            return
+        self._reset_ledger()
+
+        lines = "\n".join(f"  • {backup_manager.CATEGORY_LABELS.get(k, k)}: {v}"
+                          for k, v in report.items())
+        tail = f"\n\nSafety copy saved to:\n{safety}" if safety else ""
+        QMessageBox.information(
+            self, "Restore Complete",
+            f"Restored:\n{lines}{tail}\n\nPlease restart Dollar Detective for all "
+            f"changes to take effect.")
 
     @Slot(dict)
     def _on_processing_complete(self, summary: dict):

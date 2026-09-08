@@ -362,6 +362,84 @@ class Ledger:
             self._conn.commit()
         return True
 
+    # -- backup / merge ----------------------------------------------------
+    def backup(self, dest_path: Union[str, Path]) -> Path:
+        """Write a consistent snapshot of this ledger to dest_path using
+        SQLite's online-backup API — safe while the DB is open, and it folds in
+        the WAL so no -wal/-shm sidecars are needed alongside the copy."""
+        dest = Path(dest_path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with self._lock:
+            target = sqlite3.connect(str(dest))
+            try:
+                self._conn.backup(target)
+            finally:
+                target.close()
+        return dest
+
+    def merge_from(self, src_path: Union[str, Path]) -> dict:
+        """Merge another ledger DB into this one (for combining histories across
+        machines). Bills upsert by identity — times_seen add, date range widens,
+        is_fancy/kept/checked OR together, pattern sets union; sessions and
+        observations are appended with remapped ids. Returns a small report."""
+        src = sqlite3.connect(str(src_path))
+        src.row_factory = sqlite3.Row
+        added = updated = obs = 0
+        with self._lock:
+            c = self._conn
+            sess_map = {}
+            for s in src.execute("SELECT * FROM sessions"):
+                cur = c.execute(
+                    "INSERT INTO sessions (started_at, source_folder, label, app_version)"
+                    " VALUES (?,?,?,?)",
+                    (s["started_at"], s["source_folder"], s["label"], s["app_version"]))
+                sess_map[s["id"]] = cur.lastrowid
+            bill_map = {}
+            for b in src.execute("SELECT * FROM bills"):
+                ex = c.execute(
+                    "SELECT id FROM bills WHERE serial_key=? AND series_year=? "
+                    "AND denomination=?",
+                    (b["serial_key"], b["series_year"], b["denomination"])).fetchone()
+                if ex:
+                    bid = ex["id"]; updated += 1
+                    c.execute(
+                        "UPDATE bills SET times_seen=times_seen+?, "
+                        "first_seen=MIN(first_seen,?), last_seen=MAX(last_seen,?), "
+                        "is_fancy=MAX(is_fancy,?), kept=MAX(kept,?), checked=MAX(checked,?), "
+                        "kept_at=COALESCE(kept_at,?) WHERE id=?",
+                        (b["times_seen"], b["first_seen"], b["last_seen"], b["is_fancy"],
+                         b["kept"], b["checked"], b["kept_at"], bid))
+                else:
+                    cur = c.execute(
+                        "INSERT INTO bills (serial, serial_key, series_year, denomination,"
+                        " first_seen, last_seen, times_seen, is_fancy, checked, kept, kept_at,"
+                        " front_plate, back_plate, potential_mule, best_confidence)"
+                        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (b["serial"], b["serial_key"], b["series_year"], b["denomination"],
+                         b["first_seen"], b["last_seen"], b["times_seen"], b["is_fancy"],
+                         b["checked"], b["kept"], b["kept_at"], b["front_plate"],
+                         b["back_plate"], b["potential_mule"], b["best_confidence"]))
+                    bid = cur.lastrowid; added += 1
+                bill_map[b["id"]] = bid
+                for pr in src.execute("SELECT pattern FROM bill_patterns WHERE bill_id=?",
+                                      (b["id"],)):
+                    c.execute("INSERT OR IGNORE INTO bill_patterns (bill_id, pattern) VALUES (?,?)",
+                              (bid, pr["pattern"]))
+            for o in src.execute("SELECT * FROM observations"):
+                c.execute(
+                    "INSERT INTO observations (bill_id, session_id, seen_at, stack_position,"
+                    " front_file, back_file, serial_read, confidence, needs_review, error,"
+                    " baseline_variance, seal_x, seal_y, seal_containment, star_detected)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (bill_map.get(o["bill_id"]), sess_map.get(o["session_id"]), o["seen_at"],
+                     o["stack_position"], o["front_file"], o["back_file"], o["serial_read"],
+                     o["confidence"], o["needs_review"], o["error"], o["baseline_variance"],
+                     o["seal_x"], o["seal_y"], o["seal_containment"], o["star_detected"]))
+                obs += 1
+            c.commit()
+        src.close()
+        return {"added_bills": added, "updated_bills": updated, "added_observations": obs}
+
     # -- aggregates --------------------------------------------------------
     def stats(self) -> dict:
         """Lifetime headline numbers."""
