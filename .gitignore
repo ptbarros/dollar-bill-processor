@@ -82,3 +82,9 @@ dist/
 
 # Crop tool build artifact (obscured model copy)
 detector.bin
+
+# Bill ledger (user data — never commit)
+ledger.db
+ledger.db-wal
+ledger.db-shm
+insights_report.html
