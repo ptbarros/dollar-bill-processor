@@ -267,7 +267,7 @@ class ResultsList(QWidget):
             11: "Back plate number",
             12: "EXPERIMENTAL hint, not a verdict: an old-era note (pre-1960s series) whose back-plate font reads small. True mules are a micro/macro plate-number font mismatch and vary by denomination -- verify with the plate magnifier (press M). Modern notes never flag.",
             13: "Mismatched serial numbers (two different serials detected on front)",
-            14: "Status flags: ✓=queued, V=viewed, C=cropped, R=sent for review",
+            14: "Status flags: ✓=queued, V=viewed, C=cropped, R=sent for review, ⟳=seen in a previous scan",
         }
         self._setup_header_tooltips()
 
@@ -664,19 +664,7 @@ class ResultsList(QWidget):
                 item.setText(13, "")
 
             # Status column (review tracking)
-            status_parts = []
-            if result.get('checked'):
-                status_parts.append('\u2713')
-            auto = ''
-            if result.get('viewed'):
-                auto += 'V'
-            if result.get('cropped'):
-                auto += 'C'
-            if result.get('sent_for_review'):
-                auto += 'R'
-            if auto:
-                status_parts.append(auto)
-            item.setText(14, ' '.join(status_parts))
+            item.setText(14, self._build_status_text(result))
 
             # Build comprehensive row tooltip with all bill details
             tooltip_lines = [f"Serial: {serial}"]
@@ -702,6 +690,13 @@ class ResultsList(QWidget):
             row_tooltip = '\n'.join(tooltip_lines)
             for col in range(15):
                 item.setToolTip(col, row_tooltip)
+            # Seen-before detail on the Status column (from the bill ledger).
+            if result.get('seen_before'):
+                times = result.get('times_seen') or 2
+                seen_msg = f"⟳ Seen before — scanned {times}× total"
+                if result.get('prev_kept'):
+                    seen_msg += " (you kept it previously)"
+                item.setToolTip(14, seen_msg)
 
             # Color coding with explicit text color for contrast
             # Tiered color system: Pattern color > Library color > Default fancy color
@@ -803,15 +798,13 @@ class ResultsList(QWidget):
         else:
             dlog("sync.MISS", field=field, reason="empty_front_file")
 
-    def _update_status_cell(self, item, result: dict):
-        """Update the status column text for a single tree item.
-
-        Note: PySide6's data()/setData() copies dicts, so the caller must
-        pass the already-modified result AND store it back via setData().
-        """
-        status_parts = []
+    @staticmethod
+    def _build_status_text(result: dict) -> str:
+        """Status-column flags: \u2713=queued, V=viewed, C=cropped, R=review,
+        \u27f3=seen in a previous scan (from the bill ledger)."""
+        parts = []
         if result.get('checked'):
-            status_parts.append('\u2713')
+            parts.append('\u2713')
         auto = ''
         if result.get('viewed'):
             auto += 'V'
@@ -819,9 +812,19 @@ class ResultsList(QWidget):
             auto += 'C'
         if result.get('sent_for_review'):
             auto += 'R'
+        if result.get('seen_before'):
+            auto += '\u27f3'
         if auto:
-            status_parts.append(auto)
-        item.setText(14, ' '.join(status_parts))  # Column 14 = Status
+            parts.append(auto)
+        return ' '.join(parts)
+
+    def _update_status_cell(self, item, result: dict):
+        """Update the status column text for a single tree item.
+
+        Note: PySide6's data()/setData() copies dicts, so the caller must
+        pass the already-modified result AND store it back via setData().
+        """
+        item.setText(14, self._build_status_text(result))  # Column 14 = Status
         # Store the modified dict back (PySide6 copies on setData)
         item.setData(0, Qt.UserRole, result)
 

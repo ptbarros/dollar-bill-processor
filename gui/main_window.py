@@ -1754,11 +1754,12 @@ class MainWindow(QMainWindow):
     @Slot(dict)
     def _on_result_ready(self, result: dict):
         """Handle a single result from processing."""
+        # Persist to the bill ledger first (seen-before history, lifetime stats,
+        # Insights report) so the seen-before flag is set before the row renders.
+        # Best-effort: never let it break processing.
+        self._ledger_record(result)
         self.current_results.append(result)
         self.results_list.add_result(result)
-        # Persist to the bill ledger (seen-before history, lifetime stats,
-        # and the Insights report). Best-effort: never let it break processing.
-        self._ledger_record(result)
         # Mark session as dirty for autosave
         self._mark_session_dirty()
         # Force UI to update immediately (keeps the UI responsive during processing)
