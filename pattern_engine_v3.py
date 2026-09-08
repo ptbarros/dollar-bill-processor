@@ -407,6 +407,20 @@ class PatternEngineV3:
         """Return just pattern names."""
         return [m.name for m in self.classify(serial, metadata)]
 
+    def classify_full(self, serial: str, metadata: dict = None) -> List[str]:
+        """Classify against the ENTIRE installed library, ignoring the current
+        enabled/disabled selection. Temporarily enables every pattern in memory
+        (no settings are written) and restores the prior state afterward. Used by
+        the Core-vs-Full coverage check to see what a lean set would miss."""
+        snapshot = {name: p.enabled for name, p in self.lua_patterns.items()}
+        try:
+            for p in self.lua_patterns.values():
+                p.enabled = True
+            return self.classify_simple(serial, metadata)
+        finally:
+            for name, p in self.lua_patterns.items():
+                p.enabled = snapshot.get(name, p.enabled)
+
     def get_digit_highlights(self, serial: str, pattern_names: List[str]) -> dict:
         """
         Get combined highlight and connector data for specified patterns.

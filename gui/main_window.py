@@ -295,6 +295,11 @@ class MainWindow(QMainWindow):
         insights_action.triggered.connect(self._open_insights)
         tools_menu.addAction(insights_action)
 
+        coverage_action = QAction("&Coverage Check (Core vs Full)...", self)
+        coverage_action.setToolTip("See what a lean Core pattern set would miss vs the full library, on the current batch")
+        coverage_action.triggered.connect(self._on_coverage_check)
+        tools_menu.addAction(coverage_action)
+
         # Help menu
         help_menu = menubar.addMenu("&Help")
 
@@ -1866,6 +1871,34 @@ class MainWindow(QMainWindow):
             webbrowser.open(out.as_uri())
         except Exception as e:
             QMessageBox.warning(self, "Insights", f"Could not build the report:\n{e}")
+
+    def _get_pattern_engine(self):
+        """The live pattern engine (from the processor), creating a processor if
+        needed. None if unavailable."""
+        proc = self.processor
+        if not proc and getattr(self, "processing_thread", None):
+            proc = self.processing_thread.processor
+        if not proc:
+            proc = self._get_or_create_processor()
+        return getattr(proc, "pattern_engine", None) if proc else None
+
+    def _on_coverage_check(self):
+        """Tools -> Coverage Check. Compare the current selection (Core) against
+        the full library over the batch on screen."""
+        from .coverage_dialog import CoverageDialog
+        results = [r for r in (self.current_results or []) if r.get("serial")]
+        if not results:
+            QMessageBox.information(
+                self, "Coverage Check",
+                "Process or load a batch first, then run the coverage check — it "
+                "compares your enabled (Core) patterns against the full library on "
+                "those bills.")
+            return
+        engine = self._get_pattern_engine()
+        if not engine:
+            QMessageBox.warning(self, "Coverage Check", "The pattern engine isn't available.")
+            return
+        CoverageDialog(engine, results, self).exec()
 
     def _reset_ledger(self):
         """Close and forget the ledger handle so the next access reopens it
