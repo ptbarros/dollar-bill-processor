@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bill Insights</title>
+<meta name="description" content="Pattern hit-rate vs keep-rate across your full scan history.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#eceee7; --surface:#f7f7f1; --surface-2:#f1f2ea;
+  --ink:#19211c; --ink-soft:#586159; --ink-faint:#8a9188;
+  --line:#d7dacf; --line-soft:#e3e5db;
+  --accent:#12664b; --accent-deep:#0c4a36;
+  --keep:#1f9d63; --noise:#b0742a; --gold:#9c7f2e;
+  --keep-wash:rgba(31,157,99,.07); --noise-wash:rgba(176,116,42,.07);
+  --shadow:0 1px 2px rgba(20,30,24,.05), 0 8px 24px rgba(20,30,24,.06);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#10140f; --surface:#171c16; --surface-2:#1c221a;
+    --ink:#e7eadf; --ink-soft:#9aa294; --ink-faint:#6b746a;
+    --line:#2a322a; --line-soft:#232a22;
+    --accent:#57c095; --accent-deep:#3e9d76;
+    --keep:#4bc98a; --noise:#d59a4a; --gold:#c9ab5c;
+    --keep-wash:rgba(75,201,138,.09); --noise-wash:rgba(213,154,74,.08);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#10140f; --surface:#171c16; --surface-2:#1c221a;
+  --ink:#e7eadf; --ink-soft:#9aa294; --ink-faint:#6b746a;
+  --line:#2a322a; --line-soft:#232a22;
+  --accent:#57c095; --accent-deep:#3e9d76;
+  --keep:#4bc98a; --noise:#d59a4a; --gold:#c9ab5c;
+  --keep-wash:rgba(75,201,138,.09); --noise-wash:rgba(213,154,74,.08);
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--ground);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.55;
+  -webkit-font-smoothing:antialiased;}
+img{max-width:100%}
+.wrap{max-width:1060px;margin:0 auto;padding:clamp(20px,4vw,56px) clamp(16px,4vw,40px) 72px;}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+.num{font-variant-numeric:tabular-nums;}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:500;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--accent);
+  display:flex;align-items:center;gap:12px;}
+.eyebrow::after{content:"";height:1px;flex:1;background:var(--line);}
+h1{font-family:"IBM Plex Serif",Georgia,serif;font-weight:600;
+  font-size:clamp(30px,5.2vw,52px);line-height:1.04;letter-spacing:-.01em;
+  text-wrap:balance;margin:.5em 0 .35em;max-width:16ch;}
+h1 em{font-style:normal;color:var(--accent);}
+.lede{font-size:clamp(16px,2vw,18.5px);color:var(--ink-soft);max-width:62ch;margin:0;}
+.ledger{display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin:36px 0 8px;
+  border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);
+  box-shadow:var(--shadow);}
+.ledger .cell{padding:18px 20px;border-right:1px solid var(--line-soft);}
+.ledger .cell:last-child{border-right:0;}
+.ledger .k{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-faint);margin-bottom:7px;}
+.ledger .v{font-family:"IBM Plex Serif",serif;font-weight:600;font-size:clamp(24px,3.4vw,32px);
+  line-height:1;letter-spacing:-.01em;}
+.ledger .sub{font-size:12.5px;color:var(--ink-soft);margin-top:5px;}
+@media(max-width:720px){.ledger{grid-template-columns:repeat(2,1fr);}
+  .ledger .cell:nth-child(2){border-right:0;}
+  .ledger .cell{border-bottom:1px solid var(--line-soft);}
+  .ledger .cell:nth-last-child(-n+1){border-bottom:0;grid-column:1/-1;}}
+section{margin-top:56px;}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+.sec-no{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--accent);font-weight:600;}
+h2{font-family:"IBM Plex Serif",serif;font-weight:600;font-size:clamp(21px,3vw,27px);
+  letter-spacing:-.01em;margin:0;text-wrap:balance;}
+.sec-note{color:var(--ink-soft);font-size:15px;margin:8px 0 24px;max-width:66ch;}
+.chart-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  padding:22px 20px 14px;box-shadow:var(--shadow);}
+.chart-card svg{display:block;width:100%;height:auto;}
+.grid{stroke:var(--line-soft);stroke-width:1;}
+.axis{stroke:var(--line);stroke-width:1;}
+.tick{fill:var(--ink-faint);font-family:"IBM Plex Mono",monospace;font-size:11px;}
+.axis-title{fill:var(--ink-soft);font-family:"IBM Plex Sans",sans-serif;font-size:12px;font-weight:600;letter-spacing:.02em;}
+.quad-label{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;}
+.pt-label{fill:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;}
+.dot{stroke-width:1;cursor:default;}
+.legend{display:flex;flex-wrap:wrap;gap:18px 26px;align-items:center;margin-top:14px;
+  padding-top:14px;border-top:1px solid var(--line-soft);font-size:12.5px;color:var(--ink-soft);}
+.legend .sw{display:inline-flex;align-items:center;gap:8px;}
+.legend .chip{width:12px;height:12px;border-radius:50%;}
+.legend .rng{display:inline-flex;align-items:center;gap:7px;}
+.legend .bar{width:78px;height:9px;border-radius:5px;background:linear-gradient(90deg,var(--noise),#c7b25a,var(--keep));}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:22px;}
+@media(max-width:760px){.cols{grid-template-columns:1fr;}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px 20px 12px;box-shadow:var(--shadow);}
+.panel.keep{border-top:3px solid var(--keep);}
+.panel.noise{border-top:3px solid var(--noise);}
+.panel h3{margin:0 0 3px;font-family:"IBM Plex Sans",sans-serif;font-size:16px;font-weight:600;}
+.panel .tag{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:16px;display:block;}
+.row{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;padding:9px 0;border-top:1px solid var(--line-soft);}
+.row:first-of-type{border-top:0;}
+.row .nm{font-family:"IBM Plex Mono",monospace;font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.row .rate{font-family:"IBM Plex Serif",serif;font-weight:600;font-size:16px;text-align:right;font-variant-numeric:tabular-nums;}
+.row .meta{grid-column:1/-1;display:flex;align-items:center;gap:10px;}
+.track{flex:1;height:6px;border-radius:4px;background:var(--surface-2);overflow:hidden;border:1px solid var(--line-soft);}
+.track>i{display:block;height:100%;border-radius:4px;}
+.row .hits{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-faint);white-space:nowrap;}
+.dups{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
+.dup{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px 17px;}
+.dup .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:9px;}
+.dup .cnt{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--accent);font-weight:600;white-space:nowrap;}
+.dup .names{display:flex;flex-wrap:wrap;gap:6px;}
+.dup .chip2{font-family:"IBM Plex Mono",monospace;font-size:11px;padding:3px 8px;border-radius:6px;background:var(--surface-2);border:1px solid var(--line-soft);color:var(--ink-soft);}
+.dup .chip2.head{background:var(--accent);border-color:var(--accent);color:var(--ground);font-weight:600;}
+.callout{margin-top:22px;background:var(--surface-2);border:1px solid var(--line-soft);border-left:3px solid var(--accent);border-radius:0 10px 10px 0;padding:16px 20px;font-size:15px;}
+.callout b{color:var(--accent);}
+.empty{margin-top:40px;padding:40px;text-align:center;background:var(--surface);border:1px dashed var(--line);border-radius:14px;color:var(--ink-soft);}
+.foot{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:var(--ink-soft);font-size:13.5px;}
+.foot h4{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 12px;font-weight:600;}
+.foot ul{margin:0;padding-left:18px;display:grid;gap:7px;max-width:76ch;}
+.foot code{font-family:"IBM Plex Mono",monospace;font-size:12.5px;background:var(--surface-2);padding:1px 5px;border-radius:4px;border:1px solid var(--line-soft);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Dollar&nbsp;Detective · Bill&nbsp;Ledger</div>
+    <h1>Which patterns actually earn their <em>keep</em>?</h1>
+    <p class="lede" id="lede">Your full scan history — every bill the app has flagged, cross-referenced against the ones you cropped to keep. The gap between <em>how often a pattern fires</em> and <em>how often you keep it</em> is the whole story.</p>
+  </header>
+
+  <div class="ledger" id="ledger"></div>
+  <p style="font-size:12.5px;color:var(--ink-faint);margin:10px 2px 0" class="mono" id="genline"></p>
+
+  <div id="body"></div>
+
+  <div class="foot">
+    <h4>How to read this / caveats</h4>
+    <ul>
+      <li><b>"Kept" = cropped.</b> Cropping a bill is your judgment that it's worth saving to possibly sell — a strong proxy for value, but not a sale.</li>
+      <li><b>Rates below 8 hits are omitted</b> from the ranked lists — a 1-for-1 pattern reads as "100% kept" on a single bill and would mislead. All patterns still appear on the map.</li>
+      <li><b>Aliases were merged</b> by identical hit-sets: patterns firing on the exact same bills are shown as one group — the live duplicate-pattern signal. Only groups with ≥8 shared hits are treated as confirmed.</li>
+      <li>Generated from your local bill ledger (<code>ledger.db</code>). Re-open this report any time from <b>Tools → Insights</b>; it always reflects the latest data.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const PAYLOAD = __LEDGER_DATA__;
+const DATA = PAYLOAD.report || {total:0,fancy:0,unique_kept:0,patterns:[]};
+const STATS = PAYLOAD.stats || {};
+const $=(s)=>document.querySelector(s);
+const fmt=(n)=>Number(n||0).toLocaleString('en-US');
+const pct=(x,d=1)=>((x||0)*100).toFixed(d)+'%';
+
+$('#genline').textContent = 'Generated ' + (PAYLOAD.generated||'') +
+  (STATS.first_seen ? '  ·  history ' + (STATS.first_seen||'').slice(0,10) + ' → ' + (STATS.last_seen||'').slice(0,10) : '');
+
+/* ---- Ledger row ---- */
+const nameCount = DATA.patterns.reduce((a,p)=>a+(p.aliases?p.aliases.length:1),0);
+const cells=[
+  ['Bills scanned', fmt(STATS.observations!=null?STATS.observations:DATA.total),
+     fmt(STATS.unique_bills!=null?STATS.unique_bills:DATA.total)+' unique · '+fmt(STATS.sessions||0)+' sessions'],
+  ['Fancy hits', DATA.total?pct(DATA.fancy/DATA.total,1):'0%', fmt(DATA.fancy)+' bills flagged'],
+  ['Bills kept', fmt(DATA.unique_kept), DATA.fancy?pct(DATA.unique_kept/DATA.fancy,0)+' of fancy':'—'],
+  ['Patterns fired', String(DATA.patterns.length), 'from '+nameCount+' raw definitions'],
+  ['Keep signal', DATA.total?pct(DATA.unique_kept/DATA.total,1):'0%', 'of all bills worth saving'],
+];
+$('#ledger').innerHTML=cells.map(c=>
+  `<div class="cell"><div class="k">${c[0]}</div><div class="v num">${c[1]}</div><div class="sub">${c[2]}</div></div>`).join('');
+
+if(!DATA.total){
+  $('#body').innerHTML='<div class="empty">No bills in the ledger yet. Process a folder, and this report fills in automatically.</div>';
+} else {
+  buildBody();
+}
+
+function keepColor(k){
+  const h=32+(150-32)*Math.max(0,Math.min(1,k));
+  const s=k<0.2?58:64, l=k<0.2?46:44;
+  return `hsl(${h.toFixed(0)} ${s}% ${l}%)`;
+}
+
+function buildBody(){
+  $('#body').innerHTML = `
+  <section>
+    <div class="sec-head"><span class="sec-no">01</span><h2>The keep map</h2></div>
+    <p class="sec-note">Each dot is a pattern. Left→right: how common it is (log scale — every gridline is 10× rarer). Bottom→top: the share of its hits you cropped. Bubble size is raw hit count; color runs ochre (rarely kept) to green (usually kept). The prize corner is top-left: rare <em>and</em> worth keeping.</p>
+    <div class="chart-card">
+      <svg id="scatter" viewBox="0 0 960 566" role="img" aria-label="Pattern hit rate versus keep rate"></svg>
+      <div class="legend">
+        <span class="sw"><span class="rng"><span>Rarely kept</span><span class="bar"></span><span>Usually kept</span></span></span>
+        <span class="sw"><span class="chip" style="background:var(--ink-faint)"></span> bubble size = number of hits</span>
+        <span class="sw" style="color:var(--ink-faint)">hover a dot for exact figures</span>
+      </div>
+    </div>
+  </section>
+  <section>
+    <div class="sec-head"><span class="sec-no">02</span><h2>Two piles worth separating</h2></div>
+    <p class="sec-note">Ranked among patterns with enough hits to trust the rate. The left pile clogs the review queue for little payoff; the right pile is almost pure signal — when it fires, you keep it.</p>
+    <div class="cols">
+      <div class="panel noise"><h3>Fires a lot, rarely kept</h3><span class="tag">Noise · candidates to demote or soften</span><div id="noise"></div></div>
+      <div class="panel keep"><h3>Kept almost every time</h3><span class="tag">Signal · the core worth prioritizing</span><div id="keepers"></div></div>
+    </div>
+  </section>
+  <section id="dupsec">
+    <div class="sec-head"><span class="sec-no">03</span><h2>Patterns that are secretly the same</h2></div>
+    <p class="sec-note">These groups fired on the <em>exact same bills</em> — duplicate definitions wearing different names, inflating the hit counts and the fancy rate. Each group is one pattern in disguise. (Shown for groups with ≥8 shared hits.)</p>
+    <div class="dups" id="dups"></div>
+    <div class="callout" id="dupcall"></div>
+  </section>`;
+
+  drawScatter();
+  drawLists();
+  drawDups();
+}
+
+function drawScatter(){
+  const W=960,H=566,mL=58,mR=26,mT=26,mB=52;
+  const pw=W-mL-mR, ph=H-mT-mB;
+  const maxHit=Math.max(...DATA.patterns.map(p=>p.hit_rate), 0.01);
+  const minHit=Math.min(...DATA.patterns.map(p=>p.hit_rate), maxHit);
+  const xmin=Math.log10(Math.max(minHit*0.6, 1e-5));
+  const xmax=Math.log10(maxHit*1.3);
+  const X=(r)=>mL+(Math.log10(Math.max(r,1e-6))-xmin)/(xmax-xmin)*pw;
+  const Y=(k)=>mT+(1-k)*ph;
+  const maxH=Math.max(...DATA.patterns.map(p=>p.hits),1);
+  const R=(h)=>3.2+Math.sqrt(h)*(12/Math.sqrt(maxH));
+  // label the biggest hitters + the strongest keepers
+  const byHit=[...DATA.patterns].sort((a,b)=>b.hits-a.hits).slice(0,7).map(p=>p.name);
+  const byKeep=DATA.patterns.filter(p=>p.hits>=8).sort((a,b)=>b.keep_rate-a.keep_rate).slice(0,6).map(p=>p.name);
+  const labelSet=new Set([...byHit,...byKeep]);
+  let s='';
+  s+=`<rect x="${mL}" y="${mT}" width="${pw*0.5}" height="${ph*0.5}" fill="var(--keep-wash)"/>`;
+  s+=`<rect x="${mL+pw*0.5}" y="${mT+ph*0.5}" width="${pw*0.5}" height="${ph*0.5}" fill="var(--noise-wash)"/>`;
+  [0,.25,.5,.75,1].forEach(k=>{const y=Y(k);
+    s+=`<line class="grid" x1="${mL}" y1="${y.toFixed(1)}" x2="${mL+pw}" y2="${y.toFixed(1)}"/>`;
+    s+=`<text class="tick" x="${mL-10}" y="${(y+4).toFixed(1)}" text-anchor="end">${k*100}%</text>`;});
+  // x ticks at nice log positions within range
+  [0.0002,0.0005,0.001,0.002,0.005,0.01,0.02,0.05,0.1].forEach(r=>{
+    if(Math.log10(r)<xmin||Math.log10(r)>xmax) return;
+    const x=X(r);
+    const lab=(r*100)>=1?(r*100).toFixed(0)+'%':(r*100).toFixed(r>=0.001?1:2)+'%';
+    s+=`<line class="grid" x1="${x.toFixed(1)}" y1="${mT}" x2="${x.toFixed(1)}" y2="${mT+ph}"/>`;
+    s+=`<text class="tick" x="${x.toFixed(1)}" y="${mT+ph+20}" text-anchor="middle">${lab}</text>`;});
+  s+=`<line class="axis" x1="${mL}" y1="${mT+ph}" x2="${mL+pw}" y2="${mT+ph}"/>`;
+  s+=`<line class="axis" x1="${mL}" y1="${mT}" x2="${mL}" y2="${mT+ph}"/>`;
+  s+=`<text class="axis-title" x="${mL+pw}" y="${mT+ph+42}" text-anchor="end">How common  →  (rarer at left)</text>`;
+  s+=`<text class="axis-title" transform="translate(${mL-42},${mT+16}) rotate(-90)" text-anchor="end">Share kept  ↑</text>`;
+  s+=`<text class="quad-label" x="${mL+8}" y="${mT+16}" fill="var(--keep)">◤ prize · rare &amp; kept</text>`;
+  s+=`<text class="quad-label" x="${mL+pw-8}" y="${mT+ph-10}" text-anchor="end" fill="var(--noise)">noise · common &amp; skipped ◢</text>`;
+  const pts=[...DATA.patterns].sort((a,b)=>b.hits-a.hits);
+  pts.forEach(p=>{const x=X(p.hit_rate),y=Y(p.keep_rate),r=R(p.hits),c=keepColor(p.keep_rate);
+    s+=`<circle class="dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${c}" fill-opacity="0.82" stroke="${c}"><title>${p.name} — ${p.hits} hits, ${p.kept} kept (${pct(p.keep_rate,0)})</title></circle>`;});
+  pts.forEach(p=>{if(!labelSet.has(p.name)) return;
+    const x=X(p.hit_rate),y=Y(p.keep_rate),r=R(p.hits);
+    const left=x>mL+pw*0.72; const tx=left?(x-r-6):(x+r+6);
+    s+=`<text class="pt-label" x="${tx.toFixed(1)}" y="${(y+3.5).toFixed(1)}" text-anchor="${left?'end':'start'}">${p.name}</text>`;});
+  $('#scatter').innerHTML=s;
+}
+
+function rankRow(p,color){
+  return `<div class="row"><div class="nm" title="${p.name}">${p.name}</div>
+    <div class="rate" style="color:${color}">${pct(p.keep_rate,0)}</div>
+    <div class="meta"><span class="track"><i style="width:${(p.keep_rate*100).toFixed(0)}%;background:${color}"></i></span>
+    <span class="hits">${p.kept}/${p.hits} kept</span></div></div>`;
+}
+function drawLists(){
+  const noise=DATA.patterns.filter(p=>p.hits>=20&&p.keep_rate<=0.15).sort((a,b)=>b.hits-a.hits).slice(0,10);
+  const keepers=DATA.patterns.filter(p=>p.hits>=10&&p.keep_rate>=0.5).sort((a,b)=>b.keep_rate-a.keep_rate).slice(0,10);
+  $('#noise').innerHTML=noise.length?noise.map(p=>rankRow(p,'var(--noise)')).join(''):'<div class="row"><div class="nm" style="color:var(--ink-faint)">Not enough data yet</div></div>';
+  $('#keepers').innerHTML=keepers.length?keepers.map(p=>rankRow(p,'var(--keep)')).join(''):'<div class="row"><div class="nm" style="color:var(--ink-faint)">Not enough data yet</div></div>';
+}
+function drawDups(){
+  const dups=DATA.patterns.filter(p=>p.aliases&&p.aliases.length>1&&p.hits>=8).sort((a,b)=>b.hits-a.hits);
+  if(!dups.length){ $('#dupsec').style.display='none'; return; }
+  $('#dups').innerHTML=dups.map(p=>`
+    <div class="dup"><div class="top"><span class="cnt">${p.hits} shared hits</span><span class="cnt" style="color:var(--ink-faint)">${pct(p.keep_rate,0)} kept</span></div>
+    <div class="names">${p.aliases.map((a,i)=>`<span class="chip2${i===0?' head':''}">${a}</span>`).join('')}</div></div>`).join('');
+  const from=dups.reduce((a,p)=>a+p.aliases.length,0);
+  $('#dupcall').innerHTML=`Merging these <b>${dups.length}</b> groups collapses <b>${from}</b> pattern names into <b>${dups.length}</b> — the clearest, lowest-risk first cut toward a leaner core set, straight from your own data.`;
+}
+</script>
+</body>
+</html>

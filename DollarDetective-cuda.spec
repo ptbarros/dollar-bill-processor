@@ -16,6 +16,7 @@ datas = [
     ('best.pt', '.'),        # torch YOLO model drives inference in this edition
     ('config.yaml', '.'),
     ('assets/icon.png', 'assets'),   # window / taskbar icon
+    ('gui/insights_template.html', 'gui'),  # Tools -> Insights report template
 ]
 # NOTE: best.onnx is deliberately NOT bundled so load_detector uses the torch
 # path even if the runtime hook were bypassed.

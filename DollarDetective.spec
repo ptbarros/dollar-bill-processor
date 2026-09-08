@@ -16,6 +16,7 @@ datas = [
     ('best.pt', '.'),        # only needs to exist; ONNX sibling drives inference
     ('config.yaml', '.'),
     ('assets/icon.png', 'assets'),   # window / taskbar icon
+    ('gui/insights_template.html', 'gui'),  # Tools -> Insights report template
 ]
 # patterns/ tree, preserving structure (skip caches and the writable user dir --
 # user patterns live in the per-user data dir, not the read-only bundle).

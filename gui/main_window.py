@@ -278,6 +278,11 @@ class MainWindow(QMainWindow):
         overlay_colors_action.triggered.connect(self._open_overlay_colors)
         tools_menu.addAction(overlay_colors_action)
 
+        insights_action = QAction("&Insights Report...", self)
+        insights_action.setToolTip("Pattern hit-rate vs keep-rate across your full scan history")
+        insights_action.triggered.connect(self._open_insights)
+        tools_menu.addAction(insights_action)
+
         # Help menu
         help_menu = menubar.addMenu("&Help")
 
@@ -562,6 +567,16 @@ class MainWindow(QMainWindow):
         if cropped_results:
             self.results_list.mark_cropped(cropped_results)
             self._mark_session_dirty()
+            # Record the keep signal in the ledger (best-effort).
+            led = self._get_ledger()
+            if led:
+                try:
+                    for r in cropped_results:
+                        if r.get('serial'):
+                            led.mark_kept([r['serial']],
+                                          series_year=r.get('series_year', ''))
+                except Exception as e:
+                    print(f"Ledger mark_kept failed: {e}")
 
         # Generate printable labels file
         self._generate_labels(results, output_dir)
@@ -1712,6 +1727,21 @@ class MainWindow(QMainWindow):
         self.processing_thread.result_ready.connect(self._on_result_ready)
         self.processing_thread.processing_complete.connect(self._on_processing_complete)
         self.processing_thread.error_occurred.connect(self._on_processing_error)
+
+        # Open a ledger session for this batch (best-effort).
+        self._ledger_session = None
+        led = self._get_ledger()
+        if led:
+            try:
+                from version import __version__
+                self._ledger_session = led.start_session(
+                    source_folder=Path(input_dir).name,
+                    label=str(input_dir),
+                    app_version=__version__,
+                )
+            except Exception as e:
+                print(f"Ledger session start failed: {e}")
+
         self.processing_thread.start()
 
     @Slot(int, int, str)
@@ -1726,10 +1756,103 @@ class MainWindow(QMainWindow):
         """Handle a single result from processing."""
         self.current_results.append(result)
         self.results_list.add_result(result)
+        # Persist to the bill ledger (seen-before history, lifetime stats,
+        # and the Insights report). Best-effort: never let it break processing.
+        self._ledger_record(result)
         # Mark session as dirty for autosave
         self._mark_session_dirty()
         # Force UI to update immediately (keeps the UI responsive during processing)
         QApplication.processEvents()
+
+    # ------------------------------------------------------------------
+    # Bill ledger (persistent per-bill history) — see ledger.py
+    # ------------------------------------------------------------------
+    def _get_ledger(self):
+        """Lazily open the persistent bill ledger. Returns None if unavailable
+        (a ledger failure must never block scanning or cropping)."""
+        if getattr(self, "_ledger_obj", "unset") == "unset":
+            self._ledger_obj = None
+            try:
+                from ledger import Ledger
+                from resource_path import user_data_dir
+                self._ledger_obj = Ledger(user_data_dir() / "ledger.db")
+            except Exception as e:
+                print(f"Ledger unavailable: {e}")
+        return self._ledger_obj
+
+    @staticmethod
+    def _ledger_float(val):
+        """Parse a possibly-formatted numeric result field (e.g. '0.95')."""
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
+    def _ledger_record(self, result: dict):
+        """Record one processed bill into the ledger (best-effort)."""
+        led = self._get_ledger()
+        if not led:
+            return
+        try:
+            info = led.record(
+                getattr(self, "_ledger_session", None),
+                serial=result.get("serial"),
+                series_year=result.get("series_year", ""),
+                patterns=result.get("fancy_types"),
+                is_fancy=result.get("is_fancy"),
+                confidence=self._ledger_float(result.get("confidence")),
+                needs_review=bool(result.get("needs_review")),
+                error=result.get("error") or None,
+                stack_position=result.get("position"),
+                front_file=result.get("front_file"),
+                back_file=result.get("back_file"),
+                baseline_variance=self._ledger_float(result.get("baseline_variance")),
+                seal_x=self._ledger_float(result.get("seal_x")),
+                seal_y=self._ledger_float(result.get("seal_y")),
+                seal_containment=self._ledger_float(result.get("seal_containment")),
+                star_detected=bool(result.get("star_detected")),
+                front_plate=result.get("front_plate", ""),
+                back_plate=result.get("back_plate", ""),
+                potential_mule=bool(result.get("potential_mule")),
+            )
+            # Stash prior-history on the result so a future badge can show it.
+            if info and info.get("seen_before"):
+                result["seen_before"] = True
+                result["times_seen"] = (info.get("times_seen") or 0) + 1
+                result["prev_kept"] = bool(info.get("kept"))
+        except Exception as e:
+            print(f"Ledger record failed: {e}")
+
+    def _open_insights(self):
+        """Render the Insights report from the ledger and open it in a browser."""
+        import json
+        import webbrowser
+        from datetime import datetime
+        led = self._get_ledger()
+        if not led:
+            QMessageBox.warning(self, "Insights",
+                                "The bill ledger isn't available on this system.")
+            return
+        try:
+            payload = {
+                "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "stats": led.stats(),
+                "report": led.report_data(),
+            }
+        except Exception as e:
+            QMessageBox.warning(self, "Insights", f"Could not read the ledger:\n{e}")
+            return
+
+        try:
+            from resource_path import user_data_dir
+            tmpl_path = Path(__file__).parent / "insights_template.html"
+            html = tmpl_path.read_text(encoding="utf-8")
+            html = html.replace("__LEDGER_DATA__", json.dumps(payload))
+            out = user_data_dir() / "insights_report.html"
+            out.write_text(html, encoding="utf-8")
+            webbrowser.open(out.as_uri())
+        except Exception as e:
+            QMessageBox.warning(self, "Insights", f"Could not build the report:\n{e}")
 
     @Slot(dict)
     def _on_processing_complete(self, summary: dict):
