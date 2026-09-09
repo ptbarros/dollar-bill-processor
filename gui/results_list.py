@@ -1842,16 +1842,16 @@ class ResultsList(QWidget):
                     finally:
                         QApplication.restoreOverrideCursor()
         # Re-render only the Patterns column in place (keep order + selection).
-        green, black = QBrush(QColor("#2e7d32")), QBrush(QColor("#000000"))
+        # Leave the cell's existing color alone — the normal render already sets
+        # a readable color, and green text over the fancy green highlight would
+        # vanish. A bill dropping out of the viewed set shows an empty "-".
         for i in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(i)
             result = item.data(0, Qt.UserRole)
             if result is None:
                 continue
-            shown = self._patterns_for_result(result)
-            item.setText(2, self._format_patterns_display(shown) or "-")
-            # Color the cell so a bill dropping out of the viewed set reads clearly.
-            item.setForeground(2, green if shown else black)
+            item.setText(2, self._format_patterns_display(
+                self._patterns_for_result(result)) or "-")
         self._update_summary()
 
     def _reclassify_all(self):
