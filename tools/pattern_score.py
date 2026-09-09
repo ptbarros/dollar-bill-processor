@@ -235,13 +235,23 @@ def print_report(rows, have_keep, have_demand, top):
               f"{r['score']:>6.3f}  {'*' if r['in_essentials'] else ''}")
 
 
-def essentials_delta(rows, have_keep, have_demand):
-    """What the top scores would ADD to / DROP from the current Essentials set."""
+def essentials_delta(rows, have_keep, have_demand, protect_tier):
+    """What the top scores would ADD to / DROP from the current Essentials set.
+
+    Crown-jewel guard: patterns at/below `protect_tier` (the rarest) are NEVER
+    dropped — they are so rare they appear in neither eBay sales nor the keep
+    sample, so demand+keep are structurally blind to them and score them ~0.
+    Rarity alone can't outweigh two zeroed axes, so we protect them by policy
+    (see memory: include crown-jewels regardless of local frequency)."""
     in_ess = [r for r in rows if r["in_essentials"]]
+    protected = [r for r in in_ess if r["tier"] <= protect_tier]
+    protected_names = {r["name"] for r in protected}
     top_cut = len(in_ess)  # compare same-size cut
     top = set(r["name"] for r in rows[:top_cut])
-    would_add = [r for r in rows[:top_cut] if not r["in_essentials"]]
-    would_drop = [r for r in in_ess if r["name"] not in top]
+    would_add = [r for r in rows[:top_cut]
+                 if not r["in_essentials"] and r["tier"] > protect_tier]
+    would_drop = [r for r in in_ess
+                  if r["name"] not in top and r["name"] not in protected_names]
     print("\n" + "-" * 60)
     if not have_keep:
         print("CAVEAT: no keep axis — patterns whose value is KEEP-driven with")
@@ -253,6 +263,10 @@ def essentials_delta(rows, have_keep, have_demand):
         print("patterns), so same-family variants inherit one demand and tie;")
         print("keep + tier are what separate them.")
     print(f"ESSENTIALS DELTA (top {top_cut} by score vs current {len(in_ess)}):")
+    if protected:
+        print(f"  PROTECTED {len(protected)} crown-jewels (tier <= "
+              f"{protect_tier}, kept regardless of score): "
+              + ", ".join(sorted(r["display"][:20] for r in protected))[:200])
     print(f"  score would ADD {len(would_add)} not in Essentials:")
     for r in would_add[:15]:
         print(f"    + {r['display'][:34]:<34} score {r['score']:.3f} "
@@ -294,6 +308,9 @@ def main(argv=None):
     ap.add_argument("--essentials", default="essentials_default.json",
                     help="Essentials selection JSON (for the * flag / delta).")
     ap.add_argument("--top", type=int, default=40, help="Rows to print.")
+    ap.add_argument("--protect-tier", type=int, default=2,
+                    help="Never drop patterns at/below this tier "
+                         "(crown-jewel floor). Default 2.")
     ap.add_argument("--out", help="Directory for CSV/JSON.")
     args = ap.parse_args(argv)
 
@@ -317,7 +334,7 @@ def main(argv=None):
     rows, have_keep, have_demand = build_rows(patterns, demand, keep, essentials)
     print_report(rows, have_keep, have_demand, args.top)
     if essentials:
-        essentials_delta(rows, have_keep, have_demand)
+        essentials_delta(rows, have_keep, have_demand, args.protect_tier)
     if args.out:
         write_outputs(args.out, rows)
     return 0
