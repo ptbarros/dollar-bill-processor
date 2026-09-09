@@ -255,36 +255,16 @@ class PatternDialog(QDialog):
         del_preset_btn.setToolTip("Delete the selected saved set.")
         del_preset_btn.clicked.connect(self._delete_preset)
         preset_layout.addWidget(del_preset_btn)
-        left_layout.addLayout(preset_layout)
+        # Framed at the very top of the panel (above the filter) so the active
+        # pattern set is the first thing you see on this screen.
+        left_layout.insertLayout(0, preset_layout)
         self._refresh_preset_combo()
 
-        # Label-override tools (bulk rename + backup/restore). Display-label
-        # overrides live in user_settings.yaml keyed by pattern name; these make
-        # a big relabel (e.g. dropping the "CS-" prefix across the Green Guide)
-        # one click and back-up-able so the work can't be lost.
-        labels_layout = QHBoxLayout()
-        labels_layout.addWidget(QLabel("Labels:"))
-        strip_cs_btn = QPushButton('Strip "CS-"')
-        strip_cs_btn.setToolTip(
-            'Remove the leading "CS-" from every pattern label at once (sets a '
-            'display-label override per pattern). Reversible via Reset or Restore.')
-        strip_cs_btn.clicked.connect(self._strip_cs_labels)
-        labels_layout.addWidget(strip_cs_btn)
-
-        backup_labels_btn = QPushButton("Back Up…")
-        backup_labels_btn.setToolTip(
-            "Save all your custom pattern labels to a JSON file you can keep as a "
-            "backup or move to another machine.")
-        backup_labels_btn.clicked.connect(self._backup_labels)
-        labels_layout.addWidget(backup_labels_btn)
-
-        restore_labels_btn = QPushButton("Restore…")
-        restore_labels_btn.setToolTip("Load custom pattern labels from a backup file.")
-        restore_labels_btn.clicked.connect(self._restore_labels)
-        labels_layout.addWidget(restore_labels_btn)
-
-        labels_layout.addStretch()
-        left_layout.addLayout(labels_layout)
+        # (Removed from the UI while decluttering: the "Labels:" row — Strip
+        # "CS-", Back Up…, Restore…. Label back up/restore is redundant with the
+        # app's File -> Backup, which already includes custom labels. The
+        # _strip_cs_labels/_backup_labels/_restore_labels methods are kept in
+        # case we reintroduce them, e.g. in a Tools menu.)
 
         splitter.addWidget(left_panel)
 
