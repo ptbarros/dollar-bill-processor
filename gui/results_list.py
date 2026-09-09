@@ -1893,8 +1893,26 @@ class ResultsList(QWidget):
         return live != shown
 
     def _toggle_lock_order(self, checked):
-        """Freeze/unfreeze row order for steady side-by-side compare."""
-        self.tree.setSortingEnabled(not checked)
+        """Freeze/unfreeze row order for steady side-by-side compare, and mark
+        the locked (last-sorted) column header with a lock so the state is
+        obvious even though the sort arrow disappears."""
+        header = self.tree.header()
+        hitem = self.tree.headerItem()
+        if checked:
+            col = header.sortIndicatorSection() if header else -1
+            self.tree.setSortingEnabled(False)
+            self.lock_order_btn.setText("🔒 Order locked")
+            if hitem is not None and col is not None and col >= 0:
+                self._locked_col = col
+                self._locked_col_text = hitem.text(col)
+                hitem.setText(col, f"🔒 {self._locked_col_text}")
+        else:
+            col = getattr(self, "_locked_col", None)
+            if hitem is not None and col is not None and col >= 0:
+                hitem.setText(col, getattr(self, "_locked_col_text", hitem.text(col)))
+            self._locked_col = None
+            self.tree.setSortingEnabled(True)
+            self.lock_order_btn.setText("🔒 Lock order")
 
     def _reclassify_all(self):
         """Re-run pattern matching on all results."""
