@@ -466,25 +466,31 @@ class PatternEngineV3:
             # Check if it's a Lua pattern
             if pattern_name in self.lua_patterns:
                 info = self.lua_patterns[pattern_name]
-                if info.enabled:
-                    ctx = create_context(serial)
-                    # Inject pattern's data if available
-                    if info.data is not None:
-                        ctx['data'] = info.data
-                    if info.data_by_key is not None:
-                        ctx['data_by_key'] = info.data_by_key
-                    result = self.sandbox.execute(info.script, ctx)
-                    if result.success and result.matched:
-                        # Merge Lua highlights
-                        self._merge_lua_highlights(all_highlights, result.highlights, pattern_name)
-                        # Add connectors
-                        for conn in result.connectors:
-                            conn['pattern'] = pattern_name
-                            all_connectors.append(conn)
-                        # Add group boxes
-                        for gb in result.group_boxes:
-                            gb['pattern'] = pattern_name
-                            all_group_boxes.append(gb)
+                # Draw the overlay for any explicitly-requested pattern
+                # regardless of its enabled state: callers pass a specific
+                # pattern the bill already matched (the selected overlay) or one
+                # being previewed, and want its highlights even if the set it
+                # belongs to is currently disabled — e.g. after an A/B library
+                # toggle, a bill's stored classification can reference a
+                # now-disabled pattern. result.matched is the real gate.
+                ctx = create_context(serial)
+                # Inject pattern's data if available
+                if info.data is not None:
+                    ctx['data'] = info.data
+                if info.data_by_key is not None:
+                    ctx['data_by_key'] = info.data_by_key
+                result = self.sandbox.execute(info.script, ctx)
+                if result.success and result.matched:
+                    # Merge Lua highlights
+                    self._merge_lua_highlights(all_highlights, result.highlights, pattern_name)
+                    # Add connectors
+                    for conn in result.connectors:
+                        conn['pattern'] = pattern_name
+                        all_connectors.append(conn)
+                    # Add group boxes
+                    for gb in result.group_boxes:
+                        gb['pattern'] = pattern_name
+                        all_group_boxes.append(gb)
 
         return {'highlights': all_highlights, 'connectors': all_connectors, 'group_boxes': all_group_boxes}
 
