@@ -218,6 +218,17 @@ class ResultsList(QWidget):
         filter_layout.addWidget(self.view_set_combo)
         self._refresh_view_set_combo()
 
+        # Lock order: freeze the current row order so switching view-sets (or
+        # re-sorting) doesn't reshuffle rows — for steady side-by-side compare.
+        self.lock_order_btn = QPushButton("🔒 Lock order")
+        self.lock_order_btn.setCheckable(True)
+        self.lock_order_btn.setToolTip(
+            "Freeze the current row order so flipping between view-sets doesn't "
+            "reshuffle the rows (even when sorted by Patterns). Toggle off to "
+            "sort again. Temporary — for comparing sets side by side.")
+        self.lock_order_btn.toggled.connect(self._toggle_lock_order)
+        filter_layout.addWidget(self.lock_order_btn)
+
         # Pattern filter dropdown
         self.pattern_filter = QComboBox()
         self.pattern_filter.addItem("All Patterns", "")
@@ -763,6 +774,11 @@ class ResultsList(QWidget):
                 for i in range(12):
                     item.setBackground(i, QBrush(QColor(211, 47, 47)))    # Red background
                     item.setForeground(i, QBrush(QColor(255, 255, 255)))  # White text
+
+            # Remember the base Patterns-cell colors so the compare-diff
+            # highlight can toggle amber on/off and restore them cleanly.
+            item.setData(2, Qt.UserRole + 1, item.background(2))
+            item.setData(2, Qt.UserRole + 2, item.foreground(2))
 
             self.tree.addTopLevelItem(item)
 
@@ -1842,9 +1858,10 @@ class ResultsList(QWidget):
                     finally:
                         QApplication.restoreOverrideCursor()
         # Re-render only the Patterns column in place (keep order + selection).
-        # Leave the cell's existing color alone — the normal render already sets
-        # a readable color, and green text over the fancy green highlight would
-        # vanish. A bill dropping out of the viewed set shows an empty "-".
+        # Bills whose match set DIFFERS from the live enabled set get an amber
+        # cell so a flick between sets shows exactly what changed; matching
+        # bills restore the base cell color captured at render time.
+        amber, black = QBrush(QColor(255, 193, 7)), QBrush(QColor(0, 0, 0))
         for i in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(i)
             result = item.data(0, Qt.UserRole)
@@ -1852,7 +1869,32 @@ class ResultsList(QWidget):
                 continue
             item.setText(2, self._format_patterns_display(
                 self._patterns_for_result(result)) or "-")
+            if self._view_differs(result):
+                item.setBackground(2, amber)
+                item.setForeground(2, black)
+            else:
+                base_bg = item.data(2, Qt.UserRole + 1)
+                base_fg = item.data(2, Qt.UserRole + 2)
+                item.setBackground(2, base_bg if base_bg is not None else QBrush())
+                item.setForeground(2, base_fg if base_fg is not None else QBrush())
         self._update_summary()
+
+    def _view_differs(self, result):
+        """True if the viewed set matches this bill differently than the live
+        enabled set (only meaningful while viewing a non-live set)."""
+        if self._view_set is None:
+            return False
+
+        def names(s):
+            return {n.strip() for n in (s or '').split(',') if n.strip()}
+        live = names(result.get('fancy_types', ''))
+        shown = names(self._view_cache.get(self._view_set, {}).get(
+            self._result_key(result), ''))
+        return live != shown
+
+    def _toggle_lock_order(self, checked):
+        """Freeze/unfreeze row order for steady side-by-side compare."""
+        self.tree.setSortingEnabled(not checked)
 
     def _reclassify_all(self):
         """Re-run pattern matching on all results."""
