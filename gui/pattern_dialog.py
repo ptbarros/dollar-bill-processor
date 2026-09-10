@@ -1747,16 +1747,29 @@ class PatternDialog(QDialog):
     _FULL_PRESET_LABEL = "★ Full library (all patterns on)"
     _ESSENTIALS_LABEL = "★ Essentials (recommended lean set)"
 
-    def _essentials_states(self):
-        """The bundled Essentials default selection ({pattern: enabled}), or None."""
+    # Built-in presets shipped with the app as read-only JSON files: they can't
+    # be clobbered by a settings reset and reach every install (bundled in the
+    # spec). Listed before any user-saved presets. Ordered.
+    _BUNDLED_PRESET_FILES = ["essentials_preset.json", "original_preset.json"]
+
+    def _bundled_presets(self):
+        """[(name, pattern_states)] for the shipped built-in presets."""
         import json
         from pathlib import Path
-        path = Path(__file__).resolve().parent.parent / "essentials_default.json"
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            return data.get("pattern_states") or {}
-        except Exception:
-            return None
+        out = []
+        base = Path(__file__).resolve().parent.parent
+        for fn in self._BUNDLED_PRESET_FILES:
+            try:
+                data = json.loads((base / fn).read_text(encoding="utf-8"))
+                ps = data.get("pattern_states") or {}
+                if ps:
+                    out.append((data.get("name") or Path(fn).stem, ps))
+            except Exception:
+                pass
+        return out
+
+    def _bundled_preset_names(self):
+        return [nm for nm, _ in self._bundled_presets()]
 
     def _refresh_preset_combo(self):
         combo = getattr(self, "preset_combo", None)
@@ -1764,42 +1777,30 @@ class PatternDialog(QDialog):
             return
         combo.blockSignals(True)
         combo.clear()
-        # Only saved sets are listed now (the built-in "Full library" and
-        # "Essentials" entries were removed in favor of shipped saved presets).
-        # "Enable All" already covers the full library in one click.
+        # Built-in bundled presets first (Essentials / Original), then any the
+        # user saved. "Enable All" covers the full library in one click.
+        bundled = self._bundled_preset_names()
+        for nm in bundled:
+            combo.addItem(nm)
         for name in sorted(self.settings.get_selection_presets()):
-            combo.addItem(name)
+            if name not in bundled:
+                combo.addItem(name)
         combo.blockSignals(False)
 
     def _apply_preset(self):
         name = self.preset_combo.currentText()
         if not name:
             return
-        if name == self._FULL_PRESET_LABEL:
-            if QMessageBox.question(
-                    self, "Full Library",
-                    "Enable every installed pattern?\n\nTip: 'Save Current As…' first "
-                    "if you want to keep your current set.",
-                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+        # A built-in bundled preset?
+        for nm, pstates in self._bundled_presets():
+            if nm == name:
+                applied = self._apply_selection_states(pstates, {})
+                on = sum(1 for v in pstates.values() if v)
+                QMessageBox.information(
+                    self, "Pattern set applied",
+                    f"Switched to '{name}' — {on} patterns enabled "
+                    f"({applied} applied here).")
                 return
-            pstates = {n: True for n in self.engine.lua_patterns}
-            self._apply_selection_states(pstates, {})
-            QMessageBox.information(self, "Full Library",
-                                    f"Enabled all {len(pstates)} patterns.")
-            return
-        if name == self._ESSENTIALS_LABEL:
-            pstates = self._essentials_states() or {}
-            if not pstates:
-                QMessageBox.warning(self, "Essentials",
-                                    "The bundled Essentials set couldn't be loaded.")
-                return
-            applied = self._apply_selection_states(pstates, {})
-            on = sum(1 for v in pstates.values() if v)
-            QMessageBox.information(
-                self, "Essentials applied",
-                f"Switched to the Essentials set — {on} patterns enabled "
-                f"({applied} applied here).")
-            return
         preset = self.settings.get_selection_presets().get(name)
         if not preset:
             return
@@ -1817,8 +1818,10 @@ class PatternDialog(QDialog):
         name = (name or "").strip()
         if not ok or not name:
             return
-        if name in (self._FULL_PRESET_LABEL, self._ESSENTIALS_LABEL):
-            QMessageBox.warning(self, "Save Pattern Set", "That name is reserved.")
+        if name in (self._FULL_PRESET_LABEL, self._ESSENTIALS_LABEL) or \
+                name in self._bundled_preset_names():
+            QMessageBox.warning(self, "Save Pattern Set",
+                                f"'{name}' is a built-in set name — pick another.")
             return
         if name in self.settings.get_selection_presets() and QMessageBox.question(
                 self, "Save Pattern Set", f"Overwrite the existing '{name}' set?",
@@ -1834,7 +1837,8 @@ class PatternDialog(QDialog):
 
     def _delete_preset(self):
         name = self.preset_combo.currentText()
-        if name in (self._FULL_PRESET_LABEL, self._ESSENTIALS_LABEL):
+        if name in (self._FULL_PRESET_LABEL, self._ESSENTIALS_LABEL) or \
+                name in self._bundled_preset_names():
             QMessageBox.information(self, "Delete Pattern Set",
                                     "That's a built-in set — nothing to delete.")
             return
