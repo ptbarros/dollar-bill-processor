@@ -22,6 +22,7 @@ debug_output/
 *.csv
 !patterns/core/low_runs.csv
 !patterns/core/zip_codes.csv
+!patterns/Essentials/*.csv
 serial_numbers_*.csv
 results.csv
 non_fancy_files.txt
@@ -50,9 +51,6 @@ Jan23 Test/
 # User data files
 user_settings.yaml
 user_patterns.yaml
-
-# Generated Essentials test library (regenerate: tools/build_essentials_library.py)
-patterns/Essentials/
 corrections.yaml
 .session_recovery.json
 

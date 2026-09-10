@@ -1756,24 +1756,6 @@ class ResultsList(QWidget):
     _VIEW_FULL_LABEL = "View: ★ Full library"
     _VIEW_ESSENTIALS_LABEL = "View: ★ Essentials"
 
-    _BUNDLED_PRESET_FILES = ["essentials_preset.json", "original_preset.json"]
-
-    def _bundled_presets(self):
-        """[(name, pattern_states)] for the shipped built-in presets (mirrors
-        Pattern Manager) so the same Essentials/Original sets appear here."""
-        import json
-        out = []
-        base = Path(__file__).resolve().parent.parent
-        for fn in self._BUNDLED_PRESET_FILES:
-            try:
-                data = json.loads((base / fn).read_text(encoding="utf-8"))
-                ps = data.get("pattern_states") or {}
-                if ps:
-                    out.append((data.get("name") or Path(fn).stem, ps))
-            except Exception:
-                pass
-        return out
-
     def _refresh_view_set_combo(self):
         """Populate the view-set dropdown: live enabled set + built-ins +
         saved selection presets (mirrors Pattern Manager)."""
@@ -1785,13 +1767,9 @@ class ResultsList(QWidget):
         combo.clear()
         combo.addItem(self._VIEW_LIVE_LABEL)
         combo.addItem(self._VIEW_FULL_LABEL)
-        bundled = [nm for nm, _ in self._bundled_presets()]
-        for nm in bundled:
-            combo.addItem(nm)
         try:
             for name in sorted(self.settings.get_selection_presets()):
-                if name not in bundled:
-                    combo.addItem(name)
+                combo.addItem(name)
         except Exception:
             pass
         idx = combo.findText(prev)
@@ -1805,9 +1783,6 @@ class ResultsList(QWidget):
             return None
         if label == self._VIEW_FULL_LABEL:
             return set(self.pattern_engine.lua_patterns.keys())
-        for nm, ps in self._bundled_presets():
-            if nm == label:
-                return {n for n, on in ps.items() if on}
         preset = self.settings.get_selection_presets().get(label)
         if not preset:
             return None

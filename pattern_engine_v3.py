@@ -178,8 +178,12 @@ class PatternEngineV3:
             # Default: enabled unless explicitly disabled in settings
             enabled = True
             if self.settings:
-                # Check library enabled state first
-                lib_enabled = self.settings.get_library_enabled(library, default=True)
+                # Check library enabled state first. The bundled "Essentials"
+                # library ships DISABLED by default (it duplicates concepts that
+                # also live in core/Nicks/Green Guide, so leaving it on would
+                # double-fire) — the user enables it deliberately to try it.
+                lib_default = library != "Essentials"
+                lib_enabled = self.settings.get_library_enabled(library, default=lib_default)
                 # Check pattern-specific state (overrides library)
                 pattern_enabled = self.settings.get_pattern_enabled(name, default=lib_enabled)
                 enabled = pattern_enabled

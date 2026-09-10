@@ -18,8 +18,6 @@ datas = [
     ('assets/icon.png', 'assets'),   # window / taskbar icon
     ('gui/insights_template.html', 'gui'),  # Tools -> Insights report template
     ('essentials_default.json', '.'),  # bundled "Essentials" lean pattern preset
-    ('essentials_preset.json', '.'),   # bundled built-in "Essentials" preset
-    ('original_preset.json', '.'),     # bundled built-in "Original" preset
 ]
 # patterns/ tree, preserving structure (skip caches and the writable user dir --
 # user patterns live in the per-user data dir, not the read-only bundle).
