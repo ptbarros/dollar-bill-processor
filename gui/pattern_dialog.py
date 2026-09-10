@@ -1764,9 +1764,9 @@ class PatternDialog(QDialog):
             return
         combo.blockSignals(True)
         combo.clear()
-        combo.addItem(self._FULL_PRESET_LABEL)
-        if self._essentials_states() is not None:
-            combo.addItem(self._ESSENTIALS_LABEL)
+        # Only saved sets are listed now (the built-in "Full library" and
+        # "Essentials" entries were removed in favor of shipped saved presets).
+        # "Enable All" already covers the full library in one click.
         for name in sorted(self.settings.get_selection_presets()):
             combo.addItem(name)
         combo.blockSignals(False)

@@ -1777,8 +1777,9 @@ class ResultsList(QWidget):
         combo.clear()
         combo.addItem(self._VIEW_LIVE_LABEL)
         combo.addItem(self._VIEW_FULL_LABEL)
-        if self._essentials_view_states() is not None:
-            combo.addItem(self._VIEW_ESSENTIALS_LABEL)
+        # (Built-in "★ Essentials" removed — it pointed at the old bundled 86-set
+        # and now clashes by name with the shipped "Essentials" saved preset,
+        # which is listed below with the other saved sets.)
         try:
             for name in sorted(self.settings.get_selection_presets()):
                 combo.addItem(name)
