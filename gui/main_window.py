@@ -295,10 +295,15 @@ class MainWindow(QMainWindow):
         insights_action.triggered.connect(self._open_insights)
         tools_menu.addAction(insights_action)
 
-        coverage_action = QAction("&Coverage Check (Core vs Full)...", self)
-        coverage_action.setToolTip("See what a lean Core pattern set would miss vs the full library, on the current batch")
+        coverage_action = QAction("&Coverage Check...", self)
+        coverage_action.setToolTip("Compare your enabled patterns against a reference set (the full library or any saved pattern set) on the current batch — see what the reference would catch that you miss")
         coverage_action.triggered.connect(self._on_coverage_check)
         tools_menu.addAction(coverage_action)
+
+        strap_action = QAction("&Strap Serial Check...", self)
+        strap_action.setToolTip("Type a strap's first serial and a count — see which serials in that sequential run would be fancy, before you scan it")
+        strap_action.triggered.connect(self._on_strap_check)
+        tools_menu.addAction(strap_action)
 
         # Help menu
         help_menu = menubar.addMenu("&Help")
@@ -1921,6 +1926,16 @@ class MainWindow(QMainWindow):
             ps = (data or {}).get("pattern_states", {}) or {}
             presets[name] = {n for n, on in ps.items() if on}
         CoverageDialog(engine, results, presets, self).exec()
+
+    def _on_strap_check(self):
+        """Tools -> Strap Serial Check. Predict fancy notes in a sequential run."""
+        from .strap_check_dialog import StrapCheckDialog
+        engine = self._get_pattern_engine()
+        if not engine:
+            QMessageBox.warning(self, "Strap Serial Check",
+                                "The pattern engine isn't available.")
+            return
+        StrapCheckDialog(engine, self).exec()
 
     def _reset_ledger(self):
         """Close and forget the ledger handle so the next access reopens it
