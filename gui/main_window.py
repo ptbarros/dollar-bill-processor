@@ -296,7 +296,7 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(insights_action)
 
         coverage_action = QAction("&Coverage Check...", self)
-        coverage_action.setToolTip("Compare your enabled patterns against a reference set (the full library or any saved pattern set) on the current batch — see what the reference would catch that you miss")
+        coverage_action.setToolTip("Compare your enabled patterns against the full library on the current batch — see which bills the full library catches that your enabled set misses")
         coverage_action.triggered.connect(self._on_coverage_check)
         tools_menu.addAction(coverage_action)
 
