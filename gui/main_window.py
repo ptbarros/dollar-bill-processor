@@ -2220,7 +2220,17 @@ class MainWindow(QMainWindow):
             return  # No session to work with
 
         print("[MainWindow] Auto-loading processor for restored session...")
-        self._get_or_create_processor(silent=True)
+        # Loading the processor (YOLO/OCR models) can take a while; show a busy
+        # cursor + status so the UI doesn't look frozen during it.
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        prev_status = self.status_label.text()
+        self.status_label.setText("Preparing processor…")
+        QApplication.processEvents()
+        try:
+            self._get_or_create_processor(silent=True)
+        finally:
+            QApplication.restoreOverrideCursor()
+            self.status_label.setText(prev_status)
 
     # =========================================================================
     # Autosave & Recovery Methods
@@ -2320,12 +2330,20 @@ class MainWindow(QMainWindow):
             r = results[0]
             print(f"[Recovery] Sample result: is_fancy={r.get('is_fancy')}, needs_review={r.get('needs_review')}, align_angle={r.get('front_align_angle')}")
 
-        # Populate results list
-        for result in results:
-            self.results_list.add_result(result)
+        # Populate results list in ONE pass. Adding results one at a time
+        # (add_result) rebuilt the whole tree per bill = O(n^2) and was the bulk
+        # of the multi-second freeze on a big restore; set_results rebuilds once.
+        # Show a wait cursor + status so the load never looks frozen.
+        count = len(results)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.status_label.setText(f"Loading {count} bills…")
+        QApplication.processEvents()
+        try:
+            self.results_list.set_results(results)
+        finally:
+            QApplication.restoreOverrideCursor()
 
         # Update status
-        count = len(results)
         complete = data.get("processing_complete", False)
 
         status = f"Restored: {count} bills"
