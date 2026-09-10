@@ -160,9 +160,6 @@ class ResultsList(QWidget):
         self.filters: Dict[str, bool] = {}
         self.pattern_engine = PatternEngine()
         self.settings = get_settings()
-        # View-set (Patterns-column A/B) state.
-        self._view_set = None          # None => live enabled set (no override)
-        self._view_cache = {}          # set label -> {result_key: matches str}
         self._current_batch_path: Optional[Path] = None  # None = current session
         self._setup_ui()
 
@@ -203,31 +200,6 @@ class ResultsList(QWidget):
         self.search_edit.setPlaceholderText("Search serial...")
         self.search_edit.textChanged.connect(self._apply_filters)
         filter_layout.addWidget(self.search_edit, 1)
-
-        # View-set dropdown: re-show the Patterns column against a chosen pattern
-        # set (Essentials vs the original enabled set, saved presets, or Full)
-        # WITHOUT re-processing — a fast A/B "flicker" compare of the same bills.
-        self.view_set_combo = QComboBox()
-        self.view_set_combo.setMinimumWidth(150)
-        self.view_set_combo.setToolTip(
-            "Show the Patterns column as a chosen pattern set would match it. "
-            "Bills and order stay put — only the Patterns column changes — so "
-            "you can flip between sets to compare. Does not change your enabled "
-            "patterns or processing.")
-        self.view_set_combo.currentIndexChanged.connect(self._on_view_set_changed)
-        filter_layout.addWidget(self.view_set_combo)
-        self._refresh_view_set_combo()
-
-        # Lock order: freeze the current row order so switching view-sets (or
-        # re-sorting) doesn't reshuffle rows — for steady side-by-side compare.
-        self.lock_order_btn = QPushButton("🔒 Lock order")
-        self.lock_order_btn.setCheckable(True)
-        self.lock_order_btn.setToolTip(
-            "Freeze the current row order so flipping between view-sets doesn't "
-            "reshuffle the rows (even when sorted by Patterns). Toggle off to "
-            "sort again. Temporary — for comparing sets side by side.")
-        self.lock_order_btn.toggled.connect(self._toggle_lock_order)
-        filter_layout.addWidget(self.lock_order_btn)
 
         # Pattern filter dropdown
         self.pattern_filter = QComboBox()
@@ -488,9 +460,6 @@ class ResultsList(QWidget):
         dlog("results_list.set_results", was=fingerprint(self.results),
              now=fingerprint(results))
         self.results = results
-        # New batch => cached view-sets are stale; refresh available presets.
-        self._view_cache.clear()
-        self._refresh_view_set_combo()
         self._rebuild_pattern_filter()
         self._apply_filters()
 
@@ -499,7 +468,6 @@ class ResultsList(QWidget):
         dlog("results_list.clear", was=fingerprint(self.results))
         self.results = []
         self.filtered_results = []
-        self._view_cache.clear()
         self.tree.clear()
         self._update_summary()
 
@@ -621,10 +589,9 @@ class ResultsList(QWidget):
                 serial = f"{serial} (corrected)"
             item.setText(1, serial)
 
-            # Patterns - show display names in the column. Routed through the
-            # view-set accessor so a chosen preset re-shows this column without
-            # touching the stored (live enabled-set) classification.
-            patterns = self._patterns_for_result(result)
+            # Patterns - show display names in the column (the bill's actual
+            # matched patterns from the enabled set).
+            patterns = result.get('fancy_types', '')
             item.setText(2, self._format_patterns_display(patterns))
 
             # Confidence
@@ -774,11 +741,6 @@ class ResultsList(QWidget):
                 for i in range(12):
                     item.setBackground(i, QBrush(QColor(211, 47, 47)))    # Red background
                     item.setForeground(i, QBrush(QColor(255, 255, 255)))  # White text
-
-            # Remember the base Patterns-cell colors so the compare-diff
-            # highlight can toggle amber on/off and restore them cleanly.
-            item.setData(2, Qt.UserRole + 1, item.background(2))
-            item.setData(2, Qt.UserRole + 2, item.foreground(2))
 
             self.tree.addTopLevelItem(item)
 
@@ -1749,160 +1711,8 @@ class ResultsList(QWidget):
         # Re-select to update preview panel
         self._on_selection_changed()
 
-    # ------------------------------------------------------------------ #
-    # View-set (Patterns-column A/B compare)
-    # ------------------------------------------------------------------ #
-    _VIEW_LIVE_LABEL = "View: Enabled set"
-    _VIEW_FULL_LABEL = "View: ★ Full library"
-    _VIEW_ESSENTIALS_LABEL = "View: ★ Essentials"
-
-    def _refresh_view_set_combo(self):
-        """Populate the view-set dropdown: live enabled set + built-ins +
-        saved selection presets (mirrors Pattern Manager)."""
-        combo = getattr(self, "view_set_combo", None)
-        if combo is None:
-            return
-        prev = combo.currentText()
-        combo.blockSignals(True)
-        combo.clear()
-        combo.addItem(self._VIEW_LIVE_LABEL)
-        combo.addItem(self._VIEW_FULL_LABEL)
-        try:
-            for name in sorted(self.settings.get_selection_presets()):
-                combo.addItem(name)
-        except Exception:
-            pass
-        idx = combo.findText(prev)
-        combo.setCurrentIndex(idx if idx >= 0 else 0)
-        combo.blockSignals(False)
-
-    def _resolve_view_allowed(self, label):
-        """The set of enabled pattern names for a view-set label, or None for
-        the live enabled set (no override)."""
-        if not label or label == self._VIEW_LIVE_LABEL:
-            return None
-        if label == self._VIEW_FULL_LABEL:
-            return set(self.pattern_engine.lua_patterns.keys())
-        preset = self.settings.get_selection_presets().get(label)
-        if not preset:
-            return None
-        states = preset.get("pattern_states", {})
-        return {n for n, on in states.items() if on}
-
-    @staticmethod
-    def _result_key(result):
-        return result.get('front_file') or \
-            f"{result.get('position', '')}:{result.get('serial', '')}"
-
-    def _patterns_for_result(self, result):
-        """The Patterns-column string to show under the current view-set: the
-        stored live classification, or a cached re-match against a preset."""
-        if self._view_set is None:
-            return result.get('fancy_types', '')
-        cache = self._view_cache.get(self._view_set, {})
-        return cache.get(self._result_key(result), '')
-
-    def _compute_view_cache(self, label, allowed):
-        """Re-match every result against `allowed` (view only — never mutates
-        the stored classification), cached so re-toggling is instant."""
-        cache = {}
-        for result in self.results:
-            serial = result.get('serial', '')
-            if not serial:
-                cache[self._result_key(result)] = ''
-                continue
-            metadata = {
-                'baseline_variance': float(result.get('baseline_variance', 0) or 0),
-                'gas_pump_threshold': self.pattern_engine.get_gas_pump_threshold(),
-                'series_year': result.get('series_year', ''),
-                'front_plate': result.get('front_plate', ''),
-                'back_plate': result.get('back_plate', ''),
-            }
-            matches = self.pattern_engine.classify_reference(
-                serial, allowed, metadata)
-            cache[self._result_key(result)] = ', '.join(matches) if matches else ''
-        self._view_cache[label] = cache
-
-    def _on_view_set_changed(self):
-        """Switch the Patterns column to the chosen view-set (compute+cache on
-        first use, then just re-render — same bills, same order)."""
-        from PySide6.QtWidgets import QApplication
-        label = self.view_set_combo.currentText()
-        if label == self._VIEW_LIVE_LABEL:
-            self._view_set = None
-        else:
-            allowed = self._resolve_view_allowed(label)
-            if allowed is None:
-                self._view_set = None
-            else:
-                self._view_set = label
-                if label not in self._view_cache:
-                    QApplication.setOverrideCursor(Qt.WaitCursor)
-                    try:
-                        self._compute_view_cache(label, allowed)
-                    finally:
-                        QApplication.restoreOverrideCursor()
-        # Re-render only the Patterns column in place (keep order + selection).
-        # Bills whose match set DIFFERS from the live enabled set get an amber
-        # cell so a flick between sets shows exactly what changed; matching
-        # bills restore the base cell color captured at render time.
-        amber, black = QBrush(QColor(255, 193, 7)), QBrush(QColor(0, 0, 0))
-        for i in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(i)
-            result = item.data(0, Qt.UserRole)
-            if result is None:
-                continue
-            item.setText(2, self._format_patterns_display(
-                self._patterns_for_result(result)) or "-")
-            if self._view_differs(result):
-                item.setBackground(2, amber)
-                item.setForeground(2, black)
-            else:
-                base_bg = item.data(2, Qt.UserRole + 1)
-                base_fg = item.data(2, Qt.UserRole + 2)
-                item.setBackground(2, base_bg if base_bg is not None else QBrush())
-                item.setForeground(2, base_fg if base_fg is not None else QBrush())
-        self._update_summary()
-
-    def _view_differs(self, result):
-        """True if the viewed set matches this bill differently than the live
-        enabled set (only meaningful while viewing a non-live set)."""
-        if self._view_set is None:
-            return False
-
-        def names(s):
-            return {n.strip() for n in (s or '').split(',') if n.strip()}
-        live = names(result.get('fancy_types', ''))
-        shown = names(self._view_cache.get(self._view_set, {}).get(
-            self._result_key(result), ''))
-        return live != shown
-
-    def _toggle_lock_order(self, checked):
-        """Freeze/unfreeze row order for steady side-by-side compare, and mark
-        the locked (last-sorted) column header with a lock so the state is
-        obvious even though the sort arrow disappears."""
-        header = self.tree.header()
-        hitem = self.tree.headerItem()
-        if checked:
-            col = header.sortIndicatorSection() if header else -1
-            self.tree.setSortingEnabled(False)
-            self.lock_order_btn.setText("🔒 Order locked")
-            if hitem is not None and col is not None and col >= 0:
-                self._locked_col = col
-                self._locked_col_text = hitem.text(col)
-                hitem.setText(col, f"🔒 {self._locked_col_text}")
-        else:
-            col = getattr(self, "_locked_col", None)
-            if hitem is not None and col is not None and col >= 0:
-                hitem.setText(col, getattr(self, "_locked_col_text", hitem.text(col)))
-            self._locked_col = None
-            self.tree.setSortingEnabled(True)
-            self.lock_order_btn.setText("🔒 Lock order")
-
     def _reclassify_all(self):
         """Re-run pattern matching on all results."""
-        # A re-classify changes the live set, so any cached view-sets are stale.
-        self._view_cache.clear()
         if not self.results:
             return
 
