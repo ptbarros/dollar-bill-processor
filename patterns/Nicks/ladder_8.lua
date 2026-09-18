@@ -24,7 +24,17 @@ function match(ctx)
         return {
             matched = true,
             message = "Full 8-digit ascending ladder",
-            highlights = {{positions = {0,1,2,3,4,5,6,7}, color = "lime"}}
+            highlights = {{positions = {0,1,2,3,4,5,6,7}, color = "lime"}},
+            -- Connecting lines between boxes (Ed review), like the core Ladder.
+            connectors = {
+                connector(0,1,"lime","line"),
+                connector(1,2,"lime","line"),
+                connector(2,3,"lime","line"),
+                connector(3,4,"lime","line"),
+                connector(4,5,"lime","line"),
+                connector(5,6,"lime","line"),
+                connector(6,7,"lime","line")
+            }
         }
     end
 
@@ -43,7 +53,17 @@ function match(ctx)
         return {
             matched = true,
             message = "Full 8-digit descending ladder",
-            highlights = {{positions = {0,1,2,3,4,5,6,7}, color = "cyan"}}
+            highlights = {{positions = {0,1,2,3,4,5,6,7}, color = "cyan"}},
+            -- Connecting lines between boxes (Ed review), like the core Ladder.
+            connectors = {
+                connector(0,1,"cyan","line"),
+                connector(1,2,"cyan","line"),
+                connector(2,3,"cyan","line"),
+                connector(3,4,"cyan","line"),
+                connector(4,5,"cyan","line"),
+                connector(5,6,"cyan","line"),
+                connector(6,7,"cyan","line")
+            }
         }
     end
 

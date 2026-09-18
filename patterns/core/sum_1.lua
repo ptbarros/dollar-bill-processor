@@ -27,12 +27,11 @@ function match(ctx)
         end
     end
 
-    local all_pos = {0, 1, 2, 3, 4, 5, 6, 7}
-
+    -- Box only the single 1; skip the zeros (Ed review).
     return {
         matched = true,
         highlights = {
-            highlight(all_pos, "gold", "sum=1")
+            highlight({one_pos}, "gold", "sum=1")
         },
         connectors = {},
         message = "Digit sum = 1"
