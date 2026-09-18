@@ -141,6 +141,22 @@ print(engine.classify_simple('A12344321B'))
 "
 ```
 
+## Downstream consumer: DollarDetective Web
+
+The web spinoff (`~/projects/dollardetective-web`, live at dollardetective.tarso.net)
+**vendors these files from this repo** via its `scripts/sync-engine.sh` — it reuses the
+desktop engine server-side:
+
+- `pattern_engine_v3.py`, `pattern_sandbox.py`, `resource_path.py`
+- `patterns/{lib,core,Nicks,The Green Guide}/*.lua`
+- `patterns/user/1959.lua` (Paul's own user pattern)
+
+**Deleting or renaming any of these breaks the web app's next sync**, and an unguarded
+read of a vanished file can stop it at startup (this happened when the `Essentials`
+library was removed, 2026-09-16). Before landing such a change, flag it to the web side;
+if that isn't practical, the web app can absorb it by guarding the read. The web repo
+does NOT auto-update — pattern changes need a re-vendor + rebuild there.
+
 ## Notes
 
 - User patterns in `patterns/user/` are gitignored
