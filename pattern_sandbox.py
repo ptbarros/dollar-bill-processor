@@ -31,8 +31,8 @@ class PatternSandbox:
     Security features:
     - Whitelisted safe functions only (string, math, table, pairs, ipairs, etc.)
     - Blocked dangerous functions (os, io, loadfile, require, debug, etc.)
-    - Instruction limit to prevent infinite loops
-    - Timeout protection
+    - Instruction limit to prevent infinite loops (enforced via a Lua debug
+      count hook installed around every execution; see MAX_INSTRUCTIONS)
 
     Usage:
         sandbox = PatternSandbox()
@@ -44,11 +44,27 @@ class PatternSandbox:
         })
     """
 
-    # Maximum instructions before termination (prevents infinite loops)
-    MAX_INSTRUCTIONS = 10_000
+    # Maximum Lua VM instructions a single pattern may execute before it is
+    # forcibly aborted. This is the guard against infinite loops in hand-edited
+    # or AI-generated patterns freezing the app. Enforced by a debug count hook
+    # installed around each run in run_sandboxed() (the script itself cannot
+    # clear the hook: it runs in sandbox_env, which has no `debug`).
+    #
+    # Real patterns operate on an 8-digit serial and cost, at most, a few
+    # thousand instructions even with helper calls, so this cap leaves a very
+    # large margin while still stopping a runaway loop within a few ms.
+    #
+    # Measured 2026-09-16 across the whole library x 15 triggering serials: the
+    # curated set (core/Nicks/Green Guide) tops out near ~1,600 instructions;
+    # the heaviest pattern overall was the user pattern VAMPIRE_NOTE at ~28,000
+    # (~71x under this cap). If this ever false-trips a legitimate pattern,
+    # re-run that measurement first: a real pattern near the cap is the signal.
+    MAX_INSTRUCTIONS = 2_000_000
 
-    # Timeout in seconds
-    TIMEOUT_SECONDS = 0.1  # 100ms
+    # How often (in VM instructions) the watchdog hook fires to check the
+    # budget. Small enough to stop a loop promptly, large enough that the
+    # per-hook overhead is negligible for legitimate patterns.
+    INSTRUCTION_CHECK_INTERVAL = 50_000
 
     # Safe Lua standard library functions
     SAFE_GLOBALS = {
@@ -76,16 +92,18 @@ class PatternSandbox:
         '_G',  # Direct access to global table
     }
 
-    def __init__(self, instruction_limit: int = None, timeout_seconds: float = None):
+    def __init__(self, instruction_limit: int = None, check_interval: int = None):
         """
         Initialize the sandbox.
 
         Args:
-            instruction_limit: Max Lua instructions (default: 10,000)
-            timeout_seconds: Execution timeout (default: 0.1s)
+            instruction_limit: Max Lua VM instructions per run before the
+                pattern is aborted (default: MAX_INSTRUCTIONS).
+            check_interval: How often (in instructions) the watchdog hook fires
+                (default: INSTRUCTION_CHECK_INTERVAL).
         """
         self.instruction_limit = instruction_limit or self.MAX_INSTRUCTIONS
-        self.timeout_seconds = timeout_seconds or self.TIMEOUT_SECONDS
+        self.check_interval = check_interval or self.INSTRUCTION_CHECK_INTERVAL
         self._lua = None
         self._helpers_loaded = False
 
@@ -202,7 +220,33 @@ class PatternSandbox:
             end
 
             -- Helper to run code in sandbox
-            function run_sandboxed(code, ctx, debug_enabled)
+            function run_sandboxed(code, ctx, debug_enabled, inst_limit, check_interval)
+                -- Instruction watchdog. run_sandboxed runs in the master
+                -- context (it has `debug`); the user script runs in sandbox_env
+                -- which does NOT, so the script cannot disarm this hook. When a
+                -- run exceeds inst_limit VM instructions the hook raises a
+                -- tagged error that we turn into a friendly "ran too long"
+                -- message. The hook stays armed after tripping (it does not
+                -- clear itself) so a loop that swallows the error via its own
+                -- pcall keeps getting interrupted rather than running free.
+                inst_limit = inst_limit or 2000000
+                check_interval = check_interval or 50000
+                local __budget = 0
+                local function __arm()
+                    __budget = 0
+                    debug.sethook(function()
+                        __budget = __budget + check_interval
+                        if __budget > inst_limit then
+                            error("__INSTRUCTION_LIMIT__", 0)
+                        end
+                    end, "", check_interval)
+                end
+                local function __disarm() debug.sethook() end
+                local function __is_limit(msg)
+                    return type(msg) == "string"
+                        and msg:find("__INSTRUCTION_LIMIT__", 1, true) ~= nil
+                end
+
                 -- Create fresh environment for this execution
                 local env = {}
                 setmetatable(env, {__index = sandbox_env})
@@ -234,9 +278,14 @@ class PatternSandbox:
                     return {success = false, error = "Syntax error: " .. tostring(err), debug_log = debug_log}
                 end
 
-                -- Execute to define the match function
+                -- Execute to define the match function (chunk body could loop)
+                __arm()
                 local ok, result = pcall(fn)
+                __disarm()
                 if not ok then
+                    if __is_limit(result) then
+                        return {success = false, error = "Pattern stopped: it ran too long (possible infinite loop - check for a loop that never ends)", debug_log = debug_log}
+                    end
                     return {success = false, error = "Load error: " .. tostring(result), debug_log = debug_log}
                 end
 
@@ -245,8 +294,13 @@ class PatternSandbox:
                     return {success = false, error = "Pattern must define a match(ctx) function", debug_log = debug_log}
                 end
 
+                __arm()
                 ok, result = pcall(env.match, ctx)
+                __disarm()
                 if not ok then
+                    if __is_limit(result) then
+                        return {success = false, error = "Pattern stopped: it ran too long (possible infinite loop - check for a loop that never ends)", debug_log = debug_log}
+                    end
                     return {success = false, error = "Runtime error: " .. tostring(result), debug_log = debug_log}
                 end
 
@@ -317,8 +371,11 @@ class PatternSandbox:
             # Get the sandboxed runner
             run_sandboxed = lua.globals()['run_sandboxed']
 
-            # Execute with debug flag
-            result = run_sandboxed(script, lua_ctx, debug)
+            # Execute with debug flag + instruction watchdog limits
+            result = run_sandboxed(
+                script, lua_ctx, debug,
+                self.instruction_limit, self.check_interval,
+            )
 
             execution_time = (time.time() - start_time) * 1000
 
