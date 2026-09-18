@@ -46,10 +46,24 @@ function match(ctx)
         })
     end
 
+    -- Add arcs linking each digit's occurrences (Ed review).
+    local pos_by_digit = {}
+    for i = 0, 7 do
+        local d = digits:sub(i + 1, i + 1)
+        pos_by_digit[d] = pos_by_digit[d] or {}
+        table.insert(pos_by_digit[d], i)
+    end
+    local connectors = {}
+    for d, plist in pairs(pos_by_digit) do
+        for k = 1, #plist - 1 do
+            table.insert(connectors, {from = plist[k], to = plist[k + 1], color = digit_colors[d], style = "arc"})
+        end
+    end
+
     return {
         matched = true,
         highlights = highlights,
-        connectors = {},
+        connectors = connectors,
         message = string.format("Trinary: digits %s, %s, %s", unique[1], unique[2], unique[3])
     }
 end

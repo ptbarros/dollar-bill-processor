@@ -18,14 +18,24 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Highlight all positions in purple
-    local positions = {0, 1, 2, 3, 4, 5, 6, 7}
+    -- Color-code each digit by how it transforms, matching Near Flipper (Ed review).
+    local highlights = {}
+    for i = 0, 7 do
+        local d = digits:sub(i + 1, i + 1)
+        local color
+        if d == "0" or d == "8" then
+            color = "purple"
+        elseif d == "1" then
+            color = "blue"
+        else
+            color = "magenta"
+        end
+        table.insert(highlights, highlight({i}, color, d))
+    end
 
     return {
         matched = true,
-        highlights = {
-            highlight(positions, "purple", "flipper")
-        },
+        highlights = highlights,
         connectors = {},
         message = "All flipper digits (0,1,6,8,9)"
     }
