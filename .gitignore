@@ -89,3 +89,6 @@ ledger.db
 ledger.db-wal
 ledger.db-shm
 insights_report.html
+
+# Duplicate Reviewer generated corpus (regenerable cache; lives in user data dir)
+pattern_hits.json
