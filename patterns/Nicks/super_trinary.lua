@@ -49,10 +49,21 @@ function match(ctx)
     -- Two triples + one double, or one quad + two doubles
     if (triples == 2 and doubles == 1) or (quads == 1 and doubles == 2) then
         local desc = (triples == 2) and "2 triples + 1 double" or "1 quad + 2 doubles"
+        -- One box around each run, no per-digit boxes (Ed review).
+        local colors = {"blue", "orange", "magenta", "red"}
+        local boxes, ci = {}, 1
+        for _, run in ipairs(find_runs(s)) do
+            if run.length >= 2 then
+                table.insert(boxes, {from = run.start, to = run.start + run.length - 1,
+                    color = colors[((ci - 1) % #colors) + 1], thickness = 2})
+                ci = ci + 1
+            end
+        end
         return {
             matched = true,
             message = "Super trinary: " .. desc,
-            highlights = {{positions = {0,1,2,3,4,5,6,7}, color = "purple"}}
+            highlights = {},
+            group_boxes = boxes
         }
     end
 

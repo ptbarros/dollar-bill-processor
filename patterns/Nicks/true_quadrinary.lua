@@ -30,10 +30,22 @@ function match(ctx)
     end
 
     if has_0 and has_1 and has_2 and has_3 then
+        -- One colored box per distinct digit value (Ed review).
+        local colors = {"blue", "orange", "magenta", "red"}
+        local by_digit, order = {}, {}
+        for i = 0, 7 do
+            local ch = s:sub(i + 1, i + 1)
+            if not by_digit[ch] then by_digit[ch] = {}; table.insert(order, ch) end
+            table.insert(by_digit[ch], i)
+        end
+        local hl = {}
+        for idx, ch in ipairs(order) do
+            table.insert(hl, {positions = by_digit[ch], color = colors[((idx - 1) % #colors) + 1]})
+        end
         return {
             matched = true,
             message = "True quadrinary: only 0, 1, 2, 3",
-            highlights = {{positions = {0,1,2,3,4,5,6,7}, color = "lime"}}
+            highlights = hl
         }
     end
 

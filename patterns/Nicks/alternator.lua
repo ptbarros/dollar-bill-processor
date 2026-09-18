@@ -23,9 +23,9 @@ function match(ctx)
         return {
             matched = true,
             message = "Alternator: " .. odd_digit .. " in odd positions",
+            -- Box the matching numbers only (Ed review).
             highlights = {
-                {positions = {0, 2, 4, 6}, color = "orange"},
-                {positions = {1, 3, 5, 7}, color = "gray"}
+                {positions = {0, 2, 4, 6}, color = "orange"}
             }
         }
     end
@@ -44,9 +44,9 @@ function match(ctx)
         return {
             matched = true,
             message = "Alternator: " .. even_digit .. " in even positions",
+            -- Box the matching numbers only (Ed review).
             highlights = {
-                {positions = {1, 3, 5, 7}, color = "orange"},
-                {positions = {0, 2, 4, 6}, color = "gray"}
+                {positions = {1, 3, 5, 7}, color = "orange"}
             }
         }
     end
