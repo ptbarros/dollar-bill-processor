@@ -36,10 +36,7 @@ function match(ctx)
             {from = 2, to = 5, color = "gold", thickness = 3},
             {from = 6, to = 7, color = "coral", thickness = 3}
         },
-        connectors = {
-            {from = 0, to = 7, color = "coral", style = "arc"},
-            {from = 1, to = 6, color = "coral", style = "arc"}
-        },
+        connectors = {},  -- arcs removed (Ed review)
         message = outer .. outer .. " wraps quad of " .. inner .. "s (CS-Quad Bookend Radar)"
     }
 end

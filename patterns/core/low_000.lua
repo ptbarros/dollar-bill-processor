@@ -20,9 +20,8 @@ function match(ctx)
     -- Highlight the leading zeros
     return {
         matched = true,
-        highlights = {
-            highlight({0, 1, 2}, "gold", "low serial")
-        },
+        -- No overlay boxes (Ed review): the leading zeros speak for themselves.
+        highlights = {},
         connectors = {},
         message = "Low serial (starts with 000)"
     }

@@ -34,6 +34,6 @@ function match(ctx)
             {from = 0, to = 3, color = "gray"},
             {from = 4, to = 7, color = "gray"}
         },
-        connectors = {{from = 1, to = 5, color = "gray", style = "line"}}
+        connectors = {}  -- arc removed (Ed review)
     }
 end
