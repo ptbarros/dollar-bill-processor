@@ -49,13 +49,8 @@ function match(ctx)
 
     return {
         matched = true,
-        highlights = {
-            highlight({0, 1, 2}, "lime", "triple"),
-            highlight({3, 4}, "teal", "double"),
-            highlight({5}, "cyan", "single"),
-            highlight({6}, "blue", "single"),
-            highlight({7}, "purple", "single")
-        },
+        -- Inner per-digit boxes removed (Ed review); keep the chunk group boxes.
+        highlights = {},
         group_boxes = {
             {from = 0, to = 2, color = "lime", thickness = 2},
             {from = 3, to = 4, color = "teal", thickness = 2}

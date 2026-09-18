@@ -43,10 +43,8 @@ function match(ctx)
 
     return {
         matched = true,
-        highlights = {
-            highlight(quad_positions, "gold", "quad"),
-            highlight({pair_pos, pair_pos + 1}, "coral", "pair")
-        },
+        -- Inner per-digit boxes removed (Ed review); keep the chunk group boxes.
+        highlights = {},
         group_boxes = {
             {from = quad.start, to = quad.start + quad.length - 1, color = "gold", thickness = 2},
             {from = pair_pos, to = pair_pos + 1, color = "coral", thickness = 2}

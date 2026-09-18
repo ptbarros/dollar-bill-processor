@@ -30,16 +30,13 @@ function match(ctx)
 
     return {
         matched = true,
-        highlights = {
-            highlight({0, 2, 4}, "magenta", "A"),
-            highlight({1, 3, 5}, "coral", "B"),
-            highlight({6, 7}, "gray", "tail")
-        },
-        connectors = {
-            connector(0, 2, "magenta", "line"),
-            connector(2, 4, "magenta", "line"),
-            connector(1, 3, "coral", "line"),
-            connector(3, 5, "coral", "line")
+        -- One box around each repeating pair (Ed review); no per-digit boxes or arcs.
+        highlights = {},
+        connectors = {},
+        group_boxes = {
+            {from = 0, to = 1, color = "orange", thickness = 2},
+            {from = 2, to = 3, color = "blue", thickness = 2},
+            {from = 4, to = 5, color = "magenta", thickness = 2}
         },
         message = "Mini super repeater: " .. a .. b .. " x 3 + tail"
     }
