@@ -36,13 +36,11 @@ function match(ctx)
 
     return {
         matched = true,
-        highlights = {
-            highlight({0, 1, 2, 3}, "gold", "first quad"),
-            highlight({4, 5, 6, 7}, "coral", "second quad")
-        },
+        -- Inner per-digit boxes removed (Ed review); keep the two quad boxes.
+        highlights = {},
         group_boxes = {
-            {from = 0, to = 3, color = "gold", thickness = 3},
-            {from = 4, to = 7, color = "coral", thickness = 3}
+            {from = 0, to = 3, color = "orange", thickness = 2},
+            {from = 4, to = 7, color = "blue", thickness = 2}
         },
         connectors = {},
         message = "Double quads: " .. a .. a .. a .. a .. " + " .. b .. b .. b .. b

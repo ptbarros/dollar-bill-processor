@@ -21,15 +21,13 @@ function match(ctx)
         end
     end
 
-    -- All positions highlighted in yellow
-    local highlights = {}
-    for i = 0, 7 do
-        table.insert(highlights, {positions = {i}, color = "yellow", label = "solid"})
-    end
-
     return {
         matched = true,
-        highlights = highlights,
+        -- Single box around the whole serial (Ed review), no per-digit boxes.
+        highlights = {},
+        group_boxes = {
+            {from = 0, to = 7, color = "orange", thickness = 2}
+        },
         connectors = {},
         message = "Perfect solid - all " .. first .. "s"
     }

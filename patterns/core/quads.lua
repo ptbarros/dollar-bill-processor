@@ -26,8 +26,10 @@ function match(ctx)
 
     return {
         matched = true,
-        highlights = {
-            highlight(positions, "gold", "quad")
+        -- Single box around the quad (Ed review), no per-digit boxes.
+        highlights = {},
+        group_boxes = {
+            {from = positions[1], to = positions[#positions], color = "orange", thickness = 2}
         },
         connectors = {},
         message = "Quad " .. run.digit .. "s"
