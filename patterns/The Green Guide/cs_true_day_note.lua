@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TRUE_DAY_NOTE
-DisplayName: CS-True Day Note
+DisplayName: True Date Note
 Description: A valid mmdd or ddmm block at any position, with the remaining 4 digits all zeros.
 BookRef: CS-760
 Tier: 7
