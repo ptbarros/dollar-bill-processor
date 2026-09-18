@@ -37,16 +37,13 @@ function match(ctx)
         end
     end
 
-    local highlights = {
-        highlight(positions, "gold", "7 in a row")
-    }
-    if odd_pos then
-        table.insert(highlights, highlight({odd_pos}, "red", "odd out"))
-    end
-
     return {
         matched = true,
-        highlights = highlights,
+        -- Single box around the 7 matching digits (Ed review), no per-digit boxes.
+        highlights = {},
+        group_boxes = {
+            {from = positions[1], to = positions[#positions], color = "orange", thickness = 2}
+        },
         connectors = {},
         message = "7 x " .. run.digit .. " in a row"
     }
