@@ -29,24 +29,18 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Highlight dominant digits in gold, others in gray
     local dom_positions = find_digit_positions(digits, dominant_digit)
-    local other_positions = {}
-    for i = 0, 7 do
-        local found = false
-        for _, p in ipairs(dom_positions) do
-            if p == i then found = true; break end
-        end
-        if not found then
-            table.insert(other_positions, i)
-        end
+    -- Scattered only (Ed review): if all 5 are contiguous it's an 5-in-a-row, skip.
+    table.sort(dom_positions)
+    if dom_positions[#dom_positions] - dom_positions[1] == #dom_positions - 1 then
+        return {matched = false}
     end
 
     return {
         matched = true,
+        -- Draw like the Nicks version: gold on the matching digits only.
         highlights = {
-            highlight(dom_positions, "gold", "5 of kind"),
-            highlight(other_positions, "gray", "other")
+            highlight(dom_positions, "gold", "5 of kind")
         },
         connectors = {},
         message = "5 x " .. dominant_digit

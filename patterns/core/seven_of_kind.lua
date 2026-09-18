@@ -35,48 +35,21 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Highlight dominant digits in gold, odd one out in red
-    local highlights = {}
-    local odd_positions = {}
-
-    for i = 0, 7 do
-        local d = digits:sub(i + 1, i + 1)
-        if d == dominant_digit then
-            table.insert(highlights, {
-                positions = {i},
-                color = "gold",
-                label = "dominant"
-            })
-        else
-            table.insert(highlights, {
-                positions = {i},
-                color = "red",
-                label = "odd-out"
-            })
-            table.insert(odd_positions, i)
-        end
-    end
-
-    -- Add connector between odd positions if there are two
-    local connectors = {}
-    if #odd_positions == 2 then
-        table.insert(connectors, {
-            from = odd_positions[1],
-            to = odd_positions[2],
-            color = "red",
-            style = "dashed"
-        })
-    end
-
-    local message = string.format("%d x %s", dominant_count, dominant_digit)
-    if dominant_count == 8 then
-        message = "Perfect solid - actually 8 of a kind!"
+    -- Scattered only (Ed review): if all are contiguous it is a run (7-in-a-row or
+    -- solid), which other patterns cover, so skip it here.
+    local dom_positions = find_digit_positions(digits, dominant_digit)
+    table.sort(dom_positions)
+    if dom_positions[#dom_positions] - dom_positions[1] == #dom_positions - 1 then
+        return {matched = false}
     end
 
     return {
         matched = true,
-        highlights = highlights,
-        connectors = connectors,
-        message = message
+        -- Draw like the Nicks version: gold on the matching digits only.
+        highlights = {
+            highlight(dom_positions, "gold", "7 of kind")
+        },
+        connectors = {},
+        message = string.format("%d x %s", dominant_count, dominant_digit)
     }
 end
