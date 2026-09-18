@@ -3,7 +3,7 @@ Pattern: NICKS_COUNTING_LADDER
 DisplayName: Counting Ladder
 Description: Pattern X0X1X2X3 where odd positions count up/down
 Tier: 4
-Examples: ["10203040", "20314050", "90807060", "50403020"]
+Examples: ["12131415", "98979695"]
 --]]
 
 function match(ctx)
@@ -41,9 +41,14 @@ function match(ctx)
     return {
         matched = true,
         message = "Counting ladder: " .. base .. "X pattern " .. direction,
-        highlights = {
-            {positions = {0, 2, 4, 6}, color = "orange"},
-            {positions = {1, 3, 5, 7}, color = is_asc and "lime" or "cyan"}
+        -- Per-digit inner boxes removed (Ed review): show each 2-digit pair as a
+        -- single group box only, no arcs.
+        highlights = {},
+        group_boxes = {
+            {from = 0, to = 1, color = "orange", thickness = 2},
+            {from = 2, to = 3, color = "blue", thickness = 2},
+            {from = 4, to = 5, color = "magenta", thickness = 2},
+            {from = 6, to = 7, color = "red", thickness = 2}
         }
     }
 end

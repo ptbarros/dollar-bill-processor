@@ -35,12 +35,9 @@ function match(ctx)
 
     return {
         matched = true,
-        highlights = {
-            highlight({0, 1}, "lime", "first"),
-            highlight({2, 3}, "teal", "second"),
-            highlight({4, 5}, "cyan", "third"),
-            highlight({6, 7}, "blue", "fourth")
-        },
+        -- Per-digit inner boxes removed (Ed review): each 2-digit pair is shown
+        -- by its single group box only, no arcs.
+        highlights = {},
         group_boxes = {
             {from = 0, to = 1, color = "lime", thickness = 2},
             {from = 2, to = 3, color = "teal", thickness = 2},
