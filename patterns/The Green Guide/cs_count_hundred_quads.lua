@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_COUNT_HUNDRED_QUADS
 DisplayName: CS-Count Hundred Quads
-Description: Two 4-digit halves where only the third-to-last digit (position 2 in each half) differs by 1. The other three digits are identical. e.g., M 1234 1334 M.
+Description: Two matching four-digit halves where only the third-from-last digit ticks up or down by one (e.g. 1234·1334).
 BookRef: CS-860
 Tier: 3
 Examples: ["12341334", "13341234"]

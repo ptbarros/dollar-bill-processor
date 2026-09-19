@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_BROKEN_LADDER
 DisplayName: CS-Broken Ladder
-Description: A consecutive run of 3-7 ascending OR descending digits anywhere in the serial. Parent of CS-Ascending Broken Ladder (CS-1230) and CS-Descending Broken Ladder (CS-1240). Excludes full 8-digit ladders.
+Description: Contains a run of 3 to 7 digits stepping straight up or straight down — part of the serial, not all of it (e.g. 123456·xx).
 BookRef: CS-1220
 Tier: 7
 Examples: ["12378456", "00054321", "43218765"]

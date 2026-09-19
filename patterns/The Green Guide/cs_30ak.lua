@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_30AK
 DisplayName: CS-3OAK
-Description: Three of the same digit anywhere in the serial, with at least one separated from the others (not all consecutive). Grouped version is CS-Triple (CS-100).
+Description: The same digit shows up three times, scattered — at least one is split off from the other two (e.g. 33·xxx·3·xx).
 BookRef: CS-110
 Tier: 6
 Examples: ["30130055", "11011234", "10102034"]

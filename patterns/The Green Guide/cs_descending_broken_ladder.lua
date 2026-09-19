@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_DESCENDING_BROKEN_LADDER
 DisplayName: CS-Descending Broken Ladder
-Description: A consecutive descending run of 3-7 digits anywhere in the serial. e.g., M x4321xxx M.
+Description: Contains a run of 3 to 7 digits each dropping by one, sitting somewhere in the serial rather than filling it (e.g. x·4321·xxx).
 BookRef: CS-1240
 Tier: 7
 Examples: ["00432100", "87654000", "00098765"]

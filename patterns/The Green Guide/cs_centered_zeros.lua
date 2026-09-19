@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_CENTERED_ZEROS
 DisplayName: CS-Centered Zeros
-Description: At least one zero at position 4 or 5 (1-indexed, center of the serial), expanding outward from there. Even a single center zero qualifies. e.g., M xxx0xxxx M or M xxxx0xxx M.
+Description: Has a zero right in the middle, at the fourth or fifth spot, spreading outward from there (e.g. xxx·0·xxxx).
 BookRef: CS-1950
 Tier: 7
 Examples: ["12305678", "12300456", "12004567"]

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_ASCENDING_LADDERED_RADAR
 DisplayName: CS-Laddered Radar
-Description: A palindrome (radar) where the first 4 digits form a ladder, ascending or descending (each step 1). e.g., 45677654 or 76544567.
+Description: Reads the same forwards and backwards, and the first four digits step straight up or straight down (e.g. 4567·7654).
 BookRef: CS-1420
 Tier: 3
 Examples: ["45677654", "76544567", "12344321", "43211234"]

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_BOOKEND_FULL_RADAR
 DisplayName: CS-Bookend Full Radar
-Description: A CS-Full Radar (palindrome) where the first two digits are identical (forming a CS-Pair bookend at each end): e.g., M 44133144 M. By the palindrome, positions 6-7 automatically mirror positions 0-1.
+Description: Reads the same forwards and backwards, and both ends open with a matching pair of the same digit (e.g. 44·1331·44).
 BookRef: CS-1280
 Tier: 4
 Examples: ["44133144", "22155122", "88100188"]

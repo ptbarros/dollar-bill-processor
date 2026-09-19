@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_BINARY_FLIPPER
 DisplayName: CS-Binary Flipper
-Description: All 8 digits are from the flip set {0,1,6,8,9} and exactly 2 distinct digits are used. e.g., M 18811181 M. Superset of CS-1040 (True Binary Flipper), which additionally requires reading the same upside-down.
+Description: Built from just two different digits, both taken from the ones that still look like digits upside-down — 0, 1, 6, 8 and 9 (e.g. 1881·1181).
 BookRef: CS-1050
 Tier: 3
 Examples: ["18811181", "16611661", "00990099"]

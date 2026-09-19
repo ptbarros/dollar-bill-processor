@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_70AK
 DisplayName: CS-7OAK
-Description: Seven of the same digit anywhere in the serial (one different digit somewhere), but not all seven in a row. Grouped version is CS-Seven (CS-500).
+Description: The same digit fills seven of the eight spots, with the odd one out breaking up the run so they're not all in a row (e.g. 1111·2·111).
 BookRef: CS-490
 Tier: 2
 Examples: ["11111121", "00000100", "22222202"]

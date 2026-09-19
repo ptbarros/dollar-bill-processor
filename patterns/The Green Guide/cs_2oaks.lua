@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_2OAKS
 DisplayName: CS-2OAKs
-Description: Any two of the same digit anywhere in the serial, as long as the two digits are not grouped (not adjacent). A CS-2OAK is two non-consecutive matching digits. e.g., M xx2x2xxx M or M 2xx2xxxx M.
+Description: The same digit turns up twice, split apart with a gap between them rather than side by side (e.g. x·2·x·2·xxxx).
 BookRef: CS-10
 Tier: 9
 Examples: ["12032145", "20103456", "10234512"]

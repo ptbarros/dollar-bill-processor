@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_ASCENDING_LADDER
 DisplayName: CS-Ascending Ladder
-Description: All 8 digits form a consecutive ascending sequence (mod-10), e.g., 12345678, 23456789, 34567890. The sequence may cross the 9→0 boundary.
+Description: Every digit climbs by one straight across the serial, rolling from 9 back to 0 if it needs to (e.g. 12345678, 34567890).
 BookRef: CS-1170
 Tier: 3
 Examples: ["12345678", "23456789", "34567890"]

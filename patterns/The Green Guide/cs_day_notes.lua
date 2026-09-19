@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_DAY_NOTES
 DisplayName: CS-Day Notes
-Description: Catch-all: any serial containing a valid mmdd or ddmm block (4 digits) at any of the 5 possible positions.
+Description: Holds a valid month-and-day as a four-digit block somewhere in the serial — a real calendar date (e.g. 1225·xxxx for Dec 25).
 BookRef: CS-750
 Tier: 8
 Examples: ["12251234", "12122512", "12341225"]

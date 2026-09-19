@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_COUNT_THOUSAND_QUAD
 DisplayName: CS-Count Thousand Quad
-Description: Two 4-digit halves where only the first digit differs by 1. The last three digits of each half are identical. e.g., M 1234 2234 M or M 2234 1234 M.
+Description: Two matching four-digit halves where only the first digit ticks up or down by one (e.g. 1234·2234).
 BookRef: CS-870
 Tier: 3
 Examples: ["12342234", "22341234"]

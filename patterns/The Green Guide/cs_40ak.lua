@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_40AK
 DisplayName: CS-4OAK
-Description: Any four or more of the same digit anywhere in the serial, in any arrangement (grouped or scattered). More specific patterns: CS-Quad (CS-200) for consecutive, CS-Random 4OAK (CS-210) for scattered.
+Description: The same digit appears four or more times, anywhere in the serial, grouped or scattered (e.g. 44·4·x·4·xx).
 BookRef: CS-190
 Tier: 5
 Examples: ["10101012", "00303030", "01010101", "44441234", "11112345"]

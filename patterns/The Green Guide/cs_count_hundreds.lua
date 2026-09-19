@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_COUNT_HUNDREDS
 DisplayName: CS-Count Hundreds
-Description: Three groups (3+3+2 digits) where the leading digit of each group counts up or down by 1. The base digits (positions 2-3 of each group) stay the same. e.g., M 411 511 61 M or M 123 223 32 M.
+Description: The serial breaks into groups whose leading digit steps up or down by one while the rest of each group stays the same (e.g. 411·511·61).
 BookRef: CS-830
 Tier: 3
 Examples: ["12322332", "32322312", "41151161"]

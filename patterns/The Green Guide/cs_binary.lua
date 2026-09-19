@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_BINARY
 DisplayName: CS-Binary
-Description: The serial contains exactly two unique digits.
+Description: Built from just two different digits, in any arrangement (e.g. 25·52·52·52).
 BookRef: CS-910
 Tier: 4
 Examples: ["01010101", "11001100", "00001111"]

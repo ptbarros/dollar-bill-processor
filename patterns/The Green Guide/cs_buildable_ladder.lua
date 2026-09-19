@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_BUILDABLE_LADDER
 DisplayName: CS-Buildable Ladder
-Description: A scattered ladder with some numbers missing — k of 8 digits form a consecutive mod-10 set in scrambled order. At least one digit must be out of positional order (not a broken/full ladder). Minimum k=3; k=8 is CS-Scattered Ladder (excluded).
+Description: Holds a handful of digits that could line up into a straight run but arrive out of order and with gaps — a ladder you'd have to build (e.g. 3·4·5·7·6·xxx).
 BookRef: CS-1250
 Tier: 8
 Examples: ["34576000", "34657000", "34675000"]

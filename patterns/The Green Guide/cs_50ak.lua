@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_50AK
 DisplayName: CS-5OAK
-Description: Five of the same digit anywhere in the serial, with at least one separated from the others (no run of 5+). Grouped version is CS-Quint (CS-300).
+Description: The same digit appears five times, scattered so they don't all sit in one solid block (e.g. 11·x·1·x·1·1).
 BookRef: CS-360
 Tier: 4
 Examples: ["11112111", "00005000", "11011011"]

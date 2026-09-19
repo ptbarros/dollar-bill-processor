@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_BINARY_ROTATOR
 DisplayName: CS-Binary Rotator
-Description: Rotator using exactly 2 unique digits from {0,8} or {1,8}. Excludes {0,1} which is CS-True Binary Rotator (CS-1110).
+Description: Turn the note upside-down and it reads the same, using only two different digits that still read upside-down — but not the plain 0-and-1 pairing (e.g. 0888·8880).
 BookRef: CS-1120
 Tier: 3
 Examples: ["08888880", "88000088", "18888881"]
