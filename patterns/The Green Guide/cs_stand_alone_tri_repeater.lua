@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_TRI_REPEATER
 DisplayName: CS-Stand Alone Tri Repeater
-Description: Three CS-20AKs repeating within zeros (ABCABC at positions 2-7, surrounded by zeros). e.g., M 0301301 0 M or M 0123123 0 M.
+Description: A three-digit run repeated back to back fills the middle, with a zero at each end (e.g. 0·301301·0).
 BookRef: CS-1720
 Tier: 5
 Examples: ["03013010", "01231230"]

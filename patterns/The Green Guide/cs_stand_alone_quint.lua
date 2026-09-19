@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_QUINT
 DisplayName: CS-Stand Alone Quint
-Description: A CS-Quint (5 consecutive identical non-zero digits) surrounded by zeros. e.g., M 00555550 M or M 05555500 M.
+Description: A solid block of five identical digits sits by itself, wrapped in zeros (e.g. 0·55555·00).
 BookRef: CS-1690
 Tier: 3
 Examples: ["05555500", "00555550"]

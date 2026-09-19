@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_US_DATE_YEAR
 DisplayName: CS-Stand Alone US Date Year
-Description: A 6-digit mmddyy block (US format) surrounded by zeros. yy>=30 maps to 1900+yy, yy<30 maps to 2000+yy.
+Description: A month-day-year in the month-first style with a two-digit year sits together, wrapped in zeros (e.g. 0·122571·0).
 BookRef: CS-1830
 Tier: 7
 Examples: ["01225710", "00122571", "12257100"]

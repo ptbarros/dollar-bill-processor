@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_QUAD
 DisplayName: CS-Stand Alone Quad
-Description: Exactly one run of four consecutive identical non-zero digits, with all other positions being zero, and zeros present on both sides of the quad. e.g., M 00444400 M or M 02222000 M.
+Description: A solid block of four identical digits sits by itself, wrapped in zeros (e.g. 00·4444·00).
 BookRef: CS-1680
 Tier: 3
 Examples: ["00222200", "02222000", "00022220"]

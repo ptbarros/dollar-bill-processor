@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_DOUBLE_REPEATER
 DisplayName: CS-Stand Alone Double Repeater
-Description: Two CS-2OAKs that alternate (ABAB or ABABAB) within zeros. e.g., M 01212000 M (2 repeats) or M 01212120 M (3 repeats).
+Description: Two digits take turns for a few beats, with the rest of the serial nothing but zeros around them (e.g. 0·1212·000).
 BookRef: CS-1710
 Tier: 4
 Examples: ["01212000", "00121200", "01212120"]

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_UP_LADDER_6
 DisplayName: CS-Stand Alone Mini Up Ladder 6
-Description: Six digits grouped together that count up (each = prev+1, mod-10 wrap), with zeros in positions 1 and 8. e.g., M 01234560 M.
+Description: Six digits stepping straight up fill the middle, with a zero at each end (e.g. 0·123456·0).
 BookRef: CS-1910
 Tier: 4
 Examples: ["01234560"]

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_MINI_5_RADAR
 DisplayName: CS-Stand Alone Mini 5 Radar
-Description: A CS-Mini 5 Radar (ABCBA palindrome) surrounded by zeros. A CS-2OAK and CS-3OAK alternating, grouped. e.g., M 00121210 M.
+Description: A five-digit stretch that reads the same both ways sits by itself, wrapped in zeros (e.g. 0·12121·00).
 BookRef: CS-1750
 Tier: 3
 Examples: ["00121210", "01212100", "01232100"]

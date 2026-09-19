@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_QUAD_RADAR
 DisplayName: CS-Stand Alone Quad Radar
-Description: A CS-Radar surrounded by zeros. 6-digit palindrome at positions 1-6 (ABCCBA or ABBBBA), with zeros at positions 0 and 7. e.g., M 01233210 M or M 01444410 M.
+Description: A six-digit stretch that reads the same both ways fills the middle, with a zero at each end (e.g. 0·123321·0).
 BookRef: CS-1770
 Tier: 3
 Examples: ["01233210", "01444410", "02133120"]

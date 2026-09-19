@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_MINI_3_RADAR
 DisplayName: CS-Stand Alone Mini 3 Radar
-Description: An AXA palindrome (A ≠ X, A ≠ 0, X ≠ 0) surrounded by zeros on both sides. e.g., M 00121000 M or M 01210000 M.
+Description: A tiny three-digit mirror — a digit on each side of a different one — sits by itself, wrapped in zeros (e.g. 00·121·000).
 BookRef: CS-1730
 Tier: 4
 Examples: ["00121000", "01210000", "00012100"]

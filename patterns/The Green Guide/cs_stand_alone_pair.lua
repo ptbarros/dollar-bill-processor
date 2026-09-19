@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_PAIR
 DisplayName: CS-Stand Alone Pair
-Description: A CS-Pair (two consecutive identical digits) surrounded by zeros. e.g., M 00220000 M or M 00000220 M.
+Description: A single side-by-side pair sits by itself, wrapped in nothing but zeros (e.g. 00·22·0000).
 BookRef: CS-1660
 Tier: 5
 Examples: ["00220000", "00002200", "02200000"]

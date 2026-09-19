@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_DOWN_LADDER_4
 DisplayName: CS-Stand Alone Mini Down Ladder 4
-Description: Four digits grouped together that count down (each = prev-1, mod-10 wrap), surrounded by zeros. e.g., M 04321000 M or M 00043210 M.
+Description: Four digits stepping straight down sit by themselves, wrapped in zeros (e.g. 0·4321·000).
 BookRef: CS-1880
 Tier: 4
 Examples: ["04321000", "00432100", "00043210"]

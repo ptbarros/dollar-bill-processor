@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_DOWN_LADDER_5
 DisplayName: CS-Stand Alone Mini Down Ladder 5
-Description: Five digits grouped together that count down (each = prev-1, mod-10 wrap), surrounded by zeros. e.g., M 05432100 M or M 00543210 M.
+Description: Five digits stepping straight down sit by themselves, wrapped in zeros (e.g. 0·54321·00).
 BookRef: CS-1900
 Tier: 4
 Examples: ["05432100", "00543210"]

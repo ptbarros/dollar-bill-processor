@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_TRIPLE
 DisplayName: CS-Stand Alone Triple
-Description: Exactly one run of three consecutive identical non-zero digits, with all other positions being zero, and zeros present on both sides of the triple. e.g., M 00333000 M or M 02220000 M.
+Description: A solid block of three identical digits sits by itself, wrapped in zeros (e.g. 00·333·000).
 BookRef: CS-1670
 Tier: 4
 Examples: ["00033300", "02220000", "00022200"]

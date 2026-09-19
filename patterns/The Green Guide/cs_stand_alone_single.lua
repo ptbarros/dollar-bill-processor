@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_SINGLE
 DisplayName: CS-Stand Alone Single
-Description: A single non-zero digit surrounded by zeros on all sides. e.g., M 00010000 M or M 00000100 M.
+Description: A single lone digit sits in a sea of zeros (e.g. 000·1·0000).
 BookRef: CS-1650
 Tier: 4
 Examples: ["00010000", "00000100", "01000000"]

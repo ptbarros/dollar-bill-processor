@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_UP_LADDER_4
 DisplayName: CS-Stand Alone Mini Up Ladder 4
-Description: Four digits grouped together that count up (each = prev+1, mod-10 wrap), surrounded by zeros. e.g., M 01234000 M or M 00012340 M.
+Description: Four digits stepping straight up sit by themselves, wrapped in zeros (e.g. 0·1234·000).
 BookRef: CS-1870
 Tier: 4
 Examples: ["01234000", "00123400", "00012340"]

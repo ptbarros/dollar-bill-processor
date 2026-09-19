@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_INTL_DATE_YEAR
 DisplayName: CS-Stand Alone INTL Date Year
-Description: A 6-digit yymmdd block (INTL format) surrounded by zeros. yy>=30 maps to 1900+yy, yy<30 maps to 2000+yy.
+Description: A year-month-day in the year-first style with a two-digit year sits together, wrapped in zeros (e.g. 0·751225·0).
 BookRef: CS-1850
 Tier: 7
 Examples: ["07512250", "00751225", "75122500"]

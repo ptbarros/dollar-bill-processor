@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_MINI_4_RADAR
 DisplayName: CS-Stand Alone Mini 4 Radar
-Description: A CS-Mini 4 Radar (ABBA palindrome) surrounded by zeros. e.g., M 01221000 M or M 00122100 M.
+Description: A four-digit stretch that reads the same both ways sits by itself, wrapped in zeros (e.g. 0·1221·000).
 BookRef: CS-1740
 Tier: 3
 Examples: ["01221000", "00122100", "00012210"]

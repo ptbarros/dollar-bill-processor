@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_SEXTUP
 DisplayName: CS-Stand Alone Sextup
-Description: A CS-Sextup (6 consecutive identical non-zero digits) surrounded by zeros. This is also a CS-Radar. Only one valid position: 0XXXXXXX0 → 0DDDDDD0.
+Description: A solid block of six identical digits fills the middle, with a zero at each end (e.g. 0·666666·0).
 BookRef: CS-1700
 Tier: 3
 Examples: ["06666660"]

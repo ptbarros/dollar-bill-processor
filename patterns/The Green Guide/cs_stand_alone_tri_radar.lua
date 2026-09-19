@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_TRI_RADAR
 DisplayName: CS-Stand Alone Tri Radar
-Description: A CS-Triple surrounded by zeros. This is also a CS-Mini 5 Radar surrounded by zeros. ABBBA structure where the middle three digits are identical. e.g., M 00122210 M.
+Description: A run of three identical digits with a matching digit capping each side, sitting alone in zeros (e.g. 0·12221·00).
 BookRef: CS-1760
 Tier: 3
 Examples: ["00122210", "01222100", "01333100"]

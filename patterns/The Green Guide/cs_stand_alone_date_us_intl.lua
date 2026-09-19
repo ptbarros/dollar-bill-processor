@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_DATE_US_INTL
 DisplayName: CS-Stand Alone Date US & INTL
-Description: A valid mmdd block (US/INTL format) surrounded by zeros.
+Description: A real month-and-day in the month-first style sits by itself, wrapped in zeros (e.g. 0·1250·000).
 BookRef: CS-1790
 Tier: 7
 Examples: ["01250000", "00012500", "00001225"]

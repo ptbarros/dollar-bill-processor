@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_DATE_YEAR
 DisplayName: CS-Stand Alone Date Year
-Description: Catch-all: a 6-digit date block (mmddyy, ddmmyy, or yymmdd) surrounded by zeros. 2-digit year: yy>=30 maps to 1900+yy, yy<30 maps to 2000+yy.
+Description: A six-digit date with a two-digit year sits together somewhere in the serial, wrapped in zeros (e.g. 0·122571·0).
 BookRef: CS-1820
 Tier: 7
 Examples: ["01225710", "00122571", "71122500"]

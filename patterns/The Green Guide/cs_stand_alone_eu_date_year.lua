@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_EU_DATE_YEAR
 DisplayName: CS-Stand Alone EU Date Year
-Description: A 6-digit ddmmyy block (EU format) surrounded by zeros. yy>=30 maps to 1900+yy, yy<30 maps to 2000+yy.
+Description: A day-month-year in the day-first style with a two-digit year sits together, wrapped in zeros (e.g. 0·251271·0).
 BookRef: CS-1840
 Tier: 7
 Examples: ["02512710", "00251271", "25127100"]

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_LADDER
 DisplayName: CS-Stand Alone Mini Ladder
-Description: An ascending or descending ladder of 2+ grouped digits surrounded by zeros. e.g., M 01200000 M (2-up), M 00012300 M (3-up), M 04321000 M (4-down).
+Description: A short straight run — two or more digits stepping up or down — sits by itself, wrapped in zeros (e.g. 000·123·00).
 BookRef: CS-1860
 Tier: 4
 Examples: ["01200000", "00012300", "04321000"]

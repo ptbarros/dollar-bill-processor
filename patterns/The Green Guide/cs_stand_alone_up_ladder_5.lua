@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_UP_LADDER_5
 DisplayName: CS-Stand Alone Mini Up Ladder 5
-Description: Five digits grouped together that count up (each = prev+1, mod-10 wrap), surrounded by zeros. e.g., M 01234500 M or M 00123450 M.
+Description: Five digits stepping straight up sit by themselves, wrapped in zeros (e.g. 0·12345·00).
 BookRef: CS-1890
 Tier: 4
 Examples: ["01234500", "00123450"]
