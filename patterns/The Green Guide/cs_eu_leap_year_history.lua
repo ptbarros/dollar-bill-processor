@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_EU_LEAP_YEAR_HISTORY
 DisplayName: CS-EU Leap Year History Note
-Description: Serial forms EU date (ddmmyyyy) of 29 Feb in a leap year, year more than 100 years ago.
+Description: Reads as a leap-day date — the 29th of February in the day-first style — from more than a hundred years ago (e.g. 29·02·1904).
 BookRef: CS-600
 Tier: 6
 Examples: ["29021904", "29021808"]

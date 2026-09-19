@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_HIGH_NOTES
 DisplayName: CS-High Notes
-Description: Serial number >= 99990000 (four or more leading 9s). The more leading 9s, the rarer. e.g., M 9999xxxx M.
+Description: Opens with a run of nines so the note sits near the very top of its number range — the more nines up front, the rarer (e.g. 9999·xxxx).
 BookRef: CS-1970
 Tier: 4
 Examples: ["99990000", "99999999", "99991234"]

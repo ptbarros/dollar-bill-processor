@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_DUAL_RADAR_BOOKEND
 DisplayName: CS-Dual Radar Bookend
-Description: The first two digits are mirrored (reversed) at the end of the serial: A B xxxx B A, where A ≠ B. Distinguished from CS-Dual Repeater Bookend (CS-980) where the sequence repeats in the same order (A B xxxx A B). e.g., M 23xxxx32 M.
+Description: The first two digits show up flipped at the tail end — two different digits mirrored across the serial (e.g. 23·xxxx·32).
 BookRef: CS-970
 Tier: 7
 Examples: ["23000032", "45678954", "12999921"]

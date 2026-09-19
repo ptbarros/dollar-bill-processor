@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_EU_HISTORY_NOTE
 DisplayName: CS-EU History Note
-Description: Serial forms a valid EU date (ddmmyyyy) with year more than 100 years ago.
+Description: Reads as a real day-month-year date in the day-first style from more than a hundred years ago (e.g. 04·07·1776).
 BookRef: CS-590
 Tier: 7
 Examples: ["04071776", "25121900", "01011800"]

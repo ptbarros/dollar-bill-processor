@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_DOUBLE_QUADS_COUNT
 DisplayName: CS-Double Quads Count Note
-Description: Two CS-Quads (each half all same digit) that increase or decrease by 1. e.g., M 6666 7777 M or M 4444 3333 M.
+Description: Two blocks of four identical digits where the second block is one higher or lower than the first (e.g. 6666·7777).
 BookRef: CS-880
 Tier: 2
 Examples: ["66667777", "44443333", "11112222"]

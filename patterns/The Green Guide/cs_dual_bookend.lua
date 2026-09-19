@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_DUAL_BOOKEND
 DisplayName: CS-Dual Matched Bookend
-Description: The first two digits match the last two digits (same pair at each end). e.g., M 22xxxx22 M.
+Description: Opens and closes with the same matching pair of one digit, whatever sits between (e.g. 22·xxxx·22).
 BookRef: CS-960
 Tier: 7
 Examples: ["22123422", "44567844", "99000199"]

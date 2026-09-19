@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_DESCENDING_LADDER
 DisplayName: CS-Descending Ladder
-Description: All 8 digits form a consecutive descending sequence (mod-10), e.g., 98765432, 87654321, 09876543. The sequence may cross the 0→9 boundary.
+Description: Every digit drops by one straight across the serial, rolling from 0 back to 9 if it needs to (e.g. 87654321, 09876543).
 BookRef: CS-1180
 Tier: 3
 Examples: ["87654321", "09876543", "76543210"]

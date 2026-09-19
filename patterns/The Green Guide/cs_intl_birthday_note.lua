@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_INTL_BIRTHDAY_NOTE
 DisplayName: CS-INTL Birthday Note
-Description: Serial forms a valid INTL date (yyyymmdd) as a birthday — year within the last 100 years.
+Description: Reads as a real year-month-day birthday in the year-first style, from within the last hundred years (e.g. 1975·11·22).
 BookRef: CS-620
 Tier: 7
 Examples: ["19751122", "19500704", "20000101"]

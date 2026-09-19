@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_EU_FUTURE_DATE
 DisplayName: CS-EU Future Date Note
-Description: Serial forms a valid EU date (ddmmyyyy) that is in the future.
+Description: Reads as a real day-month-year date in the day-first style that falls in the future (e.g. 25·12·2040).
 BookRef: CS-610
 Tier: 7
 Examples: ["25122040", "01012030", "04072050"]

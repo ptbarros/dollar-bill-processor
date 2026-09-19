@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_GROUPED_QUAD_PAIRS
 DisplayName: CS-Quad Pairs
-Description: Four consecutive pairs (AABBCCDD) filling all 8 positions, with all four pair digits distinct. e.g., M 55667788 M or M 99887766 M.
+Description: Four side-by-side pairs filling the serial, each pair a different digit (e.g. 55·66·77·88).
 BookRef: CS-60
 Tier: 5
 Examples: ["55667788", "99887766", "00112233"]

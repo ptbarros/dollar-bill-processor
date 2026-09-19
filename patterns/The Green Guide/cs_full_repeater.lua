@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_FULL_REPEATER
 DisplayName: CS-Paired Quad Repeater
-Description: The first four digits are repeated exactly in positions 5-8 (ABCDABCD pattern).
+Description: The first four digits repeat as the last four — one block of four printed twice (e.g. 2233·2233).
 BookRef: CS-1480
 Tier: 3
 Examples: ["12341234", "56785678", "00120012"]

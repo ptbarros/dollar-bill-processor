@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_DOUBLE_DOUBLE
 DisplayName: CS-Double Double
-Description: Two split CS-Quads where each digit appears as exactly two separate consecutive pairs. e.g., M 99559955 M (AABBAABB pattern).
+Description: Two digits, each appearing as two side-by-side pairs, alternating across the serial (e.g. 99·55·99·55).
 BookRef: CS-280
 Tier: 4
 Examples: ["99559955", "11221122", "55885588"]

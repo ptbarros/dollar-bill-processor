@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_INTL_LEAP_YEAR_BIRTHDAY
 DisplayName: CS-INTL Leap Year Birthday Note
-Description: Serial forms INTL date (yyyymmdd) of Feb 29 in a leap year, year within the last 100 years.
+Description: Reads as a leap-day birthday — February 29th in the year-first style — from within the last hundred years (e.g. 2000·02·29).
 BookRef: CS-630
 Tier: 6
 Examples: ["20000229", "19840229", "20240229"]

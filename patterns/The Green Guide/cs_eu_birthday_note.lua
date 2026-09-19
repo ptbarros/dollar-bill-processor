@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_EU_BIRTHDAY_NOTE
 DisplayName: CS-EU Birthday Note
-Description: Serial forms a valid EU date (ddmmyyyy) as a birthday — year within the last 100 years.
+Description: Reads as a real day-month-year birthday in the day-first style, from within the last hundred years (e.g. 22·11·1975).
 BookRef: CS-570
 Tier: 7
 Examples: ["22111975", "04071950", "01012000"]

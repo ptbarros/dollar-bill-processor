@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_DUAL_REPEATER_BOOKEND
 DisplayName: CS-Dual Repeater Bookend
-Description: First two digits repeat at the end in the same order (e.g., 12xxxx12). Both bookend digits must be different — if they are the same (11...11) that is CS-960.
+Description: The first two digits reappear in the same order at the tail end — two different digits repeated across the serial (e.g. 12·xxxx·12).
 BookRef: CS-980
 Tier: 7
 Examples: ["12000012", "23456723", "34567834"]

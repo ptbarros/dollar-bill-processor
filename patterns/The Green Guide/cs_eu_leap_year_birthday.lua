@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_EU_LEAP_YEAR_BIRTHDAY
 DisplayName: CS-EU Leap Year Birthday Note
-Description: Serial forms EU date (ddmmyyyy) of 29 Feb in a leap year, year within the last 100 years.
+Description: Reads as a leap-day birthday — the 29th of February in the day-first style — from within the last hundred years (e.g. 29·02·2000).
 BookRef: CS-580
 Tier: 6
 Examples: ["29022000", "29021984", "29022024"]

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_DOUBLE_QUAD
 DisplayName: CS-Double Quad
-Description: Two separate groups of 4+ consecutive identical digits. Both quads must be grouped (consecutive). e.g., M 11114444 M.
+Description: Two solid blocks of four or more identical digits sitting side by side (e.g. 1111·4444).
 BookRef: CS-230
 Tier: 3
 Examples: ["11114444", "44441111", "33335555"]

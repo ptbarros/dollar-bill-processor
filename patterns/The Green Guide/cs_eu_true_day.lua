@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_EU_TRUE_DAY
 DisplayName: CS-EU True Day Notes
-Description: A valid ddmm block (EU format) at any position, with the remaining 4 digits all zeros.
+Description: A real day-and-month in the day-first style tucked among nothing but zeros (e.g. 2512·0000).
 BookRef: CS-780
 Tier: 7
 Examples: ["25120000", "00002512", "00251200"]

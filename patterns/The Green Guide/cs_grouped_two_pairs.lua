@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_GROUPED_TWO_PAIRS
 DisplayName: CS-Two Pairs
-Description: Two CS-Pairs (each pair grouped consecutively) of different digits anywhere in the serial. Both pairs must be adjacent (grouped). e.g., M xx2299xx M or M 22xxxx99 M. Distinguished from CS-30 (Random Two Pairs) where at least one pair is split.
+Description: Two different digits, each doubled up side by side, sitting anywhere in the serial (e.g. xx·22·99·xx).
 BookRef: CS-20
 Tier: 7
 Examples: ["11223456", "22334567", "99881234"]

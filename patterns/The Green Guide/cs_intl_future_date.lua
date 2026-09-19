@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_INTL_FUTURE_DATE
 DisplayName: CS-INTL Future Date Note
-Description: Serial forms a valid INTL date (yyyymmdd) that is in the future.
+Description: Reads as a real year-month-day date in the year-first style that falls in the future (e.g. 2040·12·25).
 BookRef: CS-660
 Tier: 7
 Examples: ["20401225", "20300101", "20500704"]

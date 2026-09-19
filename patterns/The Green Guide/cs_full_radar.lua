@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_FULL_RADAR
 DisplayName: CS-Full Radar
-Description: All 8 positions form a palindrome — reads the same forwards and backwards.
+Description: Reads the same forwards and backwards — the whole serial mirrors itself down the middle (e.g. 1234·4321).
 BookRef: CS-1270
 Tier: 3
 Examples: ["12344321", "56477465", "10011001"]

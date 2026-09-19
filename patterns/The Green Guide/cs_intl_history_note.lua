@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_INTL_HISTORY_NOTE
 DisplayName: CS-INTL History Note
-Description: Serial forms a valid INTL date (yyyymmdd) with year more than 100 years ago.
+Description: Reads as a real year-month-day date in the year-first style from more than a hundred years ago (e.g. 1776·07·04).
 BookRef: CS-640
 Tier: 7
 Examples: ["17760704", "19001225", "18000101"]
