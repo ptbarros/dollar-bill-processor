@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_PAIRED_30AK
 DisplayName: CS-Paired 3OAK
-Description: Two CS-Pairs and a CS-3OAK (three of the same digit scattered — not all consecutive) anywhere in the serial, plus one remaining digit.
+Description: Three of one digit split apart, plus two side-by-side pairs of two other digits and one leftover digit (e.g. 3·11·22·33·4).
 BookRef: CS-120
 Tier: 8
 Examples: ["11322334", "32231134", "33112230"]

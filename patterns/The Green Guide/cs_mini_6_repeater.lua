@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_MINI_6_REPEATER
 DisplayName: CS-Mini 6 Repeater
-Description: Any 3-digit pattern repeated twice and grouped (ABCABC), anywhere in the serial. e.g., M 301301xx M or M xx301301 M.
+Description: A three-digit run repeated back to back sits somewhere in the serial (e.g. 301·301·xx).
 BookRef: CS-1570
 Tier: 7
 Examples: ["30130100", "03013010", "00301301"]

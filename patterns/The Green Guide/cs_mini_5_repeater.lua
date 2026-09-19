@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_MINI_5_REPEATER
 DisplayName: CS-Mini 5 Repeater
-Description: Two CS-20AKs equidistant and separated by one random digit (ABxAB), anywhere. e.g., M 12x12xxx M or M xxx12x12 M.
+Description: A two-digit pair that repeats across a single gap sits somewhere in the serial (e.g. 12·x·12·xxx).
 BookRef: CS-1560
 Tier: 7
 Examples: ["12312000", "01231200", "00123120"]

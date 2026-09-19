@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_LEADING_ZEROS
 DisplayName: CS-Leading Zeros
-Description: Serial starts with one or more zeros, all zeros contiguous at the front. e.g., M 00000xxx M. The more leading zeros, the rarer.
+Description: Opens with a run of zeros and has none anywhere after them — the more zeros up front, the rarer (e.g. 00000·xxx).
 BookRef: CS-1940
 Tier: 7
 Examples: ["00012345", "00064185", "01234567"]

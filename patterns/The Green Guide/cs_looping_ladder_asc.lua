@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_LOOPING_LADDER_ASC
 DisplayName: CS-Ascending Looping Ladder
-Description: A cyclic rotation of 8 consecutive mod-10 digits in ascending order, where the sequence does not start at its natural first element (that would be CS-Ascending Ladder). e.g., M 78123456 M (digits 1-8 rotated to start at 7).
+Description: Eight digits climbing by one that wrap around — the straight run rolls off one end and picks back up at the other (e.g. 7812·3456).
 BookRef: CS-1190
 Tier: 1
 Examples: ["78123456", "45678923", "78903456"]

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_MINI_4_REPEATER
 DisplayName: CS-Mini 4 Repeater
-Description: Two different digits repeated and grouped together (ABAB), anywhere in the serial. e.g., M x2121xxx M or M xxxx2121 M.
+Description: Two different digits taking turns four times in a row, tucked anywhere in the serial (e.g. x·2121·xxx).
 BookRef: CS-1550
 Tier: 8
 Examples: ["21210000", "02121000", "00212100"]

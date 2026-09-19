@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_MINI_5_RADAR
 DisplayName: CS-Mini 5 Radar
-Description: A CS-20AK separated by one digit with another CS-20AK outside: 5-digit palindrome (ABCBA) anywhere in the serial. Can also be a CS-4OAK when A==B (e.g., M 44x44xxx M). e.g., M 24x42xxx M.
+Description: A five-digit stretch that reads the same both ways sits somewhere in the serial (e.g. 24342·xxx).
 BookRef: CS-1390
 Tier: 5
 Examples: ["24342000", "00024342", "02434200", "44344000", "00044344"]

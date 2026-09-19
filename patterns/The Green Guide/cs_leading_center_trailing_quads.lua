@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_LEADING_CENTER_TRAILING_QUADS
 DisplayName: CS-Leading, Center & Trailing Quads
-Description: Any four of the same digit grouped consecutively anywhere within the serial. Leading Quads start at position 1 (e.g., M 4444xxxx M), Center Quads start at positions 2, 3, or 4 (e.g., M x4444xxx M, M xx4444xx M, M xxx4444x M), Trailing Quads start at position 5 (e.g., M xxxx4444 M). This is essentially the same as CS-Quad (CS-200) — any grouped run of 4+ same digit.
+Description: A solid block of four identical digits sitting anywhere in the serial — at the front, the middle, or the end (e.g. 4444·xxxx).
 BookRef: CS-220
 Tier: 4
 Examples: ["44441234", "12444412", "12344444"]

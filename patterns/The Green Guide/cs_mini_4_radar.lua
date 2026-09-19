@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_MINI_4_RADAR
 DisplayName: CS-Mini 4 Radar
-Description: A CS-Pair inside a CS-20AK grouped: 4-digit palindrome (ABBA) anywhere in the serial. e.g., M 2442xxxx M or M xx4224xx M.
+Description: A four-digit stretch that reads the same both ways sits somewhere in the serial (e.g. 2442·xxxx).
 BookRef: CS-1380
 Tier: 5
 Examples: ["24420000", "00244200", "00002442"]

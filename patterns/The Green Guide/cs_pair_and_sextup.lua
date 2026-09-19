@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_PAIR_AND_SEXTUP
 DisplayName: CS-Pair and a Sextup
-Description: A CS-Sextup (6 consecutive identical digits) plus a CS-Pair of a different digit, where the pair occupies positions 1–2 or 7–8. e.g., M 22666666 M or M 66666622 M.
+Description: Six identical digits in a row with a matching pair of another digit tacked onto one end (e.g. 22·666666).
 BookRef: CS-450
 Tier: 4
 Examples: ["22666666", "66666622", "33555555", "55555533"]

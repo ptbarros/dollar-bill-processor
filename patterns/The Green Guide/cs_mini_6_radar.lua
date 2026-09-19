@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_MINI_6_RADAR
 DisplayName: CS-Mini 6 Radar
-Description: One CS-Pair surrounded by two equidistant CS-20AKs: 6-digit palindrome (ABCCBA) anywhere in the serial. e.g., M 234432xx M or M x221122x M or M xx234432 M.
+Description: A six-digit stretch that reads the same both ways sits somewhere in the serial (e.g. 234432·xx).
 BookRef: CS-1400
 Tier: 4
 Examples: ["23443200", "02344320", "00234432"]

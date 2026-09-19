@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_MINI_7_REPEATER
 DisplayName: CS-Mini 7 Repeater
-Description: Three CS-20AKs separated by one digit (ABCxABC): a 3-digit pattern repeats across a gap. e.g., M 123x123x M or M x123x123 M.
+Description: A three-digit run repeats across a single gap near one end of the serial (e.g. 123·x·123·x).
 BookRef: CS-1580
 Tier: 6
 Examples: ["12301230", "01230123"]

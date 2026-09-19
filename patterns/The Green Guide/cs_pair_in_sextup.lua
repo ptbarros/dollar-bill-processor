@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_PAIR_IN_SEXTUP
 DisplayName: CS-Pair in a Sextup
-Description: A CS-Pair (2 consecutive same digit) within a CS-60AK (6 of another digit surrounding it). Exactly two digits using all 8 positions. Also a CS-Binary. e.g., M 62266666 M or M 66226666 M.
+Description: Just two digits, with a side-by-side pair of one tucked inside six of the other (e.g. 6·22·66666).
 BookRef: CS-460
 Tier: 3
 Examples: ["62266666", "66226666", "66622666"]

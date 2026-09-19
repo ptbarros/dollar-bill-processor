@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_MILLION_NOTE
 DisplayName: CS-Million Notes
-Description: Serial ends in 6 or 7 trailing zeros (the last 6-7 digits are all zeros). e.g., M x0000000 M or M xx000000 M.
+Description: Ends in a long tail of zeros — six or seven of them — so the note lands on a round million or ten-million mark (e.g. xx·000000).
 BookRef: CS-1990
 Tier: 3
 Examples: ["10000000", "20000000", "23000000"]

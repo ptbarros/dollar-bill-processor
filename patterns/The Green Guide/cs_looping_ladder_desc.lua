@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_LOOPING_LADDER_DESC
 DisplayName: CS-Descending Looping Ladder
-Description: A cyclic rotation of 8 consecutive mod-10 digits in descending order, where the sequence does not start at its natural first element (that would be CS-Descending Ladder). e.g., M 32987654 M (digits 2-9 rotated to start at 3).
+Description: Eight digits dropping by one that wrap around — the straight run rolls off one end and picks back up at the other (e.g. 3298·7654).
 BookRef: CS-1200
 Tier: 1
 Examples: ["32987654", "43218765", "18765432"]

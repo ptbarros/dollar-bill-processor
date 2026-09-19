@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_OSCILLATING_RADAR
 DisplayName: CS-Oscillating Radar
-Description: CS-60AK split into 3 evenly-spaced CS-Pairs separated by a CS-2OAK at positions 3 and 6. The separators must be the same digit. e.g., M 44144144 M.
+Description: One digit runs in three pairs, broken up evenly by the same second digit slipped in twice (e.g. 44·1·44·1·44).
 BookRef: CS-1330
 Tier: 2
 Examples: ["44144144", "22322322", "99199199"]

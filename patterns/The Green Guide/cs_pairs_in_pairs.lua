@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_PAIRS_IN_PAIRS
 DisplayName: CS-Pairs in Pairs
-Description: A CS-Pair (two adjacent identical digits) must be within a CS-2OAK (two non-adjacent identical digits of another value). The 2OAK digit must appear on both sides of the grouped pair. e.g., M 80085775 M (pair 55 within 2OAK of 8s: 8...8 surrounding 55). Uses all 8 positions with the two digit types.
+Description: A side-by-side pair of one digit sits cradled between the two scattered copies of another digit (e.g. 8·xx·55·x·8).
 BookRef: CS-80
 Tier: 6
 Examples: ["80085775", "85007758", "80055778"]

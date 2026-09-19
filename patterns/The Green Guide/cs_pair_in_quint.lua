@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_PAIR_IN_QUINT
 DisplayName: CS-Pair in a Quint
-Description: Five occurrences of one digit surround a consecutive pair of another digit, with one remaining digit anywhere. The quint digit must appear on both sides of the pair. e.g., M x5225555 M.
+Description: Five of one digit flanking a side-by-side pair of another on both sides, with one stray digit somewhere (e.g. 0·5·22·555).
 BookRef: CS-390
 Tier: 5
 Examples: ["05225555", "05522555", "52255550", "55225515", "52255155"]

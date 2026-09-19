@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_LUCKY_SEVEN_RADAR
 DisplayName: CS-Lucky Seven Radar
-Description: A CS-Quint or CS-50AK (5+ of same digit) within a CS-20AK (same different digit at both ends): e.g., 25555552. The outer digit bookends a run of 6 (or 5) identical inner digits.
+Description: A single digit caps both ends around a solid run of six matching digits between them (e.g. 2·555555·2).
 BookRef: CS-1350
 Tier: 2
 Examples: ["25555552", "13333331", "70000007"]

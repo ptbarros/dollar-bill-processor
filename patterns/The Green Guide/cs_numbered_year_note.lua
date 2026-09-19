@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_NUMBERED_YEAR_NOTE
 DisplayName: CS-Numbered Year Note
-Description: A valid 4-digit year (default 1700-2099, editable below) at any position, with the remaining 4 digits all the same non-zero digit (4OAK).
+Description: A real four-digit year sits in the serial, with the other four spots all filled by one repeated non-zero digit (e.g. 1975·3333).
 BookRef: CS-680
 Tier: 7
 Examples: ["19753333", "33319753", "33197533"]

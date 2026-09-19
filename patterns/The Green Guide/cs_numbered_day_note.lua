@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_NUMBERED_DAY_NOTE
 DisplayName: CS-Numbered Day Note
-Description: A valid mmdd or ddmm block at any position, with the remaining 4 digits all the same non-zero digit (4OAK).
+Description: A real month-and-day sits in the serial, with the other four spots all filled by one repeated non-zero digit (e.g. 1225·3333).
 BookRef: CS-790
 Tier: 8
 Examples: ["12253333", "33312253", "33122533"]

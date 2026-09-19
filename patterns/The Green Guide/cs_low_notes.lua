@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_LOW_NOTES
 DisplayName: CS-Low Notes
-Description: Serial number <= 9999 (first four digits are all zeros). The lower the better. e.g., M 0000xxxx M.
+Description: The whole serial is a small number — it opens with four zeros, so the lower it runs the better (e.g. 0000·xxxx).
 BookRef: CS-1980
 Tier: 4
 Examples: ["00009999", "00000001", "00001234"]

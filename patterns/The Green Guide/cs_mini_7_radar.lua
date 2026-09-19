@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_MINI_7_RADAR
 DisplayName: CS-Mini 7 Radar
-Description: Three equidistant CS-20AKs separated by one digit: 7-digit palindrome (ABCDCBA) anywhere in the serial. e.g., M x234x432 M or M 234x432x M.
+Description: A seven-digit stretch that reads the same both ways fills nearly the whole serial (e.g. 2341432·x).
 BookRef: CS-1410
 Tier: 3
 Examples: ["02341432", "12341432", "23414320"]

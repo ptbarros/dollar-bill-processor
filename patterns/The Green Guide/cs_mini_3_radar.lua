@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_MINI_3_RADAR
 DisplayName: CS-Mini 3 Radar
-Description: A mirrored 3-digit window (AXA) anywhere in the serial — the same digit at positions i and i+2 with a different digit sandwiched between them. The window can begin at any of the first six positions.
+Description: Somewhere in the serial sits a little mirror of three — the same digit on either side of a different one (e.g. 4·3·4).
 BookRef: CS-1370
 Tier: 8
 Examples: ["34356789", "45056789", "23456787"]
