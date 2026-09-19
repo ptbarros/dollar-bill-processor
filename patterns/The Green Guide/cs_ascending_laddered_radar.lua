@@ -1,10 +1,10 @@
 --[[
 Pattern: CS_ASCENDING_LADDERED_RADAR
-DisplayName: CS-Ascending Laddered Radar
-Description: A palindrome (radar) where the first 4 digits form an ascending ladder (each +1). e.g., 45677654.
+DisplayName: CS-Laddered Radar
+Description: A palindrome (radar) where the first 4 digits form a ladder, ascending or descending (each step 1). e.g., 45677654 or 76544567.
 BookRef: CS-1420
 Tier: 3
-Examples: ["45677654", "12344321", "01233210"]
+Examples: ["45677654", "76544567", "12344321", "43211234"]
 Price: $5-$100
 --]]
 
@@ -15,8 +15,11 @@ function match(ctx)
     -- Must be a palindrome (radar)
     if not is_palindrome(d) then return {matched = false} end
 
-    -- First 4 digits must form ascending ladder
-    if not is_ascending(d:sub(1, 4)) then return {matched = false} end
+    -- First 4 digits must form a ladder, either direction (Ed review: merged the
+    -- old CS-Ascending and CS-Descending Laddered Radars into one).
+    local first = d:sub(1, 4)
+    local up = is_ascending(first)
+    if not up and not is_descending(first) then return {matched = false} end
 
     -- Ladder half highlighted in lime, palindrome arcs in purple
     return {
@@ -31,6 +34,6 @@ function match(ctx)
             {from = 2, to = 5, color = "purple", style = "arc"},
             {from = 3, to = 4, color = "purple", style = "arc"},
         },
-        message = "CS-Ascending Laddered Radar: ascending first half + palindrome (CS-1420)"
+        message = "CS-Laddered Radar: " .. (up and "ascending" or "descending") .. " first half + palindrome (CS-1420)"
     }
 end
