@@ -51,12 +51,20 @@ function match(ctx)
                 end
 
                 local direction = is_asc and "ascending" or "descending"
+                local ladder_conns = {}
+                for i = 1, 3 do
+                    table.insert(ladder_conns, {from = ladder_positions[i], to = ladder_positions[i + 1], color = "blue", style = "arc"})
+                end
                 return {
                     matched = true,
                     message = "Quad " .. d .. "s with " .. direction .. " ladder",
+                    -- Quad shown by one group box; ladder digits boxed with progression arcs (Ed review, Workshop).
                     highlights = {
-                        {positions = quad_positions, color = "orange"},
-                        {positions = ladder_positions, color = is_asc and "lime" or "cyan"}
+                        {positions = ladder_positions, color = "blue"}
+                    },
+                    connectors = ladder_conns,
+                    group_boxes = {
+                        {from = quad_positions[1], to = quad_positions[#quad_positions], color = "orange", thickness = 3}
                     }
                 }
             end

@@ -27,22 +27,29 @@ function match(ctx)
     end
     table.sort(sorted_asc)
 
+    local dir
     if table.concat(sorted_asc) == s then
-        return {
-            matched = true,
-            message = "3-digit chunky ladder (ascending)",
-            highlights = {{positions = {0,1,2,3,4,5,6,7}, color = "lime"}}
-        }
+        dir = "ascending"
+    else
+        table.sort(sorted_asc, function(a, b) return a > b end)
+        if table.concat(sorted_asc) == s then
+            dir = "descending"
+        else
+            return {matched = false}
+        end
     end
 
-    table.sort(sorted_asc, function(a, b) return a > b end)
-    if table.concat(sorted_asc) == s then
-        return {
-            matched = true,
-            message = "3-digit chunky ladder (descending)",
-            highlights = {{positions = {0,1,2,3,4,5,6,7}, color = "cyan"}}
-        }
+    -- One colored box per run of identical digits (Ed review), e.g. 9999 888 7.
+    local colors = {"blue", "orange", "magenta", "red"}
+    local boxes = {}
+    for _, run in ipairs(find_runs(s)) do
+        table.insert(boxes, {from = run.start, to = run.start + run.length - 1,
+            color = colors[(#boxes % #colors) + 1], thickness = 3})
     end
-
-    return {matched = false}
+    return {
+        matched = true,
+        message = "3-digit chunky ladder (" .. dir .. ")",
+        highlights = {},
+        group_boxes = boxes
+    }
 end

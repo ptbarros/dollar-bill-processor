@@ -49,25 +49,34 @@ function match(ctx)
     -- Check cyclic ascending order: each consecutive pair advances by +1 within the set,
     -- except after the last element (k+7)%10 which wraps back to k.
     local end_val = (k + 7) % 10
+    local wrap = nil
     for i = 1, 7 do
         local curr = tonumber(d:sub(i, i))
         local nxt  = tonumber(d:sub(i + 1, i + 1))
         local expected = (curr == end_val) and k or (curr + 1) % 10
         if nxt ~= expected then return {matched = false} end
+        if curr == end_val then wrap = i - 1 end
     end
+    if wrap == nil then return {matched = false} end
 
-    local positions = {}
-    for i = 0, 7 do table.insert(positions, i) end
-
+    -- One box per ascending run split at the wrap, a direction arrow under each (Ed review, Workshop).
+    local group_boxes = {
+        {from = 0, to = wrap, color = "blue", thickness = 3},
+        {from = wrap + 1, to = 7, color = "orange", thickness = 3},
+    }
     local connectors = {}
-    for i = 0, 6 do
-        table.insert(connectors, {from = i, to = i + 1, color = "lime", style = "line"})
+    if wrap > 0 then
+        table.insert(connectors, {from = 0, to = wrap, color = "blue", style = "arrow"})
+    end
+    if wrap + 1 < 7 then
+        table.insert(connectors, {from = wrap + 1, to = 7, color = "orange", style = "arrow"})
     end
 
     return {
         matched = true,
-        highlights = {{positions = positions, color = "lime"}},
+        highlights = {},
         connectors = connectors,
+        group_boxes = group_boxes,
         message = "Ascending looping ladder (k=" .. k .. ", starting at " .. d:sub(1,1) .. ") (CS-1190)"
     }
 end

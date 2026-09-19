@@ -26,9 +26,9 @@ function match(ctx)
 
     return {
         matched = true,
+        -- Box only the non-zero serial digit; leading zeros drawn plain (Ed review).
         highlights = {
-            highlight({0, 1, 2, 3, 4, 5, 6}, "gold", "leading zeros"),
-            highlight({7}, "yellow", "serial number")
+            highlight({7}, "blue", "serial number")
         },
         connectors = {},
         message = "Serial #" .. last
