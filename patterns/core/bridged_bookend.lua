@@ -1,83 +1,56 @@
 --[[
 Pattern: BRIDGED_BOOKEND
-Description: Bookend with bridge pattern
+DisplayName: Bridged Bookend
+Description: First and last digit match (bookend) wrapping a middle bridge that is either 2 triples (AAABBB) or 3 pairs (AABBCC). Uses all 8 digits.
 Tier: 4
-Examples: ["12233221", "34455443"]
-Odds: 1 in 12,176
+Examples: ["12223331", "15566771", "19998881", "34455663"]
 Price: $5-$25
 --]]
 
 function match(ctx)
-    local digits = ctx.digits
-    if #digits ~= 8 then
-        return {matched = false}
-    end
+    local d = ctx.digits
+    if #d ~= 8 then return {matched = false} end
 
-    -- Pattern: ABCCBA pattern embedded, like AB CC BA or similar
-    -- Check for AABBCCDD where first half mirrors second half
+    -- Bookend: first and last digit match.
+    if d:sub(1, 1) ~= d:sub(8, 8) then return {matched = false} end
 
-    -- Check ABBAABBA pattern
-    if digits:sub(1, 1) == digits:sub(4, 4) and digits:sub(1, 1) == digits:sub(5, 5) and digits:sub(1, 1) == digits:sub(8, 8) and
-       digits:sub(2, 2) == digits:sub(3, 3) and digits:sub(2, 2) == digits:sub(6, 6) and digits:sub(2, 2) == digits:sub(7, 7) then
-        local a = digits:sub(1, 1)
-        local b = digits:sub(2, 2)
-        return {
-            matched = true,
-            highlights = {
-                highlight({0, 3, 4, 7}, "orange", "A"),
-                highlight({1, 2, 5, 6}, "coral", "B")
-            },
-            connectors = {
-                connector(0, 7, "orange", "arc"),
-                connector(3, 4, "orange", "line")
-            },
-            message = "Bridged bookend: " .. a .. b .. b .. a .. a .. b .. b .. a
+    local mid = d:sub(2, 7)  -- the 6 bridge digits
+
+    -- Bridge option A: two triples, AAABBB (A != B).
+    local a, b = mid:sub(1, 1), mid:sub(4, 4)
+    local two_triples = mid:sub(1, 3) == a:rep(3) and mid:sub(4, 6) == b:rep(3) and a ~= b
+
+    -- Bridge option B: three pairs, AABBCC with adjacent pairs differing.
+    local p1, p2, p3 = mid:sub(1, 1), mid:sub(3, 3), mid:sub(5, 5)
+    local three_pairs = mid:sub(1, 2) == p1:rep(2) and mid:sub(3, 4) == p2:rep(2)
+        and mid:sub(5, 6) == p3:rep(2) and p1 ~= p2 and p2 ~= p3
+
+    if not two_triples and not three_pairs then return {matched = false} end
+
+    local group_boxes = {}
+    if two_triples then
+        group_boxes = {
+            {from = 1, to = 3, color = "orange", thickness = 3},
+            {from = 4, to = 6, color = "magenta", thickness = 3}
+        }
+    else
+        group_boxes = {
+            {from = 1, to = 2, color = "orange", thickness = 3},
+            {from = 3, to = 4, color = "magenta", thickness = 3},
+            {from = 5, to = 6, color = "red", thickness = 3}
         }
     end
 
-    -- Check ABCCBA?? pattern (first 6 is palindrome)
-    if digits:sub(1, 1) == digits:sub(6, 6) and
-       digits:sub(2, 2) == digits:sub(5, 5) and
-       digits:sub(3, 3) == digits:sub(4, 4) then
-        return {
-            matched = true,
-            highlights = {
-                highlight({0, 5}, "orange", "A"),
-                highlight({1, 4}, "coral", "B"),
-                highlight({2, 3}, "gold", "CC")
-            },
-            connectors = {
-                connector(0, 5, "orange", "arc"),
-                connector(1, 4, "coral", "arc")
-            },
-            group_boxes = {
-                {from = 2, to = 3, color = "gold", thickness = 2}
-            },
-            message = "Bridged bookend: palindrome bridge"
-        }
-    end
-
-    -- Check ??ABCCBA pattern (last 6 is palindrome)
-    if digits:sub(3, 3) == digits:sub(8, 8) and
-       digits:sub(4, 4) == digits:sub(7, 7) and
-       digits:sub(5, 5) == digits:sub(6, 6) then
-        return {
-            matched = true,
-            highlights = {
-                highlight({2, 7}, "orange", "A"),
-                highlight({3, 6}, "coral", "B"),
-                highlight({4, 5}, "gold", "CC")
-            },
-            connectors = {
-                connector(2, 7, "orange", "arc"),
-                connector(3, 6, "coral", "arc")
-            },
-            group_boxes = {
-                {from = 4, to = 5, color = "gold", thickness = 2}
-            },
-            message = "Bridged bookend: palindrome bridge"
-        }
-    end
-
-    return {matched = false}
+    local kind = two_triples and "2 triples" or "3 pairs"
+    return {
+        matched = true,
+        message = "Bridged bookend (" .. d:sub(1, 1) .. " wraps " .. kind .. ")",
+        highlights = {
+            {positions = {0, 7}, color = "blue"}
+        },
+        connectors = {
+            {from = 0, to = 7, color = "blue", style = "arc"}
+        },
+        group_boxes = group_boxes
+    }
 end
