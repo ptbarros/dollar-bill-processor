@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_PAIRS_IN_PAIRS
 DisplayName: CS-Random Pairs in Pairs
-Description: Two CS-2OAKs where one is inside the other — one 2OAK digit appears on both sides of the other 2OAK digit. Neither pair needs to be grouped (both can be scattered). e.g., M xx2x2xxx M with 5s on either side of the 2s.
+Description: Two different digits each appearing twice, one digit's two copies straddling the other's — a scattered pair nested inside another (e.g. 5·2·xx·2·x·5).
 BookRef: CS-90
 Tier: 7
 Examples: ["52302352", "29002293", "12355321"]
