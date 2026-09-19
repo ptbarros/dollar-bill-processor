@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TETRADIC
 DisplayName: CS-Tetradic
-Description: Only digits 0, 1, 8; is a palindrome; AND reads the same upside-down (flipped 180°). Only ~2 exist per run.
+Description: Built only from 0s, 1s and 8s, and it reads the same forwards, backwards, and turned upside-down (e.g. 0811·1180).
 BookRef: CS-1160
 Tier: 1
 Examples: ["08111180", "10111101", "10011001"]

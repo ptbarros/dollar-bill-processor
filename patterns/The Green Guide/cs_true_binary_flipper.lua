@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRUE_BINARY_FLIPPER
 DisplayName: CS-True Binary Flipper
-Description: Only 0s and 1s (CS-True Binary), AND reads the same upside-down (CS-Flipper). Subset of both CS-900 and CS-Rotator.
+Description: Built from only 0s and 1s, and it reads the same turned upside-down (e.g. 1010·0101).
 BookRef: CS-1040
 Tier: 1
 Examples: ["10100101", "11011011", "10111101"]

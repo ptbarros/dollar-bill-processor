@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRIPLE_TRIPLE_PAIR
 DisplayName: CS-Triple Triple Pair
-Description: Two CS-Triples (runs of 3+) plus at least one CS-Pair (run of 2), all as consecutive groups.
+Description: Two solid blocks of three identical digits alongside a side-by-side pair (e.g. 111·222·33).
 BookRef: CS-130
 Tier: 5
 Examples: ["00033300", "11122200", "11100022"]

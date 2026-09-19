@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRIPLE_IN_QUINT
 DisplayName: CS-Triple in a Quint
-Description: A CS-Triple (3 consecutive) within a CS-50AK (5 of another digit) where the 5-digit must bookend the serial (appear at positions 1 and 8). Exactly two digits using all 8 positions. Also a CS-Binary. e.g., M 53335555 M or M 55333555 M.
+Description: Just two digits, with a solid block of three of one wrapped by five of the other running to both ends (e.g. 5·333·5555).
 BookRef: CS-420
 Tier: 3
 Examples: ["53335555", "55333555", "55533355"]

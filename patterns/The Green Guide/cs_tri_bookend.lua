@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRI_BOOKEND
 DisplayName: CS-Tri Matched Bookend
-Description: The first three digits are all the same and match the last three digits: AAAxxAAA. e.g., M 333xx333 M.
+Description: The same digit opens the serial three times and closes it three times, whatever sits between (e.g. 333·xx·333).
 BookRef: CS-990
 Tier: 6
 Examples: ["33300333", "77712777", "99945999"]

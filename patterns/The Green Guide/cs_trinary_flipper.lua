@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRINARY_FLIPPER
 DisplayName: CS-Trinary Flipper
-Description: All 8 digits are from the flip set {0,1,6,8,9} and exactly 3 distinct digits are used. e.g., M 01810081 M.
+Description: Built from three different digits, all of them ones that still look like digits upside-down — 0, 1, 6, 8 and 9 (e.g. 0181·0081).
 BookRef: CS-1060
 Tier: 7
 Examples: ["01810081", "61160016", "61916191"]

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRI_REPEATED_BOOKEND
 DisplayName: CS-Tri Repeated Bookend
-Description: First three digits repeat at the end in the same order (e.g., 123xx123). The three bookend digits must not all be the same — that is CS-990 (Tri Matched Bookend).
+Description: The first three digits reappear in the same order at the tail end (e.g. 123·xx·123).
 BookRef: CS-1000
 Tier: 7
 Examples: ["12300123", "45600456", "78900789"]

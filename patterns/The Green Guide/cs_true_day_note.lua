@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRUE_DAY_NOTE
 DisplayName: True Date Note
-Description: A valid mmdd or ddmm block at any position, with the remaining 4 digits all zeros.
+Description: A real month-and-day sits in the serial with the other four spots all zeros (e.g. 1225·0000).
 BookRef: CS-760
 Tier: 7
 Examples: ["12250000", "00001225", "00122500"]

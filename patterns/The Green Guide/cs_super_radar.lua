@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SUPER_RADAR
 DisplayName: CS-Super Radar
-Description: A CS-Sextup (6 consecutive identical digits) wrapped by a CS-Pair (same digit at both ends). Structure: ABBBBBBA where A ≠ B.
+Description: A solid run of six identical digits capped by a single matching digit at each end (e.g. 0·444444·0).
 BookRef: CS-1260
 Tier: 2
 Examples: ["04444440", "19999991", "30000003"]

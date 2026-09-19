@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SUPER_REPEATER
 DisplayName: CS-Super Repeater
-Description: Two different digits alternate four times (ABABABAB pattern, A≠B).
+Description: Two different digits alternating the whole way across — one, then the other, four times over (e.g. 12·12·12·12).
 BookRef: CS-1530
 Tier: 2
 Examples: ["12121212", "34343434", "01010101"]

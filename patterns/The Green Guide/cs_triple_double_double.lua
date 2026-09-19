@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRIPLE_DOUBLE_DOUBLE
 DisplayName: CS-Triple Double Double
-Description: One CS-Triple (run of 3+) plus two CS-Pairs (runs of 2), all as consecutive groups.
+Description: A solid block of three identical digits plus two side-by-side pairs of other digits (e.g. 111·22·33).
 BookRef: CS-170
 Tier: 5
 Examples: ["11100223", "11122334", "44422300"]

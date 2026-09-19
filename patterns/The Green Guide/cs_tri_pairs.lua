@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRI_PAIRS
 DisplayName: CS-Random Tri Pairs
-Description: Three different digits each appearing exactly twice in the serial. At most two of the three pairs may be adjacent — all three cannot be grouped consecutively.
+Description: Three different digits appearing twice each, with at least one pair split apart rather than side by side (e.g. 12·03·12·04).
 BookRef: CS-50
 Tier: 7
 Examples: ["12031204", "12213345", "12312345"]

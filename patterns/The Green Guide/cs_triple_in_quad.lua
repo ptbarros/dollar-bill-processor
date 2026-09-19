@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRIPLE_IN_QUAD
 DisplayName: CS-Triple in Quad
-Description: A CS-Triple (3 consecutive) within a CS-40AK (4 scattered of another digit surrounding it), plus one random digit. e.g., M 4443334x M.
+Description: A solid block of three identical digits with four of another digit spread around it on both sides, plus one stray digit (e.g. 444·333·4·0).
 BookRef: CS-290
 Tier: 5
 Examples: ["44433340", "14443334", "04443334"]

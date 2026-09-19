@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRUE_BINARY_ROTATOR
 DisplayName: CS-True Binary Rotator
-Description: Rotator using exactly 2 unique digits, restricted to {0,1} only. Rotation equals reversal equals palindrome for these digits.
+Description: Built from only 0s and 1s, both present, and it reads the same turned upside-down (e.g. 0100·0010).
 BookRef: CS-1110
 Tier: 3
 Examples: ["01000010", "10000001", "01100110"]

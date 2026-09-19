@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRUE_BINARY_SKIP_NOTE
 DisplayName: CS-True Binary Skip Note
-Description: Exactly 01010101 or 10101010 — a true binary alternating skip pattern using only digits 0 and 1.
+Description: Just 0s and 1s taking strict turns the whole way across — either 01010101 or 10101010.
 BookRef: CS-1630
 Tier: 2
 Examples: ["01010101", "10101010"]

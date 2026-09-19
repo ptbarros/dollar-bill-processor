@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRI_PAIRS_GROUPED
 DisplayName: CS-Tri Pairs
-Description: Three different digits each appearing exactly twice, where all three pairs are internally grouped (adjacent). The three pairs do not need to be adjacent to each other. e.g., M 112233xx M or M x22x3311 M. Distinguished from CS-50 (Random Tri Pairs) where at least one pair is split.
+Description: Three different digits, each doubled up side by side, sitting anywhere in the serial (e.g. 11·22·33·xx).
 BookRef: CS-40
 Tier: 7
 Examples: ["11224500", "11992276", "66778900"]

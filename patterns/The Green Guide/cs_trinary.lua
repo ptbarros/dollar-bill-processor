@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRINARY
 DisplayName: CS-Trinary
-Description: The serial contains exactly three unique digits.
+Description: Built from just three different digits, in any arrangement (e.g. 012·012·01).
 BookRef: CS-940
 Tier: 5
 Examples: ["01201201", "11220011", "00011122"]

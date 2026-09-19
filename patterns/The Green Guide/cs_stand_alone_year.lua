@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_YEAR
 DisplayName: CS-Stand Alone Year
-Description: A 4-digit year (1000-2099) as a consecutive block, with remaining 4 digits all zeros. e.g., M 01975000 M.
+Description: A four-digit year sits by itself, wrapped in nothing but zeros (e.g. 0·1975·000).
 BookRef: CS-1810
 Tier: 5
 Examples: ["01975000", "00197500", "19760000"]

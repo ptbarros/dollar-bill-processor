@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRINARY_ROTATOR
 DisplayName: CS-Trinary Rotator
-Description: Rotator using exactly 3 unique flip-valid digits. Valid sets include {0,6,9}, {1,6,9}, {8,6,9}, or {0,1,8}.
+Description: Turn the note upside-down and it reads the same, built from three different digits that survive the flip (e.g. 0690·0690).
 BookRef: CS-1130
 Tier: 4
 Examples: ["06900690", "16911691", "10800801"]

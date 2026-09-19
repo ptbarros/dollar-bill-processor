@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRIPLE_REPEATER
 DisplayName: CS-Triple Repeater
-Description: A 3-digit sequence repeats across the 8-digit serial as ABCABCAB. The sequence repeats twice fully (positions 1–6) and the first two digits appear again at positions 7–8. e.g., M 21021021 M.
+Description: A three-digit run repeats over and over across the serial, spilling into the last two spots (e.g. 210·210·21).
 BookRef: CS-1500
 Tier: 7
 Examples: ["21021021", "12312312", "01001001"]

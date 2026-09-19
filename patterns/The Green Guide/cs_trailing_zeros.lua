@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRAILING_ZEROS
 DisplayName: CS-Trailing Zeros
-Description: Serial ends with one or more zeros, all zeros contiguous at the end. e.g., M xxxxxxx0 M or M xxxxx000 M. The more trailing zeros, the rarer.
+Description: Ends on a run of zeros with none anywhere before them — the more trailing zeros, the rarer (e.g. xxx·00000).
 BookRef: CS-1960
 Tier: 7
 Examples: ["12345600", "12345000", "12340000"]

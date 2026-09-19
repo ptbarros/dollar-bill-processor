@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRUE_BINARY
 DisplayName: CS-True Binary
-Description: The serial contains only 0s and 1s (exactly two digits: 0 and 1). Distinct from CS-Binary (CS-910) which allows any two unique digits.
+Description: Built from nothing but 0s and 1s (e.g. 0111·0010).
 BookRef: CS-900
 Tier: 3
 Examples: ["01110010", "10100101", "11001100"]

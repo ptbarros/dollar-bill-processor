@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRIPLE_YEAR_NOTE
 DisplayName: CS-Triple Year Note
-Description: Three overlapping valid years (default 1700-2099, editable below) starting at different positions among positions 1-5 in the serial.
+Description: Three overlapping four-digit years can be read from the serial, each starting one spot after the last (e.g. 1919·2012).
 BookRef: CS-720
 Tier: 6
 Examples: ["19192012", "19201920", "11992012"]

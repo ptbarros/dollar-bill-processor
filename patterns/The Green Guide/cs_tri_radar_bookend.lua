@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRI_RADAR_BOOKEND
 DisplayName: CS-Tri Radar Bookend
-Description: First three digits mirror the last three in reverse (e.g., 123xx321). The three outer position-pairs are radar-matched: d[1]=d[8], d[2]=d[7], d[3]=d[6]. Not all three can be the same digit.
+Description: The first three digits show up flipped at the tail end, mirrored across the serial (e.g. 123·xx·321).
 BookRef: CS-1010
 Tier: 7
 Examples: ["12300321", "45600654", "12312321"]
