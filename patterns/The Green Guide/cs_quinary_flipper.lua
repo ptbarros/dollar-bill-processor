@@ -20,11 +20,15 @@ function match(ctx)
 
     -- Build visualization with each flip digit in a distinct color
     local flip_colors = {["0"] = "blue", ["1"] = "cyan", ["6"] = "orange", ["8"] = "gold", ["9"] = "magenta"}
+    -- Emit highlights in reading order (first appearance), not pairs(flip_colors) order,
+    -- so the overlay's first-seen colour remap is deterministic per launch.
     local highlights = {}
-    for digit, color in pairs(flip_colors) do
-        local positions = find_digit_positions(d, digit)
-        if #positions > 0 then
-            table.insert(highlights, {positions = positions, color = color})
+    local seen = {}
+    for i = 1, 8 do
+        local digit = d:sub(i, i)
+        if not seen[digit] then
+            seen[digit] = true
+            table.insert(highlights, {positions = find_digit_positions(d, digit), color = flip_colors[digit]})
         end
     end
 

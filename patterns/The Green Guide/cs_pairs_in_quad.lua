@@ -36,14 +36,20 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- The other two digits must each appear exactly 2 times
-    local pair_digits = {}
+    -- The other two digits must each appear exactly 2 times.
     for digit, cnt in pairs(counts) do
-        if digit ~= quad_digit then
-            if cnt ~= 2 then
-                return {matched = false}
-            end
-            table.insert(pair_digits, digit)
+        if digit ~= quad_digit and cnt ~= 2 then
+            return {matched = false}
+        end
+    end
+    -- Collect the two pair digits in reading order (first appearance) for deterministic colours.
+    local pair_digits = {}
+    local seen = {}
+    for i = 1, 8 do
+        local ch = d:sub(i, i)
+        if ch ~= quad_digit and not seen[ch] then
+            seen[ch] = true
+            table.insert(pair_digits, ch)
         end
     end
 

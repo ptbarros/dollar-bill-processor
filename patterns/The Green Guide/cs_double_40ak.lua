@@ -14,10 +14,15 @@ function match(ctx)
     local counts = count_digits(d)
 
     -- Exactly 2 distinct digits, each appearing exactly 4 times
-    local digits = {}
-    for digit, cnt in pairs(counts) do
+    for _, cnt in pairs(counts) do
         if cnt ~= 4 then return {matched = false} end
-        table.insert(digits, digit)
+    end
+    -- Collect the two digits in reading order (first appearance) for deterministic colours.
+    local digits = {}
+    local seen = {}
+    for i = 1, 8 do
+        local ch = d:sub(i, i)
+        if not seen[ch] then seen[ch] = true; table.insert(digits, ch) end
     end
     if #digits ~= 2 then return {matched = false} end
 

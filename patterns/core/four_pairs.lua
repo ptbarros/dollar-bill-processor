@@ -34,23 +34,19 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Color each unique digit's positions
+    -- Colour each pair digit in reading order (first appearance) AND emit in that order,
+    -- not pairs(seen) order which Lua randomises per process (colours would shuffle).
     local colors = {"orange", "coral", "magenta", "purple"}
     local highlights = {}
     local seen = {}
     local color_idx = 1
-
     for i = 0, 7 do
         local d = digits:sub(i + 1, i + 1)
         if not seen[d] then
-            seen[d] = colors[color_idx]
+            seen[d] = true
+            table.insert(highlights, highlight(find_digit_positions(digits, d), colors[color_idx] or "gray", "pair " .. d))
             color_idx = color_idx + 1
         end
-    end
-
-    for d, color in pairs(seen) do
-        local pos = find_digit_positions(digits, d)
-        table.insert(highlights, highlight(pos, color, "pair " .. d))
     end
 
     return {
