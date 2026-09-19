@@ -1,68 +1,40 @@
 --[[
 Pattern: CONSECUTIVE_PAIRS_LADDER
 DisplayName: 3 Consecutive Pairs Ladder
-Description: At least 3 consecutive identical pairs in ladder order (AABBCC)
+Description: Three identical pairs in a row (AABBCC) anywhere in the serial, where A, B, C count by 1 (e.g. 88 77 66).
 Tier: 4
-Examples: ["11223344", "22334455", "44332211", "55443322"]
+Examples: ["11223344", "98877663", "22334455", "55443322"]
 --]]
 
 function match(ctx)
     local s = ctx.digits
+    if #s ~= 8 then return {matched = false} end
 
-    -- Split into pairs
-    local pairs = {}
-    for i = 1, 8, 2 do
-        table.insert(pairs, s:sub(i, i + 1))
-    end
+    -- Slide a 6-digit window (start positions 0,1,2) looking for AABBCC where the
+    -- three pair-digits count up or down by 1.
+    for start = 0, 2 do
+        local a1, a2 = s:sub(start + 1, start + 1), s:sub(start + 2, start + 2)
+        local b1, b2 = s:sub(start + 3, start + 3), s:sub(start + 4, start + 4)
+        local c1, c2 = s:sub(start + 5, start + 5), s:sub(start + 6, start + 6)
 
-    -- Check if each pair has identical digits
-    local identical_pairs = {}
-    for i, pair in ipairs(pairs) do
-        if pair:sub(1, 1) == pair:sub(2, 2) then
-            table.insert(identical_pairs, {index = i, digit = pair:sub(1, 1)})
-        end
-    end
-
-    if #identical_pairs < 3 then
-        return {matched = false}
-    end
-
-    -- Check if 3+ consecutive pairs form a ladder
-    for start = 1, #identical_pairs - 2 do
-        local is_asc = true
-        local is_desc = true
-
-        for i = start, start + 1 do
-            if i + 1 <= #identical_pairs then
-                local curr = tonumber(identical_pairs[i].digit)
-                local next = tonumber(identical_pairs[i + 1].digit)
-
-                -- Check consecutive indices
-                if identical_pairs[i + 1].index - identical_pairs[i].index ~= 1 then
-                    is_asc = false
-                    is_desc = false
-                    break
-                end
-
-                if next - curr ~= 1 then is_asc = false end
-                if curr - next ~= 1 then is_desc = false end
+        if a1 == a2 and b1 == b2 and c1 == c2 then
+            local a, b, c = tonumber(a1), tonumber(b1), tonumber(c1)
+            local is_asc = (b == a + 1 and c == b + 1)
+            local is_desc = (b == a - 1 and c == b - 1)
+            if is_asc or is_desc then
+                local direction = is_asc and "ascending" or "descending"
+                return {
+                    matched = true,
+                    message = "3 consecutive pairs " .. direction .. " ladder: "
+                        .. a1 .. a1 .. " " .. b1 .. b1 .. " " .. c1 .. c1,
+                    highlights = {},
+                    group_boxes = {
+                        {from = start,     to = start + 1, color = "blue", thickness = 3},
+                        {from = start + 2, to = start + 3, color = "orange", thickness = 3},
+                        {from = start + 4, to = start + 5, color = "magenta", thickness = 3}
+                    }
+                }
             end
-        end
-
-        if is_asc or is_desc then
-            local positions = {}
-            for i = start, start + 2 do
-                local idx = identical_pairs[i].index
-                table.insert(positions, (idx - 1) * 2)
-                table.insert(positions, (idx - 1) * 2 + 1)
-            end
-
-            local direction = is_asc and "ascending" or "descending"
-            return {
-                matched = true,
-                message = "3 consecutive pairs " .. direction .. " ladder",
-                highlights = {{positions = positions, color = is_asc and "lime" or "cyan"}}
-            }
         end
     end
 
