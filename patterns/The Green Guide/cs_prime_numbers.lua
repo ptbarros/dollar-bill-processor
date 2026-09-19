@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_PRIME_NUMBERS
 DisplayName: CS-Prime Numbers
-Description: The 8-digit serial number, interpreted as an integer, is a prime number.
+Description: Read as one whole number, the serial is prime — divisible only by 1 and itself.
 BookRef: CS-2290
 Tier: 8
 Examples: ["00055291", "00000002", "99999989"]

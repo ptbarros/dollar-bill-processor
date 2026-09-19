@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUINARY_ROTATOR
 DisplayName: CS-Quinary Rotator
-Description: Rotator using all 5 flip-valid digits {0,1,6,8,9}.
+Description: Turn the note upside-down and it reads the same, using all five digits that survive the flip — 0, 1, 6, 8 and 9 (e.g. 1680·0891).
 BookRef: CS-1150
 Tier: 5
 Examples: ["16800891", "01988610"]

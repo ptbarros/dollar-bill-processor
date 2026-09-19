@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUAD
 DisplayName: CS-Quad
-Description: Four or more of the same digit grouped consecutively. Scattered version is CS-40AK (CS-210).
+Description: Four or more identical digits in an unbroken run (e.g. 1111·2345).
 BookRef: CS-200
 Tier: 4
 Examples: ["11112345", "44445678", "00001234"]

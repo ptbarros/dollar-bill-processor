@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUINT_IN_TRIPLE
 DisplayName: CS-Quint in a Triple
-Description: A CS-Quint (5 consecutive) within a CS-30AK (3 of another digit surrounding it). Exactly two digits using all 8 positions. Also a CS-Binary. e.g., M 35555533 M or M 33555553 M.
+Description: Just two digits — a solid block of five of one, with the other three sitting on both sides of it (e.g. 3·55555·33).
 BookRef: CS-410
 Tier: 3
 Examples: ["35555533", "33555553", "15555511"]

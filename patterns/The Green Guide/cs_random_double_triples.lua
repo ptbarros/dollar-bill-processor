@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_DOUBLE_TRIPLES
 DisplayName: CS-Random Double Triples
-Description: Two distinct digits each appearing exactly 3 times anywhere in the serial, in any arrangement (grouped or scattered).
+Description: Two different digits, each turning up exactly three times, grouped or scattered (e.g. 777·555·xx).
 BookRef: CS-160
 Tier: 6
 Examples: ["75775511", "12312321", "77755500"]

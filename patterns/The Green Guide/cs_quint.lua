@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUINT
 DisplayName: CS-Quint
-Description: Five or more of the same digit grouped consecutively. Scattered version is CS-50AK (CS-310).
+Description: Five or more identical digits in an unbroken run (e.g. 11111·234).
 BookRef: CS-370
 Tier: 3
 Examples: ["11111234", "55555678", "00000123"]

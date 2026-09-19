@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUAD_IN_QUAD
 DisplayName: CS-Quad in Quad
-Description: A CS-Quad (4 consecutive) grouped within a CS-40AK (4 scattered of another digit). Exactly two digits, each 4 times, one as a 4-run, one scattered. e.g., M 54444555 M or M 55444455 M. Also a CS-Binary.
+Description: Two digits used four times each — one bunched into a solid block, the other scattered around it (e.g. 5·4444·555).
 BookRef: CS-250
 Tier: 4
 Examples: ["54444555", "55444455", "55544445"]

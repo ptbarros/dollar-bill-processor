@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_DOUBLE_QUAD_BINARY
 DisplayName: CS-Random Double Quad Binary
-Description: Two CS-4OAKs of any two digits, scattered (non-consecutive). e.g., M 41114414 M.
+Description: Only two digits, each used four times and mixed together rather than split into two clean blocks (e.g. 4111·4414).
 BookRef: CS-930
 Tier: 5
 Examples: ["41114414", "11441144", "41414141"]

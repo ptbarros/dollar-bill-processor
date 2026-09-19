@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUINT_YEAR_NOTE
 DisplayName: CS-Quint Year Note
-Description: All five possible positions (1-5) in the serial each start a valid year (default 1700-2099, editable below).
+Description: Every one of the five overlapping four-digit reads in the serial is a real year (e.g. 11112010).
 BookRef: CS-740
 Tier: 4
 Examples: ["11112010"]

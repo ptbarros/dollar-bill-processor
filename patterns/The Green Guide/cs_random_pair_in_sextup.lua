@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_PAIR_IN_SEXTUP
 DisplayName: CS-Random Pair in a Sextup
-Description: A CS-20AK (2 scattered, non-adjacent digits) with a CS-60AK (6 of another digit). Exactly two digits using all 8 positions. Also a CS-Binary. e.g., M 26666266 M.
+Description: Just two digits — six of one, with the other two scattered apart rather than paired up (e.g. 2·6666·2·66).
 BookRef: CS-470
 Tier: 3
 Examples: ["26666266", "62666626", "66266626"]

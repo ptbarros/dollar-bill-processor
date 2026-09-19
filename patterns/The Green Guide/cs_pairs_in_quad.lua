@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_PAIRS_IN_QUAD
 DisplayName: CS-Pairs in Quad
-Description: A CS-4OAK bookending the serial (first and last digit both the quad digit), plus two CS-Pairs inside. Exactly 3 distinct digits: one with count 4, two with count 2. e.g., M 44114224 M.
+Description: One digit shows up four times with copies at both ends, wrapped around two side-by-side pairs of two other digits (e.g. 4·11·4·22·4).
 BookRef: CS-330
 Tier: 4
 Examples: ["44114224", "99118899", "55335885"]

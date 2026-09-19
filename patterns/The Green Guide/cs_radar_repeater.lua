@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RADAR_REPEATER
 DisplayName: CS-Radar Repeater
-Description: A CS-Full Repeater (first half = second half: ABCDABCD) that is also a CS-Full Radar (palindrome). e.g., 12211221.
+Description: The first four digits repeat as the last four, and the whole serial also reads the same backwards (e.g. 1221·1221).
 BookRef: CS-1520
 Tier: 3
 Examples: ["12211221", "34433443", "10011001"]

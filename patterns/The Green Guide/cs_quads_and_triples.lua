@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUADS_AND_TRIPLES
 DisplayName: CS-Quads and Triples
-Description: A CS-Quad (4 consecutive same digit) and a CS-Triple (3 consecutive same digit), where the remaining digit cannot match either the quad or triple digit. e.g., M 4444333x M, M 4444x333 M, M x4444333 M.
+Description: A solid block of four identical digits next to a solid block of three of another digit (e.g. 4444·333·x).
 BookRef: CS-340
 Tier: 4
 Examples: ["44443330", "33344441", "14444333"]

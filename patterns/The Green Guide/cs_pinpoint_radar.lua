@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_PINPOINT_RADAR
 DisplayName: CS-Pinpoint Radar
-Description: CS-Binary + CS-Radar (palindrome with two 4OAKs) where the only adjacent pair is at the center. Structure XYXYYXYX. e.g., M 41411414 M.
+Description: Just two digits woven so the serial reads the same both ways, and the only spot where matching digits sit together is dead center (e.g. 4141·1414).
 BookRef: CS-1320
 Tier: 4
 Examples: ["41411414", "10100101", "19199191"]

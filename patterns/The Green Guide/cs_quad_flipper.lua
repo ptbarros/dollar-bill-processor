@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUAD_FLIPPER
 DisplayName: CS-Quad Flipper
-Description: All 8 digits are from the flip set {0,1,6,8,9} and exactly 4 distinct digits are used. e.g., M 01899901 M.
+Description: Made from four different digits, all of them ones that still look like digits upside-down — 0, 1, 6, 8 and 9 (e.g. 0189·9901).
 BookRef: CS-1070
 Tier: 7
 Examples: ["01899901", "10899810", "10688601"]

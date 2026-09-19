@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_DAY_MONTH
 DisplayName: CS-Random Day Month Note
-Description: A valid mmdd or ddmm block at any position, with the remaining 4 digits random (not all zeros and not 4OAK).
+Description: A real month-and-day sits somewhere in the serial, with the other four spots just ordinary mixed digits (e.g. 1225·1357).
 BookRef: CS-800
 Tier: 8
 Examples: ["12251357", "45122513", "13122545"]

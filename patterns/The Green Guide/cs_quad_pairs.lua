@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUAD_PAIRS
 DisplayName: CS-Random Quad Pairs
-Description: Four pairs of different digits spanning all 8 positions, with at least one pair having its two digits non-adjacent. A fully-grouped AABBCCDD arrangement qualifies as CS-Quad Pairs (CS-60) instead.
+Description: Four different digits, each appearing twice, with at least one of the pairs split apart rather than side by side (e.g. 13·24·13·24).
 BookRef: CS-70
 Tier: 6
 Examples: ["13241324", "23413241", "12341234"]

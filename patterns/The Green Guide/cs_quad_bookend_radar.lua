@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUAD_BOOKEND_RADAR
 DisplayName: CS-Quad Bookend Radar
-Description: A CS-40AK split as a pair at each end, bookending an inner CS-Quad. Structure AABBBBAA. e.g., M 22444422 M or M 33666633 M.
+Description: A pair of one digit at each end wrapping a solid block of four of another digit (e.g. 22·4444·22).
 BookRef: CS-1310
 Tier: 2
 Examples: ["22444422", "33666633", "11999911"]

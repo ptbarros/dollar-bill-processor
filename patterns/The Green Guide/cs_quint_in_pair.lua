@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUINT_IN_PAIR
 DisplayName: CS-Quint in a Pair
-Description: A CS-Quint (5 consecutive) within a CS-20AK (pair of another digit surrounding it), plus one random digit. e.g., M 2555552x M.
+Description: A solid block of five identical digits flanked by a matching digit on each side, plus one stray digit (e.g. 2·55555·2·4).
 BookRef: CS-380
 Tier: 4
 Examples: ["25555524", "05555501", "20555552"]

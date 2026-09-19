@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUAD_YEAR_NOTE
 DisplayName: CS-Quad Year Note
-Description: Four overlapping valid years (default 1700-2099, editable below) starting at different positions among positions 1-5 in the serial.
+Description: Four overlapping four-digit years can be read from the serial, each beginning one spot after the last (e.g. 11192010).
 BookRef: CS-730
 Tier: 5
 Examples: ["11192010"]

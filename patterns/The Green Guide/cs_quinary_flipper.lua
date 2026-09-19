@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUINARY_FLIPPER
 DisplayName: CS-Quinary Flipper
-Description: All 8 digits are from the flip set {0,1,6,8,9} AND all five flip digits are present. The serial can be read upside down. e.g., M 01698900 M.
+Description: Uses all five of the digits that still look like digits upside-down — 0, 1, 6, 8 and 9 — and nothing else, so the whole note can be read upside-down (e.g. 0169·8900).
 BookRef: CS-1080
 Tier: 6
 Examples: ["01698900", "91806100", "61890001"]

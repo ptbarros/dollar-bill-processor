@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_QUAD_ROTATOR
 DisplayName: CS-Quad Rotator
-Description: Rotator using exactly 4 unique flip-valid digits. Must include {6,9} plus 2 from {0,1,8}.
+Description: Turn the note upside-down and it reads the same, built from four different digits that survive the flip (e.g. 0166·9910).
 BookRef: CS-1140
 Tier: 5
 Examples: ["01669910", "08696980", "18696981"]
