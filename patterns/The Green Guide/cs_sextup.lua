@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SEXTUP
 DisplayName: CS-Sextup
-Description: Six or more of the same digit grouped consecutively. Scattered version is CS-60AK (CS-410).
+Description: Six or more identical digits in an unbroken run (e.g. 111111·22).
 BookRef: CS-440
 Tier: 2
 Examples: ["11111122", "66666600", "00000099"]

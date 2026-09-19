@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SIX_REPEATER_IN_PAIR
 DisplayName: CS-Six Repeater in a Pair
-Description: A 3-digit sequence repeated twice (6 digits) is bookended by a CS-2OAK: A · XYZ · XYZ · A, where A appears at positions 1 and 8 and differs from all of X, Y, Z. e.g., M 9 301 301 9 M.
+Description: A three-digit run repeated back to back, with a single matching digit capping both ends (e.g. 9·301·301·9).
 BookRef: CS-1510
 Tier: 6
 Examples: ["93013019", "71231237", "45915914"]

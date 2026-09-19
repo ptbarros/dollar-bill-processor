@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SPLIT_SIX_RADAR
 DisplayName: CS-Split Six Radar
-Description: CS-60AK (6 of one digit) where the 2 minority digits form an adjacent pair in the interior (not at the edges). e.g., 66600666 has three 6s, pair of 0s in center, three 6s.
+Description: Six of one digit split down the middle by a side-by-side pair of another digit in the center (e.g. 666·00·666).
 BookRef: CS-1300
 Tier: 2
 Examples: ["66600666", "33300333", "88811888"]

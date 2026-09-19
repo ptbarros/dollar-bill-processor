@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SOLID
 DisplayName: CS-Solid
-Description: All 8 digits identical (CS-8OAK in book nomenclature). The rarest possible serial.
+Description: Every digit is the same — one number repeated straight across, the rarest serial there is (e.g. 88888888).
 BookRef: CS-500
 Tier: 1
 Examples: ["00000000", "11111111", "88888888"]

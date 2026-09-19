@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SCATTERED_LADDER
 DisplayName: CS-Scattered Ladder
-Description: All 8 digits are a permutation of a straight run of 8 consecutive values (0-7, 1-8, or 2-9) in scrambled (non-ladder) order. No 9->0 wrap (that is a Looping Ladder). e.g., M 07634152 M or M 25734896 M.
+Description: All eight digits of a straight run are present but shuffled out of order — the makings of a full ladder, jumbled (e.g. 0763·4152).
 BookRef: CS-1210
 Tier: 4
 Examples: ["07634152", "85412367", "57234896"]

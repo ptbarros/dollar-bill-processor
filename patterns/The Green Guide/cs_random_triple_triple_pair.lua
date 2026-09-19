@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_TRIPLE_TRIPLE_PAIR
 DisplayName: CS-Random Triple Triple Pair
-Description: Two 3OAKs (two different digits each appearing 3 times) and one 2OAK (a third digit appearing twice), in any position (scattered). e.g., M 12332112 M. These are also a CS-Trinary.
+Description: Two different digits appearing three times each plus a third digit twice, spread around rather than grouped (e.g. 123·321·12).
 BookRef: CS-140
 Tier: 5
 Examples: ["12332112", "11233212", "22133231"]

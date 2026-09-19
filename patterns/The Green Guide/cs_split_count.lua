@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SPLIT_COUNT
 DisplayName: CS-Split Count
-Description: Two matching digits at positions 1 and 8 (bookend), with two CS-Triples inside that increase or decrease by 1. e.g., M 2 000 111 2 M or M 2 999 888 2 M.
+Description: A single matching digit caps both ends around two side-by-side triples that step up or down by one (e.g. 2·000·111·2).
 BookRef: CS-890
 Tier: 3
 Examples: ["20001112", "29998882"]

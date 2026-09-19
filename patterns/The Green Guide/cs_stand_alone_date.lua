@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_DATE
 DisplayName: CS-Stand Alone Date
-Description: Catch-all: a valid mmdd or ddmm block (4 digits) surrounded by zeros at any position in the serial.
+Description: A real month-and-day sits by itself somewhere in the serial, wrapped in nothing but zeros (e.g. 0·1250·000).
 BookRef: CS-1780
 Tier: 7
 Examples: ["01250000", "00012500", "00001225"]

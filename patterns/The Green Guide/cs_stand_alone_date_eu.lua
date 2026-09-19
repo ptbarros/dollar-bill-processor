@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_STAND_ALONE_DATE_EU
 DisplayName: CS-Stand Alone Date EU
-Description: A valid ddmm block (EU format) surrounded by zeros.
+Description: A real day-and-month in the day-first style sits by itself, padded with zeros around it (e.g. 0·2512·000).
 BookRef: CS-1800
 Tier: 7
 Examples: ["02512000", "00251200", "00002512"]

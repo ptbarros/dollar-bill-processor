@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_TRIPLE_IN_QUAD
 DisplayName: CS-Random Triple in Quad
-Description: A 3OAK (three scattered instances of one digit) and a 4OAK (four scattered instances of another digit), where the 3OAK digit is surrounded by the 4OAK digit (the 4OAK has instances on both sides of all three 3OAK positions). Neither needs to be consecutive. e.g., CS-30AK and CS-40AK in any position with the 30AK surrounded.
+Description: Three of one digit sit spread out between four of another digit, with neither forming a solid block (e.g. 1414·1413).
 BookRef: CS-300
 Tier: 5
 Examples: ["14141413", "21212123", "31313134"]

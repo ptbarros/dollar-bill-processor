@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_QUAD_AND_PAIRS
 DisplayName: CS-Random Quad and Pairs
-Description: Any CS-4OAK (four of one digit, scattered — no consecutive run of 4) plus any two CS-2OAKs (two different digits each appearing twice), all in any position. e.g., M 41142424 M.
+Description: One digit appearing four times spread around, never in a solid block, plus two side-by-side pairs of two other digits (e.g. 4·11·42·42·4).
 BookRef: CS-320
 Tier: 5
 Examples: ["41142424", "24141424", "14241424"]

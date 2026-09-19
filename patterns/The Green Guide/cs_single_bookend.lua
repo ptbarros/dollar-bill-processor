@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SINGLE_BOOKEND
 DisplayName: CS-Single Bookend
-Description: The digits in positions 1 and 8 are identical. e.g., M 7xxxxxx7 M.
+Description: Opens and closes on the same single digit, whatever runs between (e.g. 7·xxxxxx·7).
 BookRef: CS-950
 Tier: 8
 Examples: ["71234567", "31987653", "00000000"]

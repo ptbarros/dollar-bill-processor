@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_TRIPLE_DOUBLE_DOUBLE
 DisplayName: CS-Random Triple Double Double
-Description: One 3OAK (one digit appearing 3 times) and two 2OAKs (two different digits each appearing twice), in any position (scattered). e.g., M 333221x1 M. They can be a CS-Triple and CS-Pairs as long as one of the three is an OAK.
+Description: One digit appears three times and two other digits twice each, plus one leftover, spread around rather than in neat blocks (e.g. 333·22·1·4).
 BookRef: CS-180
 Tier: 6
 Examples: ["11312244", "33322141", "44421312"]

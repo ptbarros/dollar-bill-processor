@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SHOTGUN_RADAR
 DisplayName: CS-Shotgun Radar
-Description: A radar with exactly 3 of 4 mirror pairs matching. The non-matching pair must have different digits (not a CS-Pair). The 3 matching pairs must use at least 2 distinct digit values.
+Description: Almost reads the same both ways — three of its four mirrored pairs match, with just one pair out of step (e.g. 1230·1321).
 BookRef: CS-1340
 Tier: 2
 Examples: ["12301321", "56701765", "80101108"]

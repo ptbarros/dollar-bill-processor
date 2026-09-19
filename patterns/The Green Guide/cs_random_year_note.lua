@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_YEAR_NOTE
 DisplayName: CS-Random Year Note
-Description: A valid 4-digit year (default 1700-2099, editable below) at any position, with the remaining 4 digits random (not all zeros and not 4OAK).
+Description: A real four-digit year sits somewhere in the serial, with the other four spots just ordinary mixed digits (e.g. 1975·2468).
 BookRef: CS-690
 Tier: 8
 Examples: ["19752468", "12197534", "56197524"]

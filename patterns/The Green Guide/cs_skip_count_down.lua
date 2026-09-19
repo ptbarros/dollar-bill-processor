@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SKIP_COUNT_DOWN
 DisplayName: CS-Skip Count Down Note
-Description: A CS-Skip Note where the non-skip positions count down in sequence. e.g., M x4x3x2x1 M or M 4x3x2x1x M.
+Description: Every other spot counts down step by step, while the spots between them all hold the same digit (e.g. x·4·x·3·x·2·x·1).
 BookRef: CS-1620
 Tier: 4
 Examples: ["94939291", "40302010", "04030201"]

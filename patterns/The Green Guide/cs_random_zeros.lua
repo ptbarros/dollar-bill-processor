@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_ZEROS
 DisplayName: CS-Random Zeros
-Description: Serial contains 1-7 zero digits anywhere. Parent of Leading/Centered/Trailing Zeros. Very common pattern (~57% of serials).
+Description: The serial carries one or more zeros somewhere among its digits — a common trait, rarer the more zeros it holds (e.g. 1234·5060).
 BookRef: CS-1930
 Tier: 8
 Examples: ["10000000", "00000001", "12345060"]

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_RANDOM_QUAD_IN_TRIPLE
 DisplayName: CS-Random Quad in Triple
-Description: A CS-40AK (four of the same digit, scattered — no run of 4) coexists with three of a different digit and one random digit. Count distribution: {4, 3, 1}. e.g., M 34x44433 M.
+Description: Four of one digit scattered around, three of another digit, and one stray, none forming a clean block (e.g. 3·4·7·444·33).
 BookRef: CS-270
 Tier: 6
 Examples: ["34744433", "12114441", "14114413"]

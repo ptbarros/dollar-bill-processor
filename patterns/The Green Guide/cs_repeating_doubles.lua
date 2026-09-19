@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_REPEATING_DOUBLES
 DisplayName: CS-Repeating Doubles
-Description: A CS-Paired 4OAK (one digit appearing in two separate grouped pairs, i.e., AABB...AABB structure) plus two additional CS-Pairs of different digits, filling all 8 positions. Pattern is AABBAACC or similar — the 4OAK digit forms two grouped pairs separated by other pairs. e.g., M 55995533 M (55|99|55|33), M 55993355 M (55|99|33|55).
+Description: Four side-by-side pairs where one digit makes two of them and two other digits make the rest (e.g. 55·99·55·33).
 BookRef: CS-350
 Tier: 4
 Examples: ["55995533", "55993355", "99553355"]

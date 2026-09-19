@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SINGLE_SKIP_NOTE
 DisplayName: CS-Single Skip Notes
-Description: A CS-40AK that skips every other digit — the same digit at all 4 odd or all 4 even positions. The other 4 positions may not form another CS-40AK. e.g., M 1x1x1x1x M or M x2x2x2x2 M.
+Description: The same digit lands on every other spot across the serial, while the digits between them vary (e.g. 1·x·1·x·1·x·1·x).
 BookRef: CS-1590
 Tier: 6
 Examples: ["10101012", "01010102", "40404041"]

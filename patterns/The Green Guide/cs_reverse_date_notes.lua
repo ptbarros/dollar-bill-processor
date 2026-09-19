@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_REVERSE_DATE_NOTES
 DisplayName: CS-Reverse Date Notes
-Description: The serial, when reversed, forms a valid calendar date in US (mmddyyyy), EU (ddmmyyyy), or INTL (yyyymmdd) format.
+Description: Read the serial back to front and it spells out a real calendar date (e.g. 5791·0221 reversed).
 BookRef: CS-510
 Tier: 9
 Examples: ["57910221", "57910122", "58915110"]

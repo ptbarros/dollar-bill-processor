@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_ROTATOR
 DisplayName: CS-Rotator
-Description: Serial reads the same when rotated 180°. All digits must be flip-valid (0, 1, 6, 8, 9) and the reversed+mapped version equals the original.
+Description: Turn the note upside-down and the serial reads exactly the same, since every digit is one that survives the flip — 0, 1, 6, 8 and 9 (e.g. 1081·1801).
 BookRef: CS-1090
 Tier: 2
 Examples: ["10811801", "96100196", "18188181"]

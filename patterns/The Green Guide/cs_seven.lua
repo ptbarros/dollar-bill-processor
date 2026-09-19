@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_SEVEN
 DisplayName: CS-Seven
-Description: Seven consecutive identical digits. Scattered version is CS-70AK (CS-510).
+Description: Seven identical digits in an unbroken row (e.g. 1111111·2).
 BookRef: CS-480
 Tier: 1
 Examples: ["11111112", "33333330", "77777771"]
