@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_US_DATE_NOTES
 DisplayName: CS-US Date Notes
-Description: Serial forms a valid US date (mmddyyyy) as a birthday — year within the last 100 years.
+Description: Reads as a real month-day-year birthday in the month-first style, from within the last hundred years (e.g. 11·22·1975).
 BookRef: CS-520
 Tier: 7
 Examples: ["11221975", "07041950", "01012000"]

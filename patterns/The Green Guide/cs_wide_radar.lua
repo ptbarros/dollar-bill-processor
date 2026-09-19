@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_WIDE_RADAR
 DisplayName: CS-Wide Radar
-Description: CS-60AK structure split as AAAXBBBAAA — first 3 and last 3 are the same digit (A), with a pair or different digit (B) in the center. e.g., 33322333.
+Description: Three of one digit at each end wrapping a side-by-side pair of another digit in the middle (e.g. 333·22·333).
 BookRef: CS-1290
 Tier: 2
 Examples: ["33322333", "77700777", "11188111"]

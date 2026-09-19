@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TWO_PAIRS
 DisplayName: CS-Random Two Pairs
-Description: Two different digits each occurring exactly twice in the serial, where at least one of those pairs has its digits split apart by intervening digits. Both pairs cannot be consecutive — that would qualify as CS-Two Pairs (CS-20) instead.
+Description: Two different digits each appearing twice, with at least one pair split apart rather than side by side (e.g. 1·1·3·2·xx·2).
 BookRef: CS-30
 Tier: 7
 Examples: ["11324526", "45016745", "91207329"]

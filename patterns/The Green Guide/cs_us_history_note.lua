@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_US_HISTORY_NOTE
 DisplayName: CS-US History Note
-Description: Serial forms a valid US date (mmddyyyy) with year more than 100 years ago.
+Description: Reads as a real month-day-year date in the month-first style from more than a hundred years ago (e.g. 07·04·1776).
 BookRef: CS-540
 Tier: 7
 Examples: ["07041776", "12251900", "01011800"]

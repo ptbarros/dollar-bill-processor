@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_US_INTL_TRUE_DAY
 DisplayName: CS-US & INTL True Day Notes
-Description: A valid mmdd block (US/INTL format) at any position, with the remaining 4 digits all zeros.
+Description: A real month-and-day in the month-first style sits in the serial with the other four spots all zeros (e.g. 1225·0000).
 BookRef: CS-770
 Tier: 7
 Examples: ["12250000", "00001225", "00122500"]

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_UNARY_ROTATOR
 DisplayName: CS-Unary Rotator
-Description: Rotator using only 1 unique digit. Only 11111111 and 88888888 qualify (00000000 excluded as non-collectible).
+Description: Every digit is the same and the note reads the same turned upside-down — only all-1s or all-8s qualify.
 BookRef: CS-1100
 Tier: 1
 Examples: ["11111111", "88888888"]

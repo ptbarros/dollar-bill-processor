@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRUE_YEAR_NOTE
 DisplayName: CS-True Year Note
-Description: A valid 4-digit year (default 1700-2099, editable below) at any position in the serial, with the remaining 4 digits all zeros.
+Description: A real four-digit year sits in the serial with the other four spots all zeros (e.g. 1975·0000).
 BookRef: CS-670
 Tier: 6
 Examples: ["19750000", "00019750", "00197500"]

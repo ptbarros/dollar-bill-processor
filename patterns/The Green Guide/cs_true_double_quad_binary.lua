@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRUE_DOUBLE_QUAD_BINARY
 DisplayName: CS-True Double Quad Binary
-Description: Two consecutive quads of 0s and 1s. Only two possible serials: 00001111 or 11110000.
+Description: A solid block of four 0s next to a solid block of four 1s — only 00001111 or 11110000.
 BookRef: CS-920
 Tier: 2
 Examples: ["00001111", "11110000"]

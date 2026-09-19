@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_UNARY_FLIPPER
 DisplayName: CS-Unary Flipper
-Description: All 8 digits are the same, and the digit is a valid flipper (1, 6, 8, or 9 — not 0). The note reads identically upside down. Also qualifies as CS-Solid (CS-500). The combination adds a significant premium.
+Description: Every digit is the same, and it's one that still reads upside-down — a solid note of all 1s, 6s, 8s or 9s (e.g. 88888888).
 BookRef: CS-1030
 Tier: 1
 Examples: ["11111111", "66666666", "88888888", "99999999"]
