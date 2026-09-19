@@ -16,16 +16,24 @@ function match(ctx)
     -- Count pairs (digits appearing exactly twice)
     local counts = count_digits(digits)
 
+    -- Collect the pair digits in reading order (first appearance), NOT pairs(counts)
+    -- order, which Lua randomises per process (colours would shuffle each launch).
     local pair_count = 0
     local pair_digits = {}
-    for d, c in pairs(counts) do
-        if c == 2 then
-            pair_count = pair_count + 1
-            table.insert(pair_digits, d)
-        elseif c == 4 then
-            -- 4 of a kind counts as 2 pairs
-            pair_count = pair_count + 2
-            table.insert(pair_digits, d)
+    local seen = {}
+    for i = 1, 8 do
+        local d = digits:sub(i, i)
+        if not seen[d] then
+            seen[d] = true
+            local c = counts[d]
+            if c == 2 then
+                pair_count = pair_count + 1
+                table.insert(pair_digits, d)
+            elseif c == 4 then
+                -- 4 of a kind counts as 2 pairs
+                pair_count = pair_count + 2
+                table.insert(pair_digits, d)
+            end
         end
     end
 

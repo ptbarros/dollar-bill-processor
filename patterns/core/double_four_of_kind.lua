@@ -15,11 +15,15 @@ function match(ctx)
 
     local counts = count_digits(digits)
 
-    -- Find two digits each with count 4
+    -- Find the two digits each with count 4, in reading order (first appearance) so
+    -- their colours are deterministic (pairs() order is randomised per process).
     local four_digits = {}
-    for d, c in pairs(counts) do
-        if c == 4 then
-            table.insert(four_digits, d)
+    local seen = {}
+    for i = 1, 8 do
+        local d = digits:sub(i, i)
+        if not seen[d] then
+            seen[d] = true
+            if counts[d] == 4 then table.insert(four_digits, d) end
         end
     end
 

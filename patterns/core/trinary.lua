@@ -53,8 +53,11 @@ function match(ctx)
         pos_by_digit[d] = pos_by_digit[d] or {}
         table.insert(pos_by_digit[d], i)
     end
+    -- Build arcs in first-appearance digit order (unique is already in reading order),
+    -- NOT pairs(pos_by_digit) order, so arc stacking is deterministic per launch.
     local connectors = {}
-    for d, plist in pairs(pos_by_digit) do
+    for _, d in ipairs(unique) do
+        local plist = pos_by_digit[d]
         for k = 1, #plist - 1 do
             table.insert(connectors, {from = plist[k], to = plist[k + 1], color = digit_colors[d], style = "arc"})
         end

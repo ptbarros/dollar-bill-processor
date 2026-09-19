@@ -17,14 +17,18 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Each digit must appear exactly 4 times
+    -- Each digit must appear exactly 4 times.
     local counts = count_digits(d)
+    for _, cnt in pairs(counts) do
+        if cnt ~= 4 then return {matched = false} end
+    end
+    -- Collect the two digits in reading order (first appearance) so colours are
+    -- deterministic (pairs() order is randomised per process).
     local digit_list = {}
-    for digit, cnt in pairs(counts) do
-        if cnt ~= 4 then
-            return {matched = false}
-        end
-        table.insert(digit_list, digit)
+    local seen = {}
+    for i = 1, 8 do
+        local ch = d:sub(i, i)
+        if not seen[ch] then seen[ch] = true; table.insert(digit_list, ch) end
     end
 
     -- Exclude if both quads are consecutive (00001111 or 11110000) — that's CS-920
