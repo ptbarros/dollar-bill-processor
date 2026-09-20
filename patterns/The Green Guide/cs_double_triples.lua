@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_DOUBLE_TRIPLES
-DisplayName: CS-Doubles Triples
+DisplayName: Doubles Triples
 Description: Two separate blocks of three or more identical digits, each block bunched together (e.g. 000·111·00).
 BookRef: CS-150
 Tier: 5

@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_QUAD_BOOKEND_RADAR
-DisplayName: CS-Quad Bookend Radar
+DisplayName: Quad Bookend Radar
 Description: A pair of one digit at each end wrapping a solid block of four of another digit (e.g. 22·4444·22).
 BookRef: CS-1310
 Tier: 2

@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TRI_RADAR_BOOKEND
-DisplayName: CS-Tri Radar Bookend
+DisplayName: Tri Radar Bookend
 Description: The first three digits show up flipped at the tail end, mirrored across the serial (e.g. 123·xx·321).
 BookRef: CS-1010
 Tier: 7

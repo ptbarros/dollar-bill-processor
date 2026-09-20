@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_BOOKEND_FULL_RADAR
-DisplayName: CS-Bookend Full Radar
+DisplayName: Bookend Full Radar
 Description: Reads the same forwards and backwards, and both ends open with a matching pair of the same digit (e.g. 44·1331·44).
 BookRef: CS-1280
 Tier: 4

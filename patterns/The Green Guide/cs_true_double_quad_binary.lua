@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TRUE_DOUBLE_QUAD_BINARY
-DisplayName: CS-True Double Quad Binary
+DisplayName: True Double Quad Binary
 Description: A solid block of four 0s next to a solid block of four 1s — only 00001111 or 11110000.
 BookRef: CS-920
 Tier: 2
