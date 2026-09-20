@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_DUAL_RADAR_BOOKEND
-DisplayName: Radar Bookend
+DisplayName: 2 Digit Radar Bookend
 Description: The first two digits show up flipped at the tail end — two different digits mirrored across the serial (e.g. 23·xxxx·32).
 BookRef: CS-970
 Tier: 7

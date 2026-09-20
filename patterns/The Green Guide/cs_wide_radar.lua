@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_WIDE_RADAR
-DisplayName: Wide Radar
+DisplayName: Binary Triple Bookend
 Description: Three of one digit at each end wrapping a side-by-side pair of another digit in the middle (e.g. 333·22·333).
 BookRef: CS-1290
 Tier: 2
