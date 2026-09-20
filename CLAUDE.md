@@ -27,7 +27,10 @@ function match(ctx)
     -- ctx.digits: "12345678" (8 numeric characters)
     -- ctx.full_serial: "A12345678B" (with prefix/suffix)
     -- ctx.digit_list: {1,2,3,4,5,6,7,8} as integers
-    -- ctx.data: loaded from DataFile (if specified)
+    -- ctx.data / ctx.data_by_key: loaded from DataFile (if specified).
+    --   READ-ONLY: this is a shared cached Lua table (converted once per sandbox,
+    --   not a private per-run copy) -- never assign into it, or you poison every
+    --   later match. See pattern_sandbox._convert_to_lua_cached.
     -- ctx.metadata: {baseline_variance, gas_pump_threshold, seal_x, seal_y, seal_containment, series_year, front_plate, back_plate}
 
     return {
