@@ -19,6 +19,11 @@ function match(ctx)
             if seg:sub(4, 4) == seg:sub(5, 5) and seg:sub(5, 5) == seg:sub(6, 6) then
                 -- Must be different digits
                 if seg:sub(1, 1) ~= seg:sub(4, 4) then
+                    -- Stand aside for Consec Seq Triples on the case it owns: triples
+                    -- front-loaded (start 1) with the two digits one apart (Ed review).
+                    if start == 1 and math.abs(tonumber(seg:sub(1, 1)) - tonumber(seg:sub(4, 4))) == 1 then
+                        return {matched = false}
+                    end
                     return {
                         matched = true,
                         message = "Consecutive triples: " .. seg:sub(1, 1) .. seg:sub(1, 1) .. seg:sub(1, 1) .. " + " .. seg:sub(4, 4) .. seg:sub(4, 4) .. seg:sub(4, 4),

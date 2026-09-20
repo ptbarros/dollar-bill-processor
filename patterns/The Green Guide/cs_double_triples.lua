@@ -1,19 +1,25 @@
 --[[
 Pattern: CS_DOUBLE_TRIPLES
-DisplayName: Doubles Triples
-Description: Two separate blocks of three or more identical digits, each block bunched together (e.g. 000·111·00).
+DisplayName: Two Triple Runs
+Description: Two or more separate runs of exactly three identical digits, with no run of four or more anywhere (e.g. 444·6·7·000, where 444 and 000 both qualify).
 BookRef: CS-150
 Tier: 5
-Examples: ["00011100", "11100222", "00033355"]
+Examples: ["44467000", "00011100", "11100222", "00033355"]
 Price: $10-$30
 --]]
 
 function match(ctx)
     local runs = find_runs(ctx.digits)
 
+    -- Reject any serial that has a run of four or more identical digits (Ed review).
+    for _, run in ipairs(runs) do
+        if run.length >= 4 then return {matched = false} end
+    end
+
+    -- Collect runs of exactly three.
     local triple_runs = {}
     for _, run in ipairs(runs) do
-        if run.length >= 3 then
+        if run.length == 3 then
             table.insert(triple_runs, run)
         end
     end
@@ -24,7 +30,6 @@ function match(ctx)
 
     local group_boxes = {}
     local colors = {"gold", "coral", "cyan", "lime"}
-
     for i, run in ipairs(triple_runs) do
         table.insert(group_boxes, {
             from = run.start,
@@ -34,10 +39,9 @@ function match(ctx)
         })
     end
 
-    local msg = #triple_runs .. " triple groups"
     return {
         matched = true,
         group_boxes = group_boxes,
-        message = msg
+        message = #triple_runs .. " triple runs"
     }
 end
