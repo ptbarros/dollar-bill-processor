@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_QUAD_AND_PAIRS
-DisplayName: CS-Quad and Pairs
+DisplayName: Quad and 2 Pair
 Description: A solid block of four identical digits plus two side-by-side pairs of two other digits (e.g. 11·2222·33).
 BookRef: CS-310
 Tier: 5

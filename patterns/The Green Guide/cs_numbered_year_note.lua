@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_NUMBERED_YEAR_NOTE
-DisplayName: CS-Numbered Year Note
+DisplayName: Year Note & 4 of a Kind
 Description: A real four-digit year sits in the serial, with the other four spots all filled by one repeated non-zero digit (e.g. 1975·3333).
 BookRef: CS-680
 Tier: 7

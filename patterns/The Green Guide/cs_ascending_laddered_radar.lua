@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_ASCENDING_LADDERED_RADAR
-DisplayName: CS-Laddered Radar
+DisplayName: Radar Ladder
 Description: Reads the same forwards and backwards, and the first four digits step straight up or straight down (e.g. 4567·7654).
 BookRef: CS-1420
 Tier: 3

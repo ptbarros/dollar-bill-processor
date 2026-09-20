@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_PAIR_IN_QUINT
-DisplayName: CS-Pair in a Quint
+DisplayName: 5 of a Kind & Pair
 Description: Five of one digit flanking a side-by-side pair of another on both sides, with one stray digit somewhere (e.g. 0·5·22·555).
 BookRef: CS-390
 Tier: 5

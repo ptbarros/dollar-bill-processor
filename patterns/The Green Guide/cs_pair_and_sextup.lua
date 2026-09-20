@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_PAIR_AND_SEXTUP
-DisplayName: CS-Pair and a Sextup
+DisplayName: 6 of a Kind & Pair
 Description: Six identical digits in a row with a matching pair of another digit tacked onto one end (e.g. 22·666666).
 BookRef: CS-450
 Tier: 4

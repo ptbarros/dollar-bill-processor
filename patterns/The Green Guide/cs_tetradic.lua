@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TETRADIC
-DisplayName: CS-Tetradic
+DisplayName: Rotator 018
 Description: Built only from 0s, 1s and 8s, and it reads the same forwards, backwards, and turned upside-down (e.g. 0811·1180).
 BookRef: CS-1160
 Tier: 1

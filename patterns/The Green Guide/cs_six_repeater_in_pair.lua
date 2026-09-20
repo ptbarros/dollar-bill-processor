@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_SIX_REPEATER_IN_PAIR
-DisplayName: CS-Six Repeater in a Pair
+DisplayName: Bookended Repeater
 Description: A three-digit run repeated back to back, with a single matching digit capping both ends (e.g. 9·301·301·9).
 BookRef: CS-1510
 Tier: 6

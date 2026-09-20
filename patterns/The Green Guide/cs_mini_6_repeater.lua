@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_MINI_6_REPEATER
-DisplayName: CS-Mini 6 Repeater
+DisplayName: 6 Digit Repeater
 Description: A three-digit run repeated back to back sits somewhere in the serial (e.g. 301·301·xx).
 BookRef: CS-1570
 Tier: 7

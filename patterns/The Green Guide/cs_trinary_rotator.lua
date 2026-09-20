@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TRINARY_ROTATOR
-DisplayName: CS-Trinary Rotator
+DisplayName: Trinary Rotator
 Description: Turn the note upside-down and it reads the same, built from three different digits that survive the flip (e.g. 0690·0690).
 BookRef: CS-1130
 Tier: 4

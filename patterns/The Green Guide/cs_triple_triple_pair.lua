@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TRIPLE_TRIPLE_PAIR
-DisplayName: CS-Triple Triple Pair
+DisplayName: Triple Triple Double
 Description: Two solid blocks of three identical digits alongside a side-by-side pair (e.g. 111·222·33).
 BookRef: CS-130
 Tier: 5
