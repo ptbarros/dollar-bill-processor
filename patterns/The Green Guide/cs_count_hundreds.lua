@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_COUNT_HUNDREDS
-DisplayName: CS-Count Hundreds
+DisplayName: Count by 100
 Description: The serial breaks into groups whose leading digit steps up or down by one while the rest of each group stays the same (e.g. 411·511·61).
 BookRef: CS-830
 Tier: 3

@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_EU_BIRTHDAY_NOTE
-DisplayName: CS-EU Birthday Note
+DisplayName: Birthday Note D/M/Y
 Description: Reads as a real day-month-year birthday in the day-first style, from within the last hundred years (e.g. 22·11·1975).
 BookRef: CS-570
 Tier: 7

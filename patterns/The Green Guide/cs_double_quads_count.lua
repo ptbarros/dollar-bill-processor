@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_DOUBLE_QUADS_COUNT
-DisplayName: CS-Double Quads Count Note
+DisplayName: Quad Ladder
 Description: Two blocks of four identical digits where the second block is one higher or lower than the first (e.g. 6666·7777).
 BookRef: CS-880
 Tier: 2

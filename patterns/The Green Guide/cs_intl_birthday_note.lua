@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_INTL_BIRTHDAY_NOTE
-DisplayName: CS-INTL Birthday Note
+DisplayName: Birthday Note Y/M/D
 Description: Reads as a real year-month-day birthday in the year-first style, from within the last hundred years (e.g. 1975·11·22).
 BookRef: CS-620
 Tier: 7

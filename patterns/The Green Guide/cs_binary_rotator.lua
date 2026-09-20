@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_BINARY_ROTATOR
-DisplayName: CS-Binary Rotator
+DisplayName: Binary Rotator
 Description: Turn the note upside-down and it reads the same, using only two different digits that still read upside-down — but not the plain 0-and-1 pairing (e.g. 0888·8880).
 BookRef: CS-1120
 Tier: 3

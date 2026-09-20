@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_EU_HISTORY_NOTE
-DisplayName: CS-EU History Note
+DisplayName: History Note D/M/Y
 Description: Reads as a real day-month-year date in the day-first style from more than a hundred years ago (e.g. 04·07·1776).
 BookRef: CS-590
 Tier: 7

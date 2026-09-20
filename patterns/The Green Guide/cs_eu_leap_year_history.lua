@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_EU_LEAP_YEAR_HISTORY
-DisplayName: CS-EU Leap Year History Note
+DisplayName: History Note Leap Year
 Description: Reads as a leap-day date — the 29th of February in the day-first style — from more than a hundred years ago (e.g. 29·02·1904).
 BookRef: CS-600
 Tier: 6

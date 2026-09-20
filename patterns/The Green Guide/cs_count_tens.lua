@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_COUNT_TENS
-DisplayName: CS-Count Tens
+DisplayName: Count by 10
 Description: Reads as four two-digit numbers climbing (or dropping) by ten each time (e.g. 10·20·30·40).
 BookRef: CS-820
 Tier: 3
