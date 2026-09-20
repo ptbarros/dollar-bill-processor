@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_PAIR_IN_QUINT
 DisplayName: 5 of a Kind & Pair
-Description: Five of one digit flanking a side-by-side pair of another on both sides, with one stray digit somewhere (e.g. 0·5·22·555).
+Description: Five of one digit split around an adjacent pair of a second digit, plus one stray digit (e.g. 0·5·22·5555).
 BookRef: CS-390
 Tier: 5
 Examples: ["05225555", "05522555", "52255550", "55225515", "52255155"]

@@ -1,6 +1,7 @@
 --[[
 Pattern: TRIPLE_BOOKENDS
-Description: First 3 and last 3 digits match
+DisplayName: 3 Digit Bookend
+Description: First three and last three digits match, middle two free (e.g. 111·xx·111).
 Tier: 4
 Examples: ["12312312", "45645645"]
 Odds: 1 in 1,000

@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_YEAR_NOTES
 DisplayName: Year Note
-Description: A real four-digit year sits somewhere in the serial, whatever surrounds it (e.g. 1975·xxxx).
+Description: Four digits in a row, anywhere in the serial, read as a number from 1700 to 2099 — a year, real or future. Only the leftmost such run is marked.
 BookRef: CS-700
 Tier: 8
 Examples: ["19751234", "12197534", "12341975"]

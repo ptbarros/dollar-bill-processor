@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_TRUE_BINARY_SKIP_NOTE
 DisplayName: True Binary Alternator
-Description: Just 0s and 1s taking strict turns the whole way across — either 01010101 or 10101010.
+Description: 0 and 1 strictly alternate across all 8 digits, 01010101 or 10101010, and nothing else.
 BookRef: CS-1630
 Tier: 2
 Examples: ["01010101", "10101010"]

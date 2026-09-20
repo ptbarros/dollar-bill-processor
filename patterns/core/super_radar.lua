@@ -1,6 +1,6 @@
 --[[
 Pattern: SUPER_RADAR
-Description: First/last same, all interior digits same (e.g., 10000001)
+Description: A single repeated digit six times, wrapped in a matching pair — one digit at each end, six of another digit between (e.g. 10000001, 58888885)
 Tier: 2
 Examples: ["10000001", "42222224", "91111119"]
 Odds: 1 in 1,010,526

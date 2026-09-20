@@ -1,6 +1,6 @@
 --[[
 Pattern: BINARY_RADAR
-Description: Binary AND palindrome
+Description: Only two different digits in the whole serial, and it reads the same backwards as forwards. Example: 66166166
 Tier: 2
 Examples: ["10011001", "66166166", "01100110"]
 Odds: 1 in 914,285

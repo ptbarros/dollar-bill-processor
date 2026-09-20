@@ -1,7 +1,7 @@
 --[[
 Pattern: NICKS_BINARY
 DisplayName: Binary
-Description: Exactly 2 unique digits in the serial
+Description: Only two different digits appear in the whole serial, in any order
 Tier: 5
 Examples: ["12121212", "00110011", "99889988", "55665566"]
 --]]

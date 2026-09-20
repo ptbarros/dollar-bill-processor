@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_BINARY_FLIPPER
 DisplayName: Binary Flipper
-Description: Built from just two different digits, both taken from the ones that still look like digits upside-down — 0, 1, 6, 8 and 9 (e.g. 1881·1181).
+Description: Uses only two different digits, both from the upside-down-friendly set 0, 1, 6, 8 and 9 — any arrangement (e.g. 1881·1181, 0099·0099); the digits flip, the serial doesn't have to.
 BookRef: CS-1050
 Tier: 3
 Examples: ["18811181", "16611661", "00990099"]

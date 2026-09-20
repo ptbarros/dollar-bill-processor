@@ -1,7 +1,7 @@
 --[[
 Pattern: CS_NUMBERED_YEAR_NOTE
 DisplayName: Year Note & 4 of a Kind
-Description: A real four-digit year sits in the serial, with the other four spots all filled by one repeated non-zero digit (e.g. 1975·3333).
+Description: A four-digit block reading as a year from 1700 to 2099 occupies four of the eight spots, and the remaining four are all the same non-zero digit — the year block can sit anywhere, so the repeated digits may be split around it (e.g. 1975·3333, 3331·9753, 33·1975·33).
 BookRef: CS-680
 Tier: 7
 Examples: ["19753333", "33319753", "33197533"]
