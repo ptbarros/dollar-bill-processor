@@ -46,8 +46,9 @@ function match(ctx)
         end
     end
 
-    -- Two triples + one double, or one quad + two doubles
-    if (triples == 2 and doubles == 1) or (quads == 1 and doubles == 2) then
+    -- Two triples + one double, or one quad + two doubles -- and exactly 3 distinct
+    -- digits (Ed review), so the name is literally true (runs alone can repeat a digit).
+    if ((triples == 2 and doubles == 1) or (quads == 1 and doubles == 2)) and unique_count(s) == 3 then
         local desc = (triples == 2) and "2 triples + 1 double" or "1 quad + 2 doubles"
         -- One box around each run, no per-digit boxes (Ed review).
         local colors = {"blue", "orange", "magenta", "red"}

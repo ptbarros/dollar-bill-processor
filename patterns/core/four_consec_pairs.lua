@@ -24,20 +24,19 @@ function match(ctx)
     local c = digits:sub(5, 5)
     local d = digits:sub(7, 7)
 
-    -- Draw like Double Double (Ed review): a bracketed colored box per pair.
-    local colors = {"teal", "cyan", "blue", "purple"}
-    local highlights = {}
-    local connectors = {}
+    -- One colored box per pair (Ed review): no individual digit boxes, no lines.
+    local colors = {"blue", "orange", "magenta", "red"}
+    local group_boxes = {}
     for i = 0, 3 do
-        local p1, p2 = i * 2, i * 2 + 1
-        table.insert(highlights, {positions = {p1, p2}, color = colors[i + 1], label = "pair"})
-        table.insert(connectors, {from = p1, to = p2, color = colors[i + 1], style = "bracket"})
+        local p1 = i * 2
+        table.insert(group_boxes, {from = p1, to = p1 + 1, color = colors[i + 1], thickness = 3})
     end
 
     return {
         matched = true,
-        highlights = highlights,
-        connectors = connectors,
+        highlights = {},
+        group_boxes = group_boxes,
+        connectors = {},
         message = "Four pairs: " .. a .. a .. " " .. b .. b .. " " .. c .. c .. " " .. d .. d
     }
 end

@@ -1,9 +1,9 @@
 --[[
 Pattern: NICKS_SUPER_LADDER
 DisplayName: Super Ladder
-Description: 3 unique digits with specific counts (3-3-2, 4-4-2, or 2-2-4), all sorted
+Description: Three consecutive digits in sorted order, with counts like 3-3-2 or 4-2-2 (e.g. 000·111·22).
 Tier: 4
-Examples: ["00011122", "00112233", "11222233", "33322211", "22211100"]
+Examples: ["00011122", "11222233", "00001122", "33322211", "22211100"]
 --]]
 
 function match(ctx)
@@ -22,6 +22,18 @@ function match(ctx)
         return {matched = false}
     end
 
+    -- The 3 distinct digits must be consecutive on the number line (Ed review):
+    -- a real ladder, e.g. 3-4-5, not any three sorted digits.
+    local lo, hi = 9, 0
+    for d in pairs(unique) do
+        local n = tonumber(d)
+        if n < lo then lo = n end
+        if n > hi then hi = n end
+    end
+    if hi - lo ~= 2 then
+        return {matched = false}
+    end
+
     -- Count occurrences
     local counts = {}
     for i = 1, 8 do
@@ -36,14 +48,13 @@ function match(ctx)
     end
     table.sort(count_list)
 
-    -- Valid combinations: [2,3,3], [2,2,4], [2,4,4] (sorted)
+    -- Valid count multisets (sorted): [2,3,3] covers 3-3-2/3-2-3/2-3-3;
+    -- [2,2,4] covers 4-2-2/2-4-2/2-2-4. (The old [2,4,4] summed to 10 -- dead.)
     local valid = false
     if count_list[1] == 2 and count_list[2] == 3 and count_list[3] == 3 then
         valid = true
     elseif count_list[1] == 2 and count_list[2] == 2 and count_list[3] == 4 then
         valid = true
-    elseif count_list[1] == 2 and count_list[2] == 4 and count_list[3] == 4 then
-        valid = true -- Not in original but similar pattern
     end
 
     if not valid then

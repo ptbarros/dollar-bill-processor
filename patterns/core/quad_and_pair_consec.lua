@@ -19,16 +19,21 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Look for a consecutive pair adjacent to the quad or elsewhere
+    -- Look for a consecutive pair ADJACENT to the quad (Ed review): the pair must
+    -- start immediately after the quad ends, or end immediately before it begins,
+    -- so the two boxes read as one block. Pick by adjacency, not by position.
     local runs = find_runs(digits)
     local has_pair = false
     local pair_pos = nil
+    local quad_end = quad.start + quad.length - 1  -- 0-indexed
 
     for _, run in ipairs(runs) do
         if run.length == 2 and run.digit ~= quad.digit then
-            has_pair = true
-            pair_pos = run.start
-            break
+            if run.start == quad_end + 1 or run.start + 2 == quad.start then
+                has_pair = true
+                pair_pos = run.start
+                break
+            end
         end
     end
 
