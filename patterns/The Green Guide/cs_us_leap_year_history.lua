@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_US_LEAP_YEAR_HISTORY
-DisplayName: CS-US Leap Year History Note
+DisplayName: History Note U.S. M/D/Y Leap Yr
 Description: Reads as a leap-day date — February 29th in the month-first style — from more than a hundred years ago (e.g. 02·29·1904).
 BookRef: CS-550
 Tier: 6

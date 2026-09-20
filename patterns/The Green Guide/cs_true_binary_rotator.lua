@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TRUE_BINARY_ROTATOR
-DisplayName: CS-True Binary Rotator
+DisplayName: True Binary Rotator
 Description: Built from only 0s and 1s, both present, and it reads the same turned upside-down (e.g. 0100·0010).
 BookRef: CS-1110
 Tier: 3

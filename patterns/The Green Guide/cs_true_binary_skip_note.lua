@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TRUE_BINARY_SKIP_NOTE
-DisplayName: CS-True Binary Skip Note
+DisplayName: True Binary Alternator
 Description: Just 0s and 1s taking strict turns the whole way across — either 01010101 or 10101010.
 BookRef: CS-1630
 Tier: 2

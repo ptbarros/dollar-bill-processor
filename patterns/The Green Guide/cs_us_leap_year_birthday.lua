@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_US_LEAP_YEAR_BIRTHDAY
-DisplayName: CS-US Leap Year Birthday Note
+DisplayName: Birthday Note Leap Year M/D/Y
 Description: Reads as a leap-day birthday — February 29th in the month-first style — from within the last hundred years (e.g. 02·29·2000).
 BookRef: CS-530
 Tier: 6

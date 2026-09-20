@@ -1,5 +1,6 @@
 --[[
 Pattern: TRUE_FLIPPER
+DisplayName: True Flipper/Rotator
 Description: Reads same upside down (only 0, 6, 9)
 Tier: 3
 Examples: ["69000069", "96099069", "00699600"]

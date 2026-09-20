@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_US_FUTURE_DATE
-DisplayName: CS-US Future Date Note
+DisplayName: Date Note Future
 Description: Reads as a real month-day-year date in the month-first style that falls in the future (e.g. 12·25·2040).
 BookRef: CS-560
 Tier: 7

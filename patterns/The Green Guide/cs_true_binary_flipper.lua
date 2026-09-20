@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_TRUE_BINARY_FLIPPER
-DisplayName: CS-True Binary Flipper
+DisplayName: True Binary Flipper
 Description: Built from only 0s and 1s, and it reads the same turned upside-down (e.g. 1010·0101).
 BookRef: CS-1040
 Tier: 1

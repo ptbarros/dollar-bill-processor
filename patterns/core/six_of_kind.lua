@@ -1,5 +1,6 @@
 --[[
 Pattern: SIX_OF_KIND
+DisplayName: 6 of a Kind
 Description: 6 of the same digit (anywhere)
 Tier: 3
 Examples: ["66666612", "11111189", "12111311"]
