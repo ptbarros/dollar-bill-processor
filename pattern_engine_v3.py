@@ -132,12 +132,35 @@ class PatternEngineV3:
                 helpers_code = f.read()
             self.sandbox.load_helpers(helpers_code)
 
+    def _load_shipped_enabled(self):
+        """Internal pattern names that make up the shipped default set (whitelist).
+
+        Read from patterns/shipped_enabled.json (the curated core from Ed's review).
+        When present, any pattern NOT in this list ships DISABLED by default; the
+        .lua files stay in place so they remain re-enableable and importable. A
+        user's explicit on/off in settings always overrides this default. If the
+        file is missing/empty, no whitelist is applied (every pattern defaults on).
+        """
+        import json
+        path = self.patterns_dir / "shipped_enabled.json"
+        try:
+            if path.exists():
+                with open(path, 'r', encoding='utf-8') as f:
+                    return set(json.load(f))
+        except Exception:
+            pass
+        return set()
+
     def _load_lua_patterns(self):
         """Load all Lua pattern scripts from all library directories."""
         self.lua_patterns.clear()
 
         # Skip these directories (not pattern libraries)
         skip_dirs = {'lib', 'data', '__pycache__'}
+
+        # Curated shipped set (whitelist). Patterns not in it ship disabled by
+        # default; the files remain for re-enable/import.
+        self._shipped_enabled = self._load_shipped_enabled()
 
         # Scan all subdirectories under patterns/
         if self.patterns_dir.exists():
@@ -184,8 +207,16 @@ class PatternEngineV3:
                 # double-fire) — the user enables it deliberately to try it.
                 lib_default = library != "Essentials"
                 lib_enabled = self.settings.get_library_enabled(library, default=lib_default)
-                # Check pattern-specific state (overrides library)
-                pattern_enabled = self.settings.get_pattern_enabled(name, default=lib_enabled)
+                # Curated shipped set (Ed review): when a whitelist is present, a
+                # pattern outside it defaults off. Library state still gates it, and
+                # the user's explicit choice overrides both.
+                whitelist = getattr(self, '_shipped_enabled', set())
+                if whitelist:
+                    ship_default = lib_enabled and (name in whitelist)
+                else:
+                    ship_default = lib_enabled
+                # Check pattern-specific state (overrides library + ship default)
+                pattern_enabled = self.settings.get_pattern_enabled(name, default=ship_default)
                 enabled = pattern_enabled
 
             # Create pattern info
