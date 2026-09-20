@@ -15,7 +15,10 @@ local function mono_runs(s)
         local i = 1
         while i <= 8 do
             local j = i
-            while j < 8 and tonumber(s:sub(j + 1, j + 1)) == tonumber(s:sub(j, j)) + step do
+            -- mod-10 so a ladder wrapping 9<->0 reads as one run, consistent with
+            -- Three And Five (Ed review): otherwise a wrapping 5-run looked like a
+            -- 4-run + stray and this pattern poached clean 3+5 serials.
+            while j < 8 and tonumber(s:sub(j + 1, j + 1)) == (tonumber(s:sub(j, j)) + step) % 10 do
                 j = j + 1
             end
             if j > i then
