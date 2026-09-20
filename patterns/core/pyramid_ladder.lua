@@ -1,7 +1,7 @@
 --[[
 Pattern: PYRAMID_LADDER
 DisplayName: Pyramid Ladder
-Description: All 8 digits ascend by 1 to a single peak then descend by 1 (e.g. 34565432, 23454321).
+Description: All 8 digits climb by 1 to a single peak near the middle, then fall by 1 to the end, with the peak on the fourth or fifth digit (e.g. 34565432, 23454321).
 Tier: 2
 Odds: 1 in 1,200,000
 Price: $10-$50
@@ -37,6 +37,9 @@ function match(ctx)
     end
     -- Need both an ascending and a descending leg (peak strictly inside).
     if ascending or peak == nil or peak == 0 then return {matched = false} end
+
+    -- Peak must sit on the 4th or 5th digit (Ed review): index 3 or 4.
+    if peak ~= 3 and peak ~= 4 then return {matched = false} end
 
     local asc_pos, desc_pos = {}, {}
     for i = 0, peak - 1 do table.insert(asc_pos, i) end

@@ -1,9 +1,10 @@
 --[[
 Pattern: TRIPLE_DOUBLE
-Description: One triple and two doubles as consecutive runs (AAABBBCC or AABBCCC format)
+DisplayName: Triple Double Double
+Description: A triple and two pairs back to back, in any order, starting at the first or second digit, with one odd digit at the front or the end (e.g. 1·333·44·55).
 Tier: 4
-Examples: ["11122233", "44455566", "11233344"]
-Odds: 1 in ~5,000
+Examples: ["13334455", "33344551", "44433551", "55443331"]
+Odds: 1 in 5,000
 Price: $25-$75
 --]]
 
@@ -13,46 +14,42 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Find consecutive runs
+    -- Consecutive runs across all 8 digits.
     local runs = {}
     local i = 1
     while i <= 8 do
-        local d = digits:sub(i, i)
-        local run_start = i
-        local run_len = 1
-        while i + run_len <= 8 and digits:sub(i + run_len, i + run_len) == d do
-            run_len = run_len + 1
-        end
-        table.insert(runs, {digit = d, start = run_start - 1, length = run_len})
-        i = i + run_len
+        local dch = digits:sub(i, i)
+        local len = 1
+        while i + len <= 8 and digits:sub(i + len, i + len) == dch do len = len + 1 end
+        table.insert(runs, {digit = dch, start = i - 1, length = len})
+        i = i + len
     end
 
-    -- Sort run lengths to check pattern
+    -- Exactly one triple, two pairs and one single (run lengths 3, 2, 2, 1).
+    if #runs ~= 4 then return {matched = false} end
     local lengths = {}
-    for _, r in ipairs(runs) do
-        table.insert(lengths, r.length)
-    end
+    for _, r in ipairs(runs) do table.insert(lengths, r.length) end
     table.sort(lengths, function(a, b) return a > b end)
-
-    -- Check for exactly: one triple (3), two doubles (2, 2), one single (1)
-    local is_triple_double = (
-        #lengths == 4 and
-        lengths[1] == 3 and
-        lengths[2] == 2 and
-        lengths[3] == 2 and
-        lengths[4] == 1
-    )
-
-    if not is_triple_double then
+    if not (lengths[1] == 3 and lengths[2] == 2 and lengths[3] == 2 and lengths[4] == 1) then
         return {matched = false}
     end
 
-    -- One colored box per run (Ed review): removed individual boxes and bracket lines.
+    -- The triple and two pairs must sit back to back (7 digits in a row), so the lone
+    -- single must be the FIRST or LAST run -- never in the middle (Ed review).
+    if runs[1].length ~= 1 and runs[#runs].length ~= 1 then
+        return {matched = false}
+    end
+
+    -- One colored box per run, but NOT around the lone stray digit (Ed review).
     local colors = {"blue", "orange", "magenta", "red"}
     local group_boxes = {}
-    for idx, r in ipairs(runs) do
-        table.insert(group_boxes, {from = r.start, to = r.start + r.length - 1,
-            color = colors[math.min(idx, 4)], thickness = 3})
+    local ci = 1
+    for _, r in ipairs(runs) do
+        if r.length > 1 then
+            table.insert(group_boxes, {from = r.start, to = r.start + r.length - 1,
+                color = colors[ci], thickness = 3})
+            ci = ci + 1
+        end
     end
 
     return {
@@ -60,6 +57,6 @@ function match(ctx)
         highlights = {},
         group_boxes = group_boxes,
         connectors = {},
-        message = "Triple + double + double pattern"
+        message = "Triple Double Double"
     }
 end
