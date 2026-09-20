@@ -1539,7 +1539,15 @@ class MainWindow(QMainWindow):
             "- YOLO-based serial number detection\n"
             "- 50+ pattern recognition rules\n"
             "- Manual correction workflow\n\n"
-            "Built with PySide6 and OpenCV"
+            "Built with PySide6 and OpenCV\n\n"
+            "———\n"
+            "Fancy serial-number pattern names and CS-#### reference numbers use "
+            "the Currency Systems nomenclature and numbering system from "
+            "“The Green Guide of Fancy Serial Numbers” by RB Edgar and "
+            "Alan A. Moss (Currency Systems, 2023), used under the free-use "
+            "permission granted in that book for non-commercial use. Dollar "
+            "Detective is free and not for sale. Pattern descriptions and "
+            "detection logic are our own; no text from the book is reproduced."
         )
 
     def _export_results(self, format_type: str):
