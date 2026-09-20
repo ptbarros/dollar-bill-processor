@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_BINARY_FLIPPER
-DisplayName: CS-Binary Flipper
+DisplayName: Binary Flipper
 Description: Built from just two different digits, both taken from the ones that still look like digits upside-down — 0, 1, 6, 8 and 9 (e.g. 1881·1181).
 BookRef: CS-1050
 Tier: 3

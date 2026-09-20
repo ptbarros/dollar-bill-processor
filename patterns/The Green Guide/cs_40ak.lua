@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_40AK
-DisplayName: CS-4OAK
+DisplayName: 4 of a Kind
 Description: The same digit appears four or more times, anywhere in the serial, grouped or scattered (e.g. 44·4·x·4·xx).
 BookRef: CS-190
 Tier: 5

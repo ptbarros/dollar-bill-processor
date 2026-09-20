@@ -1,6 +1,6 @@
 --[[
 Pattern: CS_YEAR_NOTES
-DisplayName: CS-Year Notes
+DisplayName: Year Note
 Description: A real four-digit year sits somewhere in the serial, whatever surrounds it (e.g. 1975·xxxx).
 BookRef: CS-700
 Tier: 8

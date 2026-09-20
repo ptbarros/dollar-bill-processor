@@ -1,5 +1,6 @@
 --[[
 Pattern: BROKEN_LADDER_8
+DisplayName: 8 Digit Broken Ladder
 Description: 8-digit broken ladder (one digit out of sequence)
 Tier: 4
 Examples: ["23546718", "12354678"]
