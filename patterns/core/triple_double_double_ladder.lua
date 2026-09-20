@@ -48,15 +48,11 @@ function match(ctx)
 
     return {
         matched = true,
-        highlights = {
-            highlight({0, 1, 2}, "lime", "triple"),
-            highlight({3, 4}, "teal", "double B"),
-            highlight({5, 6}, "cyan", "double C")
-        },
+        highlights = {},
         group_boxes = {
-            {from = 0, to = 2, color = "lime", thickness = 2},
-            {from = 3, to = 4, color = "teal", thickness = 2},
-            {from = 5, to = 6, color = "cyan", thickness = 2}
+            {from = 0, to = 2, color = "blue", thickness = 3},
+            {from = 3, to = 4, color = "orange", thickness = 3},
+            {from = 5, to = 6, color = "magenta", thickness = 3}
         },
         connectors = {},
         message = "Triple + double + double ladder " .. direction

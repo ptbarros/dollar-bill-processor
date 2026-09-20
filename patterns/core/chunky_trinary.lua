@@ -33,22 +33,16 @@ function match(ctx)
         end
     end
 
-    local colors = {"lime", "teal", "cyan"}
-    local highlights = {}
+    -- One colored box per run (Ed review): removed the individual digit highlights.
+    local colors = {"blue", "orange", "magenta"}
     local group_boxes = {}
-
     for i, run in ipairs(runs) do
-        local positions = {}
-        for j = 0, run.length - 1 do
-            table.insert(positions, run.start + j)
-        end
-        table.insert(highlights, highlight(positions, colors[i], run.digit))
-        table.insert(group_boxes, {from = run.start, to = run.start + run.length - 1, color = colors[i], thickness = 2})
+        table.insert(group_boxes, {from = run.start, to = run.start + run.length - 1, color = colors[i], thickness = 3})
     end
 
     return {
         matched = true,
-        highlights = highlights,
+        highlights = {},
         group_boxes = group_boxes,
         connectors = {},
         message = "Chunky trinary"

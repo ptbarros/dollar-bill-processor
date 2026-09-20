@@ -29,7 +29,7 @@ function match(ctx)
     end
 
     -- Assign different colors to each unique digit
-    local colors = {"cyan", "teal", "blue"}
+    local colors = {"blue", "orange", "magenta"}
     local digit_colors = {}
     for i, d in ipairs(unique) do
         digit_colors[d] = colors[i]
@@ -46,27 +46,11 @@ function match(ctx)
         })
     end
 
-    -- Add arcs linking each digit's occurrences (Ed review).
-    local pos_by_digit = {}
-    for i = 0, 7 do
-        local d = digits:sub(i + 1, i + 1)
-        pos_by_digit[d] = pos_by_digit[d] or {}
-        table.insert(pos_by_digit[d], i)
-    end
-    -- Build arcs in first-appearance digit order (unique is already in reading order),
-    -- NOT pairs(pos_by_digit) order, so arc stacking is deterministic per launch.
-    local connectors = {}
-    for _, d in ipairs(unique) do
-        local plist = pos_by_digit[d]
-        for k = 1, #plist - 1 do
-            table.insert(connectors, {from = plist[k], to = plist[k + 1], color = digit_colors[d], style = "arc"})
-        end
-    end
-
+    -- Colored box per digit, no arcs (Ed review: eliminate the arcs).
     return {
         matched = true,
         highlights = highlights,
-        connectors = connectors,
+        connectors = {},
         message = string.format("Trinary: digits %s, %s, %s", unique[1], unique[2], unique[3])
     }
 end

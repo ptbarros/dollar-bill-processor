@@ -47,44 +47,19 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Build highlights for each run
-    local colors = {"gold", "orange", "coral", "salmon"}
-    local highlights = {}
-    local connectors = {}
-
+    -- One colored box per run (Ed review): removed individual boxes and bracket lines.
+    local colors = {"blue", "orange", "magenta", "red"}
+    local group_boxes = {}
     for idx, r in ipairs(runs) do
-        local color = colors[math.min(idx, 4)]
-        local positions = {}
-        for p = r.start, r.start + r.length - 1 do
-            table.insert(positions, p)
-        end
-
-        local label = "single"
-        if r.length == 2 then label = "double"
-        elseif r.length == 3 then label = "triple"
-        end
-
-        table.insert(highlights, {
-            positions = positions,
-            color = color,
-            label = label
-        })
-
-        -- Connect runs of 2+
-        if r.length >= 2 then
-            table.insert(connectors, {
-                from = r.start,
-                to = r.start + r.length - 1,
-                color = color,
-                style = "bracket"
-            })
-        end
+        table.insert(group_boxes, {from = r.start, to = r.start + r.length - 1,
+            color = colors[math.min(idx, 4)], thickness = 3})
     end
 
     return {
         matched = true,
-        highlights = highlights,
-        connectors = connectors,
+        highlights = {},
+        group_boxes = group_boxes,
+        connectors = {},
         message = "Triple + double + double pattern"
     }
 end
