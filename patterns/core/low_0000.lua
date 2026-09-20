@@ -1,6 +1,6 @@
 --[[
 Pattern: LOW_0000
-Description: Starts with 0000
+Description: Exactly four leading zeros — no fewer, no more (e.g. 0000·1234).
 Tier: 4
 Examples: ["00001234", "00009999"]
 Odds: 1 in 10,667
@@ -13,17 +13,17 @@ function match(ctx)
         return {matched = false}
     end
 
-    if not starts_with(digits, "0000") then
+    -- Exactly 4 leading zeros: starts with 0000 but the 5th digit is not a zero.
+    if not starts_with(digits, "0000") or digits:sub(5, 5) == "0" then
         return {matched = false}
     end
 
-    -- Highlight the leading zeros
     return {
         matched = true,
         highlights = {
             highlight({0, 1, 2, 3}, "gold", "low serial")
         },
         connectors = {},
-        message = "Low serial (starts with 0000)"
+        message = "Low serial (4 leading zeros)"
     }
 end

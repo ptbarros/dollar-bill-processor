@@ -1,6 +1,6 @@
 --[[
 Pattern: LOW_000000
-Description: Starts with 000000 (serial under 100)
+Description: Exactly six leading zeros, so the serial is under 100 (e.g. 000000·12).
 Tier: 2
 Examples: ["00000012", "00000099"]
 Odds: 1 in 1,066,667
@@ -13,15 +13,17 @@ function match(ctx)
         return {matched = false}
     end
 
-    if not starts_with(digits, "000000") then
+    -- Exactly 6 leading zeros: starts with 000000 but the 7th digit is not a zero.
+    -- (On an 8-digit serial this also guarantees the number is under 100.)
+    if not starts_with(digits, "000000") or digits:sub(7, 7) == "0" then
         return {matched = false}
     end
 
-    -- Highlight the leading zeros
     return {
         matched = true,
-        -- No overlay boxes (Ed review): the leading zeros speak for themselves.
-        highlights = {},
+        highlights = {
+            highlight({0, 1, 2, 3, 4, 5}, "gold", "low serial")
+        },
         connectors = {},
         message = "Ultra low serial (under 100)"
     }
