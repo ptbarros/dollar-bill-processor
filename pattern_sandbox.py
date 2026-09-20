@@ -106,6 +106,10 @@ class PatternSandbox:
         self.check_interval = check_interval or self.INSTRUCTION_CHECK_INTERVAL
         self._lua = None
         self._helpers_loaded = False
+        # Cache of id(payload) -> (payload, converted Lua table) for immutable
+        # DataFile data, so a large table (e.g. ZIP_CODE's ~32k rows) is built
+        # once per sandbox runtime instead of on every execute().
+        self._lua_convert_cache = {}
 
     def _get_lua(self):
         """Get or create the Lua runtime with sandboxed environment."""
@@ -415,11 +419,11 @@ class PatternSandbox:
         # Add external data if present (from DataFile)
         data = ctx.get('data')
         if data is not None:
-            lua_table['data'] = self._convert_to_lua(data)
+            lua_table['data'] = self._convert_to_lua_cached(data)
 
         data_by_key = ctx.get('data_by_key')
         if data_by_key is not None:
-            lua_table['data_by_key'] = self._convert_to_lua(data_by_key)
+            lua_table['data_by_key'] = self._convert_to_lua_cached(data_by_key)
 
         return lua_table
 
@@ -436,6 +440,24 @@ class PatternSandbox:
         else:
             # Primitives (str, int, float, bool, None) pass through
             return obj
+
+    def _convert_to_lua_cached(self, obj: Any) -> Any:
+        """Convert an immutable DataFile payload to a Lua table once and reuse it.
+
+        DataFile-backed patterns (e.g. ZIP_CODE, ~32k rows) pass the same dict/list
+        loaded at startup on every execute(). Rebuilding it into fresh Lua tables
+        each call dominated matching time. The payload is immutable after load and
+        each sandbox owns exactly one Lua runtime, so we build it once per
+        (sandbox, object) and reuse it. The cache holds the object, so its id()
+        can't be reused by a different object while the table is live.
+        """
+        key = id(obj)
+        cached = self._lua_convert_cache.get(key)
+        if cached is not None and cached[0] is obj:
+            return cached[1]
+        lua_obj = self._convert_to_lua(obj)
+        self._lua_convert_cache[key] = (obj, lua_obj)
+        return lua_obj
 
     def _lua_result_to_python(self, lua_result, execution_time: float) -> LuaExecutionResult:
         """Convert Lua result table to Python LuaExecutionResult."""
