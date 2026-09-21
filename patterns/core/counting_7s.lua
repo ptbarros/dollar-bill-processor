@@ -40,10 +40,10 @@ function match(ctx)
         -- by its single group box only, no arcs.
         highlights = {},
         group_boxes = {
-            {from = 0, to = 1, color = "lime", thickness = 2},
-            {from = 2, to = 3, color = "teal", thickness = 2},
-            {from = 4, to = 5, color = "cyan", thickness = 2},
-            {from = 6, to = 7, color = "blue", thickness = 2}
+            {from = 0, to = 1, color = "blue", thickness = 3},
+            {from = 2, to = 3, color = "orange", thickness = 3},
+            {from = 4, to = 5, color = "magenta", thickness = 3},
+            {from = 6, to = 7, color = "red", thickness = 3}
         },
         connectors = {},
         message = string.format("Counting by 7s: %02d->%02d->%02d->%02d", nums[1], nums[2], nums[3], nums[4])
