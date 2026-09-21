@@ -2,7 +2,7 @@
 Pattern: 1959
 DisplayName: 1959
 Description: Year note 1959
-Tier: 5
+Tier: 6
 Odds: 1 in 1,967 (48,799 per 96M)
 Examples: ["19590000", "00195900", "00001959"]
 --]]

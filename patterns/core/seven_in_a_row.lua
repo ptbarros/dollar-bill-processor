@@ -2,7 +2,7 @@
 Pattern: NICKS_SEVEN_IN_A_ROW
 DisplayName: 7 in a Row
 Description: 7 consecutive identical digits
-Tier: 2
+Tier: 3
 Odds: 1 in 571,429 (168 per 96M)
 Examples: ["00000001", "10000000", "11111112", "21111111", "99999990"]
 --]]

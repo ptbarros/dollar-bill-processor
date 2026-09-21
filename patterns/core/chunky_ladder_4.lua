@@ -2,7 +2,7 @@
 Pattern: NICKS_CHUNKY_LADDER_4
 DisplayName: 4 Digit Chunky Ladder
 Description: Four consecutive digits (like 3-4-5-6), each in its own chunk, the whole serial sorted up or down (e.g. 00·11·22·33).
-Tier: 6
+Tier: 3
 Odds: 1 in 210,989 (455 per 96M)
 Examples: ["00112233", "01112223", "33221100", "66778899"]
 --]]

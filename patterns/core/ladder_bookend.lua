@@ -1,7 +1,7 @@
 --[[
 Pattern: LADDER_BOOKEND
 Description: Ladder sequence bookended by same digits
-Tier: 3
+Tier: 6
 Examples: ["12345621", "77234577", "11234511"]
 Odds: 1 in 1,901 (50,495 per 96M)
 Price: $10-$50

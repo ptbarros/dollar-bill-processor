@@ -2,7 +2,7 @@
 Pattern: NICKS_FIVE_IN_A_ROW
 DisplayName: 5 in a Row
 Description: 5 consecutive identical digits
-Tier: 4
+Tier: 6
 Odds: 1 in 2,968 (32,346 per 96M)
 Examples: ["00000123", "12300000", "11111234"]
 --]]

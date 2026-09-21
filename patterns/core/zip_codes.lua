@@ -2,7 +2,7 @@
 Pattern: ZIP_CODE
 DisplayName: Zip Code (Zeros)
 Description: A valid US ZIP code as 5 consecutive digits, with every other digit a 0 (e.g. 0 ZZZZZ 00)
-Tier: 4
+Tier: 7
 Examples: ["90210000", "09021000", "00902100", "00090210"]
 Odds: ~1 in 800
 Price: $20-$60

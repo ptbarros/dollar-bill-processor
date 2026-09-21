@@ -1,7 +1,7 @@
 --[[
 Pattern: SUM_68_OR_4
 Description: Digit sum equals 68 or 4
-Tier: 5
+Tier: 3
 Examples: ["00300100", "10000300", "00001030"]
 Odds: 1 in 212,860 (451 per 96M)
 Price: $40-$300+

@@ -2,7 +2,7 @@
 Pattern: COUNTING_7S
 DisplayName: Counting By 7s Ladder
 Description: Counting by 7s ladder (07142128)
-Tier: 7
+Tier: 2
 Examples: ["07142128", "14212835"]
 Odds: 1 in 1,215,190 (79 per 96M)
 Price: $100-$1,000+

@@ -3,7 +3,7 @@ Pattern: TRUE_DOUBLE_QUAD_BINARY
 DisplayName: True Double Quad Binary
 Description: A solid block of four 0s next to a solid block of four 1s — only 00001111 or 11110000.
 BookRef: CS-920
-Tier: 2
+Tier: 1
 Examples: ["00001111", "11110000"]
 Odds: 1 in 48,000,000 (2 per 96M)
 Price: $50+

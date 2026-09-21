@@ -1,7 +1,7 @@
 --[[
 Pattern: SUM_1
 Description: Sum equals 1
-Tier: 5
+Tier: 1
 Examples: ["10000000", "00001000", "00000001"]
 Odds: 1 in 12,000,000 (8 per 96M)
 Price: $100-$1,500

@@ -1,7 +1,7 @@
 --[[
 Pattern: BOOKENDS
 Description: First 2 and last 2 digits match
-Tier: 4
+Tier: 8
 Examples: ["12345612", "99123499"]
 Odds: 1 in 100 (959,999 per 96M)
 Price: $3-$10

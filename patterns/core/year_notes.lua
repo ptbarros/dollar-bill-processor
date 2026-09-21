@@ -3,7 +3,7 @@ Pattern: YEAR_NOTES
 DisplayName: Year Note
 Description: Four digits in a row, anywhere in the serial, read as a number from 1700 to 2099 — a year, real or future. Only the leftmost such run is marked.
 BookRef: CS-700
-Tier: 8
+Tier: 10
 Odds: 1 in 5 (18,572,800 per 96M)
 Examples: ["19751234", "12197534", "12341975"]
 --]]

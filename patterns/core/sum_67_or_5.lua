@@ -1,7 +1,7 @@
 --[[
 Pattern: SUM_67_OR_5
 Description: Digit sum equals 67 or 5
-Tier: 5
+Tier: 4
 Examples: ["04000001", "00001400", "00000500"]
 Odds: 1 in 85,031 (1,129 per 96M)
 Price: $20-$140+

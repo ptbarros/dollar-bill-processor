@@ -2,7 +2,7 @@
 Pattern: ANY_4_PAIRS
 DisplayName: 4 Pairs
 Description: 4 pairs total (any positions, e.g., AABBCCDD or ABCABCDD)
-Tier: 5
+Tier: 8
 Odds: 1 in 147 (655,103 per 96M)
 Examples: ["11223344", "12123434", "11112222", "00001111"]
 --]]

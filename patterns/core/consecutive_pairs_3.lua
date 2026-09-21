@@ -2,7 +2,7 @@
 Pattern: CONSECUTIVE_PAIRS_3
 DisplayName: 3 Consecutive Pairs
 Description: 3 consecutive pairs within the serial
-Tier: 5
+Tier: 7
 Odds: 1 in 433 (221,859 per 96M)
 Examples: ["11223312", "12233445", "00112234", "99887700"]
 --]]

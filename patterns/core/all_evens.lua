@@ -1,7 +1,7 @@
 --[[
 Pattern: ALL_EVENS
 Description: All digits even (0,2,4,6,8)
-Tier: 4
+Tier: 8
 Examples: ["24680246", "20486420", "24688864"]
 Odds: 1 in 246 (390,624 per 96M)
 Price: $3-$10

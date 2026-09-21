@@ -1,7 +1,7 @@
 --[[
 Pattern: DOUBLES_BOOKEND
 Description: Double digits on each end match (11XXXX11)
-Tier: 4
+Tier: 7
 Examples: ["11234511", "99123499", "22567822"]
 Odds: 1 in 1,067 (89,999 per 96M)
 Price: $3-$15

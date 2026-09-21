@@ -1,7 +1,7 @@
 --[[
 Pattern: THREE_AND_FOUR_LADDER
 Description: A 3-digit ladder and a 4-digit ladder, in either order, sitting in the serial (e.g. 123·8765·0).
-Tier: 4
+Tier: 6
 Examples: ["12387650", "32145670", "56781230"]
 Odds: 1 in 5,378 (17,852 per 96M)
 Price: $10-$100+

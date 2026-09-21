@@ -2,7 +2,7 @@
 Pattern: TOMBSTONE
 DisplayName: Tombstone
 Description: Two 4-digit years, second > first, difference <= 120 years (birth-death)
-Tier: 6
+Tier: 7
 Odds: 1 in 1,012 (94,860 per 96M)
 Examples: ["19001990", "19202020", "18501970", "19502050"]
 --]]

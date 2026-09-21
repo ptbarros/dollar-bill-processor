@@ -3,7 +3,7 @@ Pattern: TRUE_BINARY_ROTATOR
 DisplayName: True Binary Rotator
 Description: Built from only 0s and 1s, both present, and it reads the same turned upside-down (e.g. 0100·0010).
 BookRef: CS-1110
-Tier: 3
+Tier: 1
 Odds: 1 in 6,857,143 (14 per 96M)
 Examples: ["01000010", "10000001", "01100110"]
 Price: $5-$100

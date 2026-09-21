@@ -1,7 +1,7 @@
 --[[
 Pattern: SUM_62_OR_10
 Description: Digit sum equals 62 or 10
-Tier: 5
+Tier: 6
 Examples: ["00008020", "90100000", "21101005"]
 Odds: 1 in 3,019 (31,802 per 96M)
 Price: $5-$25+

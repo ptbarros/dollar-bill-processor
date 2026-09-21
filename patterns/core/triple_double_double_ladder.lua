@@ -1,7 +1,7 @@
 --[[
 Pattern: TRIPLE_DOUBLE_DOUBLE_LADDER
 Description: Triple + double + double ladder (AAABBCCX)
-Tier: 6
+Tier: 3
 Examples: ["11122334", "22233445"]
 Odds: 1 in 640,000 (150 per 96M)
 Price: $40-$200+

@@ -3,7 +3,7 @@ Pattern: PAIR_AND_SEXTUP
 DisplayName: 6 of a Kind & Pair
 Description: Six identical digits in a row with a matching pair of another digit tacked onto one end (e.g. 22·666666).
 BookRef: CS-450
-Tier: 4
+Tier: 3
 Examples: ["22666666", "66666622", "33555555", "55555533"]
 Odds: 1 in 592,593 (162 per 96M)
 Price: $25-$500

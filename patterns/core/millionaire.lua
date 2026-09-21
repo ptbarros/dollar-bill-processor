@@ -2,7 +2,7 @@
 Pattern: NICKS_MILLIONAIRE
 DisplayName: Millionaire
 Description: Round millions with any leading digits (XX000000)
-Tier: 3
+Tier: 2
 Odds: 1 in 1,000,000 (96 per 96M)
 Examples: ["01000000", "12000000", "99000000", "55000000"]
 --]]

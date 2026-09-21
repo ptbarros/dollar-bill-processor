@@ -2,7 +2,7 @@
 Pattern: NICKS_CHUNKY_LADDER_7
 DisplayName: 7 Digit Chunky Ladder
 Description: Seven consecutive digits, each in its own chunk, the whole serial sorted up or down (e.g. 00·1·2·3·4·5·6).
-Tier: 3
+Tier: 2
 Odds: 1 in 1,959,184 (49 per 96M)
 Examples: ["00123456", "01234566", "66543210", "99876543"]
 --]]

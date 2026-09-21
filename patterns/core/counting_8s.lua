@@ -2,7 +2,7 @@
 Pattern: COUNTING_8S
 DisplayName: Counting By 8s Ladder
 Description: Counting by 8s ladder (08162432)
-Tier: 7
+Tier: 2
 Examples: ["08162432", "16243240"]
 Odds: 1 in 1,263,158 (76 per 96M)
 Price: $100-$1,000+

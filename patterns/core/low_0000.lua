@@ -1,7 +1,7 @@
 --[[
 Pattern: LOW_0000
 Description: Exactly four leading zeros — no fewer, no more (e.g. 0000·1234).
-Tier: 4
+Tier: 5
 Examples: ["00001234", "00009999"]
 Odds: 1 in 10,667 (9,000 per 96M)
 Price: $10-$30

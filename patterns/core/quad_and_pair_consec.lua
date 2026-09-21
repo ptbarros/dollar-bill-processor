@@ -1,7 +1,7 @@
 --[[
 Pattern: QUAD_AND_PAIR_CONSEC
 Description: 4 in a row plus consecutive pair
-Tier: 4
+Tier: 6
 Examples: ["11112234", "22223345"]
 Odds: 1 in 2,056 (46,683 per 96M)
 Price: $5-$25

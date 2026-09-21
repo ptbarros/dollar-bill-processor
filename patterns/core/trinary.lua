@@ -1,7 +1,7 @@
 --[[
 Pattern: TRINARY
 Description: Contains exactly 3 unique digits
-Tier: 5
+Tier: 8
 Examples: ["12312312", "01201201", "11223311"]
 Odds: 1 in 146 (657,889 per 96M)
 Price: $5-$20

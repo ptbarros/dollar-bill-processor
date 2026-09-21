@@ -2,7 +2,7 @@
 Pattern: DOUBLE_FOUR_OF_KIND
 DisplayName: Double Four of a Kind
 Description: Two groups of 4 of a kind (33343444)
-Tier: 3
+Tier: 5
 Examples: ["33343444", "11121222", "55556666"]
 Odds: 1 in 32,487 (2,955 per 96M)
 Price: $20-$120

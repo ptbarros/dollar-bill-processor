@@ -3,7 +3,7 @@ Pattern: TETRADIC
 DisplayName: Rotator 018
 Description: Built only from 0s, 1s and 8s, and it reads the same forwards, backwards, and turned upside-down (e.g. 0811·1180).
 BookRef: CS-1160
-Tier: 1
+Tier: 2
 Odds: 1 in 1,200,000 (80 per 96M)
 Examples: ["08111180", "10111101", "10011001"]
 Price: $50-$1,000

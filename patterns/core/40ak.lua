@@ -3,7 +3,7 @@ Pattern: 40AK
 DisplayName: 4 of a Kind
 Description: The same digit appears exactly four times, anywhere in the serial, grouped or scattered (e.g. 44·4·x·4·xx).
 BookRef: CS-190
-Tier: 5
+Tier: 9
 Odds: 1 in 22 (4,363,755 per 96M)
 Examples: ["10101012", "01010101", "11112345", "70717273", "17171712"]
 Price: $10-$30

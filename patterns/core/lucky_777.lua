@@ -1,7 +1,7 @@
 --[[
 Pattern: LUCKY_777
 Description: Contains 777
-Tier: 10
+Tier: 8
 Examples: ["12377712", "77712345"]
 Odds: 1 in 183 (525,948 per 96M)
 Price: $2-$5

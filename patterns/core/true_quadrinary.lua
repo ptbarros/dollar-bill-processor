@@ -2,7 +2,7 @@
 Pattern: NICKS_TRUE_QUADRINARY
 DisplayName: True Quadrinary
 Description: Only digits 0, 1, 2, 3 used, all four present
-Tier: 4
+Tier: 6
 Odds: 1 in 2,352 (40,824 per 96M)
 Examples: ["01230123", "00112233", "32103210", "12301230"]
 --]]

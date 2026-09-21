@@ -2,7 +2,7 @@
 Pattern: FOUR_IN_A_ROW
 DisplayName: 4 in a Row
 Description: 4 consecutive identical digits (quad)
-Tier: 5
+Tier: 8
 Odds: 1 in 239 (401,139 per 96M)
 Examples: ["00001234", "12340000", "11112345"]
 --]]
