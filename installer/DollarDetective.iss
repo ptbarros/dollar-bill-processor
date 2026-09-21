@@ -45,8 +45,22 @@ DisableDirPage=no
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
 
+[InstallDelete]
+; Remove the bundled pattern library BEFORE copying the new one, so pattern
+; folders dropped between versions don't linger as orphaned libraries. This is
+; what left a stale "Essentials" group on updated installs, and it matters more
+; for the single-core flatten (which removes the Nicks and Green Guide folders).
+; Bundled patterns are read-only and fully replaced each build; USER patterns
+; live in the per-user data dir and are NOT touched by this.
+Type: filesandordirs; Name: "{app}\_internal\patterns"
+Type: filesandordirs; Name: "{app}\patterns"
+
 [Files]
 Source: "..\dist\DollarDetective\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+; The optional Green Guide pattern library, as an importable bundle. Placed at the
+; install-folder root so it's easy to find: Pattern Manager -> Import Bundle... ->
+; this file re-adds the 145 Green Guide patterns that aren't in the core set.
+Source: "..\library_sources\green_guide.ddpat"; DestDir: "{app}"; DestName: "Green Guide Library.ddpat"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
