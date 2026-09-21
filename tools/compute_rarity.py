@@ -47,7 +47,10 @@ DEFAULT_MAX = 96_000_000  # top ~4M serials of a 10^8 block are never printed
 # auto-detected DataFile / date-relative ones.
 # STAR matches on the star SUFFIX, not the 8 digits, so a digit-only brute force
 # never triggers it (would report a false 0) -- skip like the other physical ones.
-HARD_SKIP = {"GAS_PUMP", "SEAL_SHIFT", "DUPLICATE_SN", "STAR"}
+# HIGH_SERIAL matches only serials > 96,000,000, i.e. entirely OUTSIDE the swept
+# circulating range, so it can only ever count 0 here -- by design, not a bug.
+# Skip it (keep its hand-set qualitative odds) so the sweep never mislabels it.
+HARD_SKIP = {"GAS_PUMP", "SEAL_SHIFT", "DUPLICATE_SN", "STAR", "HIGH_SERIAL"}
 # Lua tokens that mark a pattern as date-relative (its count shifts with "today").
 DATE_TOKENS = ("current_year", "current_month", "current_day")
 

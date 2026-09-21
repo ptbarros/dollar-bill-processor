@@ -34,12 +34,14 @@ def parse_serial(text):
     return m.group(1).upper(), int(m.group(2)), m.group(3).upper()
 
 
-MAX_PRINTED_SERIAL = 96_000_000  # top ~4M serials of a 10^8 block are never printed
+MAX_PRINTED_SERIAL = 96_000_000  # circulating max; serials above this go on uncut
+                                 # collector sheets, not into circulation
 
 
 def strap_serials(prefix, start_num, suffix, count):
     """Yield (position, full_serial) for a strap of `count` consecutive notes,
-    STOPPING at 96,000,000 (the top ~4M serials of a block are never printed).
+    STOPPING at 96,000,000 (the circulating maximum; higher serials are printed
+    only for uncut collector sheets, not for circulation).
     The note after 96,000,000 is in a DIFFERENT block with different letters --
     not 00000001 with the same letters -- so the run ends rather than wrapping;
     wrapping would name a serial that isn't the next physical note in the strap."""
@@ -122,9 +124,9 @@ class StrapCheckDialog(QDialog):
         self.tree.clear()
         if start_num > MAX_PRINTED_SERIAL:
             self.summary.setText(
-                "<b style='color:#c62828'>Past the printed range</b> — serials stop "
-                f"at 96,000,000. {prefix}{start_num:08d}{suffix} is beyond what's "
-                "printed; look it up individually instead.")
+                "<b style='color:#c62828'>Above the circulating range</b> — circulating "
+                f"serials stop at 96,000,000. {prefix}{start_num:08d}{suffix} is an "
+                "uncut-sheet serial; look it up individually instead.")
             return
 
         fancy = 0
@@ -147,9 +149,9 @@ class StrapCheckDialog(QDialog):
         msg = (f"<b>{fancy}</b> of <b>{checked}</b> serials would be fancy "
                f"(<b>{pct:.0f}%</b>) — run {prefix}{start_num:08d}{suffix} → {last_serial}.")
         if checked < count:
-            msg += (f"  <i>Run reaches the end of the printed range at 96,000,000; "
-                    f"only {checked} of {count} notes exist here (the rest are in the "
-                    f"next block).</i>")
+            msg += (f"  <i>Run reaches the circulating maximum at 96,000,000; only "
+                    f"{checked} of {count} are circulating serials (the rest would be "
+                    f"uncut-sheet serials, not part of this strap).</i>")
         elif not fancy:
             msg += "  <i>None — probably not worth scanning.</i>"
         self.summary.setText(msg)

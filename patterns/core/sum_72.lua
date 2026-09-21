@@ -3,7 +3,7 @@ Pattern: SUM_72
 Description: Maximum sum (all 9s)
 Tier: 5
 Examples: ["99999999"]
-Odds: Cannot occur on a printed note — only 99999999, which is never printed
+Odds: Only 99999999, which is not printed for circulation
 Price: $500+
 --]]
 
