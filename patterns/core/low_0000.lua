@@ -20,9 +20,8 @@ function match(ctx)
 
     return {
         matched = true,
-        highlights = {
-            highlight({0, 1, 2, 3}, "gold", "low serial")
-        },
+        highlights = {},
+        group_boxes = {},
         connectors = {},
         message = "Low serial (4 leading zeros)"
     }
