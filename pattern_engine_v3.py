@@ -840,6 +840,25 @@ class PatternEngineV3:
             if self.settings:
                 self.settings.set_pattern_enabled(name, enabled)
 
+    def sync_enabled_from_settings(self):
+        """Refresh every loaded pattern's `enabled` flag from the (shared) settings,
+        WITHOUT re-parsing the Lua. Other engine instances (Pattern Manager, the
+        results list, the processor) each hold their own in-memory flags; when one
+        changes enable/disable, the others go stale until restart. Call this on an
+        engine before it's used (Strap Check, Serial Lookup) so it reflects the
+        current settings. Mirrors the enabled logic in _load_patterns."""
+        if not self.settings:
+            return
+        whitelist = getattr(self, '_shipped_enabled', set())
+        for name, info in self.lua_patterns.items():
+            lib_default = info.library != "Essentials"
+            lib_enabled = self.settings.get_library_enabled(info.library, default=lib_default)
+            if whitelist:
+                ship_default = lib_enabled and (name in whitelist)
+            else:
+                ship_default = lib_enabled
+            info.enabled = self.settings.get_pattern_enabled(name, default=ship_default)
+
     def clear_pattern_enabled(self, name: str):
         """Clear explicit pattern state, reverting to library default.
 

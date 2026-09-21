@@ -990,6 +990,9 @@ class MainWindow(QMainWindow):
         if dlg is None:
             dlg = SerialLookupDialog(self.results_list.pattern_engine, self)
             self._serial_lookup_dialog = dlg
+        # Reflect any enable/disable made in Pattern Manager (separate engine
+        # instance) so the lookup matches the current on/off set without a restart.
+        self.results_list.pattern_engine.sync_enabled_from_settings()
         if initial_serial:
             dlg.serial_edit.setText(initial_serial)
         dlg.show()
@@ -1301,6 +1304,18 @@ class MainWindow(QMainWindow):
         from .pattern_dialog import PatternDialog
         dialog = PatternDialog(self)
         dialog.exec()
+
+        # Pattern Manager edits its OWN engine instance; propagate enable/disable
+        # to the other live engines (results list + processor) from the shared
+        # settings so the results view, Serial Lookup and Strap Check reflect it
+        # without a restart.
+        try:
+            self.results_list.pattern_engine.sync_enabled_from_settings()
+        except Exception:
+            pass
+        proc_engine = self._get_pattern_engine()
+        if proc_engine:
+            proc_engine.sync_enabled_from_settings()
 
         # Reload preview panel's pattern engine if patterns were modified
         if dialog.patterns_were_modified():
@@ -1943,6 +1958,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Strap Serial Check",
                                 "The pattern engine isn't available.")
             return
+        # Reflect any enable/disable made in Pattern Manager (separate engine
+        # instance) without needing a restart.
+        engine.sync_enabled_from_settings()
         StrapCheckDialog(engine, self).exec()
 
     def _reset_ledger(self):
