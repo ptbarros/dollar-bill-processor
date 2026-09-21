@@ -2568,16 +2568,29 @@ class DigitPreviewWidget(QWidget):
         num_chars = 10  # prefix + 8 digits + suffix
         total_width = num_chars * box_width + (num_chars - 1) * spacing
         start_x = (self.width() - total_width) // 2
-        # Vertical placement. Connector arcs draw above the boxes (at start_y - 5,
-        # bulging up by up to arc_height), so a pattern WITH arcs needs headroom or
-        # a wide arc clips off the top. A pattern with NO arcs (only boxes/group
-        # boxes) doesn't -- reserving that headroom just made its digits sit low
-        # ("shifted down"). So reserve headroom only when there are arcs; otherwise
-        # center the boxes in the available height.
+        # Vertical placement. Center the boxes in the available height, then only
+        # push them down if connector arcs need MORE headroom than centering already
+        # gives (deeply-nested arcs lift higher). A fixed headroom made every arc'd
+        # pattern sit low even when its one shallow arc fit fine above a centered
+        # row. No arcs -> just centered.
+        centered_y = max(10, (self.height() - box_height) // 2)
         if self.connectors:
-            start_y = 40
+            spans_tmp = []
+            for c in self.connectors:
+                fp, tp = c.get('from', 0), c.get('to', 0)
+                if 0 <= fp < 8 and 0 <= tp < 8:
+                    spans_tmp.append((min(fp, tp), max(fp, tp)))
+            max_level = 0
+            for lo, hi in spans_tmp:
+                lvl = sum(1 for l2, h2 in spans_tmp
+                          if lo <= l2 and h2 <= hi and (l2, h2) != (lo, hi))
+                max_level = max(max_level, lvl)
+            # Headroom the deepest arc needs above the box tops: endpoint lift
+            # (6 + level*6) + arc bulge (11) + a small top margin.
+            needed_headroom = 6 + max_level * 6 + 11 + 8
+            start_y = max(centered_y, needed_headroom)
         else:
-            start_y = max(10, (self.height() - box_height) // 2)
+            start_y = centered_y
 
         # Build color + style map for each digit position (0-7 -> char pos 1-8)
         position_colors = {}
