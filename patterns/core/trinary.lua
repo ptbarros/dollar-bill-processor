@@ -35,8 +35,11 @@ function match(ctx)
         digit_colors[d] = colors[i]
     end
 
-    -- Highlight each digit with its assigned color
+    -- Highlight each digit with its assigned color, and link like occurrences
+    -- with arcs in that digit's color (Ed review: add arcs back).
     local highlights = {}
+    local connectors = {}
+    local last = {}
     for i = 0, 7 do
         local d = digits:sub(i + 1, i + 1)
         table.insert(highlights, {
@@ -44,13 +47,16 @@ function match(ctx)
             color = digit_colors[d],
             label = "digit-" .. d
         })
+        if last[d] then
+            table.insert(connectors, {from = last[d], to = i, color = digit_colors[d], style = "arc"})
+        end
+        last[d] = i
     end
 
-    -- Colored box per digit, no arcs (Ed review: eliminate the arcs).
     return {
         matched = true,
         highlights = highlights,
-        connectors = {},
+        connectors = connectors,
         message = string.format("Trinary: digits %s, %s, %s", unique[1], unique[2], unique[3])
     }
 end

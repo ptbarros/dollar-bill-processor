@@ -26,7 +26,7 @@ function match(ctx)
         -- Single box around the whole serial (Ed review), no per-digit boxes.
         highlights = {},
         group_boxes = {
-            {from = 0, to = 7, color = "orange", thickness = 2}
+            {from = 0, to = 7, color = "orange", thickness = 3}
         },
         connectors = {},
         message = "Perfect solid - all " .. first .. "s"

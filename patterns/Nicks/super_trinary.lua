@@ -50,21 +50,23 @@ function match(ctx)
     -- digits (Ed review), so the name is literally true (runs alone can repeat a digit).
     if ((triples == 2 and doubles == 1) or (quads == 1 and doubles == 2)) and unique_count(s) == 3 then
         local desc = (triples == 2) and "2 triples + 1 double" or "1 quad + 2 doubles"
-        -- One box around each run, no per-digit boxes (Ed review).
-        local colors = {"blue", "orange", "magenta", "red"}
-        local boxes, ci = {}, 1
+        -- One single group box around the whole span of matching runs (Ed review),
+        -- no per-digit or per-run boxes.
+        local first_pos, last_pos = nil, nil
         for _, run in ipairs(find_runs(s)) do
             if run.length >= 2 then
-                table.insert(boxes, {from = run.start, to = run.start + run.length - 1,
-                    color = colors[((ci - 1) % #colors) + 1], thickness = 2})
-                ci = ci + 1
+                if first_pos == nil or run.start < first_pos then first_pos = run.start end
+                local e = run.start + run.length - 1
+                if last_pos == nil or e > last_pos then last_pos = e end
             end
         end
         return {
             matched = true,
             message = "Super trinary: " .. desc,
             highlights = {},
-            group_boxes = boxes
+            group_boxes = {
+                {from = first_pos, to = last_pos, color = "blue", thickness = 3}
+            }
         }
     end
 

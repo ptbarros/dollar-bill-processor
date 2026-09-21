@@ -25,7 +25,11 @@ function match(ctx)
         highlights = {
             highlight({start_pos, start_pos + 1, start_pos + 2}, "red", "devil 666")
         },
-        connectors = {},
+        -- Horns: red arcs over the 666 (Ed review).
+        connectors = {
+            {from = start_pos, to = start_pos + 1, color = "red", style = "arc"},
+            {from = start_pos + 1, to = start_pos + 2, color = "red", style = "arc"}
+        },
         message = "Devil 666"
     }
 end
