@@ -4,7 +4,7 @@ DisplayName: Duplicate S/N
 Description: B* star note in specific ranges (potential duplicate serial)
 Tier: 3
 Odds: Varies — flags star notes in known duplicate-serial ranges
-Examples: ["00000001", "00100000", "03200001", "05000000"]
+Examples: ["B00000001*", "B00100000*", "B03200001*", "B05000000*"]
 --]]
 
 function match(ctx)
