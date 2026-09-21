@@ -2568,10 +2568,16 @@ class DigitPreviewWidget(QWidget):
         num_chars = 10  # prefix + 8 digits + suffix
         total_width = num_chars * box_width + (num_chars - 1) * spacing
         start_x = (self.width() - total_width) // 2
-        # Headroom above the boxes for connector arcs -- arcs draw at start_y - 5
-        # and bulge up by up to arc_height, so start_y must clear that or a wide
-        # arc clips off the top edge (the old start_y=18 peaked around y=-7).
-        start_y = 40
+        # Vertical placement. Connector arcs draw above the boxes (at start_y - 5,
+        # bulging up by up to arc_height), so a pattern WITH arcs needs headroom or
+        # a wide arc clips off the top. A pattern with NO arcs (only boxes/group
+        # boxes) doesn't -- reserving that headroom just made its digits sit low
+        # ("shifted down"). So reserve headroom only when there are arcs; otherwise
+        # center the boxes in the available height.
+        if self.connectors:
+            start_y = 40
+        else:
+            start_y = max(10, (self.height() - box_height) // 2)
 
         # Build color + style map for each digit position (0-7 -> char pos 1-8)
         position_colors = {}
