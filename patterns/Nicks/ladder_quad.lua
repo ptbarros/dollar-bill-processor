@@ -3,6 +3,7 @@ Pattern: LADDER_QUAD
 DisplayName: Ladder & Quad
 Description: 4 consecutive identical digits with remaining 4 forming a ladder
 Tier: 3
+Odds: 1 in 395,062 (243 per 96M)
 Examples: ["11112345", "12345555", "43215555", "55554321"]
 --]]
 

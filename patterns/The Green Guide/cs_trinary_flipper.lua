@@ -5,7 +5,7 @@ Description: Built from three different digits, all of them ones that still look
 BookRef: CS-1060
 Tier: 7
 Examples: ["01810081", "61160016", "61916191"]
-Odds: 1 in 21
+Odds: 1 in 1,906 (50,359 per 96M)
 Price: $0-$5
 --]]
 

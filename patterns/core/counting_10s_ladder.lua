@@ -3,7 +3,7 @@ Pattern: COUNTING_10S_LADDER
 Description: Counting by 10s (21314151)
 Tier: 7
 Examples: ["21314151", "31415161"]
-Odds: 1 in 932,038
+Odds: 1 in 1,371,429 (70 per 96M)
 Price: $100-$1,000+
 --]]
 

@@ -3,6 +3,7 @@ Pattern: TWIN_SET_DOUBLES
 DisplayName: Twin Sets Doubles
 Description: Pattern ABABCDCD where positions 1&3, 2&4, 5&7, 6&8 match
 Tier: 5
+Odds: 1 in 10,001 (9,599 per 96M)
 Examples: ["12123434", "98987676", "12124545"]
 --]]
 

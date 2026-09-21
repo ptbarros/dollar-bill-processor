@@ -3,6 +3,7 @@ Pattern: NICKS_ALTERNATOR
 DisplayName: Alternator
 Description: Odd positions all same OR even positions all same (X_X_X_X_ or _Y_Y_Y_Y)
 Tier: 5
+Odds: 1 in 500 (191,903 per 96M)
 Examples: ["12131415", "10203040", "91929394", "19293949"]
 --]]
 

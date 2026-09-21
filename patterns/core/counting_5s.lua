@@ -4,7 +4,7 @@ DisplayName: Counting By 5s Ladder
 Description: Counting by 5s ladder (05101520)
 Tier: 7
 Examples: ["05101520", "10152025"]
-Odds: 1 in 2,823,529
+Odds: 1 in 1,129,412 (85 per 96M)
 Price: $100-$1,000+
 --]]
 

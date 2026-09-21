@@ -5,7 +5,7 @@ Description: Eight digits climbing or dropping by one that wrap around — the s
 BookRef: CS-1190
 Tier: 1
 Examples: ["78123456", "45678923", "32987654", "18765432"]
-Odds: 1 in 3,472,222
+Odds: 1 in 721,805 (133 per 96M)
 Price: $250-$1,000
 --]]
 

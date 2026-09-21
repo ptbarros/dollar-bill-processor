@@ -3,7 +3,7 @@ Pattern: LADDER_BOOKEND
 Description: Ladder sequence bookended by same digits
 Tier: 3
 Examples: ["12345621", "77234577", "11234511"]
-Odds: 1 in 41,666
+Odds: 1 in 1,901 (50,495 per 96M)
 Price: $10-$50
 --]]
 

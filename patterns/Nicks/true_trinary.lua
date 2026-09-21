@@ -3,6 +3,7 @@ Pattern: NICKS_TRUE_TRINARY
 DisplayName: True Trinary
 Description: Only digits 0, 1, 2 used, all three present
 Tier: 4
+Odds: 1 in 16,563 (5,796 per 96M)
 Examples: ["01201201", "00112200", "12012012", "22110022"]
 --]]
 

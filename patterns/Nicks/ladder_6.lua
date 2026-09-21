@@ -3,6 +3,7 @@ Pattern: NICKS_LADDER_6
 DisplayName: 6 Digit Ladder
 Description: Exactly 6 consecutive digits in strictly ascending or descending order
 Tier: 3
+Odds: 1 in 37,900 (2,533 per 96M)
 Examples: ["12345600", "01234500", "00654321"]
 --]]
 

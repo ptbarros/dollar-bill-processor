@@ -3,7 +3,7 @@ Pattern: SUM_63_OR_9
 Description: Digit sum equals 63 or 9
 Tier: 5
 Examples: ["33101001", "00010008", "90000000"]
-Odds: 1 in 4,166
+Odds: 1 in 5,235 (18,337 per 96M)
 Price: $10-$40+
 --]]
 

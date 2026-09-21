@@ -3,7 +3,7 @@ Pattern: CHUNKY_TRINARY
 Description: Three different digits, each in one unbroken block, with at least one appearing only once (e.g. 0·55555·22). If every block is two or more, it's a Super Trinary instead.
 Tier: 4
 Examples: ["05555522", "13333355", "88800001", "44999992"]
-Odds: 1 in 6,666
+Odds: 1 in 9,591 (10,009 per 96M)
 Price: $10-$50+
 --]]
 

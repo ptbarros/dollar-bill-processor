@@ -3,7 +3,7 @@ Pattern: RADAR
 Description: Radar (Palindrome) - reads the same forwards and backwards, so the eight digits form four mirrored pairs. Many radars also trip narrower patterns (e.g. 12344321 also matches Radar Ladder, Ladder Bookend and 4 Digit Ladder).
 Tier: 3
 Examples: ["12344321", "01233210", "45677654"]
-Odds: 1 in 10,000
+Odds: 1 in 10,001 (9,599 per 96M)
 Price: $50-$300
 --]]
 

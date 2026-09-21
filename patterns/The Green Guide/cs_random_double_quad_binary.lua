@@ -5,7 +5,7 @@ Description: Only two digits, each used four times and mixed together rather tha
 BookRef: CS-930
 Tier: 5
 Examples: ["41114414", "11441144", "41414141"]
-Odds: 1 in 17,500
+Odds: 1 in 33,403 (2,874 per 96M)
 Price: $5-$20
 --]]
 

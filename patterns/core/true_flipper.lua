@@ -4,7 +4,7 @@ DisplayName: True Flipper/Rotator
 Description: Reads same upside down (only 0, 6, 9)
 Tier: 3
 Examples: ["69069069", "66669999", "66696999"]
-Odds: 1 in 18,443
+Odds: 1 in 1,548,387 (62 per 96M)
 Price: $20-$100
 --]]
 

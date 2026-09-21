@@ -5,7 +5,7 @@ Description: The first three digits show up flipped at the tail end, mirrored ac
 BookRef: CS-1010
 Tier: 7
 Examples: ["12300321", "45600654", "12312321"]
-Odds: 1 in 720,000
+Odds: 1 in 1,009 (95,100 per 96M)
 Price: $20-$200
 --]]
 

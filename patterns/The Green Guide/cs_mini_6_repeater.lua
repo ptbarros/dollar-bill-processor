@@ -5,7 +5,7 @@ Description: A three-digit run repeated back to back sits somewhere in the seria
 BookRef: CS-1570
 Tier: 7
 Examples: ["30130100", "03013010", "00301301"]
-Odds: 1 in ~100,000
+Odds: 1 in 361 (266,166 per 96M)
 Price: $0
 --]]
 

@@ -3,7 +3,7 @@ Pattern: RADAR_REPEATER
 Description: Both radar AND repeater (e.g., 12121212)
 Tier: 2
 Examples: ["59955995", "34433443", "70077007"]
-Odds: 1 in 1,111,111
+Odds: 1 in 1,010,526 (95 per 96M)
 Price: $80-$450
 --]]
 

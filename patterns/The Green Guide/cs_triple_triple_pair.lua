@@ -5,7 +5,7 @@ Description: Two solid blocks of three identical digits alongside a side-by-side
 BookRef: CS-130
 Tier: 5
 Examples: ["00033300", "11122200", "11100022"]
-Odds: 1 in 27,720
+Odds: 1 in 43,896 (2,187 per 96M)
 Price: $20-$60
 --]]
 

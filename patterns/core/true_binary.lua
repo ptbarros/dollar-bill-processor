@@ -3,7 +3,7 @@ Pattern: TRUE_BINARY
 Description: Binary using only 0 and 1
 Tier: 3
 Examples: ["01101001", "10010110", "10100100"]
-Odds: 1 in 375,000
+Odds: 1 in 376,471 (255 per 96M)
 Price: $50-$4,500
 --]]
 

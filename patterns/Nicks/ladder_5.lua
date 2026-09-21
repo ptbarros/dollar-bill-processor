@@ -3,6 +3,7 @@ Pattern: NICKS_LADDER_5
 DisplayName: 5 Digit Ladder
 Description: Exactly 5 consecutive digits in strictly ascending or descending order
 Tier: 4
+Odds: 1 in 2,391 (40,146 per 96M)
 Examples: ["12345000", "00054321", "00987650"]
 --]]
 

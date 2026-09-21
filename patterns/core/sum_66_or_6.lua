@@ -3,7 +3,7 @@ Pattern: SUM_66_OR_6
 Description: Digit sum equals 66 or 6
 Tier: 5
 Examples: ["00420000", "10000050", "00402000"]
-Odds: 1 in 33,333
+Odds: 1 in 37,855 (2,536 per 96M)
 Price: $10-$100
 --]]
 

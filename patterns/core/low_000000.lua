@@ -3,7 +3,7 @@ Pattern: LOW_000000
 Description: Exactly six leading zeros, so the serial is under 100 (e.g. 000000·12).
 Tier: 2
 Examples: ["00000012", "00000099"]
-Odds: 1 in 1,066,667
+Odds: 1 in 1,066,667 (90 per 96M)
 Price: $100-$800
 --]]
 

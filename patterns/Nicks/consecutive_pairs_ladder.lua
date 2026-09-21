@@ -3,6 +3,7 @@ Pattern: CONSECUTIVE_PAIRS_LADDER
 DisplayName: 3 Consecutive Pairs Ladder
 Description: Three identical pairs in a row (AABBCC) anywhere in the serial, where A, B, C count by 1 (e.g. 88 77 66).
 Tier: 4
+Odds: 1 in 21,039 (4,563 per 96M)
 Examples: ["11223344", "98877663", "22334455", "55443322"]
 --]]
 

@@ -5,7 +5,7 @@ Description: A pair of one digit at each end wrapping a solid block of four of a
 BookRef: CS-1310
 Tier: 2
 Examples: ["22444422", "33666633", "11999911"]
-Odds: 1 in 1,111,111
+Odds: 1 in 1,185,185 (81 per 96M)
 Price: $500-$3,000
 --]]
 

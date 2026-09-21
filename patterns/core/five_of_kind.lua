@@ -4,7 +4,7 @@ DisplayName: 5 of a Kind
 Description: 5 of the same digit (anywhere)
 Tier: 4
 Examples: ["50505055", "49446144", "50550505"]
-Odds: 1 in 232
+Odds: 1 in 269 (356,994 per 96M)
 Price: $3-$25
 --]]
 

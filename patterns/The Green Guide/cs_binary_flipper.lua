@@ -5,7 +5,7 @@ Description: Uses only two different digits, both from the upside-down-friendly 
 BookRef: CS-1050
 Tier: 3
 Examples: ["18811181", "16611661", "00990099"]
-Odds: 1 in 153
+Odds: 1 in 44,444 (2,160 per 96M)
 Price: $50-$500
 --]]
 

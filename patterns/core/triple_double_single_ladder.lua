@@ -3,7 +3,7 @@ Pattern: TRIPLE_DOUBLE_SINGLE_LADDER
 Description: Triple + double + single ladder consecutive
 Tier: 4
 Examples: ["11122345", "22233456"]
-Odds: 1 in 27,777
+Odds: 1 in 8,727,273 (11 per 96M)
 Price: $5-$40
 --]]
 

@@ -3,6 +3,7 @@ Pattern: NICKS_SUPER_LADDER
 DisplayName: Super Ladder
 Description: Three consecutive digits in sorted order, with counts like 3-3-2 or 4-2-2 (e.g. 000·111·22).
 Tier: 4
+Odds: 1 in 1,066,667 (90 per 96M)
 Examples: ["00011122", "11222233", "00001122", "33322211", "22211100"]
 --]]
 

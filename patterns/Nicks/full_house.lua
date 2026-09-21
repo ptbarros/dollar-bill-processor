@@ -3,6 +3,7 @@ Pattern: NICKS_FULL_HOUSE
 DisplayName: Full House
 Description: Three of a kind followed by a pair (AAABB) or pair followed by three (AABBB)
 Tier: 5
+Odds: 1 in 150 (638,496 per 96M)
 Examples: ["11122345", "00011234", "99988765"]
 --]]
 

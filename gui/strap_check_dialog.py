@@ -34,11 +34,19 @@ def parse_serial(text):
     return m.group(1).upper(), int(m.group(2)), m.group(3).upper()
 
 
+MAX_PRINTED_SERIAL = 96_000_000  # top ~4M serials of a 10^8 block are never printed
+
+
 def strap_serials(prefix, start_num, suffix, count):
-    """Yield (position, full_serial) for a sequential run, wrapping the 8-digit
-    counter at 100,000,000 (rare at a strap boundary)."""
+    """Yield (position, full_serial) for a strap of `count` consecutive notes,
+    STOPPING at 96,000,000 (the top ~4M serials of a block are never printed).
+    The note after 96,000,000 is in a DIFFERENT block with different letters --
+    not 00000001 with the same letters -- so the run ends rather than wrapping;
+    wrapping would name a serial that isn't the next physical note in the strap."""
     for i in range(count):
-        num = (start_num + i) % 100_000_000
+        num = start_num + i
+        if num > MAX_PRINTED_SERIAL:
+            return
         yield i + 1, f"{prefix}{num:08d}{suffix}"
 
 
@@ -112,9 +120,20 @@ class StrapCheckDialog(QDialog):
         count = self.count_spin.value()
 
         self.tree.clear()
+        if start_num > MAX_PRINTED_SERIAL:
+            self.summary.setText(
+                "<b style='color:#c62828'>Past the printed range</b> — serials stop "
+                f"at 96,000,000. {prefix}{start_num:08d}{suffix} is beyond what's "
+                "printed; look it up individually instead.")
+            return
+
         fancy = 0
+        checked = 0
+        last_serial = f"{prefix}{start_num:08d}{suffix}"
         green = QBrush(QColor("#2e7d32"))
         for pos, serial in strap_serials(prefix, start_num, suffix, count):
+            checked += 1
+            last_serial = serial
             names = self.engine.classify_simple(serial)
             if not names:
                 continue
@@ -124,9 +143,13 @@ class StrapCheckDialog(QDialog):
             item.setForeground(1, green)
             self.tree.addTopLevelItem(item)
 
-        last = f"{prefix}{(start_num + count - 1) % 100_000_000:08d}{suffix}"
-        pct = (fancy / count * 100) if count else 0
-        self.summary.setText(
-            f"<b>{fancy}</b> of <b>{count}</b> serials would be fancy "
-            f"(<b>{pct:.0f}%</b>) — run {prefix}{start_num:08d}{suffix} → {last}."
-            + ("  <i>None — probably not worth scanning.</i>" if not fancy else ""))
+        pct = (fancy / checked * 100) if checked else 0
+        msg = (f"<b>{fancy}</b> of <b>{checked}</b> serials would be fancy "
+               f"(<b>{pct:.0f}%</b>) — run {prefix}{start_num:08d}{suffix} → {last_serial}.")
+        if checked < count:
+            msg += (f"  <i>Run reaches the end of the printed range at 96,000,000; "
+                    f"only {checked} of {count} notes exist here (the rest are in the "
+                    f"next block).</i>")
+        elif not fancy:
+            msg += "  <i>None — probably not worth scanning.</i>"
+        self.summary.setText(msg)

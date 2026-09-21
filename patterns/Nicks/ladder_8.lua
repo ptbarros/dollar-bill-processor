@@ -3,6 +3,7 @@ Pattern: LADDER_8
 DisplayName: 8 Digit Ladder
 Description: All 8 digits in strictly ascending or descending order (01234567 or 98765432)
 Tier: 1
+Odds: 1 in 19,200,000 (5 per 96M)
 Examples: ["01234567", "12345678", "23456789", "98765432", "87654321", "76543210"]
 --]]
 

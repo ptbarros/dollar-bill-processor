@@ -4,7 +4,7 @@ DisplayName: Counting By 9s Ladder
 Description: Counting by 9s ladder (09182736)
 Tier: 7
 Examples: ["09182736", "18273645"]
-Odds: 1 in 5,052,631
+Odds: 1 in 1,315,068 (73 per 96M)
 Price: $100-$1,000+
 --]]
 

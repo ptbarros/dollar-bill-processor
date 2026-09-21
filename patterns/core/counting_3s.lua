@@ -4,7 +4,7 @@ DisplayName: Counting By 3s Ladder
 Description: Counting by 3s ladder (06091215)
 Tier: 7
 Examples: ["03060912", "06091215"]
-Odds: 1 in 1,684,210
+Odds: 1 in 1,054,945 (91 per 96M)
 Price: $100-$1,000+
 --]]
 

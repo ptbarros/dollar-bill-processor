@@ -3,6 +3,7 @@ Pattern: NICKS_SUPER_REPEATER
 DisplayName: Super Repeater
 Description: 2-digit pattern repeated 4 times (XYXYXYXY)
 Tier: 2
+Odds: 1 in 1,010,526 (95 per 96M)
 Examples: ["12121212", "01010101", "98989898", "12121212"]
 --]]
 

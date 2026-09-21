@@ -3,7 +3,7 @@ Pattern: MINI_SUPER_REPEATER
 Description: Alternating start pattern (12121234)
 Tier: 4
 Examples: ["12121234", "89898912", "80808093"]
-Odds: 1 in 4,938
+Odds: 1 in 11,034 (8,700 per 96M)
 Price: $4-$20
 --]]
 

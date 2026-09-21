@@ -3,6 +3,7 @@ Pattern: NICKS_BROKEN_LADDER_8
 DisplayName: 8 Digit Scattered Ladder
 Description: All 8 unique digits that form consecutive sequence when sorted
 Tier: 3
+Odds: 1 in 808 (118,795 per 96M)
 Examples: ["12436587", "87654312", "01325476"]
 --]]
 

@@ -3,7 +3,7 @@ Pattern: HYBRID_NOTES
 Description: The first two digits repeat at the end in either order, with a repeated pair filling the middle (e.g. 32·6868·32).
 Tier: 4
 Examples: ["32686832", "32686823", "12525212", "12525221"]
-Odds: 1 in 8,333
+Odds: 1 in 6,130 (15,660 per 96M)
 Price: $10-$50+
 --]]
 

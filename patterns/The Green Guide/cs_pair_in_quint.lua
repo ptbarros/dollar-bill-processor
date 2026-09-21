@@ -5,7 +5,7 @@ Description: Five of one digit split around an adjacent pair of a second digit, 
 BookRef: CS-390
 Tier: 5
 Examples: ["05225555", "05522555", "52255550", "55225515", "52255155"]
-Odds: 1 in 720
+Odds: 1 in 5,115 (18,768 per 96M)
 Price: $0.25
 --]]
 

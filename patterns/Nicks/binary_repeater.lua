@@ -3,6 +3,7 @@ Pattern: NICKS_BINARY_REPEATER
 DisplayName: Binary Repeater
 Description: Repeater with only 2 unique digits
 Tier: 3
+Odds: 1 in 162,437 (591 per 96M)
 Examples: ["12121212", "00110011", "98989898"]
 --]]
 

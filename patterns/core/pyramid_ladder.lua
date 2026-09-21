@@ -3,7 +3,7 @@ Pattern: PYRAMID_LADDER
 DisplayName: Pyramid Ladder
 Description: All 8 digits climb by 1 to a single peak near the middle, then fall by 1 to the end, with the peak on the fourth or fifth digit (e.g. 34565432, 23454321).
 Tier: 2
-Odds: 1 in 8,333,333
+Odds: 1 in 8,000,000 (12 per 96M)
 Price: $10-$50
 --]]
 

@@ -4,7 +4,7 @@ DisplayName: Counting By 6s Ladder
 Description: Counting by 6s ladder (06121824)
 Tier: 7
 Examples: ["06121824", "12182430"]
-Odds: 1 in 3,428,571
+Odds: 1 in 1,170,732 (82 per 96M)
 Price: $100-$1,000+
 --]]
 

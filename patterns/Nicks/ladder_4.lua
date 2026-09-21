@@ -3,6 +3,7 @@ Pattern: NICKS_LADDER_4
 DisplayName: 4 Digit Ladder
 Description: Exactly 4 consecutive digits in strictly ascending or descending order
 Tier: 5
+Odds: 1 in 166 (579,344 per 96M)
 Examples: ["12340000", "00004321", "00987600"]
 --]]
 

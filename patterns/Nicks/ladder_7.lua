@@ -3,6 +3,7 @@ Pattern: NICKS_LADDER_7
 DisplayName: 7 Digit Ladder
 Description: Exactly 7 consecutive digits in strictly ascending or descending order
 Tier: 2
+Odds: 1 in 705,882 (136 per 96M)
 Examples: ["12345670", "02345678", "98765430"]
 --]]
 

@@ -4,7 +4,7 @@ DisplayName: Counting By 2s Ladder
 Description: Counting by 2s ladder (02040608)
 Tier: 7
 Examples: ["02040608", "12141618"]
-Odds: 1 in 1,116,279
+Odds: 1 in 1,021,277 (94 per 96M)
 Price: $100-$1,000+
 --]]
 

@@ -4,6 +4,7 @@ DisplayName: Binary Triple Bookend
 Description: Three of one digit at each end wrapping a side-by-side pair of another digit in the middle (e.g. 333·22·333).
 BookRef: CS-1290
 Tier: 2
+Odds: 1 in 1,185,185 (81 per 96M)
 Examples: ["33322333", "77700777", "11188111"]
 Price: $1,500-$10,000+
 --]]

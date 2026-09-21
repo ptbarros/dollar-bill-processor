@@ -3,7 +3,7 @@ Pattern: TRIPLES_BOOKEND
 Description: Triple on each end (111XX111)
 Tier: 3
 Examples: ["11122111", "99912999", "33345333"]
-Odds: 1 in 148,148
+Odds: 1 in 106,785 (899 per 96M)
 Price: $20-$150
 --]]
 

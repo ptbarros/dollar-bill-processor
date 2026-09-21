@@ -3,7 +3,7 @@ Pattern: LOW_000
 Description: Exactly three leading zeros — no fewer, no more (e.g. 000·12345).
 Tier: 4
 Examples: ["00012345", "00098765"]
-Odds: 1 in 1,066
+Odds: 1 in 1,067 (90,000 per 96M)
 Price: $5-$35
 --]]
 

@@ -3,7 +3,7 @@ Pattern: DEVIL_666
 Description: Contains 666
 Tier: 10
 Examples: ["12366612", "66612345"]
-Odds: 1 in 167
+Odds: 1 in 183 (525,948 per 96M)
 Price: $2-$5
 --]]
 

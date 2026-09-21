@@ -3,7 +3,7 @@ Pattern: CONSEC_SEQ_TRIPLES
 Description: Two consecutive sequential triples, at the front (AAABBBXX) or the back (XXAAABBB), the two digits one apart (e.g. 111·222·xx, xx·888·999).
 Tier: 4
 Examples: ["11122234", "22233345", "34111222", "98999888"]
-Odds: 1 in 24,691
+Odds: 1 in 28,005 (3,428 per 96M)
 Price: $5-$15
 --]]
 

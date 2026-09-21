@@ -3,6 +3,7 @@ Pattern: NICKS_DOUBLES_LADDER
 DisplayName: Doubles Ladder
 Description: AABBCCDD where AA < BB < CC < DD (or descending)
 Tier: 4
+Odds: 1 in 285,714 (336 per 96M)
 Examples: ["11223344", "00112233", "99887766", "44332211"]
 --]]
 

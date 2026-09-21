@@ -3,7 +3,7 @@ Pattern: BOOKENDED_LADDER
 Description: Ladder bookended by matching digits
 Tier: 6
 Examples: ["77234577", "11234511"]
-Odds: 1 in 266,666
+Odds: 1 in 761,905 (126 per 96M)
 Price: $20-$100
 --]]
 

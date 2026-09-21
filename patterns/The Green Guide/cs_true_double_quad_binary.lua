@@ -5,7 +5,7 @@ Description: A solid block of four 0s next to a solid block of four 1s — only 
 BookRef: CS-920
 Tier: 2
 Examples: ["00001111", "11110000"]
-Odds: 1 in 50,000,000
+Odds: 1 in 48,000,000 (2 per 96M)
 Price: $50+
 --]]
 

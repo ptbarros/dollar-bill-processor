@@ -3,6 +3,7 @@ Pattern: NICKS_CONSECUTIVE_TRIPLES
 DisplayName: Consecutive Triples
 Description: Two consecutive triples (AAABBB) with no digits in between
 Tier: 3
+Odds: 1 in 4,054 (23,680 per 96M)
 Examples: ["12333444", "11133344", "22255578"]
 --]]
 

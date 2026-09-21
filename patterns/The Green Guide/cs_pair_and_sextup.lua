@@ -5,7 +5,7 @@ Description: Six identical digits in a row with a matching pair of another digit
 BookRef: CS-450
 Tier: 4
 Examples: ["22666666", "66666622", "33555555", "55555533"]
-Odds: 1 in 810
+Odds: 1 in 592,593 (162 per 96M)
 Price: $25-$500
 --]]
 

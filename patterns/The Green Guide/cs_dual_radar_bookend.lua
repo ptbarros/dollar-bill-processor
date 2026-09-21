@@ -5,7 +5,7 @@ Description: The first two digits show up flipped at the tail end — two differ
 BookRef: CS-970
 Tier: 7
 Examples: ["23000032", "45678954", "12999921"]
-Odds: 1 in 810,000
+Odds: 1 in 110 (870,000 per 96M)
 Price: $10-$100
 --]]
 

@@ -4,7 +4,7 @@ DisplayName: 4 Consec Pairs
 Description: Four consecutive pairs (AABBCCDD)
 Tier: 3
 Examples: ["11223344", "55667788", "44227733"]
-Odds: 1 in 21,164
+Odds: 1 in 10,668 (8,999 per 96M)
 Price: $20-$100
 --]]
 

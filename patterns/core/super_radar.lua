@@ -3,7 +3,7 @@ Pattern: SUPER_RADAR
 Description: A single repeated digit six times, wrapped in a matching pair — one digit at each end, six of another digit between (e.g. 10000001, 58888885)
 Tier: 2
 Examples: ["10000001", "42222224", "91111119"]
-Odds: 1 in 1,010,526
+Odds: 1 in 1,103,448 (87 per 96M)
 Price: $80-$2,500
 --]]
 

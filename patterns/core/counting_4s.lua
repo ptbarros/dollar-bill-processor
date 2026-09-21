@@ -4,7 +4,7 @@ DisplayName: Counting By 4s Ladder
 Description: Counting by 4s ladder (04081216)
 Tier: 7
 Examples: ["04081216", "08121620"]
-Odds: 1 in 2,232,558
+Odds: 1 in 1,090,909 (88 per 96M)
 Price: $100-$1,000+
 --]]
 

@@ -5,7 +5,7 @@ Description: A solid block of four identical digits plus two side-by-side pairs 
 BookRef: CS-310
 Tier: 5
 Examples: ["11222233", "44441122", "33224444"]
-Odds: 1 in 2,160
+Odds: 1 in 9,456 (10,152 per 96M)
 Price: $0
 --]]
 

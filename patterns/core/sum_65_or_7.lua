@@ -3,7 +3,7 @@ Pattern: SUM_65_OR_7
 Description: Digit sum equals 65 or 7
 Tier: 5
 Examples: ["99999992", "00000007"]
-Odds: 1 in 15,625
+Odds: 1 in 18,349 (5,232 per 96M)
 Price: $5-$100+
 --]]
 

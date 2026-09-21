@@ -3,7 +3,7 @@ Pattern: SERIAL_UNDER_10
 Description: Serial number 00000001-00000009
 Tier: 1
 Examples: ["00000001", "00000003", "00000009"]
-Odds: 1 in 10,666,667
+Odds: 1 in 10,666,667 (9 per 96M)
 Price: $300-$25,000
 --]]
 

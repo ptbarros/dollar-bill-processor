@@ -3,7 +3,7 @@ Pattern: SUM_64_OR_8
 Description: Digit sum equals 64 or 8
 Tier: 5
 Examples: ["05000111", "08000000", "16001000"]
-Odds: 1 in 7,692
+Odds: 1 in 9,527 (10,077 per 96M)
 Price: $10-$50+
 --]]
 

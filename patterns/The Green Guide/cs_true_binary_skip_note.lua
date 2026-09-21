@@ -4,6 +4,7 @@ DisplayName: True Binary Alternator
 Description: 0 and 1 strictly alternate across all 8 digits, 01010101 or 10101010, and nothing else.
 BookRef: CS-1630
 Tier: 2
+Odds: 1 in 48,000,000 (2 per 96M)
 Examples: ["01010101", "10101010"]
 Price: $5-$200
 --]]

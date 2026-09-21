@@ -5,7 +5,7 @@ Description: A three-digit run repeated back to back, with a single matching dig
 BookRef: CS-1510
 Tier: 6
 Examples: ["93013019", "71231237", "45915914"]
-Odds: 1 in 10,000
+Odds: 1 in 13,793 (6,960 per 96M)
 Price: $10-$100
 --]]
 

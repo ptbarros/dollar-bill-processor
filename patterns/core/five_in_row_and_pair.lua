@@ -3,7 +3,7 @@ Pattern: FIVE_IN_ROW_AND_PAIR
 Description: Exactly five of a kind in a row plus a single separate pair (e.g. 11111·22·3).
 Tier: 3
 Examples: ["11111223", "55555667", "99999100"]
-Odds: 1 in 66,667
+Odds: 1 in 11,134 (8,622 per 96M)
 Price: $10-$50
 --]]
 

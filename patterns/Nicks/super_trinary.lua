@@ -3,6 +3,7 @@ Pattern: NICKS_SUPER_TRINARY
 DisplayName: Super Trinary
 Description: Two triples and one double, or one quad and two doubles
 Tier: 4
+Odds: 1 in 24,691 (3,888 per 96M)
 Examples: ["11122233", "00011122", "99988877", "11112233"]
 --]]
 
