@@ -340,6 +340,14 @@ class PatternDialog(QDialog):
         self.duplicate_pattern_btn.clicked.connect(self._duplicate_current_pattern)
         self.lua_script_layout.addWidget(self.duplicate_pattern_btn)
 
+        self.ask_ai_btn = QPushButton("Ask Claude…")
+        self.ask_ai_btn.setToolTip(
+            "Chat with AI about this pattern — what it does, how it compares to "
+            "another pattern, or ask for a change to the script. Requires an API "
+            "key (Settings → AI).")
+        self.ask_ai_btn.clicked.connect(self._ask_claude_about_pattern)
+        self.lua_script_layout.addWidget(self.ask_ai_btn)
+
         self.delete_pattern_btn = QPushButton("Delete")
         self.delete_pattern_btn.setToolTip("Delete this user pattern")
         self.delete_pattern_btn.setStyleSheet("QPushButton { color: #d32f2f; }")
@@ -366,6 +374,7 @@ class PatternDialog(QDialog):
         self.lua_script_label.hide()
         self.view_script_btn.hide()
         self.duplicate_pattern_btn.hide()
+        self.ask_ai_btn.hide()
         self.delete_pattern_btn.hide()
         self.generate_serial_btn.hide()
         self.test_serial_edit.hide()
@@ -956,6 +965,13 @@ class PatternDialog(QDialog):
             self.lua_script_label.show()
             self.view_script_btn.show()
             self.duplicate_pattern_btn.show()  # works on core + user patterns
+            # "Ask Claude…" only when an AI provider is configured.
+            try:
+                from ai_pattern_chat import is_configured
+                from settings_manager import get_settings
+                self.ask_ai_btn.setVisible(is_configured(get_settings()))
+            except Exception:
+                self.ask_ai_btn.hide()
             self.generate_serial_btn.show()
             self.generate_serial_btn.setEnabled(True)
             self.test_serial_edit.show()
@@ -976,6 +992,7 @@ class PatternDialog(QDialog):
             self.lua_script_label.hide()
             self.view_script_btn.hide()
             self.duplicate_pattern_btn.hide()
+            self.ask_ai_btn.hide()
             self.delete_pattern_btn.hide()
             self.generate_serial_btn.hide()
             self.test_serial_edit.hide()
@@ -1481,6 +1498,26 @@ class PatternDialog(QDialog):
                 f"Could not delete pattern '{pattern_name}'.\n"
                 "It may be a core pattern or the file may be protected."
             )
+
+    def _ask_claude_about_pattern(self):
+        """Open the AI chat for the selected pattern."""
+        if not self._current_lua_pattern:
+            return
+        try:
+            from settings_manager import get_settings
+            from ai_pattern_chat import is_configured
+            from gui.pattern_chat_dialog import PatternChatDialog
+        except Exception as e:
+            QMessageBox.warning(self, "Chat unavailable", str(e))
+            return
+        settings = get_settings()
+        if not is_configured(settings):
+            QMessageBox.warning(
+                self, "AI Not Configured",
+                "Add an Anthropic or OpenAI API key in Settings → AI first.")
+            return
+        dlg = PatternChatDialog(self.engine, settings, self._current_lua_pattern, self)
+        dlg.exec()
 
     def _view_lua_script(self):
         """View or edit the Lua script for the selected pattern."""
