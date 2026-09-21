@@ -1313,7 +1313,14 @@ class MainWindow(QMainWindow):
             self.results_list.pattern_engine.sync_enabled_from_settings()
         except Exception:
             pass
-        proc_engine = self._get_pattern_engine()
+        # Sync the processor's engine ONLY if a processor already exists -- do NOT
+        # create one here (that would load the YOLO model on Pattern Manager close,
+        # which is surprising before any processing). Strap Check syncs its own
+        # engine when it opens, so a not-yet-created processor loses nothing.
+        proc = self.processor
+        if not proc and getattr(self, "processing_thread", None):
+            proc = self.processing_thread.processor
+        proc_engine = getattr(proc, "pattern_engine", None) if proc else None
         if proc_engine:
             proc_engine.sync_enabled_from_settings()
 
@@ -1953,13 +1960,16 @@ class MainWindow(QMainWindow):
     def _on_strap_check(self):
         """Tools -> Strap Serial Check. Predict fancy notes in a sequential run."""
         from .strap_check_dialog import StrapCheckDialog
-        engine = self._get_pattern_engine()
+        # Use the standalone pattern engine (no processor / YOLO needed -- Strap
+        # Check only classifies serials), and refresh its enabled set from settings
+        # so Pattern Manager toggles are honored without a restart.
+        engine = getattr(self.results_list, "pattern_engine", None)
+        if not engine:
+            engine = self._get_pattern_engine()  # fallback
         if not engine:
             QMessageBox.warning(self, "Strap Serial Check",
                                 "The pattern engine isn't available.")
             return
-        # Reflect any enable/disable made in Pattern Manager (separate engine
-        # instance) without needing a restart.
         engine.sync_enabled_from_settings()
         StrapCheckDialog(engine, self).exec()
 

@@ -383,7 +383,7 @@ class PatternDialog(QDialog):
 
         # Pattern preview section
         self.pattern_preview = DigitPreviewWidget()
-        self.pattern_preview.setMinimumHeight(100)
+        self.pattern_preview.setMinimumHeight(150)
         details_layout.addWidget(self.pattern_preview)
 
         self.match_message_label = QLabel("")
@@ -2510,8 +2510,10 @@ class DigitPreviewWidget(QWidget):
         # Optional {name: BGR} palette (from serial_overlay.build_palette) for the
         # Overlay Colors tool's live preview; None => use the global palette.
         self._palette_override = None
-        # Tall enough for arc headroom (start_y=40) + box_height(63) + bottom pad.
-        self.setMinimumHeight(125)
+        # Tall enough that CENTERED digits still leave room above for the deepest
+        # nested arcs (radar mirror pairs, ~43px), so every pattern's digit row
+        # sits at the same height whether it has arcs or not.
+        self.setMinimumHeight(150)
         self.setMinimumWidth(550)
 
     def set_palette_override(self, palette_bgr):
