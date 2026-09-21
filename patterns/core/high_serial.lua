@@ -1,10 +1,10 @@
 --[[
 Pattern: HIGH_SERIAL
 DisplayName: High Serial
-Description: Serial number above 96,000,000. Circulating $1 serials stop at 96,000,000 (a block is 15 press runs of 6,400,000). Serials above that are printed for uncut collector sheets, which are sold above face value and rarely cut apart — so a circulated note this high came from a separated sheet, making it an uncommon find.
+Description: Serial number above 96,000,000, the modern circulating maximum for $1 ($20 and below, Series 1988 onward). A serial this high is either a pre-1988 note (99,999,999 was standard production until the 1970s) or an uncut collector-sheet over-run — either way, worth checking the note's series.
 Tier: 3
 Examples: ["96000001", "98765432", "99999999"]
-Odds: Over-run serial — printed for uncut sheets, rarely circulated
+Odds: High serial — a pre-1988 note or an uncut-sheet over-run
 Price:
 --]]
 
@@ -29,7 +29,7 @@ function match(ctx)
             highlights = {
                 highlight({0, 1, 2, 3, 4, 5, 6, 7}, "blue", "serial above 96,000,000")
             },
-            message = "High serial " .. digits .. " (over 96,000,000 — sheet over-run)"
+            message = "High serial " .. digits .. " (over 96,000,000 — pre-1988 note or sheet over-run)"
         }
     end
 

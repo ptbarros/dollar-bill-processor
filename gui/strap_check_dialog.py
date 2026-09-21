@@ -34,14 +34,16 @@ def parse_serial(text):
     return m.group(1).upper(), int(m.group(2)), m.group(3).upper()
 
 
-MAX_PRINTED_SERIAL = 96_000_000  # circulating max; serials above this go on uncut
-                                 # collector sheets, not into circulation
+MAX_PRINTED_SERIAL = 96_000_000  # modern circulating max ($20 and below, Series 1988
+                                 # on); above it = a pre-1988 note or an uncut-sheet serial
 
 
 def strap_serials(prefix, start_num, suffix, count):
     """Yield (position, full_serial) for a strap of `count` consecutive notes,
-    STOPPING at 96,000,000 (the circulating maximum; higher serials are printed
-    only for uncut collector sheets, not for circulation).
+    STOPPING at 96,000,000 — the modern circulating maximum ($20 and below,
+    Series 1988 onward). Serials above it are pre-1988 notes (99,999,999 was
+    standard until the 1970s) or uncut-sheet over-runs, not part of a modern
+    sequential strap.
     The note after 96,000,000 is in a DIFFERENT block with different letters --
     not 00000001 with the same letters -- so the run ends rather than wrapping;
     wrapping would name a serial that isn't the next physical note in the strap."""
@@ -124,9 +126,10 @@ class StrapCheckDialog(QDialog):
         self.tree.clear()
         if start_num > MAX_PRINTED_SERIAL:
             self.summary.setText(
-                "<b style='color:#c62828'>Above the circulating range</b> — circulating "
-                f"serials stop at 96,000,000. {prefix}{start_num:08d}{suffix} is an "
-                "uncut-sheet serial; look it up individually instead.")
+                "<b style='color:#c62828'>Above the modern maximum</b> — modern serials "
+                "($20 and below, Series 1988 on) stop at 96,000,000. "
+                f"{prefix}{start_num:08d}{suffix} is a pre-1988 note or an uncut-sheet "
+                "serial; look it up individually instead.")
             return
 
         fancy = 0
@@ -149,9 +152,9 @@ class StrapCheckDialog(QDialog):
         msg = (f"<b>{fancy}</b> of <b>{checked}</b> serials would be fancy "
                f"(<b>{pct:.0f}%</b>) — run {prefix}{start_num:08d}{suffix} → {last_serial}.")
         if checked < count:
-            msg += (f"  <i>Run reaches the circulating maximum at 96,000,000; only "
-                    f"{checked} of {count} are circulating serials (the rest would be "
-                    f"uncut-sheet serials, not part of this strap).</i>")
+            msg += (f"  <i>Run reaches 96,000,000, the modern circulating maximum; "
+                    f"{checked} of {count} are modern serials. Any beyond would be "
+                    f"pre-1988 notes or uncut-sheet serials, not part of a modern strap.</i>")
         elif not fancy:
             msg += "  <i>None — probably not worth scanning.</i>"
         self.summary.setText(msg)
