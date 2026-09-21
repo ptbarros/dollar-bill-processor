@@ -29,14 +29,18 @@ function match(ctx)
         end
 
         if valid then
-            local positions = {}
-            for i = start - 1, start + 4 do
-                table.insert(positions, i)
-            end
+            -- One group box around each of the 3 consecutive pairs (Ed review);
+            -- no per-digit boxes.
+            local base = start - 1
             return {
                 matched = true,
                 message = "3 consecutive pairs",
-                highlights = {{positions = positions, color = "orange"}}
+                highlights = {},
+                group_boxes = {
+                    {from = base, to = base + 1, color = "blue", thickness = 3},
+                    {from = base + 2, to = base + 3, color = "orange", thickness = 3},
+                    {from = base + 4, to = base + 5, color = "magenta", thickness = 3}
+                }
             }
         end
     end

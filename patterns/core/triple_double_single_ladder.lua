@@ -52,8 +52,8 @@ function match(ctx)
         -- Inner per-digit boxes removed (Ed review); keep the chunk group boxes.
         highlights = {},
         group_boxes = {
-            {from = 0, to = 2, color = "lime", thickness = 2},
-            {from = 3, to = 4, color = "teal", thickness = 2}
+            {from = 0, to = 2, color = "blue", thickness = 3},
+            {from = 3, to = 4, color = "orange", thickness = 3}
         },
         connectors = {},
         message = "Triple + double + singles ladder " .. direction

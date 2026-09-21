@@ -34,9 +34,9 @@ function match(ctx)
         highlights = {},
         connectors = {},
         group_boxes = {
-            {from = 0, to = 1, color = "orange", thickness = 2},
-            {from = 2, to = 3, color = "blue", thickness = 2},
-            {from = 4, to = 5, color = "magenta", thickness = 2}
+            {from = 0, to = 1, color = "orange", thickness = 3},
+            {from = 2, to = 3, color = "blue", thickness = 3},
+            {from = 4, to = 5, color = "magenta", thickness = 3}
         },
         message = "Mini super repeater: " .. a .. b .. " x 3 + tail"
     }

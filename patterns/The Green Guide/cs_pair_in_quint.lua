@@ -54,12 +54,13 @@ function match(ctx)
         matched = true,
         highlights = {
             {positions = quint_positions,  color = "gold"},
-            {positions = pair_positions,   color = "orange"},
             {positions = single_positions, color = "charcoal", style = "x"}
         },
-        connectors = {
-            {from = pair_positions[1], to = pair_positions[2], color = "orange", style = "bracket"}
+        -- Pair shown as a single group box around the two pair digits (Ed review).
+        group_boxes = {
+            {from = pair_positions[1], to = pair_positions[2], color = "orange", thickness = 3}
         },
+        connectors = {},
         message = quint_digit .. "x5 surrounds " .. pair_digit .. pair_digit .. " pair (CS-Pair in a Quint)"
     }
 end
