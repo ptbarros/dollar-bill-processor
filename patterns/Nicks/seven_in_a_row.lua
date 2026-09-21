@@ -38,7 +38,7 @@ function match(ctx)
                     matched = true,
                     message = "7 consecutive " .. digit .. "s",
                     highlights = {},
-                    group_boxes = {{from = positions[1], to = positions[#positions], color = "orange", thickness = 2}}
+                    group_boxes = {{from = positions[1], to = positions[#positions], color = "orange", thickness = 3}}
                 }
             end
         end
