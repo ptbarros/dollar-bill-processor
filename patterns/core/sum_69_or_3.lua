@@ -2,7 +2,7 @@
 Pattern: SUM_69_OR_3
 Description: Digit sum equals 69 or 3
 Tier: 5
-Examples: ["99999991", "00000003"]
+Examples: ["00000003", "00000030", "00000300"]
 Odds: 1 in 588,957
 Price: $50-$500+
 --]]

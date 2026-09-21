@@ -3,7 +3,7 @@ Pattern: NICKS_BINARY_REPEATER
 DisplayName: Binary Repeater
 Description: Repeater with only 2 unique digits
 Tier: 3
-Examples: ["12121212", "00110011", "98989898", "12001200"]
+Examples: ["12121212", "00110011", "98989898"]
 --]]
 
 function match(ctx)

@@ -3,7 +3,7 @@ Pattern: SIX_OF_KIND
 DisplayName: 6 of a Kind
 Description: 6 of the same digit (anywhere)
 Tier: 3
-Examples: ["66666612", "11111189", "12111311"]
+Examples: ["77777070", "66666106", "99999090"]
 Odds: 1 in 17,778
 Price: $20-$100
 --]]

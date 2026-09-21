@@ -3,7 +3,7 @@ Pattern: NICKS_FIVE_IN_A_ROW
 DisplayName: 5 in a Row
 Description: 5 consecutive identical digits
 Tier: 4
-Examples: ["00000123", "12300000", "11111234", "23411111", "99990123"]
+Examples: ["00000123", "12300000", "11111234"]
 --]]
 
 function match(ctx)

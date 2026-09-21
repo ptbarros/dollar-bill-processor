@@ -3,7 +3,7 @@ Pattern: NICKS_SIX_IN_A_ROW
 DisplayName: 6 in a Row
 Description: 6 consecutive identical digits
 Tier: 3
-Examples: ["00000012", "12000000", "11111123", "23111111", "99999012"]
+Examples: ["00000012", "12000000", "11111123"]
 --]]
 
 function match(ctx)

@@ -3,7 +3,7 @@ Pattern: NICKS_CONSECUTIVE_TRIPLES
 DisplayName: Consecutive Triples
 Description: Two consecutive triples (AAABBB) with no digits in between
 Tier: 3
-Examples: ["11122234", "12333444", "00011134", "99988834"]
+Examples: ["12333444", "11133344", "22255578"]
 --]]
 
 function match(ctx)

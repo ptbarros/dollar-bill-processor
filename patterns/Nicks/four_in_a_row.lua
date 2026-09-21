@@ -3,7 +3,7 @@ Pattern: FOUR_IN_A_ROW
 DisplayName: 4 in a Row
 Description: 4 consecutive identical digits (quad)
 Tier: 5
-Examples: ["00001234", "12340000", "11112345", "23451111", "99901234"]
+Examples: ["00001234", "12340000", "11112345"]
 --]]
 
 function match(ctx)

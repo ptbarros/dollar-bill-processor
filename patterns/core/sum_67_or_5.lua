@@ -2,7 +2,7 @@
 Pattern: SUM_67_OR_5
 Description: Digit sum equals 67 or 5
 Tier: 5
-Examples: ["99999993", "00000005"]
+Examples: ["04000001", "00001400", "00000500"]
 Odds: 1 in 76,923
 Price: $20-$140+
 --]]

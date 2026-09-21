@@ -3,7 +3,7 @@ Pattern: SEVEN_OF_KIND
 DisplayName: 7 of a Kind
 Description: Seven of the same digit anywhere in the serial
 Tier: 2
-Examples: ["77777773", "18888888", "99999992"]
+Examples: ["77777077", "88880888", "99909999"]
 Odds: 1 in ~1,000,000
 Price: $100-$500
 --]]

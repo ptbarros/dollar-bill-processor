@@ -3,7 +3,7 @@ Pattern: THREE_AND_FIVE_LADDER
 DisplayName: Three And Five Ladder
 Description: A 3-digit ladder and a 5-digit ladder side by side, filling all 8 digits (e.g. 123 76543).
 Tier: 4
-Examples: ["12376543", "32187654", "54332101"]
+Examples: ["12376543", "32187654", "12345987"]
 Odds: 1 in 200,000
 Price: $10-$100+
 --]]

@@ -2,7 +2,7 @@
 Pattern: THREE_PAIRS_NOT_TOGETHER
 Description: 3 pairs not consecutive
 Tier: 4
-Examples: ["33566088", "11224456"]
+Examples: ["33566088", "12123434", "11244553"]
 Odds: 1 in 200
 Price: $3-$15
 --]]

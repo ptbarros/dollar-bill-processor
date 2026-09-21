@@ -2,7 +2,7 @@
 Pattern: SUM_70_OR_2
 Description: Digit sum equals 70 or 2
 Tier: 5
-Examples: ["99999990", "00000002"]
+Examples: ["00002000", "00010100", "00101000"]
 Odds: 1 in 2,232,558
 Price: $100-$1,000+
 --]]

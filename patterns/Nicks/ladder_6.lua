@@ -3,7 +3,7 @@ Pattern: NICKS_LADDER_6
 DisplayName: 6 Digit Ladder
 Description: Exactly 6 consecutive digits in strictly ascending or descending order
 Tier: 3
-Examples: ["12345600", "00123456", "01234500", "65432100", "00654321", "09876500"]
+Examples: ["12345600", "01234500", "00654321"]
 --]]
 
 function match(ctx)

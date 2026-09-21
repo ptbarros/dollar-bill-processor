@@ -3,7 +3,7 @@ Pattern: BROKEN_LADDER_8
 DisplayName: 8 Digit Broken Ladder
 Description: 8-digit broken ladder (one digit out of sequence)
 Tier: 4
-Examples: ["23546718", "12354678"]
+Examples: ["12345679", "13456789", "12345689"]
 Odds: 1 in 2,380
 Price: $10-$35
 --]]

@@ -2,7 +2,7 @@
 Pattern: SUM_64_OR_8
 Description: Digit sum equals 64 or 8
 Tier: 5
-Examples: ["99999996", "00000008"]
+Examples: ["05000111", "08000000", "16001000"]
 Odds: 1 in 7,692
 Price: $10-$50+
 --]]

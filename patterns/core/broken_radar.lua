@@ -2,7 +2,7 @@
 Pattern: BROKEN_RADAR
 Description: One digit away from radar
 Tier: 4
-Examples: ["12344322", "12345321", "15700751"]
+Examples: ["12344322", "22344321", "12344320"]
 Odds: 1 in 1,048
 Price: $3-$20
 --]]

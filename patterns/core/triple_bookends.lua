@@ -3,7 +3,7 @@ Pattern: TRIPLE_BOOKENDS
 DisplayName: 3 Digit Bookend
 Description: First three and last three digits match, middle two free (e.g. 111·xx·111).
 Tier: 4
-Examples: ["12312312", "45645645"]
+Examples: ["12345123", "45678456", "11100111"]
 Odds: 1 in 1,000
 Price: $5-$20
 --]]

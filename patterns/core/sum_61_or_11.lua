@@ -2,7 +2,7 @@
 Pattern: SUM_61_OR_11
 Description: Digit sum equals 61 or 11
 Tier: 5
-Examples: ["89999999", "20000009"]
+Examples: ["91000010", "71000111", "81000002"]
 Odds: 1 in 1,315
 Price: $5-$20
 --]]

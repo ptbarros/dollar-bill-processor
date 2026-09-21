@@ -2,7 +2,7 @@
 Pattern: SUM_62_OR_10
 Description: Digit sum equals 62 or 10
 Tier: 5
-Examples: ["99999998", "10000009"]
+Examples: ["00008020", "90100000", "21101005"]
 Odds: 1 in 2,272
 Price: $5-$25+
 --]]

@@ -3,7 +3,7 @@ Pattern: NICKS_FULL_HOUSE
 DisplayName: Full House
 Description: Three of a kind followed by a pair (AAABB) or pair followed by three (AABBB)
 Tier: 5
-Examples: ["11122345", "12333456", "00011234", "99988765"]
+Examples: ["11122345", "00011234", "99988765"]
 --]]
 
 function match(ctx)

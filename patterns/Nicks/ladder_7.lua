@@ -3,7 +3,7 @@ Pattern: NICKS_LADDER_7
 DisplayName: 7 Digit Ladder
 Description: Exactly 7 consecutive digits in strictly ascending or descending order
 Tier: 2
-Examples: ["01234567", "12345670", "02345678", "87654321", "98765430", "09876543"]
+Examples: ["12345670", "02345678", "98765430"]
 --]]
 
 function match(ctx)

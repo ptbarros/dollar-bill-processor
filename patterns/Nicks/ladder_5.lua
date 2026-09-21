@@ -3,7 +3,7 @@ Pattern: NICKS_LADDER_5
 DisplayName: 5 Digit Ladder
 Description: Exactly 5 consecutive digits in strictly ascending or descending order
 Tier: 4
-Examples: ["12345000", "00012345", "00123450", "54321000", "00054321", "00987650"]
+Examples: ["12345000", "00054321", "00987650"]
 --]]
 
 function match(ctx)
