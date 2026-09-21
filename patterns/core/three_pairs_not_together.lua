@@ -1,5 +1,6 @@
 --[[
 Pattern: THREE_PAIRS_NOT_TOGETHER
+DisplayName: 3 Pairs Not Together
 Description: 3 pairs not consecutive
 Tier: 4
 Examples: ["33566088", "12123434", "11244553"]

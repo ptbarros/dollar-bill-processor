@@ -750,14 +750,21 @@ class PatternEngineV3:
             print(f"Error deleting pattern: {e}")
             return False
 
+    # Short words that read better lowercased mid-name (else the "short uppercase
+    # acronym" rule below keeps them uppercase, giving "Sum 61 OR 11").
+    _JOINER_WORDS = {'OF', 'IN', 'OR', 'AND', 'FOR', 'THE', 'A', 'TO', 'ON', 'AT', 'BY'}
+
     def _make_friendly_name(self, name: str) -> str:
         """Convert PATTERN_NAME to 'Pattern Name' for display."""
         # Split on underscores and capitalize each word
         words = name.split('_')
         # Keep numbers/acronyms as-is, title-case others
         result = []
-        for word in words:
-            if word.isdigit() or (len(word) <= 2 and word.isupper()):
+        for i, word in enumerate(words):
+            if i > 0 and word.upper() in self._JOINER_WORDS:
+                # Lowercase joiner words mid-name (of/in/or/and), not the first word
+                result.append(word.lower())
+            elif word.isdigit() or (len(word) <= 2 and word.isupper()):
                 # Keep short acronyms and numbers as-is (e.g., "6M", "12M")
                 result.append(word)
             else:

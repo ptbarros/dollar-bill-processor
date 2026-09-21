@@ -1,5 +1,6 @@
 --[[
 Pattern: FIVE_IN_ROW_AND_PAIR
+DisplayName: 5 in a Row & Pair
 Description: Exactly five of a kind in a row plus a single separate pair (e.g. 11111·22·3).
 Tier: 3
 Examples: ["11111223", "55555667", "99999100"]

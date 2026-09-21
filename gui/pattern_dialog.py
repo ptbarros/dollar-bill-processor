@@ -504,11 +504,15 @@ class PatternDialog(QDialog):
             RADAR -> Radar
             DOUBLE_YEAR -> Double Year
         """
+        joiners = {'OF', 'IN', 'OR', 'AND', 'FOR', 'THE', 'A', 'TO', 'ON', 'AT', 'BY'}
         words = name.replace('_', ' ').split()
         friendly_words = []
-        for word in words:
+        for i, word in enumerate(words):
+            # Lowercase joiner words mid-name (of/in/or/and), not the first word
+            if i > 0 and word.upper() in joiners:
+                friendly_words.append(word.lower())
             # Keep short alphanumeric tokens (like "6M", "3D") uppercase
-            if len(word) <= 3 and any(c.isdigit() for c in word):
+            elif len(word) <= 3 and any(c.isdigit() for c in word):
                 friendly_words.append(word.upper())
             else:
                 friendly_words.append(word.capitalize())
