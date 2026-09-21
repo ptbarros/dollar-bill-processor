@@ -33,11 +33,7 @@ function match(ctx)
                         {from = base, to = base + 2, color = "orange", thickness = 2},
                         {from = base + 3, to = base + 5, color = "orange", thickness = 2}
                     },
-                    connectors = {
-                        {from = base, to = base + 3, color = "orange", style = "arc"},
-                        {from = base + 1, to = base + 4, color = "coral", style = "arc"},
-                        {from = base + 2, to = base + 5, color = "cyan", style = "arc"}
-                    },
+                    connectors = {},  -- arcs removed (Ed review)
                     message = a .. b .. c .. " repeats at position " .. i .. " (CS-Mini 6 Repeater)"
                 }
             end
