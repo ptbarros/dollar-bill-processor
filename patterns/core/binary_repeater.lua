@@ -1,44 +1,42 @@
 --[[
-Pattern: BINARY_REPEATER
-Description: Binary AND repeater
-Tier: 2
-Examples: ["01010101", "10101010", "33993399"]
-Odds: 1 in 1,185,185
-Price: $80-$450
+Pattern: NICKS_BINARY_REPEATER
+DisplayName: Binary Repeater
+Description: Repeater with only 2 unique digits
+Tier: 3
+Odds: 1 in 162,437 (591 per 96M)
+Examples: ["12121212", "00110011", "98989898"]
 --]]
 
 function match(ctx)
-    local digits = ctx.digits
-    if #digits ~= 8 then
+    local s = ctx.digits
+
+    -- Check repeater
+    local first_half = s:sub(1, 4)
+    local second_half = s:sub(5, 8)
+
+    if first_half ~= second_half then
         return {matched = false}
     end
 
-    -- Check binary (exactly 2 unique digits)
-    if unique_count(digits) ~= 2 then
-        return {matched = false}
+    -- Check binary (2 unique)
+    local unique = {}
+    for i = 1, 8 do
+        unique[s:sub(i, i)] = true
     end
 
-    -- Check repeater (ABCDABCD)
-    if not is_repeater(digits) then
-        return {matched = false}
+    local count = 0
+    for _ in pairs(unique) do count = count + 1 end
+
+    if count == 2 then
+        return {
+            matched = true,
+            message = "Binary repeater",
+            group_boxes = {
+                {from = 0, to = 3, color = "cyan"},
+                {from = 4, to = 7, color = "cyan"}
+            }
+        }
     end
 
-    -- Get the two digits
-    local unique = get_unique_digits(digits)
-    local d1, d2 = unique:sub(1, 1), unique:sub(2, 2)
-
-    return {
-        matched = true,
-        highlights = {
-            highlight(find_digit_positions(digits, d1), "blue", "digit 1"),
-            highlight(find_digit_positions(digits, d2), "cyan", "digit 2")
-        },
-        connectors = {
-            connector(0, 4, "magenta", "arc"),
-            connector(1, 5, "magenta", "arc"),
-            connector(2, 6, "magenta", "arc"),
-            connector(3, 7, "magenta", "arc")
-        },
-        message = "Binary (" .. d1 .. "," .. d2 .. ") + Repeater"
-    }
+    return {matched = false}
 end

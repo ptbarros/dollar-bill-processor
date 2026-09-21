@@ -1,58 +1,29 @@
 --[[
-Pattern: REPEATER
-Description: First 4 digits repeat exactly (ABCDABCD)
-Tier: 3
-Examples: ["12341234", "56785678", "90129012"]
-Odds: 1 in 10,000
-Price: $50-$200
+Pattern: NICKS_REPEATER
+DisplayName: Repeater
+Description: First 4 digits repeat in positions 5-8 (ABCDABCD)
+Tier: 4
+Odds: 1 in 10,001 (9,599 per 96M)
+Examples: ["12341234", "00110011", "98769876", "12001200"]
 --]]
 
 function match(ctx)
-    local digits = ctx.digits
-    if #digits ~= 8 then
-        return {matched = false}
+    local s = ctx.digits
+
+    local first_half = s:sub(1, 4)
+    local second_half = s:sub(5, 8)
+
+    if first_half == second_half then
+        return {
+            matched = true,
+            message = "Repeater: " .. first_half .. " × 2",
+            group_boxes = {
+                {from = 0, to = 3, color = "orange"},
+                {from = 4, to = 7, color = "orange"}
+            },
+            connectors = {{from = 1, to = 5, color = "gold", style = "arc"}}
+        }
     end
 
-    -- Check if first half equals second half
-    local first_half = digits:sub(1, 4)
-    local second_half = digits:sub(5, 8)
-
-    if first_half ~= second_half then
-        return {matched = false}
-    end
-
-    -- Highlight all digits in magenta
-    local highlights = {}
-    local connectors = {}
-
-    -- First group
-    table.insert(highlights, {
-        positions = {0, 1, 2, 3},
-        color = "magenta",
-        label = "first"
-    })
-
-    -- Second group
-    table.insert(highlights, {
-        positions = {4, 5, 6, 7},
-        color = "magenta",
-        label = "repeat"
-    })
-
-    -- Add connectors showing the repetition
-    for i = 0, 3 do
-        table.insert(connectors, {
-            from = i,
-            to = i + 4,
-            color = "magenta",
-            style = "line"
-        })
-    end
-
-    return {
-        matched = true,
-        highlights = highlights,
-        connectors = connectors,
-        message = first_half .. " repeats"
-    }
+    return {matched = false}
 end

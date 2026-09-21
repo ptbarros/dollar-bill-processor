@@ -1,55 +1,65 @@
 --[[
-Pattern: CHUNKY_LADDER_7
-Description: 7-digit chunky ladder (ABCDEFGG)
-Tier: 6
-Examples: ["12345677", "23456788"]
-Odds: 1 in 1,959,183
-Price: $100-$1,500+
+Pattern: NICKS_CHUNKY_LADDER_7
+DisplayName: 7 Digit Chunky Ladder
+Description: Seven consecutive digits, each in its own chunk, the whole serial sorted up or down (e.g. 00·1·2·3·4·5·6).
+Tier: 3
+Odds: 1 in 1,959,184 (49 per 96M)
+Examples: ["00123456", "01234566", "66543210", "99876543"]
 --]]
 
 function match(ctx)
-    local digits = ctx.digits
-    if #digits ~= 8 then
+    local s = ctx.digits
+
+    local unique = {}
+    local lo, hi = 9, 0
+    for i = 1, 8 do
+        local d = s:sub(i, i)
+        unique[d] = true
+        local n = tonumber(d)
+        if n < lo then lo = n end
+        if n > hi then hi = n end
+    end
+
+    local count = 0
+    for _ in pairs(unique) do count = count + 1 end
+    if count ~= 7 then
         return {matched = false}
     end
 
-    -- Pattern: ABCDEFGG where A, B, C, D, E, F, G form ladder
-    -- Check GG at end
-    local g = digits:sub(7, 7)
-    if digits:sub(8, 8) ~= g then
+    -- The 7 distinct digits must be consecutive on the number line (a real
+    -- ladder, not just any 7 sorted digits) -- Ed review.
+    if hi - lo ~= 6 then
         return {matched = false}
     end
 
-    -- Get A through G
-    local nums = {}
-    for i = 1, 7 do
-        table.insert(nums, tonumber(digits:sub(i, i)))
+    -- Whole serial must run in one direction (all sorted ascending or descending).
+    local chars = {}
+    for i = 1, 8 do chars[i] = s:sub(i, i) end
+    table.sort(chars)
+    local dir
+    if table.concat(chars) == s then
+        dir = "ascending"
+    else
+        table.sort(chars, function(a, b) return a > b end)
+        if table.concat(chars) == s then
+            dir = "descending"
+        else
+            return {matched = false}
+        end
     end
 
-    -- Check A, B, C, D, E, F, G form a ladder
-    local ascending = true
-    local descending = true
-    for i = 1, 6 do
-        if nums[i + 1] ~= nums[i] + 1 then ascending = false end
-        if nums[i + 1] ~= nums[i] - 1 then descending = false end
+    -- One colored box per run of identical digits (Ed review).
+    local colors = {"blue", "orange", "magenta", "red", "purple", "hotpink", "black"}
+    local boxes = {}
+    for _, run in ipairs(find_runs(s)) do
+        table.insert(boxes, {from = run.start, to = run.start + run.length - 1,
+            color = colors[(#boxes % #colors) + 1], thickness = 3})
     end
-
-    if not ascending and not descending then
-        return {matched = false}
-    end
-
-    local direction = ascending and "ascending" or "descending"
 
     return {
         matched = true,
-        highlights = {
-            highlight({0, 1, 2, 3, 4, 5}, "lime", "ladder"),
-            highlight({6, 7}, "gold", "double")
-        },
-        group_boxes = {
-            {from = 6, to = 7, color = "gold", thickness = 2}
-        },
-        connectors = {},
-        message = "Chunky ladder 7 " .. direction
+        message = "7-digit chunky ladder (" .. dir .. ")",
+        highlights = {},
+        group_boxes = boxes
     }
 end

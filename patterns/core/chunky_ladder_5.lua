@@ -1,60 +1,55 @@
 --[[
-Pattern: CHUNKY_LADDER_5
-Description: 5-digit chunky ladder (AAABBCDE)
-Tier: 6
-Examples: ["11122345", "22233456"]
-Odds: 1 in 396,694
-Price: $40-$350
+Pattern: NICKS_CHUNKY_LADDER_5
+DisplayName: 5 Digit Chunky Ladder
+Description: 5 consecutive digits (a 5-rung ladder) in sorted order, each appearing one or more times (e.g. 01122334).
+Tier: 5
+Odds: 1 in 249,351 (385 per 96M)
+Examples: ["01122334", "44332210", "00112234", "43322110"]
 --]]
 
 function match(ctx)
-    local digits = ctx.digits
-    if #digits ~= 8 then
-        return {matched = false}
-    end
+    local s = ctx.digits
 
-    -- Pattern: AAABBCDE where A, B, C, D, E form ladder
-    -- Check first 3 are same (A)
-    local a = digits:sub(1, 1)
-    if digits:sub(2, 2) ~= a or digits:sub(3, 3) ~= a then
-        return {matched = false}
-    end
+    local seen = {}
+    for i = 1, 8 do seen[s:sub(i, i)] = true end
+    local uniq = {}
+    for ch in pairs(seen) do table.insert(uniq, tonumber(ch)) end
+    if #uniq ~= 5 then return {matched = false} end
 
-    -- Check BB
-    local b = digits:sub(4, 4)
-    if digits:sub(5, 5) ~= b then
-        return {matched = false}
-    end
-
-    -- Get C, D, E
-    local c = digits:sub(6, 6)
-    local d = digits:sub(7, 7)
-    local e = digits:sub(8, 8)
-
-    -- Check A, B, C, D, E form a ladder
-    local nums = {tonumber(a), tonumber(b), tonumber(c), tonumber(d), tonumber(e)}
-    local ascending = true
-    local descending = true
+    -- The 5 unique digits must be consecutive (a real ladder), not just any 5.
+    table.sort(uniq)
     for i = 1, 4 do
-        if nums[i + 1] ~= nums[i] + 1 then ascending = false end
-        if nums[i + 1] ~= nums[i] - 1 then descending = false end
+        if uniq[i + 1] - uniq[i] ~= 1 then return {matched = false} end
     end
 
-    if not ascending and not descending then
-        return {matched = false}
+    -- Digits must be in sorted order (ascending or descending).
+    local sorted = {}
+    for i = 1, 8 do table.insert(sorted, s:sub(i, i)) end
+    table.sort(sorted)
+    local dir
+    if table.concat(sorted) == s then
+        dir = "ascending"
+    else
+        table.sort(sorted, function(a, b) return a > b end)
+        if table.concat(sorted) == s then
+            dir = "descending"
+        else
+            return {matched = false}
+        end
     end
 
-    local direction = ascending and "ascending" or "descending"
+    -- One colored box per run of identical digits (like the 3-digit version, Ed review).
+    local colors = {"blue", "orange", "magenta", "red", "purple"}
+    local boxes = {}
+    for _, run in ipairs(find_runs(s)) do
+        table.insert(boxes, {from = run.start, to = run.start + run.length - 1,
+            color = colors[(#boxes % #colors) + 1], thickness = 3})
+    end
 
     return {
         matched = true,
-        -- Inner per-digit boxes removed (Ed review); keep the chunk group boxes.
+        message = "5-digit chunky ladder (" .. dir .. ")",
         highlights = {},
-        group_boxes = {
-            {from = 0, to = 2, color = "lime", thickness = 2},
-            {from = 3, to = 4, color = "teal", thickness = 2}
-        },
-        connectors = {},
-        message = "Chunky ladder 5 " .. direction
+        group_boxes = boxes
     }
 end

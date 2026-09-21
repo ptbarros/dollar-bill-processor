@@ -1,66 +1,65 @@
 --[[
-Pattern: CHUNKY_LADDER_3
-Description: 3-digit chunky ladder (AAAABCCC)
-Tier: 6
-Examples: ["11112333", "22223444"]
-Odds: 1 in 426,666
-Price: $40-$350
+Pattern: NICKS_CHUNKY_LADDER_3
+DisplayName: 3 Digit Chunky Ladder
+Description: Three consecutive digits (like 3-4-5), each in its own chunk, the whole serial sorted up or down (e.g. 000·11·222).
+Tier: 7
+Odds: 1 in 304,762 (315 per 96M)
+Examples: ["00011222", "01112222", "33222111", "77788899"]
 --]]
 
 function match(ctx)
-    local digits = ctx.digits
-    if #digits ~= 8 then
+    local s = ctx.digits
+
+    local unique = {}
+    local lo, hi = 9, 0
+    for i = 1, 8 do
+        local d = s:sub(i, i)
+        unique[d] = true
+        local n = tonumber(d)
+        if n < lo then lo = n end
+        if n > hi then hi = n end
+    end
+
+    local count = 0
+    for _ in pairs(unique) do count = count + 1 end
+    if count ~= 3 then
         return {matched = false}
     end
 
-    -- Pattern: AAAABCCC where A, B, C are consecutive
-    -- Check first 4 are same
-    local a = digits:sub(1, 1)
-    if digits:sub(2, 2) ~= a or digits:sub(3, 3) ~= a or digits:sub(4, 4) ~= a then
+    -- The 3 distinct digits must be consecutive on the number line (a real
+    -- ladder, not just any 3 sorted digits) -- Ed review.
+    if hi - lo ~= 2 then
         return {matched = false}
     end
 
-    -- Check position 5 (B)
-    local b = digits:sub(5, 5)
-    local a_num = tonumber(a)
-    local b_num = tonumber(b)
-
-    -- B should be A+1 or A-1
-    local ascending = (b_num == a_num + 1)
-    local descending = (b_num == a_num - 1)
-    if not ascending and not descending then
-        return {matched = false}
+    -- Whole serial must run in one direction (all sorted ascending or descending).
+    local chars = {}
+    for i = 1, 8 do chars[i] = s:sub(i, i) end
+    table.sort(chars)
+    local dir
+    if table.concat(chars) == s then
+        dir = "ascending"
+    else
+        table.sort(chars, function(a, b) return a > b end)
+        if table.concat(chars) == s then
+            dir = "descending"
+        else
+            return {matched = false}
+        end
     end
 
-    -- Check last 3 are same (C)
-    local c = digits:sub(6, 6)
-    if digits:sub(7, 7) ~= c or digits:sub(8, 8) ~= c then
-        return {matched = false}
+    -- One colored box per run of identical digits (Ed review), e.g. 000 11 222.
+    local colors = {"blue", "orange", "magenta", "red", "purple", "hotpink", "black"}
+    local boxes = {}
+    for _, run in ipairs(find_runs(s)) do
+        table.insert(boxes, {from = run.start, to = run.start + run.length - 1,
+            color = colors[(#boxes % #colors) + 1], thickness = 3})
     end
-
-    -- C should continue the sequence
-    local c_num = tonumber(c)
-    if ascending and c_num ~= b_num + 1 then
-        return {matched = false}
-    end
-    if descending and c_num ~= b_num - 1 then
-        return {matched = false}
-    end
-
-    local direction = ascending and "ascending" or "descending"
 
     return {
         matched = true,
-        highlights = {
-            highlight({0, 1, 2, 3}, "lime", "A group"),
-            highlight({4}, "teal", "B"),
-            highlight({5, 6, 7}, "cyan", "C group")
-        },
-        group_boxes = {
-            {from = 0, to = 3, color = "lime", thickness = 2},
-            {from = 5, to = 7, color = "cyan", thickness = 2}
-        },
-        connectors = {},
-        message = "Chunky ladder 3 " .. direction
+        message = "3-digit chunky ladder (" .. dir .. ")",
+        highlights = {},
+        group_boxes = boxes
     }
 end

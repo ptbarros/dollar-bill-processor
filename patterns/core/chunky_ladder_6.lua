@@ -1,67 +1,65 @@
 --[[
-Pattern: CHUNKY_LADDER_6
-Description: 6-digit chunky ladder (AABBCDEF)
-Tier: 6
-Examples: ["11223456", "22334567"]
-Odds: 1 in 507,936
-Price: $40-$350
+Pattern: NICKS_CHUNKY_LADDER_6
+DisplayName: 6 Digit Chunky Ladder
+Description: Six consecutive digits, each in its own chunk, the whole serial sorted up or down (e.g. 00·1·2·3·4·55).
+Tier: 4
+Odds: 1 in 507,937 (189 per 96M)
+Examples: ["00123455", "11234566", "55443210", "99876654"]
 --]]
 
 function match(ctx)
-    local digits = ctx.digits
-    if #digits ~= 8 then
+    local s = ctx.digits
+
+    local unique = {}
+    local lo, hi = 9, 0
+    for i = 1, 8 do
+        local d = s:sub(i, i)
+        unique[d] = true
+        local n = tonumber(d)
+        if n < lo then lo = n end
+        if n > hi then hi = n end
+    end
+
+    local count = 0
+    for _ in pairs(unique) do count = count + 1 end
+    if count ~= 6 then
         return {matched = false}
     end
 
-    -- Pattern: AABBCDEF where A, B, C, D, E, F form ladder
-    -- Check AA
-    local a = digits:sub(1, 1)
-    if digits:sub(2, 2) ~= a then
+    -- The 6 distinct digits must be consecutive on the number line (a real
+    -- ladder, not just any 6 sorted digits) -- Ed review.
+    if hi - lo ~= 5 then
         return {matched = false}
     end
 
-    -- Check BB
-    local b = digits:sub(3, 3)
-    if digits:sub(4, 4) ~= b then
-        return {matched = false}
+    -- Whole serial must run in one direction (all sorted ascending or descending).
+    local chars = {}
+    for i = 1, 8 do chars[i] = s:sub(i, i) end
+    table.sort(chars)
+    local dir
+    if table.concat(chars) == s then
+        dir = "ascending"
+    else
+        table.sort(chars, function(a, b) return a > b end)
+        if table.concat(chars) == s then
+            dir = "descending"
+        else
+            return {matched = false}
+        end
     end
 
-    -- Get C, D, E, F
-    local c = digits:sub(5, 5)
-    local d = digits:sub(6, 6)
-    local e = digits:sub(7, 7)
-    local f = digits:sub(8, 8)
-
-    -- Check A, B, C, D, E, F form a ladder
-    local nums = {tonumber(a), tonumber(b), tonumber(c), tonumber(d), tonumber(e), tonumber(f)}
-    local ascending = true
-    local descending = true
-    for i = 1, 5 do
-        if nums[i + 1] ~= nums[i] + 1 then ascending = false end
-        if nums[i + 1] ~= nums[i] - 1 then descending = false end
+    -- One colored box per run of identical digits (Ed review).
+    local colors = {"blue", "orange", "magenta", "red", "purple", "hotpink", "black"}
+    local boxes = {}
+    for _, run in ipairs(find_runs(s)) do
+        table.insert(boxes, {from = run.start, to = run.start + run.length - 1,
+            color = colors[(#boxes % #colors) + 1], thickness = 3})
     end
-
-    if not ascending and not descending then
-        return {matched = false}
-    end
-
-    local direction = ascending and "ascending" or "descending"
 
     return {
         matched = true,
-        highlights = {
-            highlight({0, 1}, "lime", "A pair"),
-            highlight({2, 3}, "teal", "B pair"),
-            highlight({4}, "cyan", "C"),
-            highlight({5}, "blue", "D"),
-            highlight({6}, "purple", "E"),
-            highlight({7}, "magenta", "F")
-        },
-        group_boxes = {
-            {from = 0, to = 1, color = "lime", thickness = 2},
-            {from = 2, to = 3, color = "teal", thickness = 2}
-        },
-        connectors = {},
-        message = "Chunky ladder 6 " .. direction
+        message = "6-digit chunky ladder (" .. dir .. ")",
+        highlights = {},
+        group_boxes = boxes
     }
 end

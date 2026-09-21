@@ -1,61 +1,69 @@
 --[[
-Pattern: DOUBLES_LADDER
-Description: Pairs in ascending/descending order (AABBCCDD)
-Tier: 1
-Examples: ["11223344", "22334455", "99887766"]
-Odds: 1 in 6,400,000
-Price: $100-$4,500
+Pattern: NICKS_DOUBLES_LADDER
+DisplayName: Doubles Ladder
+Description: AABBCCDD where AA < BB < CC < DD (or descending)
+Tier: 4
+Odds: 1 in 285,714 (336 per 96M)
+Examples: ["11223344", "00112233", "99887766", "44332211"]
 --]]
 
 function match(ctx)
-    local digits = ctx.digits
-    if #digits ~= 8 then
-        return {matched = false}
+    local s = ctx.digits
+
+    -- Split into pairs
+    local pairs = {}
+    for i = 1, 8, 2 do
+        local pair = s:sub(i, i + 1)
+        -- Each pair must have identical digits
+        if pair:sub(1, 1) ~= pair:sub(2, 2) then
+            return {matched = false}
+        end
+        table.insert(pairs, tonumber(pair:sub(1, 1)))
     end
 
-    -- Check for AABBCCDD pattern where A,B,C,D are consecutive
-    -- First verify pairs
-    for i = 1, 4 do
-        local pos = (i - 1) * 2 + 1
-        if digits:sub(pos, pos) ~= digits:sub(pos + 1, pos + 1) then
-            return {matched = false}
+    -- Check ascending
+    local is_asc = true
+    for i = 1, 3 do
+        if pairs[i + 1] <= pairs[i] then
+            is_asc = false
+            break
         end
     end
 
-    -- Get the four values
-    local vals = {}
-    for i = 1, 4 do
-        local pos = (i - 1) * 2 + 1
-        table.insert(vals, tonumber(digits:sub(pos, pos)))
+    if is_asc then
+        return {
+            matched = true,
+            message = "Doubles ladder (ascending)",
+            group_boxes = {
+                {from = 0, to = 1, color = "lime"},
+                {from = 2, to = 3, color = "lime"},
+                {from = 4, to = 5, color = "lime"},
+                {from = 6, to = 7, color = "lime"}
+            }
+        }
     end
 
-    -- Check if ascending or descending
-    local ascending = true
-    local descending = true
+    -- Check descending
+    local is_desc = true
     for i = 1, 3 do
-        if vals[i + 1] ~= vals[i] + 1 then ascending = false end
-        if vals[i + 1] ~= vals[i] - 1 then descending = false end
+        if pairs[i + 1] >= pairs[i] then
+            is_desc = false
+            break
+        end
     end
 
-    if not ascending and not descending then
-        return {matched = false}
+    if is_desc then
+        return {
+            matched = true,
+            message = "Doubles ladder (descending)",
+            group_boxes = {
+                {from = 0, to = 1, color = "cyan"},
+                {from = 2, to = 3, color = "cyan"},
+                {from = 4, to = 5, color = "cyan"},
+                {from = 6, to = 7, color = "cyan"}
+            }
+        }
     end
 
-    local direction = ascending and "ascending" or "descending"
-
-    return {
-        matched = true,
-        highlights = {
-            highlight({0, 1}, "lime", "pair A"),
-            highlight({2, 3}, "teal", "pair B"),
-            highlight({4, 5}, "cyan", "pair C"),
-            highlight({6, 7}, "blue", "pair D")
-        },
-        connectors = {
-            connector(0, 2, "lime", "line"),
-            connector(2, 4, "lime", "line"),
-            connector(4, 6, "lime", "line")
-        },
-        message = "Doubles ladder " .. direction
-    }
+    return {matched = false}
 end

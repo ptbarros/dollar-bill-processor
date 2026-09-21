@@ -1,42 +1,30 @@
 --[[
-Pattern: SUPER_REPEATER
-Description: 2-digit pattern repeated 4 times (ABABABAB)
+Pattern: NICKS_SUPER_REPEATER
+DisplayName: Super Repeater
+Description: 2-digit pattern repeated 4 times (XYXYXYXY)
 Tier: 2
-Examples: ["12121212", "78787878", "39393939"]
-Odds: 1 in 1,185,185
-Price: $80-$900
+Odds: 1 in 1,010,526 (95 per 96M)
+Examples: ["12121212", "01010101", "98989898", "12121212"]
 --]]
 
 function match(ctx)
-    local digits = ctx.digits
-    if #digits ~= 8 then
-        return {matched = false}
+    local s = ctx.digits
+
+    local pair = s:sub(1, 2)
+    local expected = pair .. pair .. pair .. pair
+
+    if s == expected then
+        return {
+            matched = true,
+            message = "Super repeater: " .. pair .. " × 4",
+            group_boxes = {
+                {from = 0, to = 1, color = "gold"},
+                {from = 2, to = 3, color = "gold"},
+                {from = 4, to = 5, color = "gold"},
+                {from = 6, to = 7, color = "gold"}
+            }
+        }
     end
 
-    -- Check ABABABAB pattern
-    if not is_super_repeater(digits) then
-        return {matched = false}
-    end
-
-    local a = digits:sub(1, 1)
-    local b = digits:sub(2, 2)
-
-    -- A and B must be different
-    if a == b then
-        return {matched = false}  -- That's a solid
-    end
-
-    return {
-        matched = true,
-        highlights = {
-            highlight({0, 2, 4, 6}, "magenta", "A digits"),
-            highlight({1, 3, 5, 7}, "coral", "B digits")
-        },
-        connectors = {
-            connector(0, 2, "magenta", "line"),
-            connector(2, 4, "magenta", "line"),
-            connector(4, 6, "magenta", "line")
-        },
-        message = "Super repeater: " .. a .. b .. " x 4"
-    }
+    return {matched = false}
 end

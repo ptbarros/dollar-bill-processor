@@ -1,64 +1,75 @@
 --[[
-Pattern: SUPER_TRINARY
-Description: Trinary with structured groups (AAACCCEE, etc.)
-Tier: 3
-Examples: ["11133355", "22244466", "00022244"]
-Odds: 1 in 24,691
-Price: $20-$100+
+Pattern: NICKS_SUPER_TRINARY
+DisplayName: Super Trinary
+Description: Two triples and one double, or one quad and two doubles
+Tier: 4
+Odds: 1 in 24,691 (3,888 per 96M)
+Examples: ["11122233", "00011122", "99988877", "11112233"]
 --]]
 
 function match(ctx)
-    local digits = ctx.digits
-    if #digits ~= 8 then
-        return {matched = false}
-    end
+    local s = ctx.digits
 
-    -- Must be trinary (exactly 3 unique digits)
-    if unique_count(digits) ~= 3 then
-        return {matched = false}
-    end
+    local i = 1
+    local quads = 0
+    local triples = 0
+    local doubles = 0
 
-    -- Check for pattern where each digit appears in groups (2+ consecutive)
-    -- Look for structured groupings like AAA BBB CC or AA BBB CCC
-    local runs = find_runs(digits)
-
-    -- Check if we have 3 or fewer runs (meaning digits are grouped)
-    if #runs > 4 then
-        return {matched = false}
-    end
-
-    -- Check if each run is at least 2 long
-    local structured = true
-    for _, run in ipairs(runs) do
-        if run.length < 2 then
-            structured = false
-            break
+    while i <= 8 do
+        -- Check for quad
+        if i <= 5 and s:sub(i, i) == s:sub(i + 1, i + 1) and
+           s:sub(i, i) == s:sub(i + 2, i + 2) and s:sub(i, i) == s:sub(i + 3, i + 3) then
+            -- Make sure it's not a quint
+            if i + 4 > 8 or s:sub(i, i) ~= s:sub(i + 4, i + 4) then
+                quads = quads + 1
+                i = i + 4
+            else
+                i = i + 1
+            end
+        -- Check for triple
+        elseif i <= 6 and s:sub(i, i) == s:sub(i + 1, i + 1) and s:sub(i, i) == s:sub(i + 2, i + 2) then
+            if i + 3 > 8 or s:sub(i, i) ~= s:sub(i + 3, i + 3) then
+                triples = triples + 1
+                i = i + 3
+            else
+                i = i + 1
+            end
+        -- Check for double
+        elseif i <= 7 and s:sub(i, i) == s:sub(i + 1, i + 1) then
+            if i + 2 > 8 or s:sub(i, i) ~= s:sub(i + 2, i + 2) then
+                doubles = doubles + 1
+                i = i + 2
+            else
+                i = i + 1
+            end
+        else
+            i = i + 1
         end
     end
 
-    if not structured then
-        return {matched = false}
-    end
-
-    -- Highlight each group
-    local colors = {"lime", "teal", "cyan", "blue"}
-    local highlights = {}
-    local group_boxes = {}
-
-    for i, run in ipairs(runs) do
-        local positions = {}
-        for j = 0, run.length - 1 do
-            table.insert(positions, run.start + j)
+    -- Two triples + one double, or one quad + two doubles -- and exactly 3 distinct
+    -- digits (Ed review), so the name is literally true (runs alone can repeat a digit).
+    if ((triples == 2 and doubles == 1) or (quads == 1 and doubles == 2)) and unique_count(s) == 3 then
+        local desc = (triples == 2) and "2 triples + 1 double" or "1 quad + 2 doubles"
+        -- One single group box around the whole span of matching runs (Ed review),
+        -- no per-digit or per-run boxes.
+        local first_pos, last_pos = nil, nil
+        for _, run in ipairs(find_runs(s)) do
+            if run.length >= 2 then
+                if first_pos == nil or run.start < first_pos then first_pos = run.start end
+                local e = run.start + run.length - 1
+                if last_pos == nil or e > last_pos then last_pos = e end
+            end
         end
-        table.insert(highlights, highlight(positions, colors[i] or "gray", "group"))
-        table.insert(group_boxes, {from = run.start, to = run.start + run.length - 1, color = colors[i] or "gray", thickness = 2})
+        return {
+            matched = true,
+            message = "Super trinary: " .. desc,
+            highlights = {},
+            group_boxes = {
+                {from = first_pos, to = last_pos, color = "blue", thickness = 3}
+            }
+        }
     end
 
-    return {
-        matched = true,
-        highlights = highlights,
-        group_boxes = group_boxes,
-        connectors = {},
-        message = "Super trinary (structured groups)"
-    }
+    return {matched = false}
 end
