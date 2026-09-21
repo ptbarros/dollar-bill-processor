@@ -231,6 +231,13 @@ class PatternDialog(QDialog):
         import_bundle_btn.clicked.connect(self._import_bundle)
         bundle_layout.addWidget(import_bundle_btn)
 
+        remove_library_btn = QPushButton("Remove Library…")
+        remove_library_btn.setToolTip(
+            "Remove an add-on library you imported from a bundle (e.g. Green Guide). "
+            "Deletes that library's patterns; the built-in patterns are not affected.")
+        remove_library_btn.clicked.connect(self._remove_library)
+        bundle_layout.addWidget(remove_library_btn)
+
         bundle_layout.addStretch()
         left_layout.addLayout(bundle_layout)
 
@@ -2041,7 +2048,8 @@ class PatternDialog(QDialog):
 
         self._load_patterns()  # rebuild the tree to show the imported patterns
 
-        parts = [f"Imported {len(summary['imported'])} pattern(s)"]
+        lib = summary.get("library") or "user"
+        parts = [f"Imported {len(summary['imported'])} pattern(s) into the “{lib}” library"]
         if summary["data_files"]:
             parts.append(f"with {summary['data_files']} data file(s)")
         if bundled_labels:
@@ -2052,6 +2060,39 @@ class PatternDialog(QDialog):
         if summary["errors"]:
             tail += "\n\nProblems:\n- " + "\n- ".join(summary["errors"][:8])
         QMessageBox.information(self, "Bundle imported", " ".join(parts) + "." + tail)
+
+    def _remove_library(self):
+        """Remove an add-on library imported from a bundle (deletes its folder)."""
+        removable = self.engine.removable_libraries()
+        if not removable:
+            QMessageBox.information(
+                self, "Remove Library",
+                "There are no add-on libraries to remove. Built-in patterns and your "
+                "own saved patterns can't be removed here.")
+            return
+
+        name, ok = QInputDialog.getItem(
+            self, "Remove Library",
+            "Remove which add-on library? Its patterns will be deleted.",
+            removable, 0, False)
+        if not ok or not name:
+            return
+
+        count = sum(1 for p in self.engine.lua_patterns.values() if p.library == name)
+        if QMessageBox.question(
+                self, "Remove Library",
+                f"Remove the “{name}” library and its {count} pattern(s)? "
+                "This can't be undone from the app (re-import the bundle to get it back).",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
+
+        if self.engine.remove_library(name):
+            self._load_patterns()  # rebuild the tree without the removed library
+            QMessageBox.information(self, "Library removed", f"Removed the “{name}” library.")
+        else:
+            QMessageBox.warning(
+                self, "Remove failed",
+                f"Could not remove “{name}”. It may be a built-in library or already gone.")
 
     def _save_and_close(self):
         """Save pattern states and close."""

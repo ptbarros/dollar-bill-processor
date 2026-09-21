@@ -50,12 +50,17 @@ def _resolve_data_file(engine, info) -> Path | None:
     return p if p.exists() else None
 
 
-def export_bundle(engine, pattern_names, out_path, pattern_labels=None) -> dict:
+def export_bundle(engine, pattern_names, out_path, pattern_labels=None,
+                  library_name=None) -> dict:
     """Write the named patterns (and their data files) to a ``.ddpat`` bundle.
 
     ``pattern_labels`` (optional) is a ``{name: custom_label}`` map of the user's
     display-label overrides; entries for the exported patterns are stored in the
     manifest so relabeling travels with the patterns.
+
+    ``library_name`` (optional) records the add-on library this bundle should
+    import as (so it lands in its own named group, not the flat "user" folder);
+    stored in the manifest as ``library``.
 
     Returns a summary dict: count, data_files, missing_data (list of
     (pattern, declared_datafile) whose file couldn't be found), labels, path."""
@@ -121,6 +126,8 @@ def export_bundle(engine, pattern_names, out_path, pattern_labels=None) -> dict:
             "patterns": entries,
             "pattern_labels": labels,
         }
+        if library_name:
+            manifest["library"] = library_name
         z.writestr("manifest.json", json.dumps(manifest, indent=2))
 
     return {
@@ -160,21 +167,32 @@ def bundle_collisions(engine, manifest) -> list[str]:
     return hits
 
 
-def import_bundle(engine, bundle_path, overwrite=False) -> dict:
-    """Extract a bundle's patterns + data files into the user patterns dir.
+def _sanitize_library_name(name: str) -> str:
+    """A safe folder name for an add-on library (no path separators/reserved chars)."""
+    name = re.sub(r'[\\/:*?"<>|]', '', name or '').strip().strip('.')
+    return name or "Imported"
 
-    Existing patterns (by name or target filename) are skipped unless
-    ``overwrite`` is True. Calls ``engine.reload()`` at the end. Returns a summary
-    dict: imported, skipped, errors, data_files, pattern_labels (the display-label
-    overrides from the manifest for the patterns actually imported -- the caller
-    applies these to settings)."""
-    dest = Path(engine.user_patterns_dir)
+
+def import_bundle(engine, bundle_path, overwrite=False, library_name=None) -> dict:
+    """Extract a bundle's patterns + data files into a NAMED add-on library folder
+    under the user-data tree, so it shows as its own group and can be removed as
+    one (rather than merging into the flat "user" folder).
+
+    The library name is, in order: the explicit ``library_name`` argument, the
+    manifest's ``library`` field, or the bundle filename stem. Existing patterns
+    (by name or target filename) are skipped unless ``overwrite`` is True. Calls
+    ``engine.reload()`` at the end. Returns a summary dict: imported, skipped,
+    errors, data_files, library (the folder used), pattern_labels."""
+    manifest = read_manifest(bundle_path)
+
+    lib = _sanitize_library_name(
+        library_name or manifest.get("library") or Path(bundle_path).stem)
+    root = Path(engine.user_libraries_root())
+    dest = root / lib
     dest.mkdir(parents=True, exist_ok=True)
 
     imported, skipped, errors = [], [], []
     data_written: set[str] = set()
-
-    manifest = read_manifest(bundle_path)
 
     with zipfile.ZipFile(bundle_path, "r") as z:
         names_in_zip = set(z.namelist())
@@ -224,4 +242,5 @@ def import_bundle(engine, bundle_path, overwrite=False) -> dict:
         "errors": errors,
         "data_files": len(data_written),
         "pattern_labels": imported_labels,
+        "library": lib,
     }

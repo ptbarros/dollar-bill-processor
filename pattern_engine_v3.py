@@ -173,11 +173,56 @@ class PatternEngineV3:
                 for lua_file in subdir.glob("*.lua"):
                     self._load_lua_pattern(lua_file, library=library_name)
 
-        # Also load user patterns from the writable user dir when it lives outside
-        # the bundled patterns tree (frozen build), so saved patterns persist.
-        if self.user_patterns_dir.exists() and self.user_patterns_dir != self.patterns_dir / "user":
-            for lua_file in self.user_patterns_dir.glob("*.lua"):
-                self._load_lua_pattern(lua_file, library="user")
+        # Also load patterns from the writable user-data tree when it's separate
+        # from the bundled tree (frozen build): the flat "user" folder (personal
+        # saved patterns) PLUS any NAMED add-on libraries imported from a bundle
+        # (e.g. "Green Guide"), each scanned as its own library so it shows as its
+        # own group and can be removed as a group. Loaded after the bundle, so a
+        # user-side pattern overrides a bundled one of the same internal name.
+        user_root = self.user_libraries_root()
+        if user_root and user_root != self.patterns_dir and user_root.exists():
+            for subdir in sorted(user_root.iterdir()):
+                if not subdir.is_dir() or subdir.name in skip_dirs:
+                    continue
+                for lua_file in subdir.glob("*.lua"):
+                    self._load_lua_pattern(lua_file, library=subdir.name)
+
+    def user_libraries_root(self) -> Optional[Path]:
+        """Writable dir holding user-side libraries — the flat 'user' folder plus
+        named add-on libraries imported from bundles. In a frozen build this is
+        user_data_dir/patterns (separate from the read-only bundle); from source
+        it's the repo patterns/ tree (already scanned above), returned so import
+        still has a destination."""
+        if self.user_patterns_dir != self.patterns_dir / "user":
+            return self.user_patterns_dir.parent
+        return self.patterns_dir
+
+    def removable_libraries(self) -> List[str]:
+        """Named add-on libraries the user may remove (imported bundles): folders
+        under the user-libraries root, excluding 'user', helper dirs, and any
+        bundled (shipped, read-only) library."""
+        root = self.user_libraries_root()
+        if not root or not root.exists():
+            return []
+        skip = {'lib', 'data', '__pycache__', 'user'}
+        bundled = {p.name for p in self.patterns_dir.iterdir()
+                   if p.is_dir()} if self.patterns_dir.exists() else set()
+        return sorted(d.name for d in root.iterdir()
+                      if d.is_dir() and d.name not in skip and d.name not in bundled)
+
+    def remove_library(self, library_name: str) -> bool:
+        """Delete an imported add-on library folder, then reload. Only a user-side,
+        non-bundled library can be removed (guards against deleting shipped ones).
+        Returns True if it was removed."""
+        if library_name not in self.removable_libraries():
+            return False
+        import shutil
+        try:
+            shutil.rmtree(self.user_libraries_root() / library_name)
+        except Exception:
+            return False
+        self.reload()
+        return True
 
     def _load_lua_pattern(self, file_path: Path, library: str = "user"):
         """Load a single Lua pattern from file."""
