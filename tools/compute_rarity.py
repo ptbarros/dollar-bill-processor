@@ -274,6 +274,24 @@ def _bake_from_report(report_path: Path):
     else:
         print("all expected odds confirmed in their shipping files.")
 
+    # Belt-and-braces: no SHIPPED pattern should have a blank odds field. The
+    # skipped ones (date-relative, DUPLICATE_SN, GAS_PUMP...) keep hand-set odds,
+    # but "hand-set" must mean present, not empty -- a blank reads as an oversight
+    # next to 141 patterns showing a figure.
+    try:
+        shipped = json.loads((PROJECT_ROOT / "patterns" / "shipped_enabled.json").read_text())
+    except Exception:
+        shipped = []
+    blank = []
+    for name in shipped:
+        f = find_pattern_file(eng, name)
+        if f and not _ODDS_RE.search(f.read_text(errors="ignore")):
+            blank.append(name)
+    if blank:
+        print(f"!! {len(blank)} shipped pattern(s) have NO Odds line at all (add hand-set text):")
+        for name in blank:
+            print(f"     {name}")
+
 
 def _header_has(path: Path, value: str) -> bool:
     """True if the file's Odds: header currently equals `value`."""

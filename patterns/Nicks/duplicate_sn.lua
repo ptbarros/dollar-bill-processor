@@ -3,6 +3,7 @@ Pattern: DUPLICATE_SN
 DisplayName: Duplicate S/N
 Description: B* star note in specific ranges (potential duplicate serial)
 Tier: 3
+Odds: Varies — flags star notes in known duplicate-serial ranges
 Examples: ["00000001", "00100000", "03200001", "05000000"]
 --]]
 

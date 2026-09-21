@@ -4,6 +4,7 @@ DisplayName: Birthday Note Y/M/D
 Description: Reads as a real year-month-day birthday in the year-first style, from within the last hundred years (e.g. 1975·11·22).
 BookRef: CS-620
 Tier: 7
+Odds: Depends on the date
 Examples: ["19751122", "19500704", "20000101"]
 --]]
 

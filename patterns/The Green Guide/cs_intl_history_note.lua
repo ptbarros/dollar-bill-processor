@@ -4,6 +4,7 @@ DisplayName: History Note Y/M/D
 Description: Reads as a real year-month-day date in the year-first style from more than a hundred years ago (e.g. 1776·07·04).
 BookRef: CS-640
 Tier: 7
+Odds: Depends on the date
 Examples: ["17760704", "19001225", "18000101"]
 --]]
 

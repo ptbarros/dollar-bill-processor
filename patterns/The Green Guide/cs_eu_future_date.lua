@@ -4,6 +4,7 @@ DisplayName: Future Date Note
 Description: Reads as a real day-month-year date in the day-first style that falls in the future (e.g. 25·12·2040).
 BookRef: CS-610
 Tier: 7
+Odds: Depends on the date
 Examples: ["25122040", "01012030", "04072050"]
 --]]
 

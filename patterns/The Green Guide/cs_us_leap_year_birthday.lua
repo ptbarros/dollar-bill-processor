@@ -4,6 +4,7 @@ DisplayName: Birthday Note Leap Year M/D/Y
 Description: Reads as a leap-day birthday — February 29th in the month-first style — from within the last hundred years (e.g. 02·29·2000).
 BookRef: CS-530
 Tier: 6
+Odds: Depends on the date
 Examples: ["02292000", "02291984", "02292024"]
 --]]
 
