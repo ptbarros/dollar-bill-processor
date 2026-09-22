@@ -48,6 +48,12 @@ def _natural_sort_key(text: str):
     return key
 
 
+# Stores the count of matched patterns on the Patterns column so it can sort by
+# how many patterns a bill matched (multi-pattern bills group together), rather
+# than alphabetically by the pattern names.
+PATTERN_COUNT_ROLE = Qt.UserRole + 100
+
+
 class NumericTreeWidgetItem(QTreeWidgetItem):
     """TreeWidgetItem that sorts numerically for specific columns."""
 
@@ -60,8 +66,20 @@ class NumericTreeWidgetItem(QTreeWidgetItem):
     # numerically). Front Plate (10) is alphanumeric like "A 9" / "A 10".
     NATURAL_COLUMNS = {10}  # Front Plate
 
+    # Patterns (2) sorts by matched-pattern COUNT so descending = most-fancy bills
+    # on top; ties fall back to the displayed pattern text (alphabetical).
+    COUNT_COLUMNS = {2}
+
     def __lt__(self, other):
         column = self.treeWidget().sortColumn() if self.treeWidget() else 0
+        if column in self.COUNT_COLUMNS:
+            sc = self.data(column, PATTERN_COUNT_ROLE)
+            oc = other.data(column, PATTERN_COUNT_ROLE)
+            sc = sc if isinstance(sc, int) else 0
+            oc = oc if isinstance(oc, int) else 0
+            if sc != oc:
+                return sc < oc
+            return self.text(column) < other.text(column)  # tie: alphabetical
         if column in self.NUMERIC_COLUMNS:
             try:
                 # Parse the leading number, tolerating a trailing label like the
@@ -243,6 +261,9 @@ class ResultsList(QWidget):
         # Results tree
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "GPT", "Shift X%", "Shift Y%", "Seal %", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule? (exp)", "Mismatch?", "Status"])
+        self.tree.headerItem().setToolTip(
+            2, "Click to sort by how many patterns each bill matched "
+               "(descending = the most-fancy bills on top).")
         self.tree.setAlternatingRowColors(True)
         self.tree.setRootIsDecorated(False)
         self.tree.setSortingEnabled(True)
@@ -593,6 +614,10 @@ class ResultsList(QWidget):
             # matched patterns from the enabled set).
             patterns = result.get('fancy_types', '')
             item.setText(2, self._format_patterns_display(patterns))
+            # Count of matched patterns, so the Patterns column sorts by how many
+            # (descending = multi-pattern bills on top). See NumericTreeWidgetItem.
+            item.setData(2, PATTERN_COUNT_ROLE,
+                         len([p for p in patterns.split(',') if p.strip()]))
 
             # Confidence
             conf = result.get('confidence', '0.00')
@@ -1754,8 +1779,9 @@ class ResultsList(QWidget):
             item = self.tree.topLevelItem(i)
             item_result = item.data(0, Qt.UserRole)
             if item_result and item_result.get('front_file') == result.get('front_file'):
-                # Update the Patterns column (column 2)
+                # Update the Patterns column (column 2) and its sort count
                 item.setText(2, new_fancy_types or "-")
+                item.setData(2, PATTERN_COUNT_ROLE, len(matches))
 
                 # Update colors based on fancy status
                 if result.get('is_fancy'):

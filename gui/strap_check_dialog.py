@@ -17,7 +17,7 @@ import re
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QSpinBox, QPushButton,
-    QTreeWidget, QTreeWidgetItem, QHeaderView,
+    QTreeWidget, QTreeWidgetItem, QHeaderView, QProgressDialog, QApplication, QMenu,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QBrush
@@ -54,6 +54,25 @@ def strap_serials(prefix, start_num, suffix, count):
         yield i + 1, f"{prefix}{num:08d}{suffix}"
 
 
+class _StrapItem(QTreeWidgetItem):
+    """Tree row that sorts the numeric columns (# and Tier) by value, not text,
+    so "10" sorts after "9" and a blank Tier sorts last."""
+    _NUMERIC_COLS = (0, 2)  # "#" and "Tier"
+
+    def __lt__(self, other):
+        col = self.treeWidget().sortColumn() if self.treeWidget() else 0
+        if col in self._NUMERIC_COLS:
+            def num(item):
+                try:
+                    return float(item.text(col))
+                except (ValueError, TypeError):
+                    return float("inf")  # blanks / non-numeric sort last
+            return num(self) < num(other)
+        # Text columns (Serial, Patterns): compare the cell text directly --
+        # super().__lt__ isn't reliable once __lt__ is overridden in PySide.
+        return self.text(col).lower() < other.text(col).lower()
+
+
 class StrapCheckDialog(QDialog):
     def __init__(self, engine, parent=None, start_serial=""):
         super().__init__(parent)
@@ -88,11 +107,21 @@ class StrapCheckDialog(QDialog):
         layout.addWidget(self.summary)
 
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["#", "Serial", "Patterns"])
+        self.tree.setHeaderLabels(["#", "Serial", "Tier", "Patterns"])
         self.tree.setRootIsDecorated(False)
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.tree.header().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.tree.header().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.tree.header().setSectionResizeMode(3, QHeaderView.Stretch)
+        # Sortable columns (# and Tier sort numerically via _StrapItem).
+        self.tree.setSortingEnabled(True)
+        self.tree.sortByColumn(0, Qt.AscendingOrder)
+        # Double-click / Enter looks the serial up; right-click copies it.
+        self.tree.setToolTip("Double-click a row to open it in Serial Lookup; "
+                             "right-click to copy the serial.")
+        self.tree.itemActivated.connect(self._open_lookup)
+        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._show_row_menu)
         layout.addWidget(self.tree, 1)
 
         close_row = QHBoxLayout()
@@ -136,25 +165,80 @@ class StrapCheckDialog(QDialog):
         checked = 0
         last_serial = f"{prefix}{start_num:08d}{suffix}"
         green = QBrush(QColor("#2e7d32"))
+
+        # Progress dialog so a big strap (up to 10,000) doesn't look frozen. The
+        # check runs on the GUI thread, so setValue() also pumps the event loop.
+        progress = QProgressDialog("Checking strap…", "Cancel", 0, count, self)
+        progress.setWindowTitle("Strap Serial Check")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(300)  # don't flash for small/fast runs
+
+        self.tree.setSortingEnabled(False)  # bulk insert unsorted, re-enable after
+        canceled = False
         for pos, serial in strap_serials(prefix, start_num, suffix, count):
+            if progress.wasCanceled():
+                canceled = True
+                break
             checked += 1
             last_serial = serial
-            names = self.engine.classify_simple(serial)
-            if not names:
+            matches = self.engine.classify(serial)
+            progress.setValue(checked)
+            if not matches:
                 continue
             fancy += 1
-            item = QTreeWidgetItem([str(pos), serial,
-                                    ", ".join(self._display_names(names))])
+            names = [m.name for m in matches]
+            # classify() sorts by (tier, name), so matches[0] is the best (lowest)
+            # tier -- the single value shown in the Tier column.
+            tier = matches[0].tier
+            item = _StrapItem([str(pos), serial, str(tier),
+                               ", ".join(self._display_names(names))])
             item.setForeground(1, green)
             self.tree.addTopLevelItem(item)
+        progress.setValue(count)
+        self.tree.setSortingEnabled(True)
 
         pct = (fancy / checked * 100) if checked else 0
         msg = (f"<b>{fancy}</b> of <b>{checked}</b> serials would be fancy "
                f"(<b>{pct:.0f}%</b>) — run {prefix}{start_num:08d}{suffix} → {last_serial}.")
-        if checked < count:
+        if canceled:
+            msg += f"  <i>Canceled at {checked} of {count}.</i>"
+        elif checked < count:
             msg += (f"  <i>Run reaches 96,000,000, the modern circulating maximum; "
                     f"{checked} of {count} are modern serials. Any beyond would be "
                     f"pre-1988 notes or uncut-sheet serials, not part of a modern strap.</i>")
         elif not fancy:
             msg += "  <i>None — probably not worth scanning.</i>"
         self.summary.setText(msg)
+
+    @staticmethod
+    def _serial_of(item):
+        return item.text(1) if item else ""
+
+    def _open_lookup(self, item, column=0):
+        """Open Serial Lookup prefilled with the row's serial. Parented to this
+        dialog so it shows above the (modal) Strap Check window."""
+        serial = self._serial_of(item)
+        if not serial:
+            return
+        from gui.serial_lookup_dialog import SerialLookupDialog
+        dlg = getattr(self, "_lookup_dialog", None)
+        if dlg is None:
+            dlg = SerialLookupDialog(self.engine, self)
+            self._lookup_dialog = dlg
+        dlg.serial_edit.setText(serial)  # textChanged runs the live lookup
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
+    def _show_row_menu(self, pos):
+        item = self.tree.itemAt(pos)
+        if item is None:
+            return
+        menu = QMenu(self)
+        act_copy = menu.addAction("Copy serial")
+        act_look = menu.addAction("Look up serial…")
+        chosen = menu.exec(self.tree.viewport().mapToGlobal(pos))
+        if chosen == act_copy:
+            QApplication.clipboard().setText(self._serial_of(item))
+        elif chosen == act_look:
+            self._open_lookup(item)

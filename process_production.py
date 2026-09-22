@@ -3571,7 +3571,7 @@ class ProductionProcessor:
             return None
         return (int(x1), int(y1), int(x2), int(y2))
 
-    def _serial_overlay_crops_for_side(self, front_img, front_detections, pair, which):
+    def _serial_overlay_crops_for_side(self, front_img, front_detections, pair, which, zoom=2.0):
         """Overlaid serial crops for ONE side ('left'/'right'): one crop per set
         pattern (``pair.pattern_overrides``, else the resolved top pattern), drawn
         on that side's serial box via the shared ``draw_serial_overlay``. Backs the
@@ -3607,7 +3607,7 @@ class ProductionProcessor:
         for overlay_filter in overlay_filters:
             crop = self._render_serial_overlay(
                 front_img, side_box, overlay_filter, pair.serial or '',
-                matched_patterns, gas_pump_threshold)
+                matched_patterns, gas_pump_threshold, zoom=zoom)
             if crop is not None:
                 crops.append(crop)
         return crops
@@ -3689,13 +3689,14 @@ class ProductionProcessor:
 
         min_dim = self.cfg.min_crop_dimension
 
-        def _write(crop_img):
+        def _write(crop_img, pad=True):
             if crop_img is None or getattr(crop_img, 'size', 1) == 0:
                 return
             # Global minimum-dimension padding: black-bar ANY crop under the min so
             # it clears eBay's 500px floor -- not just the overlay serial crops.
             # (pad_to_min is a no-op when the crop already meets the minimum.)
-            if min_dim > 0:
+            # Serial crops pass pad=False and handle their own border via _write_serial.
+            if pad and min_dim > 0:
                 from serial_overlay import pad_to_min
                 crop_img = pad_to_min(crop_img, min_size=min_dim)
             seq[0] += 1
@@ -3706,6 +3707,14 @@ class ProductionProcessor:
             else:
                 crop_paths.append(path)
 
+        def _write_serial(crop_img, border_on):
+            """Serial crops: always save the un-bordered 2x close-up; when THIS
+            serial's border toggle is on, ALSO save a black-bordered (padded-to-
+            min) copy. The 2x zoom is baked into the crop before it reaches here."""
+            _write(crop_img, pad=False)                 # un-bordered close-up
+            if border_on and min_dim > 0:
+                _write(crop_img, pad=True)              # black-bordered copy
+
         serial_regions = ('serial_left', 'serial_right')
         serial_in_order = any(tuple(c)[1] in serial_regions for c in crop_order)
 
@@ -3715,20 +3724,27 @@ class ProductionProcessor:
                 if side != 'front':
                     continue
                 which = 'left' if region == 'serial_left' else 'right'
-                # Per-serial "draw pattern overlay" toggle: when on, this side's
-                # crop expands to one overlaid image per set pattern (from the
-                # right-click "Set Pattern(s)"); otherwise a plain anchored crop.
-                overlay_on = bool(self._get_yolo_crop_config()
-                                  .get('serial_' + which, {}).get('overlay', False))
+                # Per-serial toggles (independent for left/right):
+                #  - overlay: draw the set-pattern boxes on the crop
+                #  - border:  also save a black-bordered (padded) copy
+                scfg = self._get_yolo_crop_config().get('serial_' + which, {})
+                overlay_on = bool(scfg.get('overlay', False))  # draw pattern boxes
+                zoom_on = bool(scfg.get('zoom', True))          # 2x close-up
+                border_on = bool(scfg.get('border', True))      # black-bordered copy
+                zoom = 2.0 if zoom_on else 1.0
                 if overlay_on:
                     for sc in self._serial_overlay_crops_for_side(
-                            front_img, front_detections, pair, which):
-                        _write(sc)
+                            front_img, front_detections, pair, which, zoom=zoom):
+                        _write_serial(sc, border_on)
                 else:
                     rect = self._serial_crop_rect(front_img, front_detections, which)
                     if rect is not None:
                         x1, y1, x2, y2 = rect
-                        _write(front_img[y1:y2, x1:x2])
+                        plain = front_img[y1:y2, x1:x2]
+                        if plain is not None and getattr(plain, 'size', 0) and zoom != 1.0:
+                            plain = cv2.resize(plain, None, fx=zoom, fy=zoom,
+                                               interpolation=cv2.INTER_LINEAR)
+                        _write_serial(plain, border_on)
                 continue
 
             if side == 'front':
@@ -3758,9 +3774,13 @@ class ProductionProcessor:
         # Legacy path: configs that don't list a 'serial' crop still get one
         # appended when the toggle is on (matches pre-list-row behavior).
         if not serial_in_order and self.cfg.include_serial_overlay:
+            # Legacy path has no per-side selection; use the left serial's border
+            # toggle as the default (defaults on -> both files).
+            legacy_border = bool(self._get_yolo_crop_config()
+                                 .get('serial_left', {}).get('border', True))
             for sc in self._generate_serial_overlay_crops(
                     front_img, front_detections, pair, serial_sides=self.cfg.serial_sides):
-                _write(sc)
+                _write_serial(sc, legacy_border)  # 2x already; honor the border toggle
 
         timing.stop('crops')
         return crop_paths
@@ -3853,9 +3873,10 @@ class ProductionProcessor:
         return [max(scored, key=lambda s: s[0])[1]]  # fallback: most-shifted
 
     def _render_serial_overlay(self, front_img, box, overlay_filter, serial,
-                               matched_patterns, gas_pump_threshold):
+                               matched_patterns, gas_pump_threshold, zoom=2.0):
         """Crop one serial region and draw one overlay onto it; return the BGR
-        crop (min-dimension padding is applied globally in _write) or None."""
+        crop (min-dimension padding is applied globally in _write) or None.
+        ``zoom`` is the close-up factor (2.0 = 2x; 1.0 = native scale)."""
         from serial_overlay import draw_serial_overlay
 
         x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
@@ -3876,8 +3897,8 @@ class ProductionProcessor:
             dlog("crop.overlay.gp_failed", serial=serial, error=str(e))
             return None
 
-        zoom = 2.0
-        crop = cv2.resize(crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
+        if zoom and zoom != 1.0:
+            crop = cv2.resize(crop, None, fx=zoom, fy=zoom, interpolation=cv2.INTER_LINEAR)
 
         try:
             # Capture the return: the overlay may grow the crop upward to give

@@ -227,6 +227,32 @@ def resolve_overlay_filter(overlay_filter, matched_patterns, pattern_override=No
     return NONE_FILTER
 
 
+def _rounded_rect(img, pt1, pt2, color, thickness):
+    """Draw a rounded rectangle (OpenCV has no primitive for it) so the overlay
+    boxes match the rounded corners of the Qt digit previews (serial lookup,
+    pattern manager). Four straight edges + four quarter-circle corner arcs.
+    Falls back to nothing for degenerate boxes."""
+    x1, y1 = int(pt1[0]), int(pt1[1])
+    x2, y2 = int(pt2[0]), int(pt2[1])
+    x1, x2 = min(x1, x2), max(x1, x2)
+    y1, y2 = min(y1, y2), max(y1, y2)
+    w, h = x2 - x1, y2 - y1
+    if w <= 2 or h <= 2:
+        return
+    # Corner radius ~18% of the shorter side, clamped so it never exceeds half a
+    # side -- a gentle round that matches the digit previews without going pill-shaped.
+    r = max(2, min(int(min(w, h) * 0.18), w // 2, h // 2))
+    lt = cv2.LINE_AA
+    cv2.line(img, (x1 + r, y1), (x2 - r, y1), color, thickness, lt)
+    cv2.line(img, (x1 + r, y2), (x2 - r, y2), color, thickness, lt)
+    cv2.line(img, (x1, y1 + r), (x1, y2 - r), color, thickness, lt)
+    cv2.line(img, (x2, y1 + r), (x2, y2 - r), color, thickness, lt)
+    cv2.ellipse(img, (x1 + r, y1 + r), (r, r), 180, 0, 90, color, thickness, lt)
+    cv2.ellipse(img, (x2 - r, y1 + r), (r, r), 270, 0, 90, color, thickness, lt)
+    cv2.ellipse(img, (x2 - r, y2 - r), (r, r), 0, 0, 90, color, thickness, lt)
+    cv2.ellipse(img, (x1 + r, y2 - r), (r, r), 90, 0, 90, color, thickness, lt)
+
+
 def draw_serial_overlay(
     crop,
     digit_boxes,
@@ -381,7 +407,7 @@ def draw_serial_overlay(
             # Pump slider to reveal borderline digits.
             if (not digit_box['is_letter']
                     and digit_box['deviation'] >= gas_pump_threshold):
-                cv2.rectangle(crop, (pdx1, pdy1), (pdx2, pdy2),
+                _rounded_rect(crop, (pdx1, pdy1), (pdx2, pdy2),
                               PATTERN_COLORS['red'], 2)
 
         elif is_pattern_mode:
@@ -395,11 +421,15 @@ def draw_serial_overlay(
                     # 'x' = X only (excluded digit), 'boxed_x' = box + X, else box.
                     if style in ('x', 'boxed_x'):
                         if style == 'boxed_x':
-                            cv2.rectangle(crop, (pdx1, pdy1), (pdx2, pdy2), color, 2)
-                        cv2.line(crop, (pdx1 + 2, pdy1 + 2), (pdx2 - 2, pdy2 - 2), color, 2, cv2.LINE_AA)
-                        cv2.line(crop, (pdx1 + 2, pdy2 - 2), (pdx2 - 2, pdy1 + 2), color, 2, cv2.LINE_AA)
+                            _rounded_rect(crop, (pdx1, pdy1), (pdx2, pdy2), color, 2)
+                        # Bold X across the WHOLE digit box (corner to corner),
+                        # thickness scaled to the box, so it reads as an X over the
+                        # number -- matching the Qt digit preview -- not a small mark.
+                        xt = max(2, int((pdy2 - pdy1) * 0.10))
+                        cv2.line(crop, (pdx1, pdy1), (pdx2, pdy2), color, xt, cv2.LINE_AA)
+                        cv2.line(crop, (pdx1, pdy2), (pdx2, pdy1), color, xt, cv2.LINE_AA)
                     else:
-                        cv2.rectangle(crop, (pdx1, pdy1), (pdx2, pdy2), color, 2)
+                        _rounded_rect(crop, (pdx1, pdy1), (pdx2, pdy2), color, 2)
 
     # Draw connector lines for relational patterns (e.g., RADAR pairs)
     if is_pattern_mode and pattern_connectors:
@@ -497,6 +527,6 @@ def draw_serial_overlay(
                 gx2 = min(cw - 1, int(max(r1[2], r2[2]) + padding))
                 gy2 = min(ch - 1, int(max(r1[3], r2[3]) + padding))
 
-                cv2.rectangle(crop, (gx1, gy1), (gx2, gy2), gb_color, thickness)
+                _rounded_rect(crop, (gx1, gy1), (gx2, gy2), gb_color, thickness)
 
     return crop

@@ -1,7 +1,7 @@
 --[[
 Pattern: FIVE_IN_ROW_AND_PAIR
 DisplayName: 5 in a Row & Pair
-Description: Exactly five of a kind in a row plus a single separate pair (e.g. 11111·22·3).
+Description: Exactly five of a kind in a row plus a single separate pair whose two digits TOUCH (e.g. 11111·22·3). A split pair like 11111·2·3·2 does not count.
 Tier: 5
 Examples: ["11111223", "55555667", "99999100"]
 Odds: 1 in 11,134 (8,622 per 96M)
@@ -28,14 +28,18 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Exactly one other digit forms a pair (count == 2). A triple/quad of another
-    -- digit does NOT count as a pair (Ed review).
+    -- Exactly one other digit forms a pair of TWO TOUCHING digits (count == 2 AND
+    -- the two occurrences are adjacent). A split pair like 55555·2·3·2 does NOT
+    -- count, nor does a triple/quad of another digit (Ed review).
     local counts = count_digits(digits)
     local pair_digit = nil
     for d, c in pairs(counts) do
         if d ~= five_run.digit and c == 2 then
-            pair_digit = d
-            break
+            local pos = find_digit_positions(digits, d)
+            if pos[2] - pos[1] == 1 then
+                pair_digit = d
+                break
+            end
         end
     end
 

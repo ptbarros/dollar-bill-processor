@@ -484,6 +484,10 @@ class EbayCropDialog(QDialog):
             self.serial_spins = {}
         if not hasattr(self, 'serial_overlay_cbs'):
             self.serial_overlay_cbs = {}
+        if not hasattr(self, 'serial_zoom_cbs'):
+            self.serial_zoom_cbs = {}
+        if not hasattr(self, 'serial_border_cbs'):
+            self.serial_border_cbs = {}
         box = QGroupBox(title)
         outer = QVBoxLayout(box)
         # Spins on one row...
@@ -507,31 +511,43 @@ class EbayCropDialog(QDialog):
         add("Offset Y:", 'offset_y', -500, 500, "Positive = shift up.")
         lay.addStretch()
 
-        # ...overlay toggle on its own line below (a long label that otherwise
-        # ran off the row until the window was widened).
-        if self.standalone:
-            # The standalone tool never draws overlays (it doesn't classify), so
-            # the toggle here only controls the crop's zoom -- name it for that.
-            overlay_cb = QCheckBox("2× zoom (close-up crop)")
+        # Three independent per-serial toggles, each on its own line (long labels
+        # otherwise ran off the row): 2× zoom, draw pattern overlay, black border.
+        zoom_cb = QCheckBox("2× zoom (close-up crop)")
+        zoom_cb.setToolTip(
+            "On = a tight, 2× magnified close-up of the serial (the serial is the\n"
+            "focus). Off = a plain crop at the bill's native scale (wider, less\n"
+            "zoomed). Independent of the overlay and border options.")
+        zoom_cb.toggled.connect(lambda _=False, w=which: self._on_serial_setting_changed(w))
+        outer.addWidget(zoom_cb)
+        self.serial_zoom_cbs[which] = zoom_cb
+
+        # Draw-pattern-overlay (boxes / arcs / X) -- MAIN APP only; the standalone
+        # tool doesn't classify, so it has no set pattern to draw.
+        if not self.standalone:
+            overlay_cb = QCheckBox("Draw pattern overlay")
             overlay_cb.setToolTip(
-                "On = a tight, 2× magnified close-up of the serial.\n"
-                "Off = a plain crop at the bill's native scale (wider, less zoomed).\n\n"
-                "(Pattern overlays are only drawn in the main app, which classifies\n"
-                "the serials; the standalone tool just crops.)")
-        else:
-            overlay_cb = QCheckBox("Draw pattern overlay (2× close-up)")
-            overlay_cb.setToolTip(
-                "During processing, draw the set-pattern overlay on this serial crop —\n"
-                "one crop per pattern chosen via right-click \"Set Pattern(s)…\" in the\n"
-                "results list.\n\n"
-                "On = a tight, 2× magnified close-up of the serial so the overlay\n"
-                "(boxes, arcs, X marks) is crisp and the serial is the focus.\n"
-                "Off = a plain crop at the bill's native scale (wider, less zoomed).\n"
-                "That size/zoom difference between on and off is intentional, not a bug.\n\n"
+                "During processing, draw the set-pattern overlay (boxes, arcs, X\n"
+                "marks) on this serial crop — one crop per pattern chosen via\n"
+                "right-click \"Set Pattern(s)…\" in the results list. Zoom is a\n"
+                "separate toggle above.\n\n"
                 "(No effect on batch/standalone crops, which have no set pattern.)")
-        overlay_cb.toggled.connect(lambda _=False, w=which: self._on_serial_setting_changed(w))
-        outer.addWidget(overlay_cb)
-        self.serial_overlay_cbs[which] = overlay_cb
+            overlay_cb.toggled.connect(lambda _=False, w=which: self._on_serial_setting_changed(w))
+            outer.addWidget(overlay_cb)
+            self.serial_overlay_cbs[which] = overlay_cb
+
+        # Black-border toggle for THIS serial crop.
+        # On: save this serial twice -- the un-bordered close-up plus a black-
+        # bordered (padded-to-min) copy. Off: just the close-up.
+        border_cb = QCheckBox("Also save with black border")
+        border_cb.setToolTip(
+            "On: save this serial crop twice — the un-bordered close-up AND a\n"
+            "black-bordered copy padded to Min crop size (eBay-ready).\n"
+            "Off: just the un-bordered close-up.\n"
+            "(The bordered copy needs Min crop size > 0 to show a border.)")
+        border_cb.toggled.connect(lambda _=False, w=which: self._on_serial_setting_changed(w))
+        outer.addWidget(border_cb)
+        self.serial_border_cbs[which] = border_cb
 
         self.serial_spins[which] = spins
         box.setVisible(False)
@@ -543,7 +559,10 @@ class EbayCropDialog(QDialog):
         node = self.config.setdefault('yolo_crops', {}).setdefault('serial_' + which, {})
         for key, sp in self.serial_spins[which].items():
             node[key] = sp.value()
-        node['overlay'] = self.serial_overlay_cbs[which].isChecked()
+        node['zoom'] = self.serial_zoom_cbs[which].isChecked()
+        if which in self.serial_overlay_cbs:   # main app only (no boxes standalone)
+            node['overlay'] = self.serial_overlay_cbs[which].isChecked()
+        node['border'] = self.serial_border_cbs[which].isChecked()
         self._refresh_preview()
 
     def _load_settings(self):
@@ -651,7 +670,10 @@ class EbayCropDialog(QDialog):
             spins['min_height'].setValue(sc.get('min_height', 0))
             spins['offset_x'].setValue(sc.get('offset_x', 0))
             spins['offset_y'].setValue(sc.get('offset_y', 0))
-            self.serial_overlay_cbs[which].setChecked(bool(sc.get('overlay', False)))
+            self.serial_zoom_cbs[which].setChecked(bool(sc.get('zoom', True)))
+            if which in self.serial_overlay_cbs:
+                self.serial_overlay_cbs[which].setChecked(bool(sc.get('overlay', False)))
+            self.serial_border_cbs[which].setChecked(bool(sc.get('border', True)))
         self._loading_serial = False
 
         # Update order numbers based on enabled state
