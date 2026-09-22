@@ -2200,8 +2200,11 @@ class MainWindow(QMainWindow):
             if reply != QMessageBox.Yes:
                 return None
 
-        # Show progress
-        self.status_label.setText("Loading YOLO model...")
+        # Show progress. The model construction below blocks the UI thread for a
+        # few seconds; without a busy cursor the window looks hung (the OS keeps the
+        # wait cursor animating even while we're blocked, so it reads as "working").
+        self.status_label.setText("Loading detection model… (first use)")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
         QApplication.processEvents()
 
         try:
@@ -2261,6 +2264,8 @@ class MainWindow(QMainWindow):
                 print(f"[MainWindow] Failed to load processor: {e}")
             self.status_label.setText("Ready")
             return None
+        finally:
+            QApplication.restoreOverrideCursor()
 
     def _load_processor_for_restored_session(self):
         """Load processor automatically after restoring a session."""
