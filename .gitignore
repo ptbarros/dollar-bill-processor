@@ -92,3 +92,6 @@ insights_report.html
 
 # Duplicate Reviewer generated corpus (regenerable cache; lives in user data dir)
 pattern_hits.json
+
+# Pattern Manager "random matching serial" corpus (regenerable cache; user data dir)
+example_corpus.json

@@ -1,11 +1,11 @@
 --[[
 Pattern: TRUE_FLIPPER
-DisplayName: True Flipper/Rotator
-Description: Reads same upside down (only 0, 6, 9)
-Tier: 2
-Examples: ["69069069", "66669999", "66696999"]
-Odds: 1 in 1,548,387 (62 per 96M)
-Price: $20-$100
+DisplayName: True Flipper
+Description: Only the perfectly-symmetric flip digits 0, 6 and 9. Always also a Flipper, but 1 and 8 are excluded because they don't truly look the same upside down. Reads as a valid number when flipped (it just need not be the SAME number -- that's a Rotator).
+Tier: 5
+Examples: ["06960690", "96069600", "60909690"]
+Odds: 1 in 18,812 (5,103 per 96M)
+Price: $5-$25
 --]]
 
 function match(ctx)
@@ -14,43 +14,25 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- First check all digits are flip-valid
-    if not all_flip_valid(digits) then
-        return {matched = false}
-    end
-
-    -- Get the flipped version
-    local flipped = flip_string(digits)
-    if not flipped then
-        return {matched = false}
-    end
-
-    -- True flipper: reads the same when flipped
-    if flipped ~= digits then
-        return {matched = false}
-    end
-
-    -- Also check it only uses 0, 6, 9 (not 1 or 8 which flip to themselves)
+    -- Purists' flipper: only the digits that look the same flipped (0, 6, 9).
+    -- 1 and 8 are flip-valid but not perfectly symmetric, so they're excluded.
     if not only_digits(digits, "069") then
         return {matched = false}
     end
 
-    local positions = {0, 1, 2, 3, 4, 5, 6, 7}
-
-    -- Add connectors showing the flip symmetry
-    local connectors = {
-        connector(0, 7, "purple", "arc"),
-        connector(1, 6, "purple", "arc"),
-        connector(2, 5, "purple", "arc"),
-        connector(3, 4, "purple", "arc")
-    }
+    -- Color-code each digit by how it transforms, matching Flipper (Ed review):
+    -- 0 flips to itself (purple); 6 and 9 flip to each other (magenta).
+    local highlights = {}
+    for i = 0, 7 do
+        local d = digits:sub(i + 1, i + 1)
+        local color = (d == "0") and "purple" or "magenta"
+        table.insert(highlights, highlight({i}, color, d))
+    end
 
     return {
         matched = true,
-        highlights = {
-            highlight(positions, "purple", "true flipper")
-        },
-        connectors = connectors,
-        message = "True flipper: reads same upside down"
+        highlights = highlights,
+        connectors = {},
+        message = "True flipper: only perfectly-symmetric digits (0, 6, 9)"
     }
 end

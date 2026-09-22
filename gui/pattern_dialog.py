@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QTabWidget, QWidget, QSpinBox, QFrame, QApplication, QPlainTextEdit,
     QInputDialog, QMenu, QSizePolicy
 )
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal, QThread
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QFontMetrics
 
 # Add parent for imports
@@ -112,6 +112,42 @@ class ColorPickerDialog(QDialog):
         return dialog.result_code, dialog.selected_color
 
 
+class CorpusBuildThread(QThread):
+    """Builds the "random matching serial" corpus off the GUI thread.
+
+    Uses its OWN PatternEngine instance (a separate Lua runtime) so it never
+    races the dialog's engine, and force-enables every pattern so disabled ones
+    still get corpus hits (classify() skips disabled patterns). Emits the built
+    corpus dict, or nothing if cancelled. It's a one-time ~2-minute warm-up; the
+    result is cached to user-data and reused until the patterns change.
+    """
+    built = Signal(object)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
+
+    def run(self):
+        try:
+            import example_corpus
+            from pattern_engine_v3 import PatternEngineV3
+            engine = PatternEngineV3()
+            for info in engine.lua_patterns.values():
+                info.enabled = True
+            data = example_corpus.build(engine, cancel=lambda: self._cancel)
+            if data is not None and not self._cancel:
+                try:
+                    example_corpus.save(data)
+                except Exception as e:
+                    print(f"[corpus] save failed: {e}")
+                self.built.emit(data)
+        except Exception as e:
+            print(f"[corpus] build failed: {e}")
+
+
 class PatternDialog(QDialog):
     """Dialog for managing patterns and testing serials."""
 
@@ -120,6 +156,12 @@ class PatternDialog(QDialog):
         self.engine = PatternEngine()
         self.settings = get_settings()
         self._patterns_modified = False  # Track if patterns were changed
+        # Precomputed "random matching serial" corpus (see example_corpus.py):
+        # loaded from cache or built lazily in the background on first use. Until
+        # it's ready, Generate Random falls back to the structure-mutator.
+        self._corpus = None
+        self._corpus_thread = None
+        self._corpus_notice_shown = False  # show the "building in background" notice once per session
 
         self.setWindowTitle("Pattern Manager")
         self.setMinimumSize(900, 600)
@@ -283,8 +325,27 @@ class PatternDialog(QDialog):
         self.pattern_desc_label.setWordWrap(True)
         details_layout.addWidget(self.pattern_desc_label)
 
-        self.pattern_tier_label = QLabel("Tier: -")
-        details_layout.addWidget(self.pattern_tier_label)
+        # Editable tier -- a settings-layer override (like the label above) so a
+        # user can reorder a pattern by its perceived value WITHOUT editing the
+        # .lua. Lower tier = rarer, and the serial overlay cycle shows lowest
+        # tier first, so this directly controls cycle placement. Setting it back
+        # to the pattern's own tier (shown to the right) clears the override.
+        tier_row = QHBoxLayout()
+        tier_row.addWidget(QLabel("Tier:"))
+        self.tier_edit = QSpinBox()
+        self.tier_edit.setRange(1, 10)
+        self.tier_edit.setToolTip("Custom tier (1 = rarest). Lower tiers sort first in the overlay cycle. Set it to the default to clear the override.")
+        self.tier_edit.valueChanged.connect(self._on_tier_edited)
+        tier_row.addWidget(self.tier_edit)
+        self.tier_default_label = QLabel("")
+        self.tier_default_label.setStyleSheet("color: #888;")
+        tier_row.addWidget(self.tier_default_label)
+        self.tier_reset_btn = QPushButton("Reset")
+        self.tier_reset_btn.setToolTip("Reset to the pattern's default tier")
+        self.tier_reset_btn.clicked.connect(self._on_tier_reset)
+        tier_row.addWidget(self.tier_reset_btn)
+        tier_row.addStretch(1)
+        details_layout.addLayout(tier_row)
 
         self.pattern_examples_label = QLabel("Examples: -")
         self.pattern_examples_label.setWordWrap(True)
@@ -354,21 +415,26 @@ class PatternDialog(QDialog):
         self.delete_pattern_btn.clicked.connect(self._delete_user_pattern)
         self.lua_script_layout.addWidget(self.delete_pattern_btn)
 
+        # End the pattern-actions row and let its buttons left-align.
+        self.lua_script_layout.addStretch()
+        details_layout.addLayout(self.lua_script_layout)
+
+        # Second row: the serial test area on its own line, so the actions row
+        # above can't clip when several buttons show, and the input has room to
+        # display a full serial without resizing the window.
+        self.test_row_layout = QHBoxLayout()
         self.generate_serial_btn = QPushButton("Generate Random")
         self.generate_serial_btn.setToolTip("Generate a random matching serial")
         self.generate_serial_btn.clicked.connect(self._generate_test_serial)
         self.generate_serial_btn.setEnabled(False)
-        self.lua_script_layout.addWidget(self.generate_serial_btn)
+        self.test_row_layout.addWidget(self.generate_serial_btn)
 
-        # Test serial input
         self.test_serial_edit = QLineEdit()
         self.test_serial_edit.setPlaceholderText("Test serial (e.g., 12345678)")
-        self.test_serial_edit.setMaximumWidth(180)
+        self.test_serial_edit.setMinimumWidth(180)
         self.test_serial_edit.textChanged.connect(self._on_test_serial_changed)
-        self.lua_script_layout.addWidget(self.test_serial_edit)
-
-        self.lua_script_layout.addStretch()
-        details_layout.addLayout(self.lua_script_layout)
+        self.test_row_layout.addWidget(self.test_serial_edit, 1)
+        details_layout.addLayout(self.test_row_layout)
 
         # Initially hidden
         self.lua_script_label.hide()
@@ -606,7 +672,9 @@ class PatternDialog(QDialog):
                 pattern_item = QTreeWidgetItem(lib_item)
 
                 has_lua = lua_info is not None
-                tier = defn.get('tier', 10)
+                # Effective tier = user override (if any) over the .lua tier, so
+                # the column + sort match the overlay cycle order.
+                tier = self.settings.get_pattern_tier(name) or defn.get('tier', 10)
 
                 # Label priority: user override -> Lua DisplayName -> auto-friendly.
                 override = self.settings.get_pattern_label(name)
@@ -892,7 +960,17 @@ class PatternDialog(QDialog):
         else:
             self.pattern_desc_label.setText(defn.get('description', 'No description'))
 
-        self.pattern_tier_label.setText(f"Tier: {defn.get('tier', '?')}")
+        # Tier: show the effective value (override wins), with the pattern's own
+        # tier noted alongside. Editing to the default clears the override.
+        default_tier = int(lua_info.tier) if lua_info is not None else int(defn.get('tier', 10) or 10)
+        tier_override = self.settings.get_pattern_tier(name)
+        effective_tier = int(tier_override) if tier_override else default_tier
+        self._selected_pattern_default_tier = default_tier
+        self.tier_edit.blockSignals(True)
+        self.tier_edit.setValue(effective_tier)
+        self.tier_edit.blockSignals(False)
+        self.tier_default_label.setText(f"(default {default_tier})")
+        self.tier_reset_btn.setEnabled(bool(tier_override))
 
         # Use Lua examples if available
         examples = defn.get('examples', [])
@@ -1037,6 +1115,41 @@ class PatternDialog(QDialog):
             suffix = " [Lua]" if getattr(self, '_selected_has_lua', False) else ""
             item.setText(0, f"{effective_label}{suffix}")
 
+    def _on_tier_edited(self, value):
+        """Persist the edited tier override for the selected pattern.
+
+        Stored only when it differs from the pattern's own tier; setting it
+        back to the default clears the override (mirrors the label field)."""
+        name = getattr(self, '_selected_pattern_name', None)
+        if not name:
+            return
+        default_tier = getattr(self, '_selected_pattern_default_tier', 10)
+        self.settings.set_pattern_tier(name, value if value != default_tier else None)
+        self.settings.save()
+        self.tier_reset_btn.setEnabled(bool(self.settings.get_pattern_tier(name)))
+        self._refresh_selected_tree_tier(value)
+
+    def _on_tier_reset(self):
+        """Clear the selected pattern's tier override (back to its .lua tier)."""
+        name = getattr(self, '_selected_pattern_name', None)
+        if not name:
+            return
+        self.settings.set_pattern_tier(name, None)
+        self.settings.save()
+        default_tier = getattr(self, '_selected_pattern_default_tier', 10)
+        self.tier_edit.blockSignals(True)
+        self.tier_edit.setValue(default_tier)
+        self.tier_edit.blockSignals(False)
+        self.tier_reset_btn.setEnabled(False)
+        self._refresh_selected_tree_tier(default_tier)
+
+    def _refresh_selected_tree_tier(self, tier):
+        """Update the current tree row's Tier column (and its sort key)."""
+        item = self.pattern_tree.currentItem() if hasattr(self, 'pattern_tree') else None
+        if item is not None:
+            item.setText(1, str(tier))
+            item.setData(1, Qt.UserRole, tier)
+
     def _update_pattern_preview(self, name: str, lua_info):
         """Update the pattern preview widget for the selected pattern."""
         print(f"[DEBUG] _update_pattern_preview called for: {name}")
@@ -1054,7 +1167,9 @@ class PatternDialog(QDialog):
         can_generate = name not in skip_patterns
         self.generate_serial_btn.setEnabled(can_generate)
         if not can_generate:
-            self.generate_serial_btn.setToolTip("This pattern requires special conditions")
+            self.generate_serial_btn.setToolTip(
+                "This pattern is about the note itself (plate, seal, or serial range), "
+                "not a digit shape, so there's no example serial to generate.")
         else:
             self.generate_serial_btn.setToolTip("Generate a random matching serial")
 
@@ -1133,14 +1248,28 @@ class PatternDialog(QDialog):
 
         # Check if it matches the pattern
         if '-' not in digits:
-            matches = self.engine.classify_simple(serial)
+            # Temporarily enable the pattern so a DISABLED pattern still reports
+            # its match/overlay here -- classify_simple skips disabled patterns,
+            # matching how the example preview and Generate Random already work.
+            was_enabled = True
+            if name in self.engine.lua_patterns:
+                was_enabled = self.engine.lua_patterns[name].enabled
+                if not was_enabled:
+                    self.engine.lua_patterns[name].enabled = True
+            try:
+                matches = self.engine.classify_simple(serial)
+            finally:
+                if not was_enabled and name in self.engine.lua_patterns:
+                    self.engine.lua_patterns[name].enabled = False
             if name in matches:
                 # It matches! Show highlights
                 viz = self.engine.get_digit_highlights(serial, [name])
                 highlights = self._flatten_highlights(viz.get('highlights', []))
                 self.pattern_preview.set_highlights(highlights, viz.get('connectors', []))
                 self.pattern_preview.set_group_boxes(viz.get('group_boxes', []))
-                self.match_message_label.setText(f"Matches {name}")
+                info = self.engine.get_pattern_info(name)
+                display = info.get('display_name', name) if info else name
+                self.match_message_label.setText(f"Matches {display}")
                 self.match_message_label.setStyleSheet("color: #2E7D32; font-style: italic; font-weight: bold;")
             else:
                 # No match
@@ -1160,6 +1289,9 @@ class PatternDialog(QDialog):
         import random
 
         print("[DEBUG] _generate_test_serial called")
+
+        # Warm up the verified-example corpus (background build on first use).
+        self._ensure_corpus()
 
         # Clear manual test input
         self.test_serial_edit.blockSignals(True)
@@ -1222,6 +1354,53 @@ class PatternDialog(QDialog):
                 self.engine.lua_patterns[name].enabled = False
                 print(f"[DEBUG] Restored pattern to disabled state")
 
+    def _reload_engine(self):
+        """Reload patterns and drop the in-memory example corpus so it rebuilds.
+
+        A pattern edit changes what serials match, so any corpus built against
+        the old definitions is stale (its verified serials may no longer match).
+        Clearing it makes the next Generate Random reload the cache -- whose
+        signature won't match -- and rebuild in the background."""
+        self.engine.reload()
+        self._corpus = None
+
+    def _ensure_corpus(self):
+        """Load the cached example corpus, or start building it in the background.
+
+        Called lazily on first use of Generate Random. Until the build finishes,
+        Generate Random uses the structure-mutator, so there's never a wait."""
+        if self._corpus is not None or self._corpus_thread is not None:
+            return
+        import example_corpus
+        try:
+            data = example_corpus.load(self.engine)
+        except Exception:
+            data = None
+        if data:
+            self._corpus = data
+            return
+        # A build is actually starting -- tell the user once so a slower app (or a
+        # slower processing run) isn't a mystery. This click still gets an instant
+        # serial from the fallback generator below.
+        if not self._corpus_notice_shown:
+            self._corpus_notice_shown = True
+            QMessageBox.information(
+                self, "Building example library",
+                "Building a library of example serials in the background "
+                "(about 2 minutes, one time).\n\n"
+                "You can keep working, but the app -- and any processing run you "
+                "start -- may be a little slower until it finishes. This click uses "
+                "the quick generator; richer examples appear once it's done.\n\n"
+                "It rebuilds only when you change patterns.")
+        self._corpus_thread = CorpusBuildThread(self)
+        self._corpus_thread.built.connect(self._on_corpus_built)
+        self._corpus_thread.start()
+
+    def _on_corpus_built(self, data):
+        """Adopt a freshly built corpus (arrives ~2 min after first use)."""
+        self._corpus = data or None
+        self._corpus_thread = None
+
     def _generate_random_matching_serial(self, pattern_name: str) -> tuple:
         """Generate a random serial that matches the given pattern.
 
@@ -1235,6 +1414,16 @@ class PatternDialog(QDialog):
             tuple: (serial, None) on success, (None, error_message) on failure
         """
         import random
+
+        # Prefer a verified serial from the precomputed corpus: it's varied and
+        # includes serials generated for other families that this pattern also
+        # matches. Falls through to structure-mutation when the corpus isn't
+        # ready yet or recorded no hits for this pattern.
+        if self._corpus:
+            import example_corpus
+            corpus_serial = example_corpus.random_serial(self._corpus, pattern_name)
+            if corpus_serial:
+                return corpus_serial, None
 
         prefixes = 'ABCDEFGHIJKL'
         suffixes = 'ABCDEFGHIJKLMNOPQRSTUVWXY'
@@ -1418,7 +1607,7 @@ class PatternDialog(QDialog):
             # For other patterns, store generic threshold override
             self.settings.set_pattern_override(name, 'threshold', value)
             self.settings.save()
-            self.engine.reload()
+            self._reload_engine()
 
         QMessageBox.information(self, "Saved", f"Threshold for {name} set to {value}")
 
@@ -1463,7 +1652,7 @@ class PatternDialog(QDialog):
             # Mark that patterns were modified
             self._patterns_modified = True
             # Reload engine to get clean state
-            self.engine.reload()
+            self._reload_engine()
             # Clear selection state
             self._current_lua_pattern = None
             self._current_lua_editable = False
@@ -1481,7 +1670,12 @@ class PatternDialog(QDialog):
             self.label_edit.blockSignals(False)
             self.label_reset_btn.setEnabled(False)
             self.pattern_desc_label.setText("")
-            self.pattern_tier_label.setText("Tier: -")
+            self._selected_pattern_default_tier = 10
+            self.tier_edit.blockSignals(True)
+            self.tier_edit.setValue(10)
+            self.tier_edit.blockSignals(False)
+            self.tier_default_label.setText("")
+            self.tier_reset_btn.setEnabled(False)
             self.pattern_odds_label.setText("Odds: -")
             self.pattern_price_label.setText("Price: -")
             self.pattern_examples_label.setText("Examples: -")
@@ -1579,7 +1773,7 @@ class PatternDialog(QDialog):
                     self._patterns_modified = True
 
                     # Reload the engine to pick up changes
-                    self.engine.reload()
+                    self._reload_engine()
                     self._load_patterns()
 
                     # Find the pattern by file path (name might have changed in script header)
@@ -1701,7 +1895,7 @@ class PatternDialog(QDialog):
                 self._patterns_modified = True
 
                 # Reload patterns
-                self.engine.reload()
+                self._reload_engine()
                 self._load_patterns()
 
                 QMessageBox.information(
@@ -2144,6 +2338,12 @@ class PatternDialog(QDialog):
 
     def closeEvent(self, event):
         """Save geometry when dialog is closed."""
+        # Stop a background corpus build cleanly (it checks the cancel flag every
+        # ~200 serials, so this returns within ~1s).
+        if self._corpus_thread is not None:
+            self._corpus_thread.cancel()
+            self._corpus_thread.wait(3000)
+            self._corpus_thread = None
         self._save_window_geometry()
         self.settings.save()
         super().closeEvent(event)
@@ -2431,7 +2631,7 @@ Logs appear in batch test results and "Copy for AI Debug" output.
                 self._patterns_modified = True
 
                 # Reload patterns to show the new one
-                self.engine.reload()
+                self._reload_engine()
                 self._load_patterns()
 
 

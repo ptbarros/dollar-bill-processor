@@ -468,7 +468,7 @@ class PatternEngineV3:
                     matches.append(PatternMatchV3(
                         name=name,
                         description=info.description,
-                        tier=info.tier,
+                        tier=self._effective_tier(name, info.tier),
                         highlights=result.highlights,
                         connectors=result.connectors,
                         group_boxes=result.group_boxes,
@@ -771,6 +771,18 @@ class PatternEngineV3:
                 result.append(word.capitalize())
         return ' '.join(result)
 
+    def _effective_tier(self, name: str, base_tier: int) -> int:
+        """The pattern's tier with the user's settings-layer override applied.
+
+        Mirrors the label override: a user can reorder a pattern (e.g. its
+        placement in the overlay cycle, which sorts lowest tier first) by its
+        perceived value without editing the .lua. Falls back to the .lua tier."""
+        if self.settings:
+            override = self.settings.get_pattern_tier(name)
+            if override:
+                return int(override)
+        return base_tier
+
     def get_pattern_info(self, name: str) -> Optional[dict]:
         """Get info about a pattern."""
         if name in self.lua_patterns:
@@ -783,7 +795,7 @@ class PatternEngineV3:
                 'display_name': label_override or info.display_name or self._make_friendly_name(info.name),
                 'library': info.library,
                 'description': info.description,
-                'tier': info.tier,
+                'tier': self._effective_tier(name, info.tier),
                 'enabled': info.enabled,
                 'source': 'lua',
                 'examples': info.examples,
@@ -807,7 +819,7 @@ class PatternEngineV3:
             patterns[name] = {
                 'name': info.name,
                 'description': info.description,
-                'tier': info.tier,
+                'tier': self._effective_tier(name, info.tier),
                 'enabled': info.enabled,
                 'source': 'lua',
                 'examples': info.examples,

@@ -945,7 +945,7 @@ class ImageLabel(QLabel):
         # draw on the digits). Shown greyed/read-only in the menu so they're
         # discoverable -- NOT added to the click-cycle. (internal, display) tuples.
         self._excluded_patterns = []
-        self._current_pattern_index = 0  # For cycling: 0=gas_pump, 1+=patterns, last=none
+        self._current_pattern_index = 0  # For cycling: 0=lowest-tier pattern, then gas_pump, then none (last)
 
         # For long-press detection
         self._right_press_time = None
@@ -967,7 +967,7 @@ class ImageLabel(QLabel):
             (name, display) for name, display in (patterns or [])
             if name != "GAS_PUMP"
         ]
-        self._current_pattern_index = 0  # Reset to gas pump when patterns change
+        self._current_pattern_index = 0  # Reset to lowest-tier pattern when patterns change
 
     def set_excluded_patterns(self, patterns: list):
         """Set the matched-but-non-overlay patterns (shown greyed in the menu).
@@ -982,9 +982,11 @@ class ImageLabel(QLabel):
 
     def _get_cycle_options(self):
         """Get the list of internal pattern names to cycle through."""
-        # Order: Gas Pump -> each pattern -> No Overlay -> (back to Gas Pump)
-        options = ["__gas_pump__"]
-        options.extend([name for name, _ in self._matched_patterns])
+        # Order: lowest-tier overlay first -> ... -> No Overlay (last) -> (wrap).
+        # _matched_patterns arrives tier-sorted (rarest first) from
+        # _split_overlay_patterns and already includes the __gas_pump__ overlay
+        # ranked by its own tier.
+        options = [name for name, _ in self._matched_patterns]
         options.append("__none__")
         return options
 
@@ -1006,18 +1008,11 @@ class ImageLabel(QLabel):
         from PySide6.QtWidgets import QMenu
         menu = QMenu(self)
 
-        # Add "Gas Pump (deviation)" option
-        gas_pump_action = menu.addAction("Gas Pump (deviation)")
-        gas_pump_action.setData("__gas_pump__")
-
-        # Add separator if we have matched patterns
-        if self._matched_patterns:
-            menu.addSeparator()
-
-            # Add each matched pattern (show display name, store internal name as data)
-            for internal_name, display_name in self._matched_patterns:
-                action = menu.addAction(display_name)
-                action.setData(internal_name)
+        # Cyclable overlays in tier order. Gas Pump is included here as
+        # __gas_pump__ (ranked by its own tier), not pinned to the top.
+        for internal_name, display_name in self._matched_patterns:
+            action = menu.addAction(display_name)
+            action.setData(internal_name)
 
         # Matched-but-no-overlay patterns (e.g. STAR, SEAL_SHIFT): shown greyed
         # and non-selectable so it's clear the bill DID match them -- they're just
@@ -1325,9 +1320,10 @@ class PreviewPanel(QWidget):
         # _pattern_overlay_filter is what is rendered for the CURRENT bill;
         # _sticky_overlay is the user's last explicit choice, re-applied to each
         # new bill when that bill also has the pattern (so it can be scanned down
-        # the list) and falling back to "__none__" when it doesn't.
-        self._pattern_overlay_filter = "__gas_pump__"
-        self._sticky_overlay = "__gas_pump__"
+        # the list). None means no explicit choice yet, so each bill defaults to
+        # its lowest-tier pattern (see _sync_overlay_to_bill).
+        self._pattern_overlay_filter = "__none__"
+        self._sticky_overlay = None
 
         serial_main_layout.addLayout(serial_images_layout)
 
@@ -2058,20 +2054,59 @@ class PreviewPanel(QWidget):
         except Exception:
             return True
 
+    def _pattern_tier(self, name: str) -> int:
+        """Tier for a pattern, used to order overlays lowest (rarest) first.
+
+        Lower tier = rarer. Missing/unknown tiers sort last so real matches
+        lead the cycle. The __gas_pump__ overlay is ranked by the GAS_PUMP
+        pattern's own tier, so it cycles like any other pattern rather than
+        sitting in a fixed slot. See _split_overlay_patterns / _get_cycle_options.
+        """
+        if name == "__gas_pump__":
+            name = "GAS_PUMP"
+        try:
+            info = self.pattern_engine.get_pattern_info(name)
+            tier = info.get('tier') if info else None
+            return tier if isinstance(tier, int) else 99
+        except Exception:
+            return 99
+
     def _split_overlay_patterns(self, names):
         """Split matched pattern names into (cyclable, excluded) tuple-lists.
 
-        cyclable = patterns that draw a serial overlay (feed the click-cycle).
+        cyclable = patterns that draw a serial overlay (feed the click-cycle),
+        sorted by tier (lowest/rarest first) so the cycle -- and each bill's
+        default overlay -- starts on the lowest-tier pattern.
         excluded = matched patterns with Overlay: none (STAR, SEAL_SHIFT, ...),
         shown greyed in the menu for discoverability. Both are lists of
         (internal_name, display_name) tuples.
         """
+        # A real gas-pump hit means the bill tripped the threshold, i.e. GAS_PUMP
+        # is among the matched names. Only then does Gas Pump earn its tier rank.
+        gas_pump_hit = any(n == "GAS_PUMP" for n in names)
+
         cyclable, excluded = [], []
         for name in names:
-            if not name:
+            if not name or name == "GAS_PUMP":
+                # GAS_PUMP is injected below as the always-available
+                # __gas_pump__ overlay so it's ranked once.
                 continue
             entry = (name, self._format_pattern_with_library(name))
             (cyclable if self._pattern_shows_overlay(name) else excluded).append(entry)
+        # Gas Pump is available on every bill (even ones with no pattern match) so
+        # the user can nudge the threshold and reveal the box. When this bill
+        # actually trips the threshold, rank it by its (user-tunable) tier like
+        # any pattern; otherwise park it just ahead of No Overlay.
+        cyclable.append(("__gas_pump__", "Gas Pump (deviation)"))
+
+        def _sort_key(entry):
+            name = entry[0]
+            if name == "__gas_pump__" and not gas_pump_hit:
+                return 10_000  # not a hit: keep it last, just before No Overlay
+            return self._pattern_tier(name)
+
+        # Stable sort keeps the original (comma) order within a tier.
+        cyclable.sort(key=_sort_key)
         return cyclable, excluded
 
     def _format_pattern_with_library(self, name: str) -> str:
@@ -2664,17 +2699,20 @@ class PreviewPanel(QWidget):
     def _sync_overlay_to_bill(self, matched_pattern_names: list):
         """Reconcile the overlay for the current bill.
 
-        Gas Pump / No Overlay always apply. A specific pattern applies only if
-        this bill actually has it (so it can be scanned down the list), otherwise
-        we fall back to No Overlay. Keeps the rendered filter, the label, and the
-        cycler index in sync so the label can't stay stuck on a pattern the new
-        bill doesn't have.
+        Sticky: an overlay the user cycled to carries over when this bill also
+        has it. Gas Pump / No Overlay are available on every bill, so those two
+        always carry. Otherwise (no explicit choice yet, or the sticky pattern
+        isn't on this bill) we default to the lowest-tier pattern this bill
+        matched -- matched_pattern_names is tier-sorted, rarest first -- or No
+        Overlay when the bill matched no cyclable pattern. Keeps the rendered
+        filter, the label, and the cycler index in sync.
         """
-        sticky = getattr(self, '_sticky_overlay', '__gas_pump__')
+        default = matched_pattern_names[0] if matched_pattern_names else "__none__"
+        sticky = getattr(self, '_sticky_overlay', None)
         if sticky in ("__gas_pump__", "__none__") or sticky in matched_pattern_names:
             effective = sticky
         else:
-            effective = "__none__"
+            effective = default
 
         self._pattern_overlay_filter = effective
         self._update_overlay_label(effective)

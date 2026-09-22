@@ -142,6 +142,7 @@ class SettingsManager:
         self.label_profiles: Dict[str, Dict] = {}  # name -> label template dict (size + fields)
         self.active_label_profile: str = ""  # currently selected profile name
         self.pattern_labels: Dict[str, str] = {}  # Pattern name -> custom display label override
+        self.pattern_tiers: Dict[str, int] = {}  # Pattern name -> custom tier override (1-10; overrides the .lua Tier)
         self.pattern_catalogs: Dict[str, str] = {}  # Pattern name -> catalog location (e.g., "A1", "B2")
         self.pattern_overrides: Dict[str, Dict[str, Any]] = {}  # e.g., {'GAS_PUMP': {'baseline_variance_min': 3.6}}
         self.custom_patterns: Dict[str, Dict] = {}  # User-defined YAML patterns
@@ -274,6 +275,8 @@ class SettingsManager:
         if self.active_label_profile not in self.label_profiles:
             self.active_label_profile = next(iter(self.label_profiles), '2x1')
         self.pattern_labels = data.get('pattern_labels', {})
+        # Custom tier overrides (int values keyed by internal pattern name)
+        self.pattern_tiers = {k: int(v) for k, v in (data.get('pattern_tiers', {}) or {}).items()}
 
         # Load pattern catalogs
         self.pattern_catalogs = data.get('pattern_catalogs', {})
@@ -433,6 +436,7 @@ class SettingsManager:
             'label_profiles': self.label_profiles,
             'active_label_profile': self.active_label_profile,
             'pattern_labels': self.pattern_labels,
+            'pattern_tiers': self.pattern_tiers,
             'pattern_catalogs': self.pattern_catalogs,
             'pattern_overrides': self.pattern_overrides,
             'custom_patterns': self.custom_patterns,
@@ -534,6 +538,23 @@ class SettingsManager:
             self.pattern_labels[pattern_name] = label
         elif pattern_name in self.pattern_labels:
             del self.pattern_labels[pattern_name]
+
+    def get_pattern_tier(self, pattern_name: str, default=None):
+        """User's custom tier override for a pattern, or `default` if none.
+
+        Lets a user reorder a pattern's placement (e.g. in the overlay cycle,
+        which sorts lowest tier first) by its perceived value, without editing
+        the .lua. Consumed by PatternEngine.get_pattern_info/classify so it
+        applies everywhere tier is read. Returns None (no override) by default."""
+        return self.pattern_tiers.get(pattern_name, default)
+
+    def set_pattern_tier(self, pattern_name: str, tier):
+        """Set/clear a pattern's tier override. A falsy/None tier clears it
+        (revert to the pattern's own .lua Tier)."""
+        if tier:
+            self.pattern_tiers[pattern_name] = int(tier)
+        elif pattern_name in self.pattern_tiers:
+            del self.pattern_tiers[pattern_name]
 
     def get_label_profiles(self) -> Dict[str, Dict]:
         """All saved label profiles ({name: template dict})."""
