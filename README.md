@@ -278,9 +278,6 @@ yourself. The software is provided **as-is, with no warranty**.
 
 ## Acknowledgements
 
-- **Training data** — the detection model was trained with help from the Roboflow
-  project ["dollar-bill-serial-number"](https://universe.roboflow.com/turt1e/dollar-bill-serial-number)
-  (CC BY 4.0).
 - **Built with** [PySide6](https://doc.qt.io/qtforpython/),
   [ONNX Runtime](https://onnxruntime.ai/),
   [RapidOCR](https://github.com/RapidAI/RapidOCR),
