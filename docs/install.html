@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Download &amp; Install — Dollar Detective</title>
+<meta name="description" content="Download Dollar Detective for Windows, macOS or Linux — pick the right build and get past the first-launch security prompt.">
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+  :root{
+    --bg:#f7f8f6; --surface:#ffffff; --surface-2:#eef1ec; --border:#d9ded4;
+    --text:#1c231a; --muted:#5c6657; --brand:#1f7a3d; --brand-2:#2fa15a;
+    --brand-ink:#ffffff; --accent:#c98a1a; --shadow:0 1px 3px rgba(20,30,15,.08),0 8px 24px rgba(20,30,15,.06);
+    --radius:14px; --maxw:840px;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#12160f; --surface:#1a1f16; --surface-2:#222820; --border:#333b2c;
+    --text:#e9eee4; --muted:#9aa691; --brand:#3fae62; --brand-2:#4cc274;
+    --brand-ink:#0c1108; --accent:#e0a63a; --shadow:0 1px 3px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  }}
+  :root[data-theme="dark"]{
+    --bg:#12160f; --surface:#1a1f16; --surface-2:#222820; --border:#333b2c;
+    --text:#e9eee4; --muted:#9aa691; --brand:#3fae62; --brand-2:#4cc274;
+    --brand-ink:#0c1108; --accent:#e0a63a; --shadow:0 1px 3px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:var(--brand)} a:hover{text-decoration:underline}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 16px}
+  header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:60px;max-width:var(--maxw);margin:0 auto;padding:0 16px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+  .logo .mark{width:30px;height:30px;border-radius:7px;object-fit:contain;display:block}
+  .nav a{color:var(--muted);font-weight:600;font-size:14px}
+  .nav a:hover{color:var(--text);text-decoration:none}
+
+  h1{font-size:clamp(30px,5vw,42px);letter-spacing:-.02em;margin:36px 0 8px;text-align:center}
+  .lede{color:var(--muted);text-align:center;max-width:620px;margin:0 auto 8px}
+  .note{background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--accent);
+    border-radius:10px;padding:12px 16px;color:var(--muted);font-size:14.5px;margin:24px 0}
+  .note b{color:var(--text)}
+
+  .os{scroll-margin-top:76px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:24px;margin:20px 0}
+  .os h2{display:flex;align-items:center;gap:12px;margin:0 0 4px;font-size:23px}
+  .os h2 .ico{font-size:26px}
+  .os .sub{color:var(--muted);font-size:14px;margin:0 0 18px}
+  h3{font-size:15px;margin:22px 0 8px;letter-spacing:.01em}
+
+  .btn{display:inline-flex;align-items:center;gap:10px;padding:12px 18px;border-radius:11px;font-weight:700;
+    font-size:15px;border:1px solid transparent;text-decoration:none;transition:transform .06s ease}
+  .btn:hover{text-decoration:none;transform:translateY(-1px)}
+  .btn-primary{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:var(--brand-ink);box-shadow:var(--shadow)}
+  .btn-ghost{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+  .btn small{display:block;font-weight:500;font-size:11px;opacity:.8;margin-top:1px}
+
+  /* Windows editions */
+  .editions{display:grid;gap:12px;margin:6px 0}
+  .ed{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;
+    border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:var(--surface-2)}
+  .ed .info{flex:1;min-width:220px}
+  .ed .name{font-weight:700}
+  .ed .badge{display:inline-block;font-size:11px;font-weight:700;color:var(--brand-ink);background:var(--brand);
+    border-radius:999px;padding:1px 9px;margin-left:8px;vertical-align:middle}
+  .ed .desc{color:var(--muted);font-size:14px;margin-top:2px}
+  .ed .dl{white-space:nowrap}
+
+  ol,ul{padding-left:20px;color:var(--muted)} li{margin:4px 0} li b,ol b{color:var(--text)}
+  pre{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;overflow-x:auto;margin:8px 0}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13.5px}
+  pre code{color:var(--text)}
+  .kbd{background:var(--surface-2);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;
+    padding:1px 7px;font-size:13px;font-weight:600;white-space:nowrap}
+  footer{border-top:1px solid var(--border);padding:28px 0;color:var(--muted);font-size:14px;text-align:center;margin-top:24px}
+</style>
+</head>
+<body>
+<header>
+  <div class="nav">
+    <a class="logo" href="index.html" style="color:inherit"><img class="mark" src="icon.png" alt=""> Dollar&nbsp;Detective</a>
+    <a href="index.html">← Home</a>
+  </div>
+</header>
+
+<main class="wrap" id="download">
+  <h1>Download &amp; Install</h1>
+  <p class="lede">Pick your operating system below. Every build is <b>free</b> and runs entirely on your own computer.</p>
+
+  <div class="note">
+    <b>Heads-up:</b> Dollar Detective isn't code-signed (a signing certificate is an expensive yearly cost for a free hobby project), so Windows and macOS show a <b>one-time "unknown developer" warning</b> on first launch. It's normal for small open-source apps — the steps below get you past it. As always, only run installers from the official
+    <a href="https://github.com/ptbarros/dollar-bill-processor/releases/latest">Releases page</a>.
+  </div>
+
+  <!-- WINDOWS -->
+  <section class="os" id="windows">
+    <h2><span class="ico">⊞</span> Windows</h2>
+    <p class="sub">Windows 10 / 11 · per-user install, <b>no admin rights needed</b>.</p>
+
+    <h3>1. Which edition? They differ only in how detection is accelerated:</h3>
+    <div class="editions">
+      <div class="ed">
+        <div class="info"><span class="name">Standard</span><span class="badge">Recommended</span>
+          <div class="desc">Best for most PCs — Intel graphics acceleration with a safe CPU fallback everywhere. Start here if unsure.</div></div>
+        <div class="dl"><a class="btn btn-primary" id="dl-win-standard" href="https://github.com/ptbarros/dollar-bill-processor/releases/latest">Download</a></div>
+      </div>
+      <div class="ed">
+        <div class="info"><span class="name">DirectML</span>
+          <div class="desc">You have an <b>AMD or NVIDIA</b> GPU and no Intel graphics.</div></div>
+        <div class="dl"><a class="btn btn-ghost" id="dl-win-directml" href="https://github.com/ptbarros/dollar-bill-processor/releases/latest">Download</a></div>
+      </div>
+      <div class="ed">
+        <div class="info"><span class="name">NVIDIA / CUDA</span>
+          <div class="desc">You have an <b>NVIDIA</b> GPU and want maximum speed. Much larger download (~2&nbsp;GB).</div></div>
+        <div class="dl"><a class="btn btn-ghost" id="dl-win-cuda" href="https://github.com/ptbarros/dollar-bill-processor/releases/latest">Download</a></div>
+      </div>
+    </div>
+    <p class="sub" style="margin-top:8px">Not sure? <b>Standard</b> works on every PC. You can always switch editions later.</p>
+
+    <h3>2. Install it</h3>
+    <p style="color:var(--muted)">Run the downloaded <code>.exe</code>. It installs just for you — no administrator password required.</p>
+
+    <h3>3. Get past the SmartScreen warning</h3>
+    <p style="color:var(--muted)">Windows may show <b>"Windows protected your PC."</b> Click
+      <span class="kbd">More info</span> → <span class="kbd">Run anyway</span>. This appears only because the app isn't
+      signed, not because anything is wrong with it.</p>
+  </section>
+
+  <!-- MACOS -->
+  <section class="os" id="macos">
+    <h2><span class="ico"></span> macOS <span style="font-size:14px;color:var(--muted);font-weight:600">(Apple Silicon)</span></h2>
+    <p class="sub">For Apple-Silicon Macs (M1, M2, M3, M4…). <b>Intel Macs aren't currently built.</b></p>
+    <a class="btn btn-primary" id="dl-mac" href="https://github.com/ptbarros/dollar-bill-processor/releases/latest/download/DollarDetective-arm64.dmg">Download the .dmg</a>
+
+    <h3>1. Install it</h3>
+    <p style="color:var(--muted)">Open the <code>.dmg</code> and drag <b>Dollar Detective</b> into your <b>Applications</b> folder.</p>
+
+    <h3>2. Get past Gatekeeper (first launch only)</h3>
+    <p style="color:var(--muted)">Because the app is unsigned, double-clicking it the first time may seem to do nothing. Do <b>one</b> of these, once:</p>
+    <ul>
+      <li><b>Right-click</b> the app in Applications → <b>Open</b> → confirm <b>Open</b> in the dialog, <b>or</b></li>
+      <li>Run this in <b>Terminal</b> (adjust the path if you didn't move it to Applications):</li>
+    </ul>
+    <pre><code>xattr -dr com.apple.quarantine "/Applications/Dollar Detective.app"</code></pre>
+    <p style="color:var(--muted)">After that first launch, it opens normally like any other app.</p>
+    <p class="sub" style="margin-top:14px">🎬 Prefer a video? Here's a helpful walkthrough of opening an unsigned macOS app past Gatekeeper:
+      <a href="https://www.youtube.com/watch?v=BZpbWWWKF2g" target="_blank" rel="noopener">watch on YouTube →</a></p>
+  </section>
+
+  <!-- LINUX -->
+  <section class="os" id="linux">
+    <h2><span class="ico">🐧</span> Linux</h2>
+    <p class="sub">Portable AppImage — no install, runs on most x86-64 distributions.</p>
+    <a class="btn btn-primary" id="dl-linux" href="https://github.com/ptbarros/dollar-bill-processor/releases/latest/download/DollarDetective-x86_64.AppImage">Download the AppImage</a>
+
+    <h3>Make it executable and run it</h3>
+    <pre><code>chmod +x DollarDetective-x86_64.AppImage
+./DollarDetective-x86_64.AppImage</code></pre>
+    <h3>If you get a FUSE error</h3>
+    <p style="color:var(--muted)">Run it in extract-and-run mode instead:</p>
+    <pre><code>./DollarDetective-x86_64.AppImage --appimage-extract-and-run</code></pre>
+  </section>
+
+  <p class="sub" style="text-align:center">Looking for older versions or release notes?
+    <a href="https://github.com/ptbarros/dollar-bill-processor/releases">Browse all releases →</a></p>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a href="index.html">Home</a> ·
+    <a href="https://github.com/ptbarros/dollar-bill-processor">GitHub</a> ·
+    <a href="https://github.com/ptbarros/dollar-bill-processor/issues">Report an issue</a>
+    <p style="font-size:12px;margin-top:12px">Not affiliated with the U.S. Bureau of Engraving and Printing or any government agency.</p>
+  </div>
+</footer>
+
+<script>
+  // Populate the Windows edition buttons with direct download links to the CURRENT
+  // release (Windows asset names include the version, so we can't hardcode them).
+  // Mac/Linux links are version-stable already. Falls back to the releases page.
+  (function(){
+    var api='https://api.github.com/repos/ptbarros/dollar-bill-processor/releases/latest';
+    function mb(n){return (n/1048576)>=1024 ? (n/1073741824).toFixed(1)+' GB' : Math.round(n/1048576)+' MB';}
+    function wire(id,url,size){
+      var a=document.getElementById(id); if(!a||!url) return;
+      a.href=url;
+      if(size){var s=document.createElement('small'); s.textContent=mb(size); a.appendChild(s);}
+    }
+    try{
+      fetch(api,{headers:{'Accept':'application/vnd.github+json'}})
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(d){
+          if(!d||!d.assets) return;
+          var std,dml,cuda,mac,lin;
+          d.assets.forEach(function(a){
+            var n=a.name.toLowerCase();
+            if(n.indexOf('cuda')>-1) cuda=a;
+            else if(n.indexOf('directml')>-1) dml=a;
+            else if(n.slice(-10)==='-setup.exe') std=a;
+            else if(n.slice(-4)==='.dmg') mac=a;
+            else if(n.slice(-9)==='.appimage') lin=a;
+          });
+          if(std) wire('dl-win-standard',std.browser_download_url,std.size);
+          if(dml) wire('dl-win-directml',dml.browser_download_url,dml.size);
+          if(cuda) wire('dl-win-cuda',cuda.browser_download_url,cuda.size);
+          if(mac) wire('dl-mac',mac.browser_download_url,mac.size);
+          if(lin) wire('dl-linux',lin.browser_download_url,lin.size);
+        }).catch(function(){});
+    }catch(e){}
+  })();
+</script>
+</body>
+</html>
