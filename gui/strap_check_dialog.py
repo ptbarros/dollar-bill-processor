@@ -19,8 +19,8 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QSpinBox, QPushButton,
     QTreeWidget, QTreeWidgetItem, QHeaderView, QProgressDialog, QApplication, QMenu,
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QBrush
+from PySide6.QtCore import Qt, QRegularExpression
+from PySide6.QtGui import QColor, QBrush, QRegularExpressionValidator
 
 # prefix letters (0-2), exactly 8 digits, optional suffix letter/star
 _SERIAL_RE = re.compile(r"^\s*([A-Za-z]{0,2})\s*(\d{8})\s*([A-Za-z*]?)\s*$")
@@ -89,7 +89,12 @@ class StrapCheckDialog(QDialog):
         row = QHBoxLayout()
         row.addWidget(QLabel("First serial:"))
         self.serial_edit = QLineEdit(start_serial)
-        self.serial_edit.setPlaceholderText("e.g. H43699401C")
+        self.serial_edit.setPlaceholderText("e.g. H43699401C  or  43699401")
+        # Hard-cap the DIGIT count at 8 (a strap's fancy-ness is digit-based; the
+        # letters don't matter here). Optional prefix/suffix letters are still
+        # tolerated so a full serial can be pasted, but you can't type a 9th digit.
+        self.serial_edit.setValidator(QRegularExpressionValidator(
+            QRegularExpression(r"^[A-Za-z]{0,2}\d{0,8}[A-Za-z*]?$")))
         self.serial_edit.returnPressed.connect(self._check)
         row.addWidget(self.serial_edit, 1)
         row.addWidget(QLabel("Count:"))

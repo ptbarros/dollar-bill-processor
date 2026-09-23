@@ -11,6 +11,7 @@ is instant and works with no run loaded. Patterns that need image-derived
 metadata (GAS_PUMP, SEAL_SHIFT, plate/mule) simply won't match a typed serial --
 those are image findings, not serial findings.
 """
+import random
 import re
 
 from PySide6.QtCore import Qt, QTimer
@@ -25,6 +26,17 @@ from .pattern_dialog import DigitPreviewWidget
 
 class SerialLookupDialog(QDialog):
     """Non-modal utility: serial in -> matched patterns + overlay preview out."""
+
+    # Plausible letters to synthesize when only 8 digits are typed. Prefix = one
+    # of the 12 Federal Reserve districts (A-L); suffix = a block letter (A-Y,
+    # skipping O to avoid 0 confusion). Cosmetic only -- there's no public way to
+    # derive a note's real letters from its 8 digits.
+    _FRB_LETTERS = "ABCDEFGHIJKL"
+    _BLOCK_LETTERS = "ABCDEFGHIJKLMNPQRSTUVWXY"
+
+    @classmethod
+    def _random_letters(cls):
+        return (random.choice(cls._FRB_LETTERS), random.choice(cls._BLOCK_LETTERS))
 
     def __init__(self, pattern_engine, parent=None, initial_serial: str = ""):
         super().__init__(parent)
@@ -45,6 +57,9 @@ class SerialLookupDialog(QDialog):
         row.addWidget(QLabel("Serial:"))
         self.serial_edit = QLineEdit()
         self.serial_edit.setPlaceholderText("A12345678B   or   12345678")
+        # Start at 10 (a full serial: 2 letters + 8 digits). _on_changed then
+        # tightens to 8 the moment the entry is digit-led.
+        self.serial_edit.setMaxLength(10)
         mono = QFont("Consolas, Monaco, monospace")
         mono.setPointSize(14)
         self.serial_edit.setFont(mono)
@@ -101,6 +116,13 @@ class SerialLookupDialog(QDialog):
         return s, digits
 
     def _on_changed(self, text: str):
+        # Dynamic length cap: a letter-led entry is a full serial (2 letters + 8
+        # digits = 10 chars); a digit-led entry is the 8 digits only.
+        first = text.strip()[:1]
+        cap = 10 if first.isalpha() else 8
+        if self.serial_edit.maxLength() != cap:
+            self.serial_edit.setMaxLength(cap)
+
         s, digits = self._normalize(text)
         self.matches_list.clear()
         self._matches = []
@@ -115,10 +137,23 @@ class SerialLookupDialog(QDialog):
             self.preview.set_serial(s or "--------")
             return
 
-        self.preview.set_serial(s)
+        # If only the 8 digits were typed (no letters), synthesize plausible
+        # prefix/suffix letters so the overlay shows a complete serial and any
+        # letter-aware pattern still has something to read. Regenerated only when
+        # the digits change, so it doesn't flicker on each keystroke.
+        if any(ch.isalpha() for ch in s):
+            full = s
+        else:
+            if getattr(self, "_letters_for", None) != digits:
+                self._letters = self._random_letters()
+                self._letters_for = digits
+            full = f"{self._letters[0]}{digits}{self._letters[1]}"
+
+        self._full_serial = full
+        self.preview.set_serial(full)
         try:
             metadata = {"gas_pump_threshold": self.engine.get_gas_pump_threshold()}
-            matches = self.engine.classify(s, metadata)
+            matches = self.engine.classify(full, metadata)
         except Exception as e:  # pragma: no cover - defensive
             self.summary.setText(f"Lookup error: {e}")
             return
@@ -188,7 +223,8 @@ class SerialLookupDialog(QDialog):
         m = self._matches[idx]
         info = self.engine.get_pattern_info(m.name) or {}
         name = info.get('display_name') or m.name
-        serial = self._normalize(self.serial_edit.text())[0]
+        # Use the same full serial the preview shows (incl. any synthesized letters).
+        serial = getattr(self, "_full_serial", None) or self._normalize(self.serial_edit.text())[0]
 
         # Grab exactly what the overlay widget is showing (serial strip + overlay).
         preview_pix = self.preview.grab()
