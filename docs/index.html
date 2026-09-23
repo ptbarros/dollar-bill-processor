@@ -77,13 +77,14 @@
   /* Screenshot placeholders */
   .shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
   .shot{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
-  .shot .ph{aspect-ratio:16/10;display:grid;place-items:center;
+  .shot .ph{position:relative;overflow:hidden;aspect-ratio:16/10;display:grid;place-items:center;
     background:repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 12px,transparent 12px,transparent 24px);
     color:var(--muted);font-size:13px;font-weight:600;text-align:center;padding:16px;border-bottom:1px solid var(--border)}
+  .shot .ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center}
   .shot .cap{padding:12px 16px;font-size:14px;color:var(--muted)}
   .shot .cap b{color:var(--text)}
   .shot.wide{grid-column:1/-1}
-  .shot.wide .ph{aspect-ratio:21/7}
+  .shot.wide .ph{aspect-ratio:16/9}
 
   /* Features */
   .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
@@ -150,15 +151,24 @@
   <section class="wrap">
     <div class="shots">
       <div class="shot wide">
-        <div class="ph">[ Screenshot placeholder — main window: results list with the Patterns column ]</div>
+        <div class="ph">
+          <img src="assets/screenshot-results.png" alt="Dollar Detective results view" onerror="this.remove()">
+          [ Screenshot placeholder — assets/screenshot-results.png (main window: results list) ]
+        </div>
         <div class="cap"><b>The results view.</b> Every scanned bill, its serial, matched patterns, tier and odds — sortable, filterable, one click to the detail.</div>
       </div>
       <div class="shot">
-        <div class="ph">[ Screenshot placeholder — serial overlay close-up ]</div>
+        <div class="ph">
+          <img src="assets/screenshot-overlay.png" alt="Serial pattern overlay close-up" onerror="this.remove()">
+          [ Screenshot placeholder — assets/screenshot-overlay.png ]
+        </div>
         <div class="cap"><b>Pattern overlays.</b> See exactly which digits make a bill fancy.</div>
       </div>
       <div class="shot">
-        <div class="ph">[ Screenshot placeholder — Pattern Manager ]</div>
+        <div class="ph">
+          <img src="assets/screenshot-pattern-manager.png" alt="Pattern Manager" onerror="this.remove()">
+          [ Screenshot placeholder — assets/screenshot-pattern-manager.png ]
+        </div>
         <div class="cap"><b>Pattern Manager.</b> Browse, test and tune 130+ patterns.</div>
       </div>
     </div>
