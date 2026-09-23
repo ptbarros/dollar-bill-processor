@@ -1897,6 +1897,36 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Insights", f"Could not read the ledger:\n{e}")
             return
 
+        # Hide report rows for patterns that no longer exist in the engine (e.g.
+        # the pulled Green Guide) so test users don't see stale/Green-Guide
+        # references. This is data-driven, so those rows come back automatically
+        # if/when the full guide is re-added. Prefer an already-loaded engine;
+        # otherwise build a lightweight Lua-only engine (no YOLO/OCR) just to
+        # enumerate the current pattern names.
+        try:
+            proc = self.processor or (
+                self.processing_thread.processor
+                if getattr(self, "processing_thread", None) else None)
+            eng = getattr(proc, "pattern_engine", None) if proc else None
+            if eng is None:
+                from pattern_engine_v3 import PatternEngineV3
+                eng = PatternEngineV3()
+            valid = set(getattr(eng, "lua_patterns", {}).keys()) or None
+        except Exception:
+            valid = None
+        if valid:
+            kept_rows = []
+            for row in payload["report"].get("patterns", []):
+                aliases = [a for a in (row.get("aliases") or [row.get("name")])
+                           if a in valid]
+                if not aliases:
+                    continue  # every alias is a removed (e.g. Green Guide) pattern
+                row = dict(row)
+                row["aliases"] = aliases
+                row["name"] = min(aliases, key=len)
+                kept_rows.append(row)
+            payload["report"]["patterns"] = kept_rows
+
         try:
             from resource_path import user_data_dir
             tmpl_path = Path(__file__).parent / "insights_template.html"
