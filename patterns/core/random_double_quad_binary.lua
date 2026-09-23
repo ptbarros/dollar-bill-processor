@@ -2,7 +2,6 @@
 Pattern: RANDOM_DOUBLE_QUAD_BINARY
 DisplayName: Binary Quads
 Description: Only two digits, each used four times and mixed together rather than split into two clean blocks (e.g. 4111·4414).
-BookRef: CS-930
 Tier: 5
 Examples: ["41114414", "11441144", "41414141"]
 Odds: 1 in 33,403 (2,874 per 96M)
@@ -47,6 +46,6 @@ function match(ctx)
             {positions = pos1, color = "gold"},
             {positions = pos2, color = "coral"}
         },
-        message = "Random double quad binary: four " .. d1 .. "s and four " .. d2 .. "s (CS-Random Double Quad Binary)"
+        message = "Random double quad binary: four " .. d1 .. "s and four " .. d2 .. "s"
     }
 end

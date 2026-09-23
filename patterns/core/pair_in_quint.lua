@@ -2,7 +2,6 @@
 Pattern: PAIR_IN_QUINT
 DisplayName: 5 of a Kind & Pair
 Description: Five of one digit split around an adjacent pair of a second digit, plus one stray digit (e.g. 0·5·22·5555).
-BookRef: CS-390
 Tier: 6
 Examples: ["05225555", "05522555", "52255550", "55225515", "52255155"]
 Odds: 1 in 5,115 (18,768 per 96M)
@@ -61,6 +60,6 @@ function match(ctx)
             {from = pair_positions[1], to = pair_positions[2], color = "orange", thickness = 3}
         },
         connectors = {},
-        message = quint_digit .. "x5 surrounds " .. pair_digit .. pair_digit .. " pair (CS-Pair in a Quint)"
+        message = quint_digit .. "x5 surrounds " .. pair_digit .. pair_digit .. " pair"
     }
 end

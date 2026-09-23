@@ -2,7 +2,6 @@
 Pattern: MINI_6_REPEATER
 DisplayName: 6 Digit Repeater
 Description: A three-digit run repeated back to back sits somewhere in the serial (e.g. 301·301·xx).
-BookRef: CS-1570
 Tier: 7
 Examples: ["30130100", "03013010", "00301301"]
 Odds: 1 in 361 (266,166 per 96M)
@@ -34,7 +33,7 @@ function match(ctx)
                         {from = base + 3, to = base + 5, color = "orange", thickness = 2}
                     },
                     connectors = {},  -- arcs removed (Ed review)
-                    message = a .. b .. c .. " repeats at position " .. i .. " (CS-Mini 6 Repeater)"
+                    message = a .. b .. c .. " repeats at position " .. i
                 }
             end
         end

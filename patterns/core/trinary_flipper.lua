@@ -2,7 +2,6 @@
 Pattern: TRINARY_FLIPPER
 DisplayName: Trinary Flipper
 Description: Built from three different digits, all of them ones that still look like digits upside-down — 0, 1, 6, 8 and 9 (e.g. 0181·0081).
-BookRef: CS-1060
 Tier: 6
 Examples: ["01810081", "61160016", "61916191"]
 Odds: 1 in 1,906 (50,359 per 96M)
@@ -48,6 +47,6 @@ function match(ctx)
             {positions = pos2, color = "teal"},
             {positions = pos3, color = "cyan"}
         },
-        message = "Trinary flipper: digits " .. d1 .. ", " .. d2 .. ", " .. d3 .. " (all flip-valid) (CS-Trinary Flipper)"
+        message = "Trinary flipper: digits " .. d1 .. ", " .. d2 .. ", " .. d3 .. " (all flip-valid)"
     }
 end

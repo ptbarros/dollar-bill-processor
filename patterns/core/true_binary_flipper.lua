@@ -2,7 +2,6 @@
 Pattern: TRUE_BINARY_FLIPPER
 DisplayName: True Binary Flipper
 Description: Built from only 0s and 1s, and it reads the same turned upside-down (e.g. 1010·0101).
-BookRef: CS-1040
 Tier: 1
 Odds: 1 in 6,400,000 (15 per 96M)
 Examples: ["10100101", "11011011", "10111101"]
@@ -33,6 +32,6 @@ function match(ctx)
             {positions = pos0, color = "blue"},
             {positions = pos1, color = "cyan"},
         },
-        message = "CS-True Binary Flipper: only 0/1, reads same upside-down (CS-1040)"
+        message = "True Binary Flipper: only 0/1, reads same upside-down"
     }
 end

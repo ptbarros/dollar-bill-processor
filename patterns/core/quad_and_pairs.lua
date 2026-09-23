@@ -2,7 +2,6 @@
 Pattern: QUAD_AND_PAIRS
 DisplayName: Quad and 2 Pair
 Description: A solid block of four identical digits plus two side-by-side pairs of two other digits (e.g. 11·2222·33).
-BookRef: CS-310
 Tier: 5
 Examples: ["11222233", "44441122", "33224444"]
 Odds: 1 in 9,456 (10,152 per 96M)
@@ -53,6 +52,6 @@ function match(ctx)
             {positions = pair1_pos, color = "orange"},
             {positions = pair2_pos, color = "coral"}
         },
-        message = quad_digit .. "x4 quad + pairs of " .. pair_digits[1] .. "," .. pair_digits[2] .. " (CS-Quad and Pairs)"
+        message = quad_digit .. "x4 quad + pairs of " .. pair_digits[1] .. "," .. pair_digits[2]
     }
 end

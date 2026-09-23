@@ -2,7 +2,6 @@
 Pattern: TRUE_BINARY_ROTATOR
 DisplayName: True Binary Rotator
 Description: Built from only 0s and 1s, both present, and it reads the same turned upside-down (e.g. 0100·0010).
-BookRef: CS-1110
 Tier: 1
 Odds: 1 in 6,857,143 (14 per 96M)
 Examples: ["01000010", "10000001", "01100110"]
@@ -32,6 +31,6 @@ function match(ctx)
             {from = 0, to = 7, color = "purple", style = "arc"},
             {from = 1, to = 6, color = "purple", style = "arc"},
         },
-        message = "CS-True Binary Rotator: {0,1} rotator (CS-1110)"
+        message = "True Binary Rotator: {0,1} rotator"
     }
 end

@@ -2,7 +2,6 @@
 Pattern: TRI_RADAR_BOOKEND
 DisplayName: 3 Digit Radar Bookend
 Description: The first three digits show up flipped at the tail end, mirrored across the serial (e.g. 123·xx·321).
-BookRef: CS-1010
 Tier: 7
 Examples: ["12300321", "45600654", "12312321"]
 Odds: 1 in 1,009 (95,100 per 96M)
@@ -41,6 +40,6 @@ function match(ctx)
             {from = 1, to = 6, color = "coral",  style = "arc"},
             {from = 2, to = 5, color = "cyan",   style = "arc"}
         },
-        message = b1..b2..b3 .. "xx" .. b3..b2..b1 .. " tri-radar bookend (CS-Tri Radar Bookend)"
+        message = b1..b2..b3 .. "xx" .. b3..b2..b1 .. " tri-radar bookend"
     }
 end

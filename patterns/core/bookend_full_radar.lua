@@ -2,7 +2,6 @@
 Pattern: BOOKEND_FULL_RADAR
 DisplayName: Bookended Radar
 Description: Reads the same forwards and backwards, and both ends open with a matching pair of the same digit (e.g. 44·1331·44).
-BookRef: CS-1280
 Tier: 4
 Odds: 1 in 106,785 (899 per 96M)
 Examples: ["44133144", "22155122", "88100188"]
@@ -37,6 +36,6 @@ function match(ctx)
             {from = 0, to = 7, color = "orange", style = "arc"},
             {from = 1, to = 6, color = "orange", style = "arc"},
         },
-        message = outer .. outer .. " bookends + palindrome (CS-Bookend Full Radar CS-1280)"
+        message = outer .. outer .. " bookends + palindrome"
     }
 end

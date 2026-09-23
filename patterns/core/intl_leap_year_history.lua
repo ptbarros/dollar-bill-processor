@@ -2,7 +2,6 @@
 Pattern: INTL_LEAP_YEAR_HISTORY
 DisplayName: History Note Leap Year Y/M/D
 Description: Reads as a leap-day date — February 29th in the year-first style — from more than a hundred years ago (e.g. 1904·02·29).
-BookRef: CS-650
 Tier: 6
 Odds: Depends on the date
 Examples: ["19040229", "18080229"]

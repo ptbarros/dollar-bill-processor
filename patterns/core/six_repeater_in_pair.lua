@@ -2,7 +2,6 @@
 Pattern: SIX_REPEATER_IN_PAIR
 DisplayName: Bookended Repeater
 Description: A three-digit run repeated back to back, with a single matching digit capping both ends (e.g. 9·301·301·9).
-BookRef: CS-1510
 Tier: 5
 Examples: ["93013019", "71231237", "45915914"]
 Odds: 1 in 13,793 (6,960 per 96M)
@@ -47,6 +46,6 @@ function match(ctx)
             {from = 1, to = 4, color = "orange", style = "arc"},
             {from = 3, to = 6, color = "orange", style = "arc"}
         },
-        message = outer .. " bookends " .. x .. y .. z .. " repeated twice (CS-Six Repeater in a Pair)"
+        message = outer .. " bookends " .. x .. y .. z .. " repeated twice"
     }
 end

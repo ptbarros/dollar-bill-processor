@@ -2,7 +2,6 @@
 Pattern: DOUBLE_QUADS_COUNT
 DisplayName: Quad Ladder
 Description: Two blocks of four identical digits where the second block is one higher or lower than the first (e.g. 6666·7777).
-BookRef: CS-880
 Tier: 1
 Odds: 1 in 5,647,059 (17 per 96M)
 Examples: ["66667777", "44443333", "11112222"]
@@ -39,6 +38,6 @@ function match(ctx)
         connectors = {
             {from = 3, to = 4, color = "lime", style = "line"},
         },
-        message = a .. a .. a .. a .. " → " .. b .. b .. b .. b .. " counts " .. direction .. " (CS-880)"
+        message = a .. a .. a .. a .. " → " .. b .. b .. b .. b .. " counts " .. direction
     }
 end

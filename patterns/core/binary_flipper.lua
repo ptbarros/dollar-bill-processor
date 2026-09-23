@@ -2,7 +2,6 @@
 Pattern: BINARY_FLIPPER
 DisplayName: Binary Flipper
 Description: Uses only two different digits, both from the upside-down-friendly set 0, 1, 6, 8 and 9 — any arrangement (e.g. 1881·1181, 0099·0099); the digits flip, the serial doesn't have to.
-BookRef: CS-1050
 Tier: 4
 Examples: ["18811181", "16611661", "00990099"]
 Odds: 1 in 44,444 (2,160 per 96M)
@@ -44,6 +43,6 @@ function match(ctx)
             {positions = pos1, color = "purple"},
             {positions = pos2, color = "cyan"}
         },
-        message = "Binary flipper: only " .. d1 .. " and " .. d2 .. " (both flip-valid) (CS-Binary Flipper)"
+        message = "Binary flipper: only " .. d1 .. " and " .. d2 .. " (both flip-valid)"
     }
 end

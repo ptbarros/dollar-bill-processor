@@ -2,7 +2,6 @@
 Pattern: BINARY_ROTATOR
 DisplayName: Binary Rotator
 Description: Turn the note upside-down and it reads the same, using only two different digits that still read upside-down — but not the plain 0-and-1 pairing (e.g. 0888·8880).
-BookRef: CS-1120
 Tier: 2
 Odds: 1 in 2,666,667 (36 per 96M)
 Examples: ["08888880", "88000088", "18888881"]
@@ -37,6 +36,6 @@ function match(ctx)
             {from = 0, to = 7, color = "purple", style = "arc"},
             {from = 1, to = 6, color = "purple", style = "arc"},
         },
-        message = "CS-Binary Rotator: 2-digit rotator {" .. uniq:sub(1,1) .. "," .. uniq:sub(2,2) .. "} (CS-1120)"
+        message = "Binary Rotator: 2-digit rotator {" .. uniq:sub(1,1) .. "," .. uniq:sub(2,2) .. "}"
     }
 end

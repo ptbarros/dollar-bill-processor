@@ -2,7 +2,6 @@
 Pattern: DUAL_RADAR_BOOKEND
 DisplayName: 2 Digit Radar Bookend
 Description: The first two digits show up flipped at the tail end — two different digits mirrored across the serial (e.g. 23·xxxx·32).
-BookRef: CS-970
 Tier: 8
 Examples: ["23000032", "45678954", "12999921"]
 Odds: 1 in 110 (870,000 per 96M)
@@ -33,6 +32,6 @@ function match(ctx)
             {from = 0, to = 7, color = "orange", style = "arc"},
             {from = 1, to = 6, color = "coral",  style = "arc"}
         },
-        message = a .. b .. " mirrored as " .. b .. a .. " at ends (CS-Dual Radar Bookend)"
+        message = a .. b .. " mirrored as " .. b .. a .. " at ends"
     }
 end

@@ -2,7 +2,6 @@
 Pattern: PAIR_AND_SEXTUP
 DisplayName: 6 in a Row & Pair
 Description: Six identical digits in a row with a matching pair of another digit tacked onto one end (e.g. 22·666666).
-BookRef: CS-450
 Tier: 3
 Examples: ["22666666", "66666622", "33555555", "55555533"]
 Odds: 1 in 592,593 (162 per 96M)
@@ -51,6 +50,6 @@ function match(ctx)
             {from = pair_start,     to = pair_start + 1,                        color = "orange", thickness = 3}
         },
         message = sext_digit .. "x6 sextup + " .. pair_digit .. pair_digit ..
-                  " pair at " .. (pair_start == 0 and "start" or "end") .. " (CS-Pair and a Sextup)"
+                  " pair at " .. (pair_start == 0 and "start" or "end")
     }
 end

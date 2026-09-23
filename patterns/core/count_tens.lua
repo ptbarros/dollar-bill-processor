@@ -2,7 +2,6 @@
 Pattern: COUNT_TENS
 DisplayName: Count by 10
 Description: Reads as four two-digit numbers climbing (or dropping) by ten each time (e.g. 10·20·30·40).
-BookRef: CS-820
 Tier: 3
 Odds: 1 in 705,882 (136 per 96M)
 Examples: ["10203040", "40302010", "20304050"]
@@ -30,7 +29,7 @@ function match(ctx)
                 {from = 3, to = 4, color = "lime", style = "line"},
                 {from = 5, to = 6, color = "lime", style = "line"},
             },
-            message = string.format("Counts by 10s: %02d %02d %02d %02d (CS-820)", start_val, start_val+10, start_val+20, start_val+30)
+            message = string.format("Counts by 10s: %02d %02d %02d %02d", start_val, start_val+10, start_val+20, start_val+30)
         }
     end
 
@@ -51,7 +50,7 @@ function match(ctx)
                 {from = 3, to = 4, color = "coral", style = "line"},
                 {from = 5, to = 6, color = "coral", style = "line"},
             },
-            message = string.format("Counts down by 10s: %02d %02d %02d %02d (CS-820)", start_val, start_val-10, start_val-20, start_val-30)
+            message = string.format("Counts down by 10s: %02d %02d %02d %02d", start_val, start_val-10, start_val-20, start_val-30)
         }
     end
 

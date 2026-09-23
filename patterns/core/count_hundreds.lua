@@ -2,7 +2,6 @@
 Pattern: COUNT_HUNDREDS
 DisplayName: Count by 100
 Description: The serial breaks into groups whose leading digit steps up or down by one while the rest of each group stays the same (e.g. 411·511·61).
-BookRef: CS-830
 Tier: 4
 Odds: 1 in 61,538 (1,560 per 96M)
 Examples: ["12322332", "32322312", "41151161"]
@@ -44,6 +43,6 @@ function match(ctx)
             {from = 0, to = 3, color = "lime", style = "arc"},
             {from = 3, to = 6, color = "lime", style = "arc"},
         },
-        message = "Hundreds count " .. direction .. ": " .. c1 .. "xx " .. c2 .. "xx " .. c3 .. "x (CS-830)"
+        message = "Hundreds count " .. direction .. ": " .. c1 .. "xx " .. c2 .. "xx " .. c3 .. "x"
     }
 end

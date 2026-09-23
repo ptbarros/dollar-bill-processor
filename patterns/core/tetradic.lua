@@ -2,7 +2,6 @@
 Pattern: TETRADIC
 DisplayName: Rotator 018
 Description: Built only from 0s, 1s and 8s, and it reads the same forwards, backwards, and turned upside-down (e.g. 0811·1180).
-BookRef: CS-1160
 Tier: 2
 Odds: 1 in 1,200,000 (80 per 96M)
 Examples: ["08111180", "10111101", "10011001"]
@@ -42,6 +41,6 @@ function match(ctx)
             {from = 2, to = 5, color = "purple", style = "arc"},
             {from = 3, to = 4, color = "purple", style = "arc"},
         },
-        message = "CS-Tetradic: reads same in all 4 orientations (CS-1160)"
+        message = "Tetradic: reads same in all 4 orientations"
     }
 end

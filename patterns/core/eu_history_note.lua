@@ -2,7 +2,6 @@
 Pattern: EU_HISTORY_NOTE
 DisplayName: History Note D/M/Y
 Description: Reads as a real day-month-year date in the day-first style from more than a hundred years ago (e.g. 04·07·1776).
-BookRef: CS-590
 Tier: 7
 Odds: Depends on the date
 Examples: ["04071776", "25121900", "01011800"]

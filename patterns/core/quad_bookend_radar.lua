@@ -2,7 +2,6 @@
 Pattern: QUAD_BOOKEND_RADAR
 DisplayName: Quad Bookend Radar
 Description: A pair of one digit at each end wrapping a solid block of four of another digit (e.g. 22·4444·22).
-BookRef: CS-1310
 Tier: 2
 Examples: ["22444422", "33666633", "11999911"]
 Odds: 1 in 1,185,185 (81 per 96M)
@@ -37,6 +36,6 @@ function match(ctx)
             {from = 6, to = 7, color = "coral", thickness = 3}
         },
         connectors = {},  -- arcs removed (Ed review)
-        message = outer .. outer .. " wraps quad of " .. inner .. "s (CS-Quad Bookend Radar)"
+        message = outer .. outer .. " wraps quad of " .. inner .. "s"
     }
 end
