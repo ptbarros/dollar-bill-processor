@@ -70,17 +70,11 @@ It runs **entirely on your computer** — your scans never leave your machine.
 
 ## Screenshots
 
-> _Screenshots coming soon._ Drop images into `docs/screenshots/` and uncomment the
-> lines below.
+![Main window — results view](docs/screenshots/main-window.png)
 
-<!-- ![Main window](docs/screenshots/main-window.png) -->
-<!-- ![Pattern overlay on a serial](docs/screenshots/pattern-overlay.png) -->
-<!-- ![Pattern Manager](docs/screenshots/pattern-manager.png) -->
-<!-- ![Crop Tool](docs/screenshots/crop-tool.png) -->
-
-| Main window | Pattern overlay | Pattern Manager |
-|:-----------:|:---------------:|:---------------:|
-| _placeholder_ | _placeholder_ | _placeholder_ |
+| Pattern overlay | Pattern Manager | Crop Tool |
+|:---:|:---:|:---:|
+| ![Pattern overlay on a serial](docs/screenshots/pattern-overlay.png) | ![Pattern Manager](docs/screenshots/pattern-manager.png) | ![Crop Tool](docs/screenshots/crop-tool.png) |
 
 ---
 

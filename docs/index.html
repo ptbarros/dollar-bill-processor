@@ -75,16 +75,17 @@
   .section-sub{text-align:center;color:var(--muted);max-width:600px;margin:0 auto 40px}
 
   /* Screenshot placeholders */
-  .shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+  .shots{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media (max-width:640px){.shots{grid-template-columns:1fr}}
   .shot{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
-  .shot .ph{position:relative;overflow:hidden;aspect-ratio:16/10;display:grid;place-items:center;
+  /* Screenshots display at their OWN aspect ratio — no forced ratio, no crop. */
+  .shot .shot-img{display:block;width:100%;height:auto;border-bottom:1px solid var(--border)}
+  .shot .ph{aspect-ratio:16/10;display:grid;place-items:center;
     background:repeating-linear-gradient(45deg,var(--surface-2),var(--surface-2) 12px,transparent 12px,transparent 24px);
     color:var(--muted);font-size:13px;font-weight:600;text-align:center;padding:16px;border-bottom:1px solid var(--border)}
-  .shot .ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center}
   .shot .cap{padding:12px 16px;font-size:14px;color:var(--muted)}
   .shot .cap b{color:var(--text)}
   .shot.wide{grid-column:1/-1}
-  .shot.wide .ph{aspect-ratio:16/9}
 
   /* Features */
   .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
@@ -151,25 +152,20 @@
   <section class="wrap">
     <div class="shots">
       <div class="shot wide">
-        <div class="ph">
-          <img src="assets/screenshot-results.png" alt="Dollar Detective results view" onerror="this.remove()">
-          [ Screenshot placeholder — assets/screenshot-results.png (main window: results list) ]
-        </div>
+        <img class="shot-img" src="screenshots/main-window.png" alt="Dollar Detective results view" onerror="shotErr(this)">
         <div class="cap"><b>The results view.</b> Every scanned bill, its serial, matched patterns, tier and odds — sortable, filterable, one click to the detail.</div>
       </div>
-      <div class="shot">
-        <div class="ph">
-          <img src="assets/screenshot-overlay.png" alt="Serial pattern overlay close-up" onerror="this.remove()">
-          [ Screenshot placeholder — assets/screenshot-overlay.png ]
-        </div>
+      <div class="shot wide">
+        <img class="shot-img" src="screenshots/pattern-overlay.png" alt="Serial pattern overlay close-up" onerror="shotErr(this)">
         <div class="cap"><b>Pattern overlays.</b> See exactly which digits make a bill fancy.</div>
       </div>
       <div class="shot">
-        <div class="ph">
-          <img src="assets/screenshot-pattern-manager.png" alt="Pattern Manager" onerror="this.remove()">
-          [ Screenshot placeholder — assets/screenshot-pattern-manager.png ]
-        </div>
+        <img class="shot-img" src="screenshots/pattern-manager.png" alt="Pattern Manager" onerror="shotErr(this)">
         <div class="cap"><b>Pattern Manager.</b> Browse, test and tune 130+ patterns.</div>
+      </div>
+      <div class="shot">
+        <img class="shot-img" src="screenshots/crop-tool.png" alt="Crop tool" onerror="shotErr(this)">
+        <div class="cap"><b>Crop tool.</b> Clean, listing-ready serial crops in a click.</div>
       </div>
     </div>
   </section>
@@ -223,6 +219,15 @@
 </footer>
 
 <script>
+  // If a screenshot file is missing, swap it for a labeled placeholder box
+  // (keeps the page tidy instead of showing a broken-image icon).
+  function shotErr(img){
+    var d=document.createElement('div');
+    d.className='ph';
+    d.textContent='[ image not found: '+img.getAttribute('src')+' ]';
+    img.replaceWith(d);
+  }
+
   // Show the actual latest version in the badge (falls back to the static label
   // if GitHub's API is unreachable / rate-limited). Buttons already point at
   // /releases/latest so they stay correct with or without this.
