@@ -218,9 +218,18 @@ jobs:
           path: dist/DollarDetective-arm64.dmg
           if-no-files-found: error
 
+  # Intel macOS build. DECOUPLED from the release gate on purpose: GitHub's
+  # macos-13 (Intel) runners are scarce/being retired, so this job can sit
+  # unscheduled for hours. It is NOT in `release.needs` -- a stuck/absent Intel
+  # runner must never hold the release hostage (a hung job blocks dependents even
+  # with continue-on-error). Instead, when it does build on a tag, it uploads its
+  # own .dmg straight onto the release, which the release job creates in parallel.
   macos-intel:
     runs-on: macos-13           # Intel (x86_64) runner
-    continue-on-error: true     # best-effort: a macOS quirk must not block the release
+    continue-on-error: true     # best-effort: a macOS quirk must not fail the run
+    timeout-minutes: 60         # bound the RUN so a hung build can't linger
+    permissions:
+      contents: write           # to attach the .dmg to the release
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -254,8 +263,19 @@ jobs:
           path: dist/DollarDetective-x86_64.dmg
           if-no-files-found: error
 
+      # Attach directly to the release (created in parallel by the release job).
+      # softprops creates-or-updates the release for this tag, so ordering between
+      # the two jobs doesn't matter -- the assets merge.
+      - name: Attach Intel .dmg to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: dist/DollarDetective-x86_64.dmg
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
   release:
-    needs: [windows, windows-cuda, windows-directml, linux, macos, macos-intel]
+    needs: [windows, windows-cuda, windows-directml, linux, macos]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -294,7 +314,6 @@ jobs:
             artifacts/windows-installer-directml/*
             artifacts/linux-appimage/*
             artifacts/macos-app/*
-            artifacts/macos-intel/*
           body_path: RELEASE_NOTES.md
           generate_release_notes: true   # appends the auto "Full Changelog" link
           # Tags with a hyphen (e.g. v1.4.0-ci1) are test/pre-releases.
