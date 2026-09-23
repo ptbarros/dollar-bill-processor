@@ -218,8 +218,44 @@ jobs:
           path: dist/DollarDetective-arm64.dmg
           if-no-files-found: error
 
+  macos-intel:
+    runs-on: macos-13           # Intel (x86_64) runner
+    continue-on-error: true     # best-effort: a macOS quirk must not block the release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies (torch-free)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
+          pip install pyinstaller
+
+      - name: Build .app (unsigned)
+        run: pyinstaller --noconfirm --clean DollarDetective.spec
+
+      - name: Verify frozen app can import its native deps (cv2, onnxruntime, ...)
+        run: |
+          QT_QPA_PLATFORM=offscreen DBP_VERIFY_IMPORTS=1 \
+            "dist/Dollar Detective.app/Contents/MacOS/DollarDetective"
+
+      - name: Package .dmg (unsigned)
+        run: |
+          hdiutil create -volname "Dollar Detective" \
+            -srcfolder "dist/Dollar Detective.app" \
+            -ov -format UDZO dist/DollarDetective-x86_64.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel
+          path: dist/DollarDetective-x86_64.dmg
+          if-no-files-found: error
+
   release:
-    needs: [windows, windows-cuda, windows-directml, linux, macos]
+    needs: [windows, windows-cuda, windows-directml, linux, macos, macos-intel]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -258,6 +294,7 @@ jobs:
             artifacts/windows-installer-directml/*
             artifacts/linux-appimage/*
             artifacts/macos-app/*
+            artifacts/macos-intel/*
           body_path: RELEASE_NOTES.md
           generate_release_notes: true   # appends the auto "Full Changelog" link
           # Tags with a hyphen (e.g. v1.4.0-ci1) are test/pre-releases.
