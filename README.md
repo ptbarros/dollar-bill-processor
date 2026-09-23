@@ -278,9 +278,6 @@ yourself. The software is provided **as-is, with no warranty**.
 
 ## Acknowledgements
 
-- **The Green Guide** — many of the named patterns are based on definitions from the
-  well-known collectors' guide to fancy serial numbers. Pattern *names and
-  descriptions* originate with that work and are credited to its author(s).
 - **Training data** — the detection model was trained with help from the Roboflow
   project ["dollar-bill-serial-number"](https://universe.roboflow.com/turt1e/dollar-bill-serial-number)
   (CC BY 4.0).
