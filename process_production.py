@@ -531,6 +531,81 @@ class YOLOBillAligner:
         self.yolo_model = yolo_model
         self.contour_aligner = BillAligner()
 
+    def _best_back_plate(self, img: np.ndarray, conf: float = 0.02) -> Optional[tuple]:
+        """Return the highest-confidence back_plate detection as (conf, cx, cy),
+        where cx/cy are the box-center as fractions (0..1) of width/height.
+        Returns None if no back_plate is found. Uses a very low confidence floor
+        because on an upside-down back the model barely recognizes the number,
+        yet its POSITION is still a reliable orientation cue.
+        """
+        h, w = img.shape[:2]
+        get_timing().add_yolo_call()
+        results = self.yolo_model(img, verbose=False, conf=conf)
+        bp_id = self.YOLO_CLASSES.get('back_plate', 1)
+        best = None
+        for result in results:
+            for box in result.boxes:
+                if not hasattr(box, 'cls') or box.cls is None:
+                    continue
+                if int(box.cls[0]) != bp_id:
+                    continue
+                c = float(box.conf[0])
+                x1, y1, x2, y2 = map(float, box.xyxy[0])
+                cx = (x1 + x2) / 2 / w
+                cy = (y1 + y2) / 2 / h
+                if best is None or c > best[0]:
+                    best = (c, cx, cy)
+        return best
+
+    def _detect_back_orientation(self, img: np.ndarray,
+                                 first_pass: Optional[tuple] = None) -> Optional[str]:
+        """Detect whether a BACK image is upside-down, independent of the front.
+
+        Backs have no treasury/FRB seal, so the seal-position test can't orient
+        them. Instead we use the back-plate check number: on an upright back of
+        any denomination it sits in the LOWER-RIGHT quadrant, and the detector
+        recognizes it far more confidently upright than upside-down. We take the
+        best back_plate in the image and in its 180-degree rotation; whichever
+        orientation scores higher is upright.
+
+        Args:
+            img: The (already deskewed) back image, BGR.
+            first_pass: Optional pre-computed _best_back_plate(img) result to
+                avoid a redundant inference.
+
+        Returns:
+            'normal', 'upside_down', or None if it can't be decided.
+        """
+        o = first_pass if first_pass is not None else self._best_back_plate(img)
+
+        def lower_right(d):
+            return d is not None and d[1] > 0.5 and d[2] > 0.5
+
+        def upper_left(d):
+            return d is not None and d[1] < 0.5 and d[2] < 0.5
+
+        # Confident single-pass decision when the plate is clearly detected.
+        if o and o[0] >= 0.30:
+            if lower_right(o):
+                return 'normal'
+            if upper_left(o):
+                return 'upside_down'
+
+        # Weak or absent: compare against the 180-degree rotation. The upright
+        # orientation yields the higher-confidence back_plate.
+        r = self._best_back_plate(cv2.rotate(img, cv2.ROTATE_180))
+        conf_o = o[0] if o else 0.0
+        conf_r = r[0] if r else 0.0
+        if max(conf_o, conf_r) >= 0.15:
+            return 'normal' if conf_o >= conf_r else 'upside_down'
+
+        # Too weak to decide by confidence; fall back to any quadrant hint.
+        if lower_right(o):
+            return 'normal'
+        if upper_left(o):
+            return 'upside_down'
+        return None
+
     def align_image(self, image_path: Path, check_flip: bool = True,
                     cached_detections: Optional[dict] = None) -> tuple[Optional[np.ndarray], dict]:
         """
@@ -650,6 +725,27 @@ class YOLOBillAligner:
                 # Bill is upside down - rotate 180 degrees
                 img = cv2.rotate(img, cv2.ROTATE_180)
                 info['flipped'] = True
+
+        # Backs have no seals, so the seal test above can't orient them. Use the
+        # back-plate number instead (independent of the front, since feed/duplex
+        # scanners often emit the back rotated 180 deg vs the front).
+        if check_flip and not info.get('flipped'):
+            is_back = info.get('is_back', False)
+            if cached_detections:
+                is_back = is_back or cached_detections.get('is_back', False)
+            if is_back:
+                back_orientation = None
+                if cached_detections:
+                    back_orientation = cached_detections.get('orientation')
+                if back_orientation is None:
+                    back_orientation = self._detect_back_orientation(img)
+                if back_orientation == 'upside_down':
+                    img = cv2.rotate(img, cv2.ROTATE_180)
+                    info['flipped'] = True
+                elif back_orientation is None:
+                    # Back-plate couldn't decide; let the caller fall back to
+                    # matching the front's flip if it wants to.
+                    info['back_orientation_undecided'] = True
 
         return img, info
 
@@ -1213,6 +1309,9 @@ class ProductionProcessor:
         back_class_id = self.YOLO_CLASSES.get('bill_back', 2)
         seal_t_class_id = self.YOLO_CLASSES.get('seal_t', 7)
         seal_f_class_id = self.YOLO_CLASSES.get('seal_f', 6)
+        back_plate_class_id = self.YOLO_CLASSES.get('back_plate', 1)
+
+        bp_best = None  # highest-conf back_plate as (conf, cx_frac, cy_frac)
 
         for result in results:
             for box in result.boxes:
@@ -1240,6 +1339,11 @@ class ProductionProcessor:
                 elif cls_id == seal_f_class_id:
                     if data['seal_f_box'] is None or conf > data['seal_f_box'][4]:
                         data['seal_f_box'] = box_tuple
+                elif cls_id == back_plate_class_id:
+                    cx = (x1 + x2) / 2 / w
+                    cy = (y1 + y2) / 2 / h
+                    if bp_best is None or conf > bp_best[0]:
+                        bp_best = (conf, cx, cy)
 
         # Determine if front based on serials OR bill_front confidence
         serial_count = len(data['serial_boxes'])
@@ -1266,6 +1370,15 @@ class ProductionProcessor:
             seal_t_cx = (seal_t_box[0] + seal_t_box[2]) / 2
             if seal_t_cx < mid_x:
                 data['orientation'] = 'upside_down'
+
+        # Backs have no seals, so the test above always leaves them 'normal'.
+        # Detect their orientation independently from the back-plate number.
+        # (Some feed/duplex scanners emit the back rotated 180 deg vs the front,
+        # so we cannot assume the back matches the front.)
+        if not data['is_front']:
+            back_orientation = self.yolo_aligner._detect_back_orientation(img, first_pass=bp_best)
+            if back_orientation is not None:
+                data['orientation'] = back_orientation
 
         return data
 
@@ -1506,8 +1619,10 @@ class ProductionProcessor:
                 back_img = cv2.imread(str(back_path))
 
                 if back_img is not None:
-                    # Back uses same orientation as front, but negated skew
-                    orientation = front_cache.get('orientation', 'normal')
+                    # The back has its OWN orientation (detected from the back-plate
+                    # number) -- do not inherit the front's, because feed/duplex
+                    # scanners often emit the back rotated 180 deg vs the front.
+                    orientation = back_cache.get('orientation', 'normal')
                     back_skew = -skew if 'skew' in dir() else 0.0
 
                     needs_correction = (orientation == 'upside_down') or (abs(back_skew) > SKEW_THRESHOLD and abs(back_skew) < 15.0)
@@ -3644,21 +3759,30 @@ class ProductionProcessor:
             front_img, front_info = self.yolo_aligner.align_image(pair.front_path)
             front_flipped = front_info.get('flipped', False)
 
-        # For back, use YOLO alignment but don't check flip (no seals on back)
-        # Instead, flip the back if the front was flipped (same physical orientation)
+        # For the back, orient it INDEPENDENTLY via the back-plate number (it has
+        # no seals). Feed/duplex scanners often emit the back rotated 180 deg vs
+        # the front, so we must not assume it matches the front. If the back-plate
+        # can't decide, fall back to matching the front's flip (same physical bill
+        # on simple flatbed scanners).
         back_img = None
         if pair.back_path:
-            back_img, _ = self.yolo_aligner.align_image(pair.back_path, check_flip=False)
-            # If front was flipped, back should be too (same physical bill)
-            if front_flipped and back_img is not None:
+            # Reuse the back's cached detections (which carry its independently
+            # detected orientation) when available -- this skips a YOLO call and
+            # avoids recomputing back-plate detection. Falls back to on-the-fly
+            # detection for organized folders where the verify stage was skipped.
+            back_img, back_info = self.yolo_aligner.align_image(
+                pair.back_path, check_flip=True, cached_detections=pair.back_cache)
+            if back_img is not None and not back_info.get('flipped') \
+                    and back_info.get('back_orientation_undecided') and front_flipped:
                 back_img = cv2.rotate(back_img, cv2.ROTATE_180)
 
-        # Also handle the is_upside_down flag from serial detection (legacy support)
+        # Also handle the is_upside_down flag from serial detection (legacy support).
+        # Only the FRONT is corrected here: the back is already oriented
+        # independently above (via the back-plate), so flipping it again would
+        # double-flip it on feed/duplex scanners.
         if pair.is_upside_down and not front_flipped:
             if front_img is not None:
                 front_img = cv2.rotate(front_img, cv2.ROTATE_180)
-            if back_img is not None:
-                back_img = cv2.rotate(back_img, cv2.ROTATE_180)
 
         # Run single YOLO detection per aligned image for dynamic cropping
         front_detections = None
