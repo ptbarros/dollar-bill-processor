@@ -5,6 +5,8 @@ scanned dollar bills, and it finds the serial numbers, reads them, and flags the
 collectible ones — radars, repeaters, ladders, low serials, birthdays, ZIP codes,
 and a few hundred more patterns — so you don't have to eyeball every note.
 
+🌐 **Website & downloads: [dollardetective.online](https://dollardetective.online)**
+
 ![Version](https://img.shields.io/badge/version-1.4.8-brightgreen)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
