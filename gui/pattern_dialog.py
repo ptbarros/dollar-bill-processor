@@ -177,6 +177,23 @@ class PatternDialog(QDialog):
         """Setup the dialog UI."""
         layout = QVBoxLayout(self)
 
+        # Name-collision banner: shown only when a user pattern's internal name
+        # clashes with a built-in (the built-in wins; the duplicate is inactive).
+        self.collision_bar = QWidget()
+        _cb = QHBoxLayout(self.collision_bar)
+        _cb.setContentsMargins(8, 4, 8, 4)
+        self.collision_label = QLabel("")
+        self.collision_label.setWordWrap(True)
+        self.collision_label.setStyleSheet("color:#7a5300;")
+        _cb.addWidget(self.collision_label, 1)
+        self.collision_btn = QPushButton("Resolve…")
+        self.collision_btn.clicked.connect(self._resolve_collisions)
+        _cb.addWidget(self.collision_btn)
+        self.collision_bar.setStyleSheet(
+            "QWidget { background:#fff3cd; border:1px solid #ffe08a; border-radius:4px; }")
+        self.collision_bar.hide()
+        layout.addWidget(self.collision_bar)
+
         # Main splitter
         splitter = QSplitter(Qt.Horizontal)
 
@@ -386,7 +403,9 @@ class PatternDialog(QDialog):
 
         # Lua script viewer - shown for patterns with Lua implementations
         self.lua_script_layout = QHBoxLayout()
-        self.lua_script_label = QLabel("[Lua]")
+        # Badge kept as an (empty) placeholder so the surrounding show/hide wiring
+        # stays valid; the "[Lua]" text is gone since every pattern is Lua now.
+        self.lua_script_label = QLabel("")
         self.lua_script_label.setStyleSheet("color: #9C27B0; font-weight: bold;")
         self.lua_script_layout.addWidget(self.lua_script_label)
         self.view_script_btn = QPushButton("View Script")
@@ -408,6 +427,13 @@ class PatternDialog(QDialog):
             "key (Settings → AI).")
         self.ask_ai_btn.clicked.connect(self._ask_claude_about_pattern)
         self.lua_script_layout.addWidget(self.ask_ai_btn)
+
+        self.move_pattern_btn = QPushButton("Move to Library…")
+        self.move_pattern_btn.setToolTip(
+            "Move this user pattern into another library (never into core or a "
+            "built-in library)")
+        self.move_pattern_btn.clicked.connect(self._move_pattern_to_library)
+        self.lua_script_layout.addWidget(self.move_pattern_btn)
 
         self.delete_pattern_btn = QPushButton("Delete")
         self.delete_pattern_btn.setToolTip("Delete this user pattern")
@@ -441,6 +467,7 @@ class PatternDialog(QDialog):
         self.view_script_btn.hide()
         self.duplicate_pattern_btn.hide()
         self.ask_ai_btn.hide()
+        self.move_pattern_btn.hide()
         self.delete_pattern_btn.hide()
         self.generate_serial_btn.hide()
         self.test_serial_edit.hide()
@@ -596,6 +623,7 @@ class PatternDialog(QDialog):
     def _load_patterns(self):
         """Load patterns into the tree, grouped by library."""
         self.pattern_tree.clear()
+        self._update_collision_banner()
 
         # Temporarily disable sorting while loading
         self.pattern_tree.setSortingEnabled(False)
@@ -686,11 +714,9 @@ class PatternDialog(QDialog):
                     # Auto-generate: LOW_RUN_6M -> Low Run 6M
                     friendly_name = self._make_friendly_name(name)
 
-                if has_lua:
-                    shown_name = f"{friendly_name} [Lua]"
-                else:
-                    shown_name = friendly_name
-                pattern_item.setText(0, shown_name)
+                # Every pattern is Lua now, so a "[Lua]" tag conveys nothing --
+                # show the plain name.
+                pattern_item.setText(0, friendly_name)
 
                 # Tier column (for sorting)
                 pattern_item.setText(1, str(tier))
@@ -1039,6 +1065,10 @@ class PatternDialog(QDialog):
             # Check if editable (not from core library)
             library = data.get('library', 'core')
             self._current_lua_editable = library != 'core'
+            # Movable = user-side (not core or any shipped library).
+            _shipped = getattr(self.engine, 'SHIPPED_LIBRARIES',
+                               frozenset({'core', 'Nicks', 'The Green Guide', 'Essentials'}))
+            self._current_lua_movable = library not in _shipped
 
             self.lua_script_label.show()
             self.view_script_btn.show()
@@ -1064,13 +1094,16 @@ class PatternDialog(QDialog):
                 self.view_script_btn.setText("View Script")
                 self.view_script_btn.setToolTip("View the Lua source code (core patterns are read-only)")
                 self.delete_pattern_btn.hide()
+            self.move_pattern_btn.setVisible(self._current_lua_movable)
         else:
             self._current_lua_pattern = None
             self._current_lua_editable = False
+            self._current_lua_movable = False
             self.lua_script_label.hide()
             self.view_script_btn.hide()
             self.duplicate_pattern_btn.hide()
             self.ask_ai_btn.hide()
+            self.move_pattern_btn.hide()
             self.delete_pattern_btn.hide()
             self.generate_serial_btn.hide()
             self.test_serial_edit.hide()
@@ -1112,8 +1145,7 @@ class PatternDialog(QDialog):
         """Update the current tree row to show the (possibly overridden) label."""
         item = self.pattern_tree.currentItem() if hasattr(self, 'pattern_tree') else None
         if item is not None:
-            suffix = " [Lua]" if getattr(self, '_selected_has_lua', False) else ""
-            item.setText(0, f"{effective_label}{suffix}")
+            item.setText(0, effective_label)
 
     def _on_tier_edited(self, value):
         """Persist the edited tier override for the selected pattern.
@@ -1212,6 +1244,11 @@ class PatternDialog(QDialog):
                 result.append({
                     'positions': [pos],
                     'color': h.get('color', 'gray'),
+                    # Preserve the render style ('x'/'boxed_x'/'box'). Without this
+                    # the Pattern Manager preview dropped style and drew an excluded
+                    # digit as a muted box, while Serial Lookup (raw highlights) drew
+                    # the intended X -- the two views disagreed. Keep them in sync.
+                    'style': h.get('style', ''),
                     'label': h.get('label', '')
                 })
         return result
@@ -1625,6 +1662,96 @@ class PatternDialog(QDialog):
                                     "Select a pattern to duplicate first.")
             return
         self._create_pattern_copy(lua_info)
+
+    def _move_pattern_to_library(self):
+        """Move the selected user pattern into another (user-side) library."""
+        name = getattr(self, '_current_lua_pattern', None)
+        if not name:
+            return
+        info = self.engine.lua_patterns.get(name)
+        if info is None:
+            return
+        cur_lib = info.library
+        try:
+            dests = [l for l in self.engine.movable_pattern_libraries() if l != cur_lib]
+        except Exception:
+            dests = []
+        NEW = "New library…"
+        items = dests + [NEW]
+        friendly = info.display_name or name
+        choice, ok = QInputDialog.getItem(
+            self, "Move to Library", f"Move “{friendly}” to:", items, 0, False)
+        if not ok or not choice:
+            return
+        target = choice
+        if choice == NEW:
+            target, ok = QInputDialog.getText(self, "New Library", "New library name:")
+            if not ok or not target.strip():
+                return
+            target = target.strip()
+        okr, msg = self.engine.move_pattern(name, target)
+        if okr:
+            self._patterns_modified = True
+            self._load_patterns()
+            QMessageBox.information(self, "Move to Library", msg)
+        else:
+            QMessageBox.warning(self, "Move to Library", msg)
+
+    def _update_collision_banner(self):
+        """Show/hide the name-collision banner from the engine's current state."""
+        cols = []
+        try:
+            if hasattr(self.engine, 'get_name_collisions'):
+                cols = self.engine.get_name_collisions()
+        except Exception:
+            cols = []
+        self._collisions = cols
+        if not cols:
+            if hasattr(self, 'collision_bar'):
+                self.collision_bar.hide()
+            return
+        names = ", ".join(sorted({c.display_name or c.name for c in cols}))
+        n = len(cols)
+        self.collision_label.setText(
+            f"⚠ {n} user pattern{'s' if n != 1 else ''} "
+            f"{'share' if n != 1 else 'shares'} a name with a built-in and "
+            f"{'are' if n != 1 else 'is'} inactive (the built-in is used instead): "
+            f"{names}. Rename or remove the duplicate to clear this.")
+        self.collision_bar.show()
+
+    def _resolve_collisions(self):
+        """Offer to delete the shadowed duplicate file(s) that hide a built-in."""
+        cols = list(getattr(self, '_collisions', None) or [])
+        if not cols:
+            return
+        detail = "\n".join(f"  • {c.display_name or c.name}  —  {c.file_path}"
+                           for c in cols)
+        box = QMessageBox(self)
+        box.setWindowTitle("Resolve Name Conflicts")
+        box.setIcon(QMessageBox.Warning)
+        box.setText("These user patterns duplicate a built-in's name and are being "
+                    "ignored. Delete the duplicate file(s) so the built-in is used "
+                    "normally?")
+        box.setInformativeText(detail)
+        del_btn = box.addButton("Delete duplicate(s)", QMessageBox.DestructiveRole)
+        box.addButton("Cancel", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is not del_btn:
+            return
+        removed = 0
+        for c in cols:
+            try:
+                if self.engine.delete_collision(c.file_path):
+                    removed += 1
+            except Exception:
+                pass
+        if removed:
+            self._patterns_modified = True
+            self._load_patterns()
+        QMessageBox.information(
+            self, "Resolve Name Conflicts",
+            f"Removed {removed} duplicate pattern file(s)."
+            + ("" if removed == len(cols) else "\nSome could not be removed."))
 
     def _delete_user_pattern(self):
         """Delete the currently selected user pattern after confirmation."""

@@ -54,6 +54,10 @@ class LuaPatternInfo:
     data: Any = None              # Loaded data (list of dicts for CSV, any for JSON)
     data_by_key: dict = None      # Dict keyed by first column (CSV only)
     book_ref: str = ""            # CS- reference number (e.g., "CS-100")
+    name_collision: bool = False  # True => this pattern's internal name clashes
+                                  # with an already-loaded (winning) pattern, so it
+                                  # was set aside inactive instead of overriding it.
+    collision_with: str = ""      # Library of the winning pattern it clashed with.
     show_overlay: bool = True     # False => hide from the serial-overlay picker
                                   # (Overlay: none in the header). For patterns
                                   # whose match has nothing useful to draw on the
@@ -111,6 +115,10 @@ class PatternEngineV3:
 
         # Load Lua patterns
         self.lua_patterns: Dict[str, LuaPatternInfo] = {}
+        # Patterns whose internal name collided with an already-loaded one (the
+        # first-loaded wins, so built-ins beat a user duplicate). Kept here,
+        # inactive, so the UI can flag them for the user to rename/move/delete.
+        self.shadowed_patterns: List[LuaPatternInfo] = []
         self._load_lua_patterns()
 
     @property
@@ -154,6 +162,7 @@ class PatternEngineV3:
     def _load_lua_patterns(self):
         """Load all Lua pattern scripts from all library directories."""
         self.lua_patterns.clear()
+        self.shadowed_patterns.clear()
 
         # Skip these directories (not pattern libraries)
         skip_dirs = {'lib', 'data', '__pycache__'}
@@ -224,6 +233,80 @@ class PatternEngineV3:
         self.reload()
         return True
 
+    # Curated libraries that ship with the app -- their patterns are read-only to
+    # the move feature (a user can't move them out, and nothing can move into
+    # them). Everything else (the flat 'user' folder + imported/created add-on
+    # libraries) is user-side and movable.
+    SHIPPED_LIBRARIES = frozenset({'core', 'Nicks', 'The Green Guide', 'Essentials'})
+    _NON_LIBRARY_DIRS = frozenset({'lib', 'data', '__pycache__'})
+
+    def movable_pattern_libraries(self) -> list:
+        """User-side libraries a pattern may be moved between: the flat 'user'
+        folder plus imported/created add-on libraries. Never core or any shipped
+        library."""
+        libs = {"user"}
+        root = self.user_libraries_root()
+        if root and root.exists():
+            for d in root.iterdir():
+                if (d.is_dir() and d.name not in self._NON_LIBRARY_DIRS
+                        and d.name not in self.SHIPPED_LIBRARIES):
+                    libs.add(d.name)
+        return sorted(libs)
+
+    def move_pattern(self, name: str, target_library: str) -> tuple:
+        """Move a user-created pattern (and a copy of its data file, if any) into
+        another user-side library. Refuses to move a built-in/shipped pattern or to
+        move into core/a shipped library. Returns (ok, message)."""
+        # Only ACTIVE patterns are movable. A shadowed name-collision loser keeps
+        # the same internal name, so moving it wouldn't stop the clash -- those are
+        # resolved by delete/rename via the collision flag instead.
+        info = self.lua_patterns.get(name)
+        if info is None:
+            return False, f"Pattern '{name}' was not found."
+
+        # Source must be a user-side library (never core or a shipped library).
+        if info.library in self.SHIPPED_LIBRARIES:
+            return False, (f"'{name}' is in the built-in '{info.library}' library "
+                           "and can't be moved.")
+
+        # Destination must not be core or a shipped/built-in library.
+        if target_library == "core" or target_library in self.SHIPPED_LIBRARIES:
+            return False, f"Patterns can't be moved into the built-in '{target_library}' library."
+        if target_library in self._NON_LIBRARY_DIRS:
+            return False, f"'{target_library}' is not a valid library name."
+
+        if target_library == info.library:
+            return False, f"'{name}' is already in '{target_library}'."
+
+        target_dir = (self.user_patterns_dir if target_library == "user"
+                      else (self.user_libraries_root() or self.patterns_dir) / target_library)
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            return False, f"Could not create the destination library: {e}"
+
+        src = Path(info.file_path)
+        dest = target_dir / src.name
+        if dest.exists():
+            return False, f"A file named {src.name} already exists in '{target_library}'."
+
+        import shutil
+        try:
+            # Copy the data file first (leave the original in place -- other
+            # patterns in the source library may share it), then move the .lua.
+            if info.data_file:
+                data_src = src.parent / Path(info.data_file).name
+                if data_src.exists():
+                    data_dest = target_dir / data_src.name
+                    if not data_dest.exists():
+                        shutil.copy2(str(data_src), str(data_dest))
+            shutil.move(str(src), str(dest))
+        except Exception as e:
+            return False, f"Move failed: {e}"
+
+        self.reload()
+        return True, f"Moved '{name}' to '{target_library}'."
+
     def _load_lua_pattern(self, file_path: Path, library: str = "user"):
         """Load a single Lua pattern from file."""
         try:
@@ -292,10 +375,32 @@ class PatternEngineV3:
                 info.data = data
                 info.data_by_key = data_by_key
 
+            # Name-collision handling: the first-loaded pattern wins. Library scan
+            # order loads shipped libraries (core, Nicks, ...) before user-side
+            # ones, so a built-in beats a user duplicate. Instead of the old
+            # behavior (the later one silently overwrote/hid the earlier), set the
+            # loser aside, inactive and flagged, so the UI can surface it and the
+            # user can rename/move/delete it.
+            existing = self.lua_patterns.get(name)
+            if existing is not None:
+                info.enabled = False
+                info.name_collision = True
+                info.collision_with = existing.library
+                self.shadowed_patterns.append(info)
+                return
+
             self.lua_patterns[name] = info
 
         except Exception as e:
             print(f"Warning: Failed to load {file_path}: {e}")
+
+    def get_name_collisions(self) -> list:
+        """User-side patterns shadowed by a same-named winning pattern (built-in
+        or earlier-loaded). Each is inactive; the UI flags these so the user can
+        rename/delete them. Shipped-vs-shipped clashes are omitted (nothing the
+        user can act on)."""
+        return [info for info in self.shadowed_patterns
+                if info.library not in self.SHIPPED_LIBRARIES]
 
     def _parse_lua_metadata(self, script: str) -> dict:
         """Parse metadata from Lua script header comment."""
@@ -749,6 +854,21 @@ class PatternEngineV3:
         except Exception as e:
             print(f"Error deleting pattern: {e}")
             return False
+
+    def delete_collision(self, file_path) -> bool:
+        """Delete a shadowed (name-collision) user-side pattern file, then reload.
+        For safety only a file currently in the user-side collision list can be
+        removed this way (used to resolve a duplicate that hides a built-in)."""
+        fp = Path(file_path)
+        if str(fp) not in {str(c.file_path) for c in self.get_name_collisions()}:
+            return False
+        try:
+            fp.unlink()
+        except Exception as e:
+            print(f"Error deleting duplicate pattern: {e}")
+            return False
+        self.reload()
+        return True
 
     # Short words that read better lowercased mid-name (else the "short uppercase
     # acronym" rule below keeps them uppercase, giving "Sum 61 OR 11").
