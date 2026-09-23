@@ -218,61 +218,11 @@ jobs:
           path: dist/DollarDetective-arm64.dmg
           if-no-files-found: error
 
-  # Intel macOS build. DECOUPLED from the release gate on purpose: GitHub's
-  # macos-13 (Intel) runners are scarce/being retired, so this job can sit
-  # unscheduled for hours. It is NOT in `release.needs` -- a stuck/absent Intel
-  # runner must never hold the release hostage (a hung job blocks dependents even
-  # with continue-on-error). Instead, when it does build on a tag, it uploads its
-  # own .dmg straight onto the release, which the release job creates in parallel.
-  macos-intel:
-    runs-on: macos-13           # Intel (x86_64) runner
-    continue-on-error: true     # best-effort: a macOS quirk must not fail the run
-    timeout-minutes: 60         # bound the RUN so a hung build can't linger
-    permissions:
-      contents: write           # to attach the .dmg to the release
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies (torch-free)
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
-          pip install pyinstaller
-
-      - name: Build .app (unsigned)
-        run: pyinstaller --noconfirm --clean DollarDetective.spec
-
-      - name: Verify frozen app can import its native deps (cv2, onnxruntime, ...)
-        run: |
-          QT_QPA_PLATFORM=offscreen DBP_VERIFY_IMPORTS=1 \
-            "dist/Dollar Detective.app/Contents/MacOS/DollarDetective"
-
-      - name: Package .dmg (unsigned)
-        run: |
-          hdiutil create -volname "Dollar Detective" \
-            -srcfolder "dist/Dollar Detective.app" \
-            -ov -format UDZO dist/DollarDetective-x86_64.dmg
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-intel
-          path: dist/DollarDetective-x86_64.dmg
-          if-no-files-found: error
-
-      # Attach directly to the release (created in parallel by the release job).
-      # softprops creates-or-updates the release for this tag, so ordering between
-      # the two jobs doesn't matter -- the assets merge.
-      - name: Attach Intel .dmg to the release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: dist/DollarDetective-x86_64.dmg
-          prerelease: ${{ contains(github.ref_name, '-') }}
+  # NOTE: no Intel (x86_64) macOS job. GitHub's macos-13 Intel runners are being
+  # retired and would not schedule for this repo (a job sat unqueued for hours and
+  # blocked a release), so Intel macOS is intentionally NOT built in CI. If Intel
+  # coverage is ever needed, build it locally on an Intel Mac or a self-hosted
+  # runner -- don't reintroduce a GitHub-hosted macos-13 job.
 
   release:
     needs: [windows, windows-cuda, windows-directml, linux, macos]
