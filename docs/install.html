@@ -163,6 +163,22 @@
     <pre><code>./DollarDetective-x86_64.AppImage --appimage-extract-and-run</code></pre>
   </section>
 
+  <!-- RECOVERY / DOWNGRADE -->
+  <section class="os" id="recovery">
+    <h2><span class="ico">↩️</span> Trouble after an update?</h2>
+    <p class="sub">If a new version won't open or starts misbehaving, you can go back to the previous one — no need to get into the app first.</p>
+
+    <p style="color:var(--muted)">If the app <b>does</b> open, the easiest way is inside it: <b>Help&nbsp;→&nbsp;Revert&nbsp;to&nbsp;Previous&nbsp;Version</b>. If it won't open, reinstall the older version by hand:</p>
+    <ol>
+      <li>Open the <b><a href="https://github.com/ptbarros/dollar-bill-processor/releases">releases page</a></b> and pick the version you had before.</li>
+      <li>Download the <b>same edition you normally use</b> — the standard Windows <code>-setup.exe</code> (or the DirectML / NVIDIA build), the macOS <code>.dmg</code>, or the Linux <code>.AppImage</code>.</li>
+      <li>Run it. It installs right over the current version — no need to uninstall first.</li>
+    </ol>
+    <a class="btn btn-primary" href="https://github.com/ptbarros/dollar-bill-processor/releases">Open the releases page</a>
+
+    <div class="note" style="margin-top:18px"><b>Your work is kept.</b> Your patterns, settings, labels and saved results live in your user folder, separate from the program, so reinstalling an older version leaves all of it in place. On Windows you'll get the same one-time SmartScreen prompt as any install.</div>
+  </section>
+
   <p class="sub" style="text-align:center">Looking for older versions or release notes?
     <a href="https://github.com/ptbarros/dollar-bill-processor/releases">Browse all releases →</a></p>
 </main>
