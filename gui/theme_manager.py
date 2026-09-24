@@ -473,4 +473,28 @@ def get_combined_stylesheet(theme: str, font_size: int) -> str:
     if use_dark:
         stylesheet += get_dark_stylesheet()
 
+    # Make the resize divider (splitter handle) clearly visible in BOTH themes,
+    # with a size that's easy to grab. Appended last so it overrides the fainter
+    # dark-theme handle rule above. A centre grip line hints that it's draggable.
+    handle_bg = "#6a6a6a" if use_dark else "#b8b8b8"
+    handle_line = "#8a8a8a" if use_dark else "#8f8f8f"
+    stylesheet += f"""
+        QSplitter::handle {{
+            background-color: {handle_bg};
+        }}
+        QSplitter::handle:horizontal {{
+            width: 7px;
+            border-left: 1px solid {handle_line};
+            border-right: 1px solid {handle_line};
+        }}
+        QSplitter::handle:vertical {{
+            height: 7px;
+            border-top: 1px solid {handle_line};
+            border-bottom: 1px solid {handle_line};
+        }}
+        QSplitter::handle:hover {{
+            background-color: #2a82da;
+        }}
+    """
+
     return stylesheet
