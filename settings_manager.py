@@ -144,6 +144,7 @@ class SettingsManager:
         self.pattern_labels: Dict[str, str] = {}  # Pattern name -> custom display label override
         self.pattern_tiers: Dict[str, int] = {}  # Pattern name -> custom tier override (1-10; overrides the .lua Tier)
         self.pattern_flippable: Dict[str, bool] = {}  # Pattern name -> user override of the .lua Flippable flag (overlay can be shown rotated 180)
+        self.previous_version: Optional[str] = None  # Version running just before the last in-app update, so it can be one-click reverted to
         self.pattern_catalogs: Dict[str, str] = {}  # Pattern name -> catalog location (e.g., "A1", "B2")
         self.pattern_overrides: Dict[str, Dict[str, Any]] = {}  # e.g., {'GAS_PUMP': {'baseline_variance_min': 3.6}}
         self.custom_patterns: Dict[str, Dict] = {}  # User-defined YAML patterns
@@ -281,6 +282,10 @@ class SettingsManager:
 
         # Per-pattern "overlay can be shown flipped 180" overrides (bool)
         self.pattern_flippable = {k: bool(v) for k, v in (data.get('pattern_flippable', {}) or {}).items()}
+
+        # Version we were on before the last in-app update (for one-click revert)
+        pv = data.get('previous_version')
+        self.previous_version = str(pv) if pv else None
 
         # Load pattern catalogs
         self.pattern_catalogs = data.get('pattern_catalogs', {})
@@ -442,6 +447,7 @@ class SettingsManager:
             'pattern_labels': self.pattern_labels,
             'pattern_tiers': self.pattern_tiers,
             'pattern_flippable': self.pattern_flippable,
+            'previous_version': self.previous_version,
             'pattern_catalogs': self.pattern_catalogs,
             'pattern_overrides': self.pattern_overrides,
             'custom_patterns': self.custom_patterns,
@@ -573,6 +579,20 @@ class SettingsManager:
             self.pattern_flippable.pop(pattern_name, None)
         else:
             self.pattern_flippable[pattern_name] = bool(value)
+
+    def get_previous_version(self) -> Optional[str]:
+        """The version running just before the last in-app update, or None.
+        Used to offer a one-click 'Revert to previous version' after an update."""
+        return self.previous_version
+
+    def set_previous_version(self, value: Optional[str]):
+        """Record (or clear, with None) the version to revert to. Auto-saves so
+        the value survives the app closing to run the installer."""
+        self.previous_version = str(value) if value else None
+        try:
+            self.save()
+        except Exception:
+            pass
 
     def get_label_profiles(self) -> Dict[str, Dict]:
         """All saved label profiles ({name: template dict})."""

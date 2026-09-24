@@ -137,6 +137,35 @@ def check_for_update(timeout: int = 6) -> Optional[UpdateInfo]:
     )
 
 
+def release_asset_for_version(version: str, timeout: int = 6):
+    """Find the GitHub release tagged `version` (e.g. '1.7.1') and return
+    (release_url, asset_or_None) where asset is the download matching the running
+    edition. Used by the one-click 'Revert to previous version' action. Never
+    raises; on any failure returns (RELEASES_PAGE, None)."""
+    want = _parse_version(version)
+    if want is None:
+        return RELEASES_PAGE, None
+    try:
+        req = urllib.request.Request(
+            RELEASES_API,
+            headers={"Accept": "application/vnd.github+json",
+                     "User-Agent": "DollarDetective-Updater"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            releases = json.load(resp)
+    except Exception:
+        return RELEASES_PAGE, None
+
+    for rel in releases:
+        if rel.get("draft"):
+            continue
+        if _parse_version(rel.get("tag_name")) == want:
+            assets = [{"name": a["name"], "url": a["browser_download_url"]}
+                      for a in rel.get("assets", [])]
+            asset = _asset_for_edition(assets, detect_edition())
+            return rel.get("html_url", RELEASES_PAGE), asset
+    return RELEASES_PAGE, None
+
+
 def download_asset(url: str, progress_cb: Optional[Callable[[int, int], None]] = None,
                    timeout: int = 30) -> Optional[str]:
     """Download an asset to a temp file; return its path or None on failure.

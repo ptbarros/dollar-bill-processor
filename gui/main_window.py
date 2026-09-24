@@ -316,6 +316,18 @@ class MainWindow(QMainWindow):
         check_updates_action.triggered.connect(lambda: self._start_update_check(manual=True))
         help_menu.addAction(check_updates_action)
 
+        # Offer a one-click revert only when the last in-app update recorded the
+        # version we came from (and it isn't the one we're already running).
+        try:
+            from version import __version__
+            prev = self.settings.get_previous_version()
+            if prev and prev != __version__:
+                revert_action = QAction(f"&Revert to Previous Version ({prev})...", self)
+                revert_action.triggered.connect(lambda: self._revert_update(prev))
+                help_menu.addAction(revert_action)
+        except Exception:
+            pass
+
     def _setup_shortcuts(self):
         """Setup keyboard shortcuts for navigation and zoom."""
         # Bill navigation
@@ -1392,6 +1404,14 @@ class MainWindow(QMainWindow):
                 prompt_and_apply(self, info)
             elif manual:
                 show_up_to_date(self, __version__)
+        except Exception:
+            pass
+
+    def _revert_update(self, version: str):
+        """Reinstall the version we were on before the last in-app update."""
+        try:
+            from .updater_ui import revert_to_previous
+            revert_to_previous(self, version)
         except Exception:
             pass
 
