@@ -21,12 +21,21 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Color-code each digit by how it transforms, matching Flipper (Ed review):
-    -- 0 flips to itself (purple); 6 and 9 flip to each other (magenta).
+    -- Color-code each digit by how it transforms, matching Flipper: 0 flips to
+    -- itself (purple); 6 and 9 flip INTO each other, so give them distinct
+    -- colours (6 magenta, 9 orange) -- that way the swap is visible, and in the
+    -- 180-degree flipped view each colour lands where its partner digit now sits.
     local highlights = {}
     for i = 0, 7 do
         local d = digits:sub(i + 1, i + 1)
-        local color = (d == "0") and "purple" or "magenta"
+        local color
+        if d == "0" then
+            color = "purple"
+        elseif d == "6" then
+            color = "magenta"
+        else  -- d == "9"
+            color = "orange"
+        end
         table.insert(highlights, highlight({i}, color, d))
     end
 

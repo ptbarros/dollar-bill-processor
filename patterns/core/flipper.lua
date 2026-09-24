@@ -19,7 +19,10 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Color-code each digit by how it transforms, matching Near Flipper (Ed review).
+    -- Color-code each digit by how it transforms: 0/8 flip to themselves (purple),
+    -- 1 flips to itself (blue), and 6/9 flip INTO each other, so give them distinct
+    -- colours (6 magenta, 9 orange) -- the swap then reads at a glance, and in the
+    -- 180-degree flipped view each colour lands where its partner digit now sits.
     local highlights = {}
     for i = 0, 7 do
         local d = digits:sub(i + 1, i + 1)
@@ -28,8 +31,10 @@ function match(ctx)
             color = "purple"
         elseif d == "1" then
             color = "blue"
-        else
+        elseif d == "6" then
             color = "magenta"
+        else  -- d == "9"
+            color = "orange"
         end
         table.insert(highlights, highlight({i}, color, d))
     end
