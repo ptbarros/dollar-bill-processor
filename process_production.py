@@ -3225,24 +3225,55 @@ class ProductionProcessor:
         if len(chars) < 3:
             return result
 
-        # Mark the leading prefix letter(s) and the trailing letter as letters,
-        # the rest as digits. $1/$2 have one leading letter; $5+ have two (series
-        # + district), so key off the configured prefix length. For prefix_len 1
-        # this is identical to the old "first and last" rule. Correct letter/digit
-        # split matters for both gas-pump deviation (digits only) and the pattern
-        # overlay (which maps highlight positions onto the non-letter boxes).
+        # $1/$2 have one leading letter; $5+ have two (series + district), so key
+        # off the configured prefix length. A serial is [prefix_len letters]
+        # [8 digits][suffix letter OR star].
         try:
             prefix_len = self.cfg.serial_prefix_length
         except Exception:
             prefix_len = 1
-        # A serial is [prefix_len letters][8 digits][suffix letter OR star]. Anchor
-        # on the 8 digits rather than "last char = suffix": the star suffix on a
-        # star note is faint and inconsistently segmented, so keying the suffix off
-        # "last char" would steal the last DIGIT whenever the star isn't captured
-        # (its box vanished and it dropped out of the gas-pump measurement). Marking
-        # everything at/after prefix_len+8 as non-digit handles both cases -- star
-        # captured (it's the suffix) or not (nothing trails the 8 digits).
         n_digits = 8
+
+        # Repair over-segmentation before splitting letters from digits. A single
+        # glyph (commonly a '4', or a serifed letter) can break into two contours
+        # that the <4px bound-merge above doesn't catch (their gap is a touch
+        # wider, ~5px). That inflates the box count, and because the letter/digit
+        # split below is POSITIONAL, it shoves the real last digit into the
+        # "suffix" slot and shifts every pattern-overlay box by one. A real serial
+        # can hold at most prefix_len + 8 digits + 1 suffix boxes, so ONLY when we
+        # exceed that do we stitch the closest-spaced pair back together -- and
+        # only if that gap is a clear outlier (a split glyph's halves sit far
+        # tighter than two real neighbouring characters). Correctly-segmented
+        # serials never enter this loop, so their results (and the whole-glyph
+        # gas-pump shape test below) are untouched.
+        max_boxes = prefix_len + n_digits + 1
+        _guard = 0
+        while len(chars) > max_boxes and _guard < 8:
+            chars.sort(key=lambda c: c['x1'])
+            gaps = [chars[k + 1]['x1'] - chars[k]['x2'] for k in range(len(chars) - 1)]
+            j = min(range(len(gaps)), key=lambda k: gaps[k])
+            med_gap = sorted(gaps)[len(gaps) // 2]
+            if gaps[j] > 0.6 * med_gap:      # no clear split -> don't force a merge
+                break
+            a, b = chars[j], chars[j + 1]
+            a['x1'], a['x2'] = min(a['x1'], b['x1']), max(a['x2'], b['x2'])
+            a['top'], a['bottom'] = min(a['top'], b['top']), max(a['bottom'], b['bottom'])
+            a['height'] = a['bottom'] - a['top']
+            a['width'] = a['x2'] - a['x1']
+            a['center'] = (a['top'] + a['bottom']) / 2
+            del chars[j + 1]
+            _guard += 1
+
+        # Mark the leading prefix letter(s) and the trailing letter as letters, the
+        # rest as digits. For prefix_len 1 this is identical to the old "first and
+        # last" rule. Correct letter/digit split matters for both gas-pump
+        # deviation (digits only) and the pattern overlay (which maps highlight
+        # positions onto the non-letter boxes). Anchor on the 8 digits rather than
+        # "last char = suffix": the star suffix on a star note is faint and
+        # inconsistently segmented, so keying the suffix off "last char" would
+        # steal the last DIGIT whenever the star isn't captured. Marking everything
+        # at/after prefix_len+8 as non-digit handles both cases -- star captured
+        # (it's the suffix) or not (nothing trails the 8 digits).
         for i, char in enumerate(chars):
             char['is_letter'] = (i < prefix_len) or (i >= prefix_len + n_digits)
 
