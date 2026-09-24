@@ -54,13 +54,13 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 ; live in the per-user data dir and are NOT touched by this.
 Type: filesandordirs; Name: "{app}\_internal\patterns"
 Type: filesandordirs; Name: "{app}\patterns"
+; Remove the previously-shipped Green Guide bundle from updated installs (it is no
+; longer distributed). Already-imported user copies live in the per-user data dir
+; and are not touched.
+Type: files; Name: "{app}\Green Guide Library.ddpat"
 
 [Files]
 Source: "..\dist\DollarDetective\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
-; The optional Green Guide pattern library, as an importable bundle. Placed at the
-; install-folder root so it's easy to find: Pattern Manager -> Import Bundle... ->
-; this file re-adds the 145 Green Guide patterns that aren't in the core set.
-Source: "..\library_sources\green_guide.ddpat"; DestDir: "{app}"; DestName: "Green Guide Library.ddpat"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
