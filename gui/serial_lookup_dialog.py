@@ -15,7 +15,7 @@ import random
 import re
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QImage, QPainter, QColor
+from PySide6.QtGui import QFont, QImage, QPainter, QColor, QTransform
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QLabel, QListWidget,
     QListWidgetItem, QWidget, QSplitter, QPushButton, QApplication,
@@ -85,6 +85,19 @@ class SerialLookupDialog(QDialog):
         self.preview.setMinimumHeight(135)
         root.addWidget(self.preview)
 
+        # "Show flipped" view for flippable patterns (flippers/rotators): the same
+        # overlay rotated 180° so newcomers can see what the note reads upside down.
+        # Hidden unless the selected pattern is flagged Flippable.
+        self.flipped_caption = QLabel("Rotated 180°")
+        self.flipped_caption.setStyleSheet("color:#555; font-style:italic;")
+        self.flipped_caption.setVisible(False)
+        root.addWidget(self.flipped_caption)
+        self.flipped_view = QLabel()
+        self.flipped_view.setAlignment(Qt.AlignCenter)
+        self.flipped_view.setVisible(False)
+        root.addWidget(self.flipped_view)
+        self._current_flippable = False
+
         self.splitter = QSplitter(Qt.Horizontal)
         self.matches_list = QListWidget()
         # Show full pattern names: don't elide, scroll if one is extremely long.
@@ -130,6 +143,8 @@ class SerialLookupDialog(QDialog):
         self.preview.set_highlights([], [])
         self.preview.set_group_boxes([])
         self.copy_btn.setEnabled(False)
+        self._current_flippable = False
+        self._update_flipped_view()
 
         if len(digits) != 8:
             self.summary.setText(
@@ -191,11 +206,26 @@ class SerialLookupDialog(QDialog):
             self.resize(min(want, screen - 40), self.height())
         self.splitter.setSizes([list_w, max(details_min, self.width() - list_w - margins)])
 
+    def _update_flipped_view(self):
+        """Show/hide the rotated-180° copy of the current overlay for flippable
+        patterns. Uses the live-rendered preview so it always matches what's above."""
+        show = getattr(self, "_current_flippable", False)
+        self.flipped_caption.setVisible(show)
+        self.flipped_view.setVisible(show)
+        if show:
+            pix = self.preview.grab().transformed(QTransform().rotate(180),
+                                                  Qt.SmoothTransformation)
+            self.flipped_view.setPixmap(pix)
+        else:
+            self.flipped_view.clear()
+
     def _on_select(self, idx: int):
         if not (0 <= idx < len(self._matches)):
             self.preview.set_highlights([], [])
             self.preview.set_group_boxes([])
             self.copy_btn.setEnabled(False)
+            self._current_flippable = False
+            self._update_flipped_view()
             return
         m = self._matches[idx]
         self.preview.set_highlights(m.highlights, m.connectors)
@@ -203,6 +233,8 @@ class SerialLookupDialog(QDialog):
         self.copy_btn.setEnabled(True)
 
         info = self.engine.get_pattern_info(m.name) or {}
+        self._current_flippable = bool(info.get('flippable'))
+        self._update_flipped_view()
         lines = [f"<b>{info.get('display_name') or m.name}</b>"]
         if info.get('library'):
             lines.append(f"Library: {info['library']}")
@@ -230,10 +262,20 @@ class SerialLookupDialog(QDialog):
         preview_pix = self.preview.grab()
         pw, ph = preview_pix.width(), preview_pix.height()
 
+        # For a flippable pattern, also stack the 180°-rotated copy below, so a
+        # paste carries both the upright and upside-down views (one over the other).
+        flipped_pix = None
+        cap_h = 22
+        if getattr(self, "_current_flippable", False):
+            flipped_pix = preview_pix.transformed(QTransform().rotate(180),
+                                                  Qt.SmoothTransformation)
+
         pad = 16
         title_h = 52
         width = max(pw, 460) + pad * 2
         height = title_h + ph + pad * 2
+        if flipped_pix is not None:
+            height += cap_h + flipped_pix.height() + pad
         img = QImage(width, height, QImage.Format_ARGB32)
         img.fill(QColor("white"))
         p = QPainter(img)
@@ -257,6 +299,14 @@ class SerialLookupDialog(QDialog):
 
             # Overlay preview, centered under the title.
             p.drawPixmap((width - pw) // 2, title_h + pad, preview_pix)
+
+            # Flipped copy + caption underneath, if applicable.
+            if flipped_pix is not None:
+                y = title_h + pad + ph + pad
+                p.setFont(sf)
+                p.setPen(QColor("#555555"))
+                p.drawText(pad, y + 15, "Rotated 180°:")
+                p.drawPixmap((width - flipped_pix.width()) // 2, y + cap_h, flipped_pix)
         finally:
             p.end()
 

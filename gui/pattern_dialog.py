@@ -364,6 +364,17 @@ class PatternDialog(QDialog):
         tier_row.addStretch(1)
         details_layout.addLayout(tier_row)
 
+        # "Overlay can be shown flipped" -- a settings-layer override of the
+        # pattern's Flippable flag (mirrors the tier override). When on, Serial
+        # Lookup also shows this pattern's overlay rotated 180 (for flippers /
+        # rotators, so newcomers can see what it looks like upside down).
+        self.flippable_check = QCheckBox("Overlay can be shown flipped (180°)")
+        self.flippable_check.setToolTip(
+            "Show a rotated-180° copy of this pattern's overlay in Serial Lookup "
+            "(useful for flippers/rotators). Overrides the pattern's own setting.")
+        self.flippable_check.toggled.connect(self._on_flippable_toggled)
+        details_layout.addWidget(self.flippable_check)
+
         self.pattern_examples_label = QLabel("Examples: -")
         self.pattern_examples_label.setWordWrap(True)
         details_layout.addWidget(self.pattern_examples_label)
@@ -993,6 +1004,17 @@ class PatternDialog(QDialog):
         self.tier_default_label.setText(f"(default {default_tier})")
         self.tier_reset_btn.setEnabled(bool(tier_override))
 
+        # Flippable: show the effective value (user override wins over the .lua
+        # Flippable header). Remember the header default so a toggle back to it
+        # clears the override.
+        default_flip = bool(getattr(lua_info, 'flippable', False)) if lua_info is not None else False
+        flip_override = self.settings.get_pattern_flippable(name)
+        effective_flip = bool(flip_override) if flip_override is not None else default_flip
+        self._selected_pattern_default_flippable = default_flip
+        self.flippable_check.blockSignals(True)
+        self.flippable_check.setChecked(effective_flip)
+        self.flippable_check.blockSignals(False)
+
         # Use Lua examples if available
         examples = defn.get('examples', [])
         if lua_info and lua_info.examples:
@@ -1147,6 +1169,18 @@ class PatternDialog(QDialog):
         self.settings.save()
         self.tier_reset_btn.setEnabled(bool(self.settings.get_pattern_tier(name)))
         self._refresh_selected_tree_tier(value)
+
+    def _on_flippable_toggled(self, checked):
+        """Persist the Flippable override for the selected pattern. Stored only
+        when it differs from the pattern's own Flippable header; toggling back to
+        the default clears the override (mirrors the tier field). Read live by the
+        engine, so Serial Lookup picks it up immediately -- no reload needed."""
+        name = getattr(self, '_selected_pattern_name', None)
+        if not name:
+            return
+        default_flip = getattr(self, '_selected_pattern_default_flippable', False)
+        self.settings.set_pattern_flippable(name, checked if checked != default_flip else None)
+        self.settings.save()
 
     def _on_tier_reset(self):
         """Clear the selected pattern's tier override (back to its .lua tier)."""

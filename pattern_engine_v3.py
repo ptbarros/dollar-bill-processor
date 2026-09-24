@@ -53,7 +53,10 @@ class LuaPatternInfo:
     data_file: str = ""           # Relative path to external data file (CSV/JSON)
     data: Any = None              # Loaded data (list of dicts for CSV, any for JSON)
     data_by_key: dict = None      # Dict keyed by first column (CSV only)
-    book_ref: str = ""            # CS- reference number (e.g., "CS-100")
+    book_ref: str = ""            # legacy reference field (unused; kept for compat)
+    flippable: bool = False       # True => the overlay is meaningful drawn 180-flipped
+                                  # (flippers/rotators). Serial Lookup then also shows
+                                  # a rotated-180 copy. Header "Flippable: true".
     name_collision: bool = False  # True => this pattern's internal name clashes
                                   # with an already-loaded (winning) pattern, so it
                                   # was set aside inactive instead of overriding it.
@@ -361,6 +364,7 @@ class PatternEngineV3:
                 odds=metadata.get('odds', ''),
                 price=metadata.get('price', ''),
                 book_ref=metadata.get('bookref', ''),
+                flippable=bool(metadata.get('flippable', False)),
                 # "Overlay: none/off/false/no" hides the pattern from the serial
                 # overlay picker (still matches + shows in results). Default shown.
                 show_overlay=str(metadata.get('overlay', '')).strip().lower()
@@ -448,7 +452,7 @@ class PatternEngineV3:
                 return json.loads(value)
             except:
                 return [value]
-        elif key == 'enabled':
+        elif key in ('enabled', 'flippable'):
             return value.lower() in ('true', 'yes', '1')
         elif key == 'datafile':
             # Keep as string path
@@ -903,6 +907,15 @@ class PatternEngineV3:
                 return int(override)
         return base_tier
 
+    def _effective_flippable(self, name: str, base: bool) -> bool:
+        """The pattern's Flippable flag with the user's settings override applied
+        (None override = use the .lua Flippable header)."""
+        if self.settings:
+            override = self.settings.get_pattern_flippable(name)
+            if override is not None:
+                return bool(override)
+        return bool(base)
+
     def get_pattern_info(self, name: str) -> Optional[dict]:
         """Get info about a pattern."""
         if name in self.lua_patterns:
@@ -916,6 +929,7 @@ class PatternEngineV3:
                 'library': info.library,
                 'description': info.description,
                 'tier': self._effective_tier(name, info.tier),
+                'flippable': self._effective_flippable(name, info.flippable),
                 'enabled': info.enabled,
                 'source': 'lua',
                 'examples': info.examples,

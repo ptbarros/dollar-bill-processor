@@ -143,6 +143,7 @@ class SettingsManager:
         self.active_label_profile: str = ""  # currently selected profile name
         self.pattern_labels: Dict[str, str] = {}  # Pattern name -> custom display label override
         self.pattern_tiers: Dict[str, int] = {}  # Pattern name -> custom tier override (1-10; overrides the .lua Tier)
+        self.pattern_flippable: Dict[str, bool] = {}  # Pattern name -> user override of the .lua Flippable flag (overlay can be shown rotated 180)
         self.pattern_catalogs: Dict[str, str] = {}  # Pattern name -> catalog location (e.g., "A1", "B2")
         self.pattern_overrides: Dict[str, Dict[str, Any]] = {}  # e.g., {'GAS_PUMP': {'baseline_variance_min': 3.6}}
         self.custom_patterns: Dict[str, Dict] = {}  # User-defined YAML patterns
@@ -277,6 +278,9 @@ class SettingsManager:
         self.pattern_labels = data.get('pattern_labels', {})
         # Custom tier overrides (int values keyed by internal pattern name)
         self.pattern_tiers = {k: int(v) for k, v in (data.get('pattern_tiers', {}) or {}).items()}
+
+        # Per-pattern "overlay can be shown flipped 180" overrides (bool)
+        self.pattern_flippable = {k: bool(v) for k, v in (data.get('pattern_flippable', {}) or {}).items()}
 
         # Load pattern catalogs
         self.pattern_catalogs = data.get('pattern_catalogs', {})
@@ -437,6 +441,7 @@ class SettingsManager:
             'active_label_profile': self.active_label_profile,
             'pattern_labels': self.pattern_labels,
             'pattern_tiers': self.pattern_tiers,
+            'pattern_flippable': self.pattern_flippable,
             'pattern_catalogs': self.pattern_catalogs,
             'pattern_overrides': self.pattern_overrides,
             'custom_patterns': self.custom_patterns,
@@ -555,6 +560,19 @@ class SettingsManager:
             self.pattern_tiers[pattern_name] = int(tier)
         elif pattern_name in self.pattern_tiers:
             del self.pattern_tiers[pattern_name]
+
+    def get_pattern_flippable(self, pattern_name: str, default=None):
+        """User override of a pattern's Flippable flag (True/False), or `default`
+        (None = no override, use the .lua Flippable header)."""
+        return self.pattern_flippable.get(pattern_name, default)
+
+    def set_pattern_flippable(self, pattern_name: str, value):
+        """Set/clear a pattern's Flippable override. None clears it (revert to the
+        pattern's own .lua Flippable header)."""
+        if value is None:
+            self.pattern_flippable.pop(pattern_name, None)
+        else:
+            self.pattern_flippable[pattern_name] = bool(value)
 
     def get_label_profiles(self) -> Dict[str, Dict]:
         """All saved label profiles ({name: template dict})."""
