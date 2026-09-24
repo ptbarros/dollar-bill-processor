@@ -50,7 +50,7 @@ Point it at a folder of scanned bills and it will:
   detection model, then reads them with OCR, correcting common currency-font
   confusions (I↔T, O↔0↔Q, G↔6, etc.).
 - **Classify fancy serials** — checks each serial against a large built-in library
-  (100+ core patterns plus the full *Green Guide* collection): solids, radars,
+  (100+ built-in patterns): solids, radars,
   repeaters, ladders, binaries, low serials, star notes, birthdays/dates, ZIP
   codes, and many more.
 - **Show its work** — draws overlays on each bill highlighting the digits and the
@@ -160,8 +160,7 @@ A "fancy" serial number is one collectors find desirable because of a pattern in
 digits. Dollar Detective ships with a large library and lets you add your own:
 
 - **Built-in library** — the common families (solid, radar, repeater, ladder,
-  binary, low serial, star note, and more) plus the full **[Green Guide](#acknowledgements)**
-  collection of named patterns.
+  binary, low serial, star note, and more) plus many named patterns.
 - **Pattern Wizard** — build patterns by picking a recipe (ladder, pairs,
   palindrome, binary, …) with no coding.
 - **Lua scripting** — for full control, patterns are small [Lua](https://www.lua.org/)
@@ -298,8 +297,3 @@ build from this code must also be released as open source under this same licens
 including if you run a modified version as a network service.** You can't take this
 code, make a few changes, and ship it as a closed-source or paid product. See the
 [LICENSE](LICENSE) file for the full terms.
-
-> **Note on pattern content:** the code is AGPL-3.0, but many of the *pattern
-> definitions* (names and descriptions) originate with **The Green Guide** (see
-> [Acknowledgements](#acknowledgements)) and may carry their own copyright
-> independent of the software license.

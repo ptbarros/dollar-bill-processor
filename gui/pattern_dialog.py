@@ -292,7 +292,7 @@ class PatternDialog(QDialog):
 
         remove_library_btn = QPushButton("Remove Library…")
         remove_library_btn.setToolTip(
-            "Remove an add-on library you imported from a bundle (e.g. Green Guide). "
+            "Remove an add-on library you imported from a bundle. "
             "Deletes that library's patterns; the built-in patterns are not affected.")
         remove_library_btn.clicked.connect(self._remove_library)
         bundle_layout.addWidget(remove_library_btn)
@@ -375,11 +375,6 @@ class PatternDialog(QDialog):
         self.pattern_price_label = QLabel("Price: -")
         self.pattern_price_label.setStyleSheet("color: #2e7d32; font-weight: bold;")
         details_layout.addWidget(self.pattern_price_label)
-
-        self.pattern_book_ref_label = QLabel("")
-        self.pattern_book_ref_label.setStyleSheet("color: #795548; font-style: italic; font-size: 10px;")
-        self.pattern_book_ref_label.setVisible(False)
-        details_layout.addWidget(self.pattern_book_ref_label)
 
         # Threshold editor for height_ratio patterns (like GAS_PUMP)
         self.threshold_layout = QHBoxLayout()
@@ -1025,14 +1020,6 @@ class PatternDialog(QDialog):
         else:
             self.pattern_price_label.setText("Price: -")
 
-        # Show Green Guide book reference if available
-        book_ref = lua_info.book_ref if lua_info else ""
-        if book_ref:
-            self.pattern_book_ref_label.setText(f"Green Guide: {book_ref}")
-            self.pattern_book_ref_label.setVisible(True)
-        else:
-            self.pattern_book_ref_label.setVisible(False)
-
         # Show threshold editor for height_ratio patterns
         rules = defn.get('rules', {})
         height_ratio_rule = None
@@ -1067,7 +1054,7 @@ class PatternDialog(QDialog):
             self._current_lua_editable = library != 'core'
             # Movable = user-side (not core or any shipped library).
             _shipped = getattr(self.engine, 'SHIPPED_LIBRARIES',
-                               frozenset({'core', 'Nicks', 'The Green Guide', 'Essentials'}))
+                               frozenset({'core', 'Nicks', 'Essentials'}))
             self._current_lua_movable = library not in _shipped
 
             self.lua_script_label.show()

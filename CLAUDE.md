@@ -55,8 +55,7 @@ end
 - **Test Tab**: Quick test, batch test cases, debug logging with `log()` function
 - **Copy for AI**: Exports API docs + template for external AI tools
 - **Export/Import Selection**: shares the enabled/disabled on-off list (JSON) — NOT the pattern definitions; only works if the recipient already has those patterns.
-- **Export/Import Bundle**: shares the actual patterns as a single `.ddpat` file (a zip). Export packs the selected pattern(s) — or all user patterns if none selected — plus any `DataFile` CSV/JSON they use, plus each pattern's custom display-**label** override (manifest `pattern_labels`, so relabeling travels with the patterns). Import copies patterns into a **named add-on library folder** under the user-data patterns tree (name from the manifest `library` field, else the bundle filename), so it shows as its own group (e.g. "Green Guide") and can be removed as one — not merged into the flat `user` folder. Data files written as siblings; `DataFile:` header normalized to the basename so it resolves; bundled labels applied via `settings.set_pattern_label`; name collisions handled (skip/overwrite); then `engine.reload()`. The engine scans `user_data_dir/patterns/*` subdirs as libraries (`user_libraries_root`), and **Remove Library…** deletes a non-bundled add-on library (`engine.removable_libraries`/`remove_library`). Logic in `pattern_bundle.py`; wired via `_export_bundle`/`_import_bundle`/`_remove_library` in `gui/pattern_dialog.py`. The shipped Green Guide bundle (`library_sources/green_guide.ddpat`, `library: "Green Guide"`) installs at the app root as `Green Guide Library.ddpat`.
-- **Label overrides — bulk + backup**: Pattern Manager "Labels:" row has **Strip "CS-"** (bulk-remove the leading `CS-` from every effective label → per-pattern overrides), **Back Up…**/**Restore…** (JSON of `settings.pattern_labels`, format `dollar-detective-pattern-labels`; restore offers Merge/Replace). Overrides live in `user_settings.yaml` keyed by internal pattern name.
+- **Export/Import Bundle**: shares the actual patterns as a single `.ddpat` file (a zip). Export packs the selected pattern(s) — or all user patterns if none selected — plus any `DataFile` CSV/JSON they use, plus each pattern's custom display-**label** override (manifest `pattern_labels`, so relabeling travels with the patterns). Import copies patterns into a **named add-on library folder** under the user-data patterns tree (name from the manifest `library` field, else the bundle filename), so it shows as its own group (e.g. "Green Guide") and can be removed as one — not merged into the flat `user` folder. Data files written as siblings; `DataFile:` header normalized to the basename so it resolves; bundled labels applied via `settings.set_pattern_label`; name collisions handled (skip/overwrite); then `engine.reload()`. The engine scans `user_data_dir/patterns/*` subdirs as libraries (`user_libraries_root`), and **Remove Library…** deletes a non-bundled add-on library (`engine.removable_libraries`/`remove_library`). Logic in `pattern_bundle.py`; wired via `_export_bundle`/`_import_bundle`/`_remove_library` in `gui/pattern_dialog.py`.- **Label overrides — bulk + backup**: Pattern Manager "Labels:" row has **Strip "CS-"** (bulk-remove the leading `CS-` from every effective label → per-pattern overrides), **Back Up…**/**Restore…** (JSON of `settings.pattern_labels`, format `dollar-detective-pattern-labels`; restore offers Merge/Replace). Overrides live in `user_settings.yaml` keyed by internal pattern name.
 
 ### Key Files
 | File | Purpose |
@@ -151,7 +150,7 @@ The web spinoff (`~/projects/dollardetective-web`, live at dollardetective.tarso
 desktop engine server-side:
 
 - `pattern_engine_v3.py`, `pattern_sandbox.py`, `resource_path.py`
-- `patterns/{lib,core,Nicks,The Green Guide}/*.lua`
+- `patterns/{lib,core}/*.lua`
 - `patterns/user/1959.lua` (Paul's own user pattern)
 
 **Deleting or renaming any of these breaks the web app's next sync**, and an unguarded
@@ -167,43 +166,13 @@ does NOT auto-update — pattern changes need a re-vendor + rebuild there.
 - Low run patterns: LOW_RUN_6M (Tier 5), LOW_RUN_12M (Tier 6). Data in `patterns/core/low_runs.csv`; see `patterns/core/LOW_RUNS.md` for how the data is derived from uspapermoney.io serial charts (96M block cap, facility slices) and `tools/parse_low_runs.py` to regenerate candidates from a saved chart.
 - Debug logging: Use `log()` in Lua patterns during batch testing
 
-## Green Guide Pattern Library
+## Pattern libraries
 
-**130 implemented patterns** in `patterns/The Green Guide/`. Full status in `patterns/The Green Guide/TRACKING.md`.
-
-### Book sources
-- `/tmp/tggfsn.txt` — OCR scan of the Green Guide book. @CS~NNN tags identify pattern numbers.
-- `~/projects/tggfsn.ods` — Spreadsheet of all book patterns with accurate CS#, page numbers, chapter. **Use this as the authoritative CS# reference** — it was verified against the book appendix and corrected many wrong CS# assignments that were in previous sessions.
-
-### ODS column layout (tggfsn.ods, col 0-based)
-| Col | Header | Notes |
-|-----|--------|-------|
-| 0 | Page # | |
-| 1 | Chapter | |
-| 2 | Original order | |
-| 3 | Skip | x = do not implement |
-| 4 | Pattern Created | x = implemented as Lua |
-| 5 | CS-# | authoritative CS number |
-| 6 | Name | display name matching book |
-| 7 | Examples | positional variant serials from book (M xx M format) |
-| 8 | Description | book prose definition (manually verified) |
-
-### CS# verified state (2026-02-24)
-All 130 implemented pattern files have correct `BookRef:` fields verified against the spreadsheet. `tools/verify_patterns.py` passes **130/130** (once ODS is updated) with zero failures. Original 104 patterns: ODS Description (col 8) and Examples (col 7) fields manually verified. Batch 7 (19 patterns): CS# verified from ODS. Batch 8 (7 counting patterns): CS-830 through CS-890. Key corrections made:
-- CS-100 = CS-Triple, CS-110 = CS-3OAK (not swapped)
-- CS-190 = CS-4OAK, CS-200 = CS-Quad, CS-210 = CS-Random 4OAK
-- CS-1060 = CS-Trinary Flipper, CS-1070 = CS-Quad Flipper
-- CS-1260 = CS-Super Radar, CS-1370 = CS-Mini 3 Radar (not CS-1340)
-- CS-1860 = CS-Stand Alone Mini Ladder (not CS-1880)
-- CS-1340 = CS-Shotgun Radar (not yet implemented)
-- CS-2280 = CS-Zip Codes, CS-2290 = CS-Prime Numbers
-
-### Naming conventions (IMPORTANT — must match book exactly)
-- **"OAK" = Of A Kind**: use `3OAK`, `4OAK`, `5OAK`, `6OAK`, `7OAK` — NOT `30AK`, `40AK` etc.
-- **"CS-Random XXX"** prefix — NOT "CS-XXX (Random)" suffix
-- **No invented qualifiers**: don't add "(Scattered)", "(Grouped)", "(CS-80AK)" etc. unless the book uses that exact wording
-- Pattern family example: "CS-Quad Pairs" (grouped AABBCCDD), "CS-Random Quad Pairs" (scattered)
-- DisplayName audit is **complete** — all original 104 files verified; batch 7 patterns written fresh to match book names
-
-### Pending work
-See `patterns/The Green Guide/TRACKING.md` Todo section for the full list.
+All shipped patterns now live in a single flat `patterns/core/` library (the old
+`Nicks` and `The Green Guide` folders were flattened into it, then culled to the
+current set). The Green Guide dependency has been removed entirely: no `BookRef:`
+headers, no CS references in messages/descriptions/comments, and the app no longer
+ships the Green Guide `.ddpat` bundle. Do not reintroduce CS numbering or book
+nomenclature. (Four names are still under review with Ed — see project memory —
+so leave True Binary Alternator / True Double Quad Binary / Binary Quads /
+Rotator 018 alone until he decides.)

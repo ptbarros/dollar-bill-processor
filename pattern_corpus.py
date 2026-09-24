@@ -41,7 +41,7 @@ META = {"current_year": 2026, "current_month": 9, "current_day": 11}
 DUP_MIN_JACCARD = 0.9
 
 # Order a group's members are shown in: the original libraries, canonical first.
-LIBRARY_ORDER = ["core", "Nicks", "The Green Guide", "user"]
+LIBRARY_ORDER = ["core", "Nicks", "user"]
 
 EXAMPLES = 3
 GROUP_SERIALS = 5

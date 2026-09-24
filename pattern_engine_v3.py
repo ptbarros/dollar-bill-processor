@@ -237,7 +237,7 @@ class PatternEngineV3:
     # the move feature (a user can't move them out, and nothing can move into
     # them). Everything else (the flat 'user' folder + imported/created add-on
     # libraries) is user-side and movable.
-    SHIPPED_LIBRARIES = frozenset({'core', 'Nicks', 'The Green Guide', 'Essentials'})
+    SHIPPED_LIBRARIES = frozenset({'core', 'Nicks', 'Essentials'})
     _NON_LIBRARY_DIRS = frozenset({'lib', 'data', '__pycache__'})
 
     def movable_pattern_libraries(self) -> list:
