@@ -9,7 +9,7 @@ Price: $250-$1,000
 --]]
 
 -- Ed review: merged the Ascending and Descending Looping Ladders into one
--- "Looping Ladder" that matches either direction. (CS-1190 / CS-1200.)
+-- "Looping Ladder" that matches either direction (merges the ascending and descending looping ladders).
 
 function match(ctx)
     local d = ctx.digits

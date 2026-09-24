@@ -16,7 +16,7 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Must be a palindrome (CS-Full Radar)
+    -- Must be a palindrome (a Full Radar)
     if not is_palindrome(d) then
         return {matched = false}
     end

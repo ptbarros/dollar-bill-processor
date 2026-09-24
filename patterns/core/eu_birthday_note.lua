@@ -20,7 +20,7 @@ function match(ctx)
     local cur_year = ctx.metadata.current_year or 2026
     if yyyy < cur_year - 100 or yyyy > cur_year then return {matched = false} end
 
-    -- Exclude leap year birthdays (handled by CS-580)
+    -- Exclude leap year birthdays (handled by the Birthday Note Leap Year pattern)
     if mm == 2 and dd == 29 then return {matched = false} end
 
     return {

@@ -16,7 +16,7 @@ function match(ctx)
     if not is_palindrome(d) then return {matched = false} end
 
     -- First 4 digits must form a ladder, either direction (Ed review: merged the
-    -- old CS-Ascending and CS-Descending Laddered Radars into one).
+    -- old Ascending and Descending Laddered Radars into one).
     local first = d:sub(1, 4)
     local up = is_ascending(first)
     if not up and not is_descending(first) then return {matched = false} end

@@ -26,7 +26,7 @@ function match(ctx)
     if d:sub(6, 6) ~= y then return {matched = false} end
     if d:sub(7, 7) ~= z then return {matched = false} end
 
-    -- Outer digit must not appear in the repeating sequence (it's a distinct CS-2OAK)
+    -- Outer digit must not appear in the repeating sequence (it's a distinct 2-of-a-kind)
     if outer == x or outer == y or outer == z then return {matched = false} end
 
     -- The XYZ pattern must not be all the same digit

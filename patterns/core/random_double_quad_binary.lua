@@ -30,7 +30,7 @@ function match(ctx)
         if not seen[ch] then seen[ch] = true; table.insert(digit_list, ch) end
     end
 
-    -- Exclude if both quads are consecutive (00001111 or 11110000) — that's CS-920
+    -- Exclude if both quads are consecutive (00001111 or 11110000) — that's the True Double Quad Binary pattern
     if d:sub(1,4) == d:sub(1,1):rep(4) and d:sub(5,8) == d:sub(5,5):rep(4) then
         return {matched = false}
     end

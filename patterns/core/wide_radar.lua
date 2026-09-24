@@ -34,7 +34,7 @@ function match(ctx)
         return {matched = false}
     end
 
-    -- Verify it's a CS-60AK: 6 occurrences of A
+    -- Verify it's a 6-of-a-kind (6OAK): 6 occurrences of A
     local counts = count_digits(d)
     if (counts[a1] or 0) ~= 6 then
         return {matched = false}

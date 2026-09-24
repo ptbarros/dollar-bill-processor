@@ -18,7 +18,7 @@ function match(ctx)
     -- Exactly 2 unique digits
     if unique_count(d) ~= 2 then return {matched = false} end
 
-    -- Exclude {0,1} — that's CS-1110 True Binary Rotator
+    -- Exclude {0,1} — that's the True Binary Rotator pattern
     local uniq = get_unique_digits(d)
     if uniq == "01" then return {matched = false} end
 

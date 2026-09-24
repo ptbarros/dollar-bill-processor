@@ -21,7 +21,7 @@ function match(ctx)
     -- Birthday: year in [current_year - 100, current_year]
     if yyyy < cur_year - 100 or yyyy > cur_year then return {matched = false} end
 
-    -- Exclude leap year birthdays (handled by CS-530)
+    -- Exclude leap year birthdays (handled by the Birthday Note Leap Year M/D/Y pattern)
     if mm == 2 and dd == 29 then return {matched = false} end
 
     return {

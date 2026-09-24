@@ -12,7 +12,7 @@ function match(ctx)
     local d = ctx.digits
     if #d ~= 8 then return {matched = false} end
 
-    -- Must be a palindrome (CS-Full Radar)
+    -- Must be a palindrome (a Full Radar)
     if not is_palindrome(d) then
         return {matched = false}
     end
