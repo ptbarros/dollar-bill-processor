@@ -2,6 +2,7 @@
 Pattern: FLIPPER
 Description: Only flippable digits (0,1,6,8,9)
 Tier: 8
+Flippable: true
 Examples: ["01689018", "96801896", "18906890"]
 Odds: 1 in 279 (343,750 per 96M)
 Price: $3-$10

@@ -3,6 +3,7 @@ Pattern: BINARY_ROTATOR
 DisplayName: Binary Rotator
 Description: Turn the note upside-down and it reads the same, using only two different digits that still read upside-down — but not the plain 0-and-1 pairing (e.g. 0888·8880).
 Tier: 2
+Flippable: true
 Odds: 1 in 2,666,667 (36 per 96M)
 Examples: ["08888880", "88000088", "18888881"]
 Price: $5-$100

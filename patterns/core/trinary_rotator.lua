@@ -3,6 +3,7 @@ Pattern: TRINARY_ROTATOR
 DisplayName: Trinary Rotator
 Description: Turn the note upside-down and it reads the same, built from three different digits that survive the flip (e.g. 0690·0690).
 Tier: 3
+Flippable: true
 Odds: 1 in 507,937 (189 per 96M)
 Examples: ["06900690", "16911691", "10800801"]
 Price: $5-$50
