@@ -10,24 +10,43 @@ Examples: ["11223344", "12123434", "11112222", "00001111"]
 function match(ctx)
     local s = ctx.digits
 
-    -- Count occurrences
-    local counts = {}
+    -- Positions (0-indexed) of each digit value, in left-to-right order.
+    local pos = {}
     for i = 1, 8 do
         local d = s:sub(i, i)
-        counts[d] = (counts[d] or 0) + 1
+        pos[d] = pos[d] or {}
+        table.insert(pos[d], i - 1)
     end
 
-    -- Count pairs (each 2 of a digit = 1 pair)
-    local pairs_count = 0
-    for _, count in pairs(counts) do
-        pairs_count = pairs_count + math.floor(count / 2)
+    -- Chunk each digit's occurrences into pairs (2 = 1 pair), digits in value
+    -- order for a deterministic colour assignment. With exactly 4 pairs across
+    -- 8 digits every position lands in a pair (no leftover).
+    local digit_vals = {}
+    for d, _ in pairs(pos) do table.insert(digit_vals, d) end
+    table.sort(digit_vals)
+
+    local pair_list = {}  -- {p1, p2} per pair
+    for _, d in ipairs(digit_vals) do
+        local ps = pos[d]
+        local i = 1
+        while i + 1 <= #ps do
+            table.insert(pair_list, {ps[i], ps[i + 1]})
+            i = i + 2
+        end
     end
 
-    if pairs_count == 4 then
+    if #pair_list == 4 then
+        -- One distinct colour per pair so the four pairs read apart on the
+        -- overlay (the rotation maps first-seen names onto blue/orange/…).
+        local colors = {"blue", "orange", "magenta", "red"}
+        local highlights = {}
+        for i, pr in ipairs(pair_list) do
+            table.insert(highlights, {positions = {pr[1], pr[2]}, color = colors[i]})
+        end
         return {
             matched = true,
             message = "4 pairs total",
-            highlights = {{positions = {0,1,2,3,4,5,6,7}, color = "gold"}}
+            highlights = highlights
         }
     end
 

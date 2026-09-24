@@ -35,20 +35,22 @@ function match(ctx)
         return {matched = false}
     end
 
-    local positions = {0, 1, 2, 3, 4, 5, 6, 7}
-
-    -- Add connectors showing the flip symmetry
+    -- Two-tone halves so the rotational symmetry reads at a glance: the front
+    -- half and back half are different colours, and each arc links a front digit
+    -- to the back digit it becomes when the note is turned 180°. (When the overlay
+    -- can also be drawn flipped, the two colours land on the opposite side.)
     local connectors = {
-        connector(0, 7, "purple", "arc"),
-        connector(1, 6, "purple", "arc"),
-        connector(2, 5, "purple", "arc"),
-        connector(3, 4, "purple", "arc")
+        connector(0, 7, "magenta", "arc"),
+        connector(1, 6, "magenta", "arc"),
+        connector(2, 5, "magenta", "arc"),
+        connector(3, 4, "magenta", "arc")
     }
 
     return {
         matched = true,
         highlights = {
-            highlight(positions, "purple", "rotator")
+            highlight({0, 1, 2, 3}, "blue", "front half"),
+            highlight({4, 5, 6, 7}, "orange", "back half")
         },
         connectors = connectors,
         message = "True flipper/rotator: reads the same number upside down"
