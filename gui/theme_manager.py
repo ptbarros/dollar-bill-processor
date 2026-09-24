@@ -4,10 +4,12 @@ Theme Manager - Dark/Light theme support for the Dollar Detective.
 Provides cross-platform theming using Qt's Fusion style with custom palettes.
 """
 
+import os
 import sys
+import tempfile
 from PySide6.QtWidgets import QApplication, QStyleFactory
-from PySide6.QtGui import QPalette, QColor
-from PySide6.QtCore import Qt
+from PySide6.QtGui import QPalette, QColor, QPixmap, QPainter, QBrush
+from PySide6.QtCore import Qt, QRectF
 
 
 def get_system_is_dark() -> bool:
@@ -402,6 +404,45 @@ def apply_theme(app: QApplication, theme: str = "system") -> None:
     app.setProperty("_dark_theme", use_dark)
 
 
+_grip_cache = {}
+
+
+def _splitter_grip_path(orientation: str, color_hex: str):
+    """Path to a small rounded 'grip' pixmap centred on a splitter handle: a short
+    vertical capsule for a horizontal handle (vertical divider), a horizontal one
+    for a vertical handle. Generated + cached on first use; returns None on any
+    failure so the caller can fall back to a plain line."""
+    key = (orientation, color_hex)
+    cached = _grip_cache.get(key)
+    if cached and os.path.exists(cached):
+        return cached
+    try:
+        # Long axis runs ALONG the divider so the middle reads as a thicker grip.
+        if orientation == "horizontal":     # vertical divider -> vertical capsule
+            w, h = 5, 26
+        else:                               # horizontal divider -> horizontal capsule
+            w, h = 26, 5
+        pm = QPixmap(w, h)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(QColor(color_hex)))
+        r = min(w, h) / 2.0
+        p.drawRoundedRect(QRectF(0, 0, w, h), r, r)
+        p.end()
+        d = os.path.join(tempfile.gettempdir(), "dollardetective_theme")
+        os.makedirs(d, exist_ok=True)
+        path = os.path.join(d, f"grip_{orientation}_{color_hex.lstrip('#')}.png")
+        if pm.save(path, "PNG"):
+            forward = path.replace("\\", "/")
+            _grip_cache[key] = forward
+            return forward
+    except Exception:
+        pass
+    return None
+
+
 def get_combined_stylesheet(theme: str, font_size: int) -> str:
     """Get a combined stylesheet with theme colors and font sizes.
 
@@ -473,27 +514,53 @@ def get_combined_stylesheet(theme: str, font_size: int) -> str:
     if use_dark:
         stylesheet += get_dark_stylesheet()
 
-    # Make the resize divider (splitter handle) clearly visible in BOTH themes,
-    # with a size that's easy to grab. Appended last so it overrides the fainter
-    # dark-theme handle rule above. A centre grip line hints that it's draggable.
-    handle_bg = "#6a6a6a" if use_dark else "#b8b8b8"
+    # Resize divider (splitter handle): a THIN centre line with a small rounded
+    # grip in the middle, rather than a thick bar -- easy to see and grab without
+    # looking heavy. The handle keeps a comfortable hit width but paints only a
+    # ~1.5px line (via a gradient that's transparent except a central band) plus a
+    # centred capsule image. Appended last so it overrides the fainter dark rule.
     handle_line = "#8a8a8a" if use_dark else "#8f8f8f"
+    grip_color = "#9a9a9a" if use_dark else "#7d7d7d"
+    hover = "#2a82da"
+    gh, gv = _splitter_grip_path("horizontal", grip_color), _splitter_grip_path("vertical", grip_color)
+    ghh, gvh = _splitter_grip_path("horizontal", hover), _splitter_grip_path("vertical", hover)
+
+    def _img(path):
+        return f'image: url("{path}");' if path else ""
+
     stylesheet += f"""
         QSplitter::handle {{
-            background-color: {handle_bg};
+            background-color: transparent;
         }}
         QSplitter::handle:horizontal {{
-            width: 7px;
-            border-left: 1px solid {handle_line};
-            border-right: 1px solid {handle_line};
+            width: 8px;
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 transparent, stop:0.40 transparent,
+                stop:0.41 {handle_line}, stop:0.59 {handle_line},
+                stop:0.60 transparent, stop:1 transparent);
+            {_img(gh)}
         }}
         QSplitter::handle:vertical {{
-            height: 7px;
-            border-top: 1px solid {handle_line};
-            border-bottom: 1px solid {handle_line};
+            height: 8px;
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 transparent, stop:0.40 transparent,
+                stop:0.41 {handle_line}, stop:0.59 {handle_line},
+                stop:0.60 transparent, stop:1 transparent);
+            {_img(gv)}
         }}
-        QSplitter::handle:hover {{
-            background-color: #2a82da;
+        QSplitter::handle:horizontal:hover {{
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 transparent, stop:0.37 transparent,
+                stop:0.38 {hover}, stop:0.62 {hover},
+                stop:0.63 transparent, stop:1 transparent);
+            {_img(ghh)}
+        }}
+        QSplitter::handle:vertical:hover {{
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 transparent, stop:0.37 transparent,
+                stop:0.38 {hover}, stop:0.62 {hover},
+                stop:0.63 transparent, stop:1 transparent);
+            {_img(gvh)}
         }}
     """
 
