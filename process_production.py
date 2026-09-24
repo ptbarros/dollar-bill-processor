@@ -867,13 +867,35 @@ class ScannerFormatDetector:
     def _natural_sort_key(path: Path) -> list:
         """Extract numbers from filename for natural sorting.
 
-        'Dollar_01.jpg' -> ['Dollar_', 1, '.jpg']
-        'Dollar_100.jpg' -> ['Dollar_', 100, '.jpg']
-        This ensures Dollar_2 comes before Dollar_10.
+        Each token becomes a (rank, value) tuple so comparisons never mix str
+        vs int, and so the file EXTENSION always sorts ahead of any name-suffix
+        separator. That last point matters for feed scanners (e.g. ScanSnap)
+        that leave the FIRST page unnumbered and only number the rest:
+            09242026.jpg, 09242026_001.jpg, 09242026_002.jpg, ...
+        The bare 'first photo' must sort before its _NNN siblings so it stays
+        the front of bill #1. Because the extension (rank 0) sorts before any
+        separator text (rank 2), that holds for '_', '-', ' ', '(' or any other
+        separator a scanner might use -- not just because '.' < '_' in ASCII.
+
+        The extension is split off FIRST so a bare stem ('09242026') is always a
+        proper prefix of its numbered siblings ('09242026_001') at the point they
+        diverge -- and a shorter/empty token sorts first -- so the bare first
+        photo stays ahead no matter what separator follows.
+
+        'Dollar_2.jpg'   -> [(2,'dollar_'), (1,2),  (2,''), (0,'.jpg')]
+        'Dollar_10.jpg'  -> [(2,'dollar_'), (1,10), (2,''), (0,'.jpg')]  (2<10)
+        '09242026.jpg'   -> [(2,''), (1,9242026), (2,''),          (0,'.jpg')]
+        '09242026_1.jpg' -> [(2,''), (1,9242026), (2,'_'), (1,1), (2,''), (0,'.jpg')]
         """
         import re
-        parts = re.split(r'(\d+)', path.name)
-        return [int(p) if p.isdigit() else p.lower() for p in parts]
+        key = []
+        for p in re.split(r'(\d+)', path.stem):
+            if p.isdigit():
+                key.append((1, int(p)))          # numbers: natural order
+            else:
+                key.append((2, p.lower()))        # text / separators
+        key.append((0, path.suffix.lower()))      # extension: tiebreak only
+        return key
 
     @staticmethod
     def find_pairs_sequential(image_folder: Path) -> list[BillPair]:
