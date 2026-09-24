@@ -3087,7 +3087,9 @@ class CustomPatternDialog(QDialog):
     def __init__(self, parent=None, name: str = "", defn: dict = None, script: str = None):
         super().__init__(parent)
         self.setWindowTitle("Add Custom Pattern" if not name else "Edit Custom Pattern")
-        self.setMinimumSize(700, 800)
+        # Low minimum so the dialog can shrink to fit short / scaled screens
+        # (the real size is set by _fit_to_screen below).
+        self.setMinimumSize(700, 480)
 
         self.original_name = name
         self.defn = defn or {}
@@ -3118,8 +3120,27 @@ class CustomPatternDialog(QDialog):
         self._setup_ui()
         if name:
             self._load_existing()
-        # Delay resize until after dialog is fully constructed
-        QTimer.singleShot(0, lambda: self.resize(700, 800))
+        # Delay sizing until the dialog is constructed and has a screen, then fit
+        # it within the work area so the bottom buttons (Validate / OK / Cancel)
+        # never land under the taskbar on smaller or display-scaled screens.
+        QTimer.singleShot(0, self._fit_to_screen)
+
+    def _fit_to_screen(self):
+        """Size the dialog to a comfortable default but never larger than the
+        screen work area, and nudge it fully on-screen."""
+        try:
+            from PySide6.QtWidgets import QApplication
+            scr = self.screen() or QApplication.primaryScreen()
+            ag = scr.availableGeometry()
+            w = max(500, min(700, ag.width() - 40))
+            h = max(440, min(800, ag.height() - 40))
+            self.resize(w, h)
+            g = self.frameGeometry()
+            x = min(max(g.x(), ag.x()), ag.x() + ag.width() - self.width())
+            y = min(max(g.y(), ag.y()), ag.y() + ag.height() - self.height())
+            self.move(x, y)
+        except Exception:
+            self.resize(700, 800)
 
     def _setup_ui(self):
         """Setup the dialog UI with tabs."""

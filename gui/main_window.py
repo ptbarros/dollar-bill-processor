@@ -939,18 +939,28 @@ class MainWindow(QMainWindow):
         try:
             from PySide6.QtWidgets import QApplication
             from PySide6.QtCore import QRect
-            vis = None
-            for scr in QApplication.screens():
-                ag = scr.availableGeometry()
-                vis = ag if vis is None else vis.united(ag)
-            if vis is not None:
-                w = max(400, min(w, vis.width()))
-                h = max(300, min(h, vis.height()))
-                inter = vis.intersected(QRect(x, y, w, h))
-                # Recenter if barely any of the window lands on a real screen.
-                if inter.width() < 100 or inter.height() < 100:
-                    x = vis.x() + (vis.width() - w) // 2
-                    y = vis.y() + (vis.height() - h) // 2
+            screens = QApplication.screens()
+            if screens:
+                # Pick the screen the window overlaps most (fall back to the
+                # primary screen) and fit the window fully inside ITS work area.
+                desired = QRect(x, y, w, h)
+                target = QApplication.primaryScreen()
+                best_area = -1
+                for scr in screens:
+                    inter = scr.availableGeometry().intersected(desired)
+                    area = inter.width() * inter.height()
+                    if area > best_area:
+                        best_area, target = area, scr
+                ag = target.availableGeometry()
+                # Cap the size to the work area, then clamp the POSITION so the
+                # whole window (title bar + bottom edge) stays on-screen. Without
+                # the position clamp, the default 100,100,1200,800 opened with its
+                # right/bottom edges off a laptop screen (top-right buttons and
+                # dialog OK/Cancel below the taskbar).
+                w = max(400, min(w, ag.width()))
+                h = max(300, min(h, ag.height()))
+                x = min(max(x, ag.x()), ag.x() + ag.width() - w)
+                y = min(max(y, ag.y()), ag.y() + ag.height() - h)
         except Exception:
             pass
         self.setGeometry(x, y, w, h)
