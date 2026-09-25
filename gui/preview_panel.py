@@ -494,6 +494,10 @@ class ImagePane(QWidget):
         self.zoom_factor = 1.0
         self._is_panning = False
         self._syncing = False  # Prevent sync loops
+        # Take keyboard focus when clicked so Left/Right keep cycling the overlay
+        # (handled by PreviewPanel.eventFilter) instead of leaking to whatever
+        # widget was last focused (e.g. the gas-pump slider).
+        self.setFocusPolicy(Qt.ClickFocus)
         self._setup_ui()
 
     def _setup_ui(self):
@@ -521,6 +525,11 @@ class ImagePane(QWidget):
         self.image_label.set_viewer(self)
         self.image_label.setCursor(QCursor(Qt.OpenHandCursor))
         self.scroll_area.setWidget(self.image_label)
+
+        # Keep focus on the ImagePane itself (not the inner scroll area/label) so a
+        # click lands focus where the arrow-key overlay cycling is handled.
+        self.scroll_area.setFocusPolicy(Qt.NoFocus)
+        self.image_label.setFocusPolicy(Qt.NoFocus)
 
         layout.addWidget(self.scroll_area, 1)
 
@@ -710,10 +719,16 @@ class SyncedSplitViewer(QWidget):
         layout.addLayout(zoom_layout)
 
     def eventFilter(self, obj, event):
-        """Track mouse entering a pane to set it as active."""
-        if event.type() == QEvent.Enter:
-            if obj is self.front_pane or obj is self.back_pane:
+        """Track mouse entering a pane to set it as active, and keep Left/Right
+        cycling the overlay when a pane (the overlay area) has keyboard focus."""
+        if obj is self.front_pane or obj is self.back_pane:
+            if event.type() == QEvent.Enter:
                 self._set_active_pane(obj)
+            elif event.type() == QEvent.KeyPress and event.modifiers() == Qt.NoModifier:
+                key = event.key()
+                if key in (Qt.Key_Left, Qt.Key_Right):
+                    self._cycle_pattern_overlay(1 if key == Qt.Key_Right else -1)
+                    return True  # consume so it doesn't scroll/leak to the slider
         return super().eventFilter(obj, event)
 
     def _set_active_pane(self, pane):
@@ -1403,8 +1418,11 @@ class PreviewPanel(QWidget):
         self.gp_threshold_slider.setMinimum(5)   # 0.5 px
         self.gp_threshold_slider.setMaximum(100)  # 10.0 px
         self.gp_threshold_slider.setValue(int(initial_threshold * 10))
-        self.gp_threshold_slider.setSingleStep(1)  # Arrow keys: 0.1 px
+        self.gp_threshold_slider.setSingleStep(1)  # 0.1 px per step
         self.gp_threshold_slider.setPageStep(2)    # Click on track: 0.2 px
+        # Drag-adjusted only: don't take keyboard focus, or a click near it would
+        # hijack Left/Right (which cycle overlays) to nudge the threshold instead.
+        self.gp_threshold_slider.setFocusPolicy(Qt.NoFocus)
         self.gp_threshold_slider.setMinimumWidth(150)
         self.gp_threshold_slider.setToolTip("Adjust threshold for gas pump detection")
         self.gp_threshold_slider.valueChanged.connect(self._on_gp_threshold_changed)
