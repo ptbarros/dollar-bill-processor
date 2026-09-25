@@ -565,9 +565,13 @@ def export_docx(path: str, items: List[LabelData], template: LabelTemplate,
             if ppr is None:
                 ppr = p._element.makeelement(qn('w:pPr'), {})
                 p._element.insert(0, ppr)
-            if not _state["top_pad"]:
-                _state["top_pad"] = True
-                ppr.append(ppr.makeelement(qn('w:spacing'), {qn('w:before'): margin_tw}))
+            # Single line spacing (line=240 auto) + no space-after so lines sit
+            # tight rather than double-spaced; only the first para gets the top pad.
+            before_tw = margin_tw if not _state["top_pad"] else '0'
+            _state["top_pad"] = True
+            ppr.append(ppr.makeelement(qn('w:spacing'), {
+                qn('w:before'): before_tw, qn('w:after'): '0',
+                qn('w:line'): '240', qn('w:lineRule'): 'auto'}))
             ppr.append(ppr.makeelement(qn('w:ind'), {qn('w:left'): margin_tw, qn('w:right'): margin_tw}))
             return p, ppr
 

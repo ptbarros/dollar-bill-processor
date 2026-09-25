@@ -689,10 +689,12 @@ class MainWindow(QMainWindow):
             return pattern_str
 
     def _selected_patterns(self, result: dict) -> list:
-        """Resolve which pattern name(s) a bill's label/crops should use.
+        """Resolve which pattern name(s) a bill's label should use.
 
         Priority: multi-select pattern_overrides -> single pattern_override ->
-        the first detected fancy type. Returns a list (may be empty).
+        ALL detected fancy types. The last case means a bill the user hasn't
+        picked a pattern for labels with EVERY match (not just the first), per
+        FIL's request. Returns a list (may be empty when nothing matched).
         """
         overrides = result.get('pattern_overrides')
         if overrides:
@@ -700,8 +702,7 @@ class MainWindow(QMainWindow):
         single = result.get('pattern_override')
         if single:
             return [single]
-        patterns = [p.strip() for p in (result.get('fancy_types', '') or '').split(',') if p.strip()]
-        return [patterns[0]] if patterns else []
+        return [p.strip() for p in (result.get('fancy_types', '') or '').split(',') if p.strip()]
 
     def _generate_labels(self, results: list, output_dir: Path):
         """Generate printable labels file for bills.
@@ -868,8 +869,12 @@ class MainWindow(QMainWindow):
                 if p1_ppr is None:
                     p1_ppr = p1._element.makeelement(qn('w:pPr'), {})
                     p1._element.insert(0, p1_ppr)
-                # Add spacing before (matching label.docx: 111 twips)
-                spacing = p1_ppr.makeelement(qn('w:spacing'), {qn('w:before'): '111'})
+                # Add spacing before (matching label.docx: 111 twips). Single line
+                # spacing (line=240 auto) + no space-after so lines sit tight, not
+                # double-spaced (FIL fits more on the label and hand-edits overflow).
+                spacing = p1_ppr.makeelement(qn('w:spacing'), {
+                    qn('w:before'): '111', qn('w:after'): '0',
+                    qn('w:line'): '240', qn('w:lineRule'): 'auto'})
                 p1_ppr.append(spacing)
                 # Add indent (matching label.docx: 72 twips L/R)
                 indent = p1_ppr.makeelement(qn('w:ind'), {
@@ -890,6 +895,9 @@ class MainWindow(QMainWindow):
                     qn('w:left'): '72', qn('w:right'): '72'
                 })
                 p2_ppr.append(indent2)
+                p2_ppr.append(p2_ppr.makeelement(qn('w:spacing'), {
+                    qn('w:before'): '0', qn('w:after'): '0',
+                    qn('w:line'): '240', qn('w:lineRule'): 'auto'}))
 
                 run2 = p2.add_run(pattern_display)
                 run2.font.size = Pt(10)
@@ -916,6 +924,9 @@ class MainWindow(QMainWindow):
                             qn('w:left'): '72', qn('w:right'): '72'
                         })
                         p3_ppr.append(indent3)
+                        p3_ppr.append(p3_ppr.makeelement(qn('w:spacing'), {
+                            qn('w:before'): '0', qn('w:after'): '0',
+                            qn('w:line'): '240', qn('w:lineRule'): 'auto'}))
                         run3 = p3.add_run(line_text)
                         run3.font.size = Pt(10)
 
