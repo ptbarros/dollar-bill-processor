@@ -42,6 +42,10 @@ class ProcessingSettings:
     # "number_date" (001 - 2026-09-25), or "date_number" (2026-09-25 - 001).
     batch_name_format: str = "number"
     batch_counter: int = 0  # Last used sequential batch number (monotonic)
+    # EXPERIMENTAL: when scanning (Start Scanning), process settled scans in
+    # small even-cut chunks as they arrive instead of waiting for Stop. Reuses
+    # the tested ProcessingThread on a shared processor; off by default.
+    live_processing: bool = False
 
 
 @dataclass
@@ -197,6 +201,7 @@ class SettingsManager:
             self.processing.data_folder = (proc.get('data_folder') or '').strip()
             self.processing.batch_name_format = (proc.get('batch_name_format') or 'number').strip() or 'number'
             self.processing.batch_counter = int(proc.get('batch_counter', 0) or 0)
+            self.processing.live_processing = bool(proc.get('live_processing', False))
 
         # Load UI settings
         if 'ui' in data:
@@ -399,6 +404,7 @@ class SettingsManager:
                 'data_folder': self.processing.data_folder,
                 'batch_name_format': self.processing.batch_name_format,
                 'batch_counter': self.processing.batch_counter,
+                'live_processing': self.processing.live_processing,
                 'archive_copy_mode': self.processing.archive_copy_mode,
                 'extract_plate_info': self.processing.extract_plate_info,
                 'output_subfolder': self.processing.output_subfolder,

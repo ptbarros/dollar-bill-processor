@@ -422,8 +422,9 @@ class SettingsDialog(QDialog):
         dirs_layout.addRow("Data Folder:", data_layout)
 
         self.data_folder_hint = QLabel(
-            "Your scanner saves here and the Watch button monitors it; finished "
-            "batches are filed into a 'Straps' subfolder. Blank = ~/DollarDetective.")
+            "Your scanner saves here and the Start Scanning button watches it; "
+            "finished batches are filed into a 'Straps' subfolder. "
+            "Blank = ~/DollarDetective.")
         self.data_folder_hint.setStyleSheet("color: gray; font-size: 9px;")
         dirs_layout.addRow("", self.data_folder_hint)
         # Soft OneDrive note updates live as the field changes.
@@ -893,8 +894,9 @@ class SettingsDialog(QDialog):
             self.data_folder_hint.setStyleSheet("color: #c07a2b; font-size: 9px;")
         else:
             self.data_folder_hint.setText(
-                "Your scanner saves here and the Watch button monitors it; finished "
-                "batches are filed into a 'Straps' subfolder. Blank = ~/DollarDetective.")
+                "Your scanner saves here and the Start Scanning button watches it; "
+                "finished batches are filed into a 'Straps' subfolder. "
+                "Blank = ~/DollarDetective.")
             self.data_folder_hint.setStyleSheet("color: gray; font-size: 9px;")
 
     def _browse_archive_dir(self):

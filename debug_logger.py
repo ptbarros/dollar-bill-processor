@@ -19,8 +19,12 @@ Usage
 `fingerprint()` summarizes the per-bill review flags so a silent reset shows up
 as the counts collapsing to zero between two log lines.
 
-The log file lives next to .session_recovery.json (the project dir), named
-debug_log.txt, and rotates at ~2 MB x 5 files.
+The log file lives in the writable per-user data dir (user_data_dir()/logs),
+named debug_log.txt, and rotates at ~2 MB x 5 files. It deliberately lives THERE
+rather than next to the code: a frozen build's own folder (the PyInstaller
+`_internal` dir) is wiped on every in-app update, which would take the log --
+and any crash we're chasing -- with it. From source, user_data_dir() is the repo
+root, so dev logs land in <repo>/logs/debug_log.txt.
 """
 
 import logging
@@ -35,19 +39,29 @@ _lock = threading.Lock()
 
 
 def _log_dir() -> Path:
-    """Directory for the log file: the project root (same place as the
-    recovery file). Falls back to the user's home dir if that is not
-    writable for any reason."""
-    candidate = Path(__file__).resolve().parent
+    """Directory for the log file. Prefer the writable per-user data dir
+    (user_data_dir()/logs) so the log SURVIVES app updates -- a frozen build's
+    own folder is wiped on update, taking the log with it. Fall back to the code
+    dir, then the home dir, if the preferred location isn't writable."""
+    candidates = []
     try:
-        candidate.mkdir(parents=True, exist_ok=True)
-        test = candidate / ".dbglog_write_test"
-        test.write_text("ok")
-        test.unlink()
-        return candidate
+        # Lazy import: resource_path is dependency-light and safe this early.
+        from resource_path import user_data_dir
+        candidates.append(user_data_dir() / "logs")
     except Exception:
-        home = Path.home()
-        return home
+        pass
+    candidates.append(Path(__file__).resolve().parent)
+    candidates.append(Path.home())
+    for candidate in candidates:
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            test = candidate / ".dbglog_write_test"
+            test.write_text("ok")
+            test.unlink()
+            return candidate
+        except Exception:
+            continue
+    return Path.home()
 
 
 def _init_logger() -> logging.Logger:

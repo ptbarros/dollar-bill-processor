@@ -7,7 +7,8 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLineEdit,
-    QProgressBar, QLabel, QFileDialog, QFrame, QComboBox, QMessageBox
+    QProgressBar, QLabel, QFileDialog, QFrame, QComboBox, QMessageBox,
+    QCheckBox
 )
 from PySide6.QtCore import Qt, Signal, Slot
 
@@ -26,6 +27,7 @@ class ProcessingPanel(QWidget):
     stop_requested = Signal()
     archive_requested = Signal()  # Archive the current batch
     watch_toggled = Signal(bool)  # Monitor: on/off (watches the configured Data Folder)
+    live_toggled = Signal(bool)   # EXPERIMENTAL: process scans live while scanning
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -110,13 +112,19 @@ class ProcessingPanel(QWidget):
 
         # Watch Folder (Monitor mode): when on, scans dropped into the selected
         # folder are auto-filed into a Straps batch and processed as they settle.
-        self.watch_btn = QPushButton("Watch Folder")
+        self.watch_btn = QPushButton("Start Scanning")
         self.watch_btn.setCheckable(True)
-        self.watch_btn.setMinimumWidth(100)
+        # Size to the WIDEST label ("Stop && File Batch", shown while scanning and
+        # drawn bold) so neither state clips. '&&' renders as a single '&'; add a
+        # cushion for the bold weight + button padding.
+        _fm = self.watch_btn.fontMetrics()
+        _watch_w = max(_fm.horizontalAdvance("Start Scanning"),
+                       _fm.horizontalAdvance("Stop & File Batch"))
+        self.watch_btn.setMinimumWidth(_watch_w + 56)
         self.watch_btn.setToolTip(
-            "Start watching the selected folder and collecting scans (feed your "
-            "whole strap in as many passes as you like). Click Stop when the strap "
-            "is done to file everything into one batch under Straps and process it.")
+            "Start collecting scans as they come off the scanner (feed your whole "
+            "strap in as many passes as you like). Click Stop when the strap is "
+            "done to file everything into one batch under Straps and process it.")
         self.watch_btn.setStyleSheet("""
             QPushButton { padding: 8px 16px; border-radius: 4px; }
             QPushButton:checked {
@@ -125,6 +133,20 @@ class ProcessingPanel(QWidget):
         """)
         self.watch_btn.toggled.connect(self._on_watch_toggled)
         layout.addWidget(self.watch_btn)
+
+        # EXPERIMENTAL: process scans live (in small chunks) while scanning,
+        # instead of waiting for Stop. Can't be changed mid-scan.
+        self.live_check = QCheckBox("Process live")
+        self.live_check.setToolTip(
+            "EXPERIMENTAL: process scans in small batches as they come in, "
+            "instead of all at once when you click Stop. Set this before you "
+            "click Start Scanning.")
+        try:
+            self.live_check.setChecked(bool(get_settings().processing.live_processing))
+        except Exception:
+            pass
+        self.live_check.toggled.connect(self._on_live_toggled)
+        layout.addWidget(self.live_check)
 
         # Active crop-profile picker (replaces the old Organize button; Organize
         # moved to Edit -> Organize Folder). Switching here changes the profile
@@ -224,10 +246,30 @@ class ProcessingPanel(QWidget):
         if folder:
             self.output_edit.setText(folder)
 
+    def _refresh_process_enabled(self):
+        """Process (a manual run) is available only when we're neither scanning
+        nor already processing -- both would conflict with a manual run."""
+        watching = getattr(self, "_watching", False)
+        processing = getattr(self, "_is_processing", False)
+        self.process_btn.setEnabled(not watching and not processing)
+
+    def _on_live_toggled(self, checked: bool):
+        """Persist the experimental live-processing toggle and notify listeners."""
+        try:
+            get_settings().processing.live_processing = checked
+            get_settings().save()
+        except Exception:
+            pass
+        self.live_toggled.emit(checked)
+
     def _on_watch_toggled(self, checked: bool):
         """Start/stop watching the Data Folder for new scans. (The button text
         reflects what a click will do; MainWindow owns the watch folder.)"""
-        self.watch_btn.setText("Stop && File Batch" if checked else "Watch Folder")
+        self.watch_btn.setText("Stop && File Batch" if checked else "Start Scanning")
+        self._watching = checked
+        # Live mode can't be flipped mid-scan (it changes how a run is wired).
+        self.live_check.setEnabled(not checked)
+        self._refresh_process_enabled()
         self.watch_toggled.emit(checked)
 
     def set_watching(self, on: bool):
@@ -235,8 +277,11 @@ class ProcessingPanel(QWidget):
         MainWindow declines to start, e.g. a missing folder)."""
         self.watch_btn.blockSignals(True)
         self.watch_btn.setChecked(on)
-        self.watch_btn.setText("Stop && File Batch" if on else "Watch Folder")
+        self.watch_btn.setText("Stop && File Batch" if on else "Start Scanning")
         self.watch_btn.blockSignals(False)
+        self._watching = on
+        self.live_check.setEnabled(not on)
+        self._refresh_process_enabled()
 
     def _on_process(self):
         """Handle process button click."""
@@ -344,7 +389,8 @@ class ProcessingPanel(QWidget):
 
     def set_processing(self, is_processing: bool):
         """Update UI for processing state."""
-        self.process_btn.setEnabled(not is_processing)
+        self._is_processing = is_processing
+        self._refresh_process_enabled()
         self.profile_combo.setEnabled(not is_processing)
         self.stop_btn.setEnabled(is_processing)
 

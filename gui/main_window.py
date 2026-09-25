@@ -77,6 +77,22 @@ class MainWindow(QMainWindow):
         self._monitor_new_files = set()       # scans collected since watching began
         self._monitor_run_active = False      # a monitor-triggered process is in flight
 
+        # EXPERIMENTAL live-processing (process scans in chunks while scanning).
+        self._live_mode = False               # this scan session is processing live
+        self._live_batch_dir = None
+        self._live_pending = []               # settled scans not yet chunked (arrival order)
+        self._live_busy = False               # a chunk ProcessingThread is running
+        self._live_stopping = False           # Stop pressed; flush remainder then finalize
+        self._live_finalized = False
+        self._live_next_position = 0
+        self._live_total = 0
+        self._live_fancy = 0
+        self._live_review = 0
+        self._live_processor = None           # warm processor reused across chunks
+        self._live_part_seq = 0
+        self._live_thread = None              # current chunk thread
+        self._live_thread_refs = []           # keep chunk threads alive until finalize
+
         # Setup UI
         self._setup_ui()
         self._setup_menus()
@@ -344,6 +360,10 @@ class MainWindow(QMainWindow):
         check_updates_action.triggered.connect(lambda: self._start_update_check(manual=True))
         help_menu.addAction(check_updates_action)
 
+        open_log_action = QAction("Open &Debug Log", self)
+        open_log_action.triggered.connect(self._on_open_debug_log)
+        help_menu.addAction(open_log_action)
+
         # Offer a one-click revert only when the last in-app update recorded the
         # version we came from (and it isn't the one we're already running).
         try:
@@ -422,6 +442,13 @@ class MainWindow(QMainWindow):
 
     def _on_align_image(self, image_path: str):
         """Handle alignment request from preview panel."""
+        # During a live scan the processor is busy on the chunk worker thread, so
+        # alignment can't run (and there's no batch processor to borrow). Clicking
+        # a result auto-fires this; silently no-op instead of flooding the "No
+        # Alignment Data" warning. Alignment works normally once the batch is done.
+        if getattr(self, "_live_mode", False):
+            return
+
         # Check if showing aligned - if so, reset instead
         if self.preview_panel._is_showing_aligned:
             self.preview_panel.reset_aligned_image()
@@ -1644,6 +1671,29 @@ class MainWindow(QMainWindow):
             "Built with PySide6 and OpenCV"
         )
 
+    def _on_open_debug_log(self):
+        """Open the debug log so a user can send it to support. The log lives in
+        the per-user data dir (survives updates); if it doesn't exist yet, open
+        its folder instead."""
+        from PySide6.QtWidgets import QMessageBox
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        try:
+            from debug_logger import get_log_path
+            log_path = Path(get_log_path())
+        except Exception as e:
+            QMessageBox.warning(self, "Open Debug Log",
+                                f"Couldn't locate the debug log:\n{e}")
+            return
+        target = log_path if log_path.exists() else log_path.parent
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(target))):
+            QMessageBox.information(self, "Open Debug Log",
+                                    f"The debug log is at:\n{log_path}")
+
     def _export_results(self, format_type: str):
         """Export results to file."""
         if not self.current_results:
@@ -1878,6 +1928,11 @@ class MainWindow(QMainWindow):
     @Slot(dict)
     def _on_result_ready(self, result: dict):
         """Handle a single result from processing."""
+        self._append_result(result)
+
+    def _append_result(self, result: dict):
+        """Record + append one processed bill to the results view (shared by the
+        normal batch run and the live/chunked scan path)."""
         # Persist to the bill ledger first (seen-before history, lifetime stats,
         # Insights report) so the seen-before flag is set before the row renders.
         # Best-effort: never let it break processing.
@@ -2262,14 +2317,24 @@ class MainWindow(QMainWindow):
         so we never auto-finalize on a pause -- only an explicit Stop closes it."""
         from resource_path import content_dir
         if on:
+            # Decide the mode for THIS scan session up front (can't change mid-scan).
+            self._live_mode = bool(self.settings.processing.live_processing)
             if not self._start_monitor(str(content_dir())):
+                self._live_mode = False
                 self.processing_panel.set_watching(False)
+                return
+            if self._live_mode and not self._live_begin():
+                # Live setup failed -> fall back to collect-then-Stop for this run.
+                self._live_mode = False
         else:
+            if getattr(self, "_live_mode", False):
+                self._live_request_stop()   # stop watcher, flush remainder, finalize
+                return
             filed = self._finalize_monitor_batch()   # while watcher state is intact
             self._stop_monitor()
             self.processing_panel.set_watching(False)
             if not filed:
-                self.status_label.setText("Stopped watching (no new scans to file)")
+                self.status_label.setText("Stopped scanning (no new scans to file)")
 
     def _start_monitor(self, watch_dir: str):
         """Begin watching `watch_dir`. New scans that arrive are collected until
@@ -2279,7 +2344,7 @@ class MainWindow(QMainWindow):
         from pathlib import Path
         wd = Path(watch_dir).expanduser()
         if not wd.is_dir():
-            QMessageBox.warning(self, "Watch folder",
+            QMessageBox.warning(self, "Start Scanning",
                                 f"Folder does not exist:\n{wd}")
             return False
         self._stop_monitor()  # clean any prior watcher
@@ -2294,7 +2359,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         self.status_label.setText(
-            f"Watching {wd} — scan your strap, then click Stop to file the batch")
+            f"Scanning {wd} — feed your strap, then click Stop to file the batch")
         return True
 
     def _stop_monitor(self):
@@ -2315,9 +2380,11 @@ class MainWindow(QMainWindow):
 
     def _on_monitor_file(self, path):
         """A new scan settled in the watch folder: collect it and show a running
-        count. Nothing is filed until the user clicks Stop."""
+        count. In collect mode nothing is filed until Stop; in live mode the scan
+        is queued for chunked processing right away."""
+        p = Path(path)
         try:
-            self._monitor_new_files.add(Path(path))
+            self._monitor_new_files.add(p)
         except Exception:
             return
         n = len(self._monitor_new_files)
@@ -2325,16 +2392,215 @@ class MainWindow(QMainWindow):
             self.preview_panel.set_watch_count(n)
         except Exception:
             pass
-        self.status_label.setText(
-            f"Watching — {n} scan{'s' if n != 1 else ''} collected "
-            f"(click Stop to file the batch)")
+        if getattr(self, "_live_mode", False):
+            self._live_pending.append(p)
+            self.status_label.setText(
+                f"Scanning (live) — {n} in, {self._live_total} processed")
+            self._live_try_chunk()
+        else:
+            self.status_label.setText(
+                f"Scanning — {n} scan{'s' if n != 1 else ''} collected "
+                f"(click Stop to file the batch)")
+
+    # ---- Live (chunked) scanning: process scans as they arrive ---------------
+    # Approach A: reuse the tested ProcessingThread on small even-cut chunks with
+    # ONE warm processor. Heavy work stays on the worker thread (unlike the old
+    # monitor_thread, whose slot ran on the GUI thread and froze the UI).
+
+    def _live_begin(self) -> bool:
+        """Set up a live scan session: create the batch folder now (scans land in
+        it as they process) and open a ledger session. Returns False on failure."""
+        try:
+            from resource_path import straps_dir
+            from batch_naming import make_batch_dir
+            batch = Path(make_batch_dir(
+                straps_dir(), self.settings.processing.batch_name_format, self.settings))
+        except Exception as e:
+            QMessageBox.warning(self, "Start Scanning",
+                                f"Couldn't start the live batch:\n{e}")
+            return False
+        self._live_batch_dir = batch
+        self._monitor_last_batch = str(batch)
+        self._live_pending = []
+        self._live_busy = False
+        self._live_stopping = False
+        self._live_finalized = False
+        self._live_next_position = 0
+        self._live_total = 0
+        self._live_fancy = 0
+        self._live_review = 0
+        self._live_processor = None
+        self._live_part_seq = 0
+        self._live_thread = None
+        self._live_thread_refs = []
+
+        # Fresh results view; point auto-export at the batch so the results CSV
+        # lands inside it (the batch dropdown reopens the batch from that CSV).
+        self.current_results = []
+        self.results_list.clear()
+        self._current_input_dir = str(batch)
+        self._session_dirty = False
+        self.settings.ui.last_input_dir = str(batch)
+        self.settings.ui.last_output_dir = str(
+            batch / (self.settings.processing.output_subfolder or "fancy_bills"))
+        try:
+            self.settings.save()
+        except Exception:
+            pass
+
+        # Ledger session for the live batch (best-effort).
+        self._ledger_session = None
+        led = self._get_ledger()
+        if led:
+            try:
+                from version import __version__
+                self._ledger_session = led.start_session(
+                    source_folder=batch.name, label=str(batch),
+                    app_version=__version__)
+            except Exception as e:
+                print(f"Ledger session start failed: {e}")
+
+        # Treat the preview like a normal batch run: skip heavy YOLO crop ops when
+        # a result is clicked mid-scan (cleared in _on_processing_complete).
+        try:
+            self.preview_panel.set_batch_processing_active(True)
+        except Exception:
+            pass
+
+        self.status_label.setText("Scanning (live) — processing scans as they arrive…")
+        return True
+
+    def _live_try_chunk(self):
+        """Start the next chunk if the worker is free and enough scans are queued.
+        Even-cut so a front and its back never split across chunks; on Stop, flush
+        whatever remains (including a lone tail)."""
+        if self._live_busy:
+            return
+        pending = self._live_pending
+        if self._live_stopping:
+            take = len(pending)                       # flush everything
+        else:
+            take = len(pending) - (len(pending) % 2)  # even cut; keep a lone tail
+        if take <= 0:
+            if self._live_stopping:
+                self._live_finalize()
+            return
+        if not self._live_stopping and take < 2:
+            return
+
+        chunk = pending[:take]
+        del pending[:take]
+
+        # Stage this chunk into its own subfolder so find_pairs sees only it and
+        # the moved originals keep valid absolute paths in the results.
+        import shutil
+        self._live_part_seq += 1
+        part = self._live_batch_dir / f"part_{self._live_part_seq:02d}"
+        staged = []
+        try:
+            part.mkdir(parents=True, exist_ok=True)
+            for f in chunk:
+                try:
+                    dst = part / f.name
+                    shutil.move(str(f), str(dst))
+                    staged.append(dst)
+                except Exception:
+                    pass
+        except Exception as e:
+            self.status_label.setText(f"Live chunk staging failed: {e}")
+            return
+        if not staged:
+            # Nothing actually moved; try again on the next event.
+            return
+
+        self._live_busy = True
+        out = str(self._live_batch_dir / (self.settings.processing.output_subfolder or "fancy_bills"))
+        from .processing_thread import ProcessingThread
+        th = ProcessingThread(
+            input_dir=str(part),
+            output_dir=out,
+            use_gpu=self.settings.processing.gpu_acceleration,
+            verify_pairs=self.settings.processing.verify_pairs,
+            crop_all=self.settings.processing.crop_all,
+            auto_crop=self.settings.processing.auto_crop,
+            extract_plate_info=self.settings.processing.extract_plate_info,
+            debug_logging=self.settings.processing.debug_logging,
+            processor=self._live_processor,   # reuse the warm models across chunks
+        )
+        th.result_ready.connect(self._on_live_result)
+        th.processing_complete.connect(self._on_live_chunk_complete)
+        th.error_occurred.connect(self._on_live_error)
+        self._live_thread = th
+        self._live_thread_refs.append(th)     # keep alive until finalize
+        th.start()
+
+    @Slot(dict)
+    def _on_live_result(self, result: dict):
+        """One bill finished inside a live chunk: renumber into a single running
+        sequence and append to the results view."""
+        self._live_next_position += 1
+        result['position'] = self._live_next_position
+        if result.get('is_fancy'):
+            self._live_fancy += 1
+        if result.get('needs_review'):
+            self._live_review += 1
+        self._live_total += 1
+        self._append_result(result)
+
+    @Slot(dict)
+    def _on_live_chunk_complete(self, summary: dict):
+        """A live chunk finished. Cache its warm processor for the next chunk and
+        drain the queue (or finalize if Stop was pressed and nothing remains)."""
+        try:
+            if self._live_thread is not None and self._live_thread.processor is not None:
+                self._live_processor = self._live_thread.processor
+        except Exception:
+            pass
+        self._live_busy = False
+        self._live_try_chunk()
+
+    @Slot(str)
+    def _on_live_error(self, error: str):
+        """A live chunk errored: log it and keep going (don't abort the strap)."""
+        self._live_busy = False
+        self.status_label.setText(f"Live chunk error: {error}")
+        self._live_try_chunk()
+
+    def _live_request_stop(self):
+        """Stop pressed during a live scan: stop watching, then flush any remaining
+        scans as a final chunk and finalize once the worker is idle."""
+        self._live_stopping = True
+        self._stop_monitor()
+        self.processing_panel.set_watching(False)
+        self.status_label.setText("Finishing live batch…")
+        if not self._live_busy:
+            self._live_try_chunk()   # process the tail; finalizes when drained
+
+    def _live_finalize(self):
+        """All live chunks done: hand off to the shared completion path (writes the
+        results CSV into the batch, refreshes the batch picker, selects it)."""
+        if self._live_finalized:
+            return
+        self._live_finalized = True
+        summary = {
+            'total': self._live_total,
+            'fancy_count': self._live_fancy,
+            'review_count': self._live_review,
+        }
+        # Let _on_processing_complete grab the warm processor + refresh/select the
+        # batch dropdown (mirrors Option A's monitor finalize).
+        self.processing_thread = self._live_thread
+        self._monitor_run_active = True   # _monitor_last_batch set in _live_begin
+        self._live_mode = False
+        self._on_processing_complete(summary)
+        self._live_thread_refs = []       # release chunk threads (all finished)
 
     def _finalize_monitor_batch(self) -> bool:
         """Stop clicked: move all collected scans into a new Straps batch and run
         the normal pipeline on it. Returns True if a batch was filed."""
         if self.is_processing:
             QMessageBox.information(
-                self, "Watch Folder",
+                self, "Start Scanning",
                 "A batch is still processing. Give it a moment, then Stop again.")
             return False
         files = [p for p in self._monitor_new_files if p.exists()]
@@ -2353,7 +2619,7 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
         except Exception as e:
-            QMessageBox.warning(self, "Watch Folder", f"Couldn't file the batch:\n{e}")
+            QMessageBox.warning(self, "Start Scanning", f"Couldn't file the batch:\n{e}")
             return False
         # Process the just-filed batch with the normal pipeline (output stays
         # self-contained under the batch folder).

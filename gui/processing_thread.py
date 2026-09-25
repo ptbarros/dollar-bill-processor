@@ -42,6 +42,7 @@ class ProcessingThread(QThread):
         auto_crop: bool = True,
         extract_plate_info: bool = False,
         debug_logging: bool = False,
+        processor=None,
         parent=None
     ):
         super().__init__(parent)
@@ -54,6 +55,10 @@ class ProcessingThread(QThread):
         self.auto_crop = auto_crop
         self.extract_plate_info = extract_plate_info
         self._stop_requested = False
+        # An already-built ProductionProcessor to REUSE (live/chunked scanning runs
+        # many small ProcessingThreads back-to-back; rebuilding the model each time
+        # would reload YOLO+OCR per chunk). None -> build one in run() as usual.
+        self._external_processor = processor
         self.processor = None  # Will be set during run()
 
     def _backend_desc(self):
@@ -72,37 +77,41 @@ class ProcessingThread(QThread):
             # Import processor
             from process_production import ProductionProcessor, Config, ScannerFormatDetector
 
-            # Find config and model
-            script_dir = Path(__file__).parent.parent
-            # The Crop Manager saves to the user-writable config dir; prefer it so
-            # crop/denomination/profile changes actually apply. In a frozen build
-            # script_dir is the read-only bundle (the default config only).
-            from resource_path import user_data_dir
-            _user_cfg = user_data_dir() / "config.yaml"
-            config_path = _user_cfg if _user_cfg.exists() else script_dir / "config.yaml"
-            patterns_dir = script_dir / "patterns"
-            model_path = script_dir / "best.pt"
-
-            if not model_path.exists():
-                self.error_occurred.emit(f"YOLO model not found: {model_path}")
-                return
-
             # Create output directory
             self.output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Initialize processor
-            self.progress_updated.emit(0, 0, "Loading models...")
+            if self._external_processor is not None:
+                # Reuse the caller's already-loaded models (live/chunked scanning).
+                self.processor = self._external_processor
+            else:
+                # Find config and model
+                script_dir = Path(__file__).parent.parent
+                # The Crop Manager saves to the user-writable config dir; prefer it so
+                # crop/denomination/profile changes actually apply. In a frozen build
+                # script_dir is the read-only bundle (the default config only).
+                from resource_path import user_data_dir
+                _user_cfg = user_data_dir() / "config.yaml"
+                config_path = _user_cfg if _user_cfg.exists() else script_dir / "config.yaml"
+                patterns_dir = script_dir / "patterns"
+                model_path = script_dir / "best.pt"
 
-            cfg = Config(config_path if config_path.exists() else None)
-            self.processor = ProductionProcessor(
-                model_path,
-                use_gpu=self.use_gpu,
-                cfg=cfg,
-                patterns_dir=patterns_dir if patterns_dir.exists() else None
-            )
+                if not model_path.exists():
+                    self.error_occurred.emit(f"YOLO model not found: {model_path}")
+                    return
 
-            if self.debug_logging:
-                dlog_raw(f"[BACKEND] {self._backend_desc()} | gpu_acceleration={self.use_gpu}")
+                # Initialize processor
+                self.progress_updated.emit(0, 0, "Loading models...")
+
+                cfg = Config(config_path if config_path.exists() else None)
+                self.processor = ProductionProcessor(
+                    model_path,
+                    use_gpu=self.use_gpu,
+                    cfg=cfg,
+                    patterns_dir=patterns_dir if patterns_dir.exists() else None
+                )
+
+                if self.debug_logging:
+                    dlog_raw(f"[BACKEND] {self._backend_desc()} | gpu_acceleration={self.use_gpu}")
 
             # Validate directory - check it's not an output directory
             self.progress_updated.emit(0, 0, "Scanning directory...")

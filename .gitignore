@@ -57,9 +57,10 @@ corrections.yaml
 # Local Claude Code settings (machine-specific)
 .claude/settings.local.json
 
-# Runtime debug log (see debug_logger.py)
+# Runtime debug log (see debug_logger.py) -- now under logs/ in dev
 debug_log.txt
 debug_log.txt.*
+logs/
 
 # Example/test files
 *_example.py

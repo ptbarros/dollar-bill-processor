@@ -1268,7 +1268,7 @@ class PreviewPanel(QWidget):
         _wl = QVBoxLayout(self.watch_page)
         _wl.setAlignment(Qt.AlignCenter)
         _wl.setSpacing(6)
-        self._watch_head = QLabel("Watching for scans")
+        self._watch_head = QLabel("Collecting scans")
         self._watch_head.setAlignment(Qt.AlignCenter)
         self._watch_head.setStyleSheet("font-size: 15px; color: #2a82da; letter-spacing: 1px;")
         self.watch_count_label = QLabel("0")
