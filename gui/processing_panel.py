@@ -114,9 +114,9 @@ class ProcessingPanel(QWidget):
         self.watch_btn.setCheckable(True)
         self.watch_btn.setMinimumWidth(100)
         self.watch_btn.setToolTip(
-            "Watch the selected folder. New scans are collected, filed into a "
-            "numbered/dated batch under your Straps folder, and processed "
-            "automatically once scanning goes quiet.")
+            "Start watching the selected folder and collecting scans (feed your "
+            "whole strap in as many passes as you like). Click Stop when the strap "
+            "is done to file everything into one batch under Straps and process it.")
         self.watch_btn.setStyleSheet("""
             QPushButton { padding: 8px 16px; border-radius: 4px; }
             QPushButton:checked {
@@ -230,7 +230,8 @@ class ProcessingPanel(QWidget):
         if checked and not watch_dir:
             self.watch_btn.setChecked(False)  # nothing to watch
             return
-        self.watch_btn.setText("Watching…" if checked else "Watch Folder")
+        # While watching, the button says what clicking it will do.
+        self.watch_btn.setText("Stop && File Batch" if checked else "Watch Folder")
         self.watch_toggled.emit(checked, watch_dir if checked else "")
 
     def _on_process(self):

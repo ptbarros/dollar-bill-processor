@@ -66,18 +66,16 @@ class MainWindow(QMainWindow):
         # Debounce for alignment warnings (prevent spam during batch load)
         self._last_align_warning_time = 0
 
-        # Monitor mode (Option A): watch a folder, and when scanning goes quiet,
-        # move the newly-arrived scans into a Straps/Batch folder and run the
-        # normal processing on it. State:
+        # Monitor mode (Option A): while watching, collect scans as they arrive;
+        # the user clicks Stop (toggles Watch off) to file them into one Straps
+        # batch and run the normal processing on it. (Manual Stop -- NOT quiet-
+        # detection -- because a strap is fed in several passes with gaps between,
+        # so any auto-timeout would wrongly split one strap into several batches.)
         self._monitor_active = False
         self._monitor_watch_dir = None
         self._monitor_watcher = None          # FileWatcher thread
-        self._monitor_new_files = set()       # scans that arrived since the last batch
+        self._monitor_new_files = set()       # scans collected since watching began
         self._monitor_run_active = False      # a monitor-triggered process is in flight
-        self._monitor_quiet_timer = QTimer(self)
-        self._monitor_quiet_timer.setSingleShot(True)
-        self._monitor_quiet_timer.timeout.connect(self._on_monitor_quiet)
-        self._monitor_quiet_ms = 8000         # process a strap after 8s of no new files
 
         # Setup UI
         self._setup_ui()
@@ -2254,18 +2252,23 @@ class MainWindow(QMainWindow):
     # ---- Monitor mode (Option A: watch -> file batch -> normal processing) ----
 
     def _on_watch_toggled(self, on: bool, watch_dir: str):
-        """Processing panel's Watch Folder toggle: start/stop monitoring."""
+        """Watch Folder toggle. ON = start collecting scans; OFF (= the user's
+        'Stop') = file everything collected into ONE Straps batch and process it.
+        The strap is fed in several passes with gaps, so we never auto-finalize on
+        a pause -- only an explicit Stop closes the batch."""
         if on:
             if not self._start_monitor(watch_dir):
                 self.processing_panel.watch_btn.setChecked(False)
         else:
+            filed = self._finalize_monitor_batch()   # while watcher state is intact
             self._stop_monitor()
-            self.status_label.setText("Stopped watching")
+            if not filed:
+                self.status_label.setText("Stopped watching (no new scans to file)")
 
     def _start_monitor(self, watch_dir: str):
-        """Begin watching `watch_dir`. New scans that arrive are collected, and
-        after the folder goes quiet they're filed into a Straps batch and
-        processed with the normal pipeline."""
+        """Begin watching `watch_dir`. New scans that arrive are collected until
+        the user clicks Stop, which files them into a Straps batch and runs the
+        normal pipeline."""
         from .file_watcher import FileWatcher
         from pathlib import Path
         wd = Path(watch_dir).expanduser()
@@ -2280,12 +2283,12 @@ class MainWindow(QMainWindow):
         self._monitor_watcher.new_file_detected.connect(self._on_monitor_file)
         self._monitor_watcher.start()
         self._monitor_active = True
-        self.status_label.setText(f"Watching for scans: {wd}")
+        self.status_label.setText(
+            "Watching — scan your strap, then click Stop to file the batch")
         return True
 
     def _stop_monitor(self):
         """Stop watching (does not touch any filed batches)."""
-        self._monitor_quiet_timer.stop()
         if self._monitor_watcher:
             try:
                 self._monitor_watcher.stop()
@@ -2297,27 +2300,29 @@ class MainWindow(QMainWindow):
         self._monitor_new_files = set()
 
     def _on_monitor_file(self, path):
-        """A new scan settled in the watch folder: remember it and (re)start the
-        quiet timer, so a burst of scans is processed as one batch."""
+        """A new scan settled in the watch folder: collect it and show a running
+        count. Nothing is filed until the user clicks Stop."""
         try:
             self._monitor_new_files.add(Path(path))
         except Exception:
             return
-        if not self.is_processing:
-            self._monitor_quiet_timer.start(self._monitor_quiet_ms)
+        n = len(self._monitor_new_files)
+        self.status_label.setText(
+            f"Watching — {n} scan{'s' if n != 1 else ''} collected "
+            f"(click Stop to file the batch)")
 
-    def _on_monitor_quiet(self):
-        """The watch folder has been quiet: file the collected scans into a new
-        Straps batch and run the normal pipeline on it."""
-        if not self._monitor_active or self.is_processing:
-            # Retry shortly if a manual/other process is running.
-            if self._monitor_active and self._monitor_new_files:
-                self._monitor_quiet_timer.start(self._monitor_quiet_ms)
-            return
+    def _finalize_monitor_batch(self) -> bool:
+        """Stop clicked: move all collected scans into a new Straps batch and run
+        the normal pipeline on it. Returns True if a batch was filed."""
+        if self.is_processing:
+            QMessageBox.information(
+                self, "Watch Folder",
+                "A batch is still processing. Give it a moment, then Stop again.")
+            return False
         files = [p for p in self._monitor_new_files if p.exists()]
         self._monitor_new_files = set()
         if not files:
-            return
+            return False
         try:
             import shutil
             from resource_path import straps_dir
@@ -2329,13 +2334,14 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
         except Exception as e:
-            QMessageBox.warning(self, "Monitor", f"Couldn't file the batch:\n{e}")
-            return
+            QMessageBox.warning(self, "Watch Folder", f"Couldn't file the batch:\n{e}")
+            return False
         # Process the just-filed batch with the normal pipeline (output stays
         # self-contained under the batch folder).
         self._monitor_run_active = True
         out = str(batch / (self.settings.processing.output_subfolder or "fancy_bills"))
         self._on_process_requested(str(batch), out)
+        return True
 
     @Slot(str)
     def _on_processing_error(self, error: str):
