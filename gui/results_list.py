@@ -1494,34 +1494,26 @@ class ResultsList(QWidget):
         self.batch_combo.clear()
         self.batch_combo.addItem("Current Session", "")
 
-        # Get archive directory from settings
-        archive_dir = self.settings.processing.archive_directory
-        if not archive_dir:
-            # Fall back to the last-used input dir's archive folder
-            last_input = self.settings.ui.last_input_dir
-            archive_dir = str(Path(last_input) / "archive") if last_input else ""
+        # Batches live under the Straps folder (Monitor mode files them there).
+        try:
+            from resource_path import straps_dir
+            straps = straps_dir()
+        except Exception:
+            straps = None
 
-        archive_path = Path(archive_dir) if archive_dir else None
-        if archive_path and archive_path.exists():
-            # Find all batch directories, sorted newest first
-            batch_dirs = sorted(
-                [d for d in archive_path.iterdir() if d.is_dir() and d.name.startswith("batch_")],
-                key=lambda d: d.name,
-                reverse=True
-            )
-
+        if straps and straps.exists():
+            # Any subfolder that holds a results CSV is a batch; newest first.
+            batch_dirs = [d for d in straps.iterdir() if d.is_dir() and self._batch_results_csv(d)]
+            batch_dirs.sort(key=lambda d: d.stat().st_mtime, reverse=True)
             for batch_dir in batch_dirs:
-                # Check if it has a results.csv
-                results_csv = batch_dir / "results.csv"
-                if results_csv.exists():
-                    # Count items in CSV for display
-                    try:
-                        with open(results_csv, 'r') as f:
-                            count = sum(1 for _ in f) - 1  # Subtract header
-                        label = f"{batch_dir.name} ({count} bills)"
-                    except Exception:
-                        label = batch_dir.name
-                    self.batch_combo.addItem(label, str(batch_dir))
+                csv_path = self._batch_results_csv(batch_dir)
+                try:
+                    with open(csv_path, 'r') as f:
+                        count = max(0, sum(1 for _ in f) - 1)
+                    label = f"{batch_dir.name} ({count} bills)"
+                except Exception:
+                    label = batch_dir.name
+                self.batch_combo.addItem(label, str(batch_dir))
 
         # Restore selection if still valid
         idx = self.batch_combo.findData(current_data)
@@ -1553,10 +1545,22 @@ class ResultsList(QWidget):
             self.save_csv_btn.setEnabled(True)
             self.batch_changed.emit(batch_path)
 
+    @staticmethod
+    def _batch_results_csv(batch_dir):
+        """The results CSV inside a batch folder: 'results.csv' if present, else
+        the newest 'results_*.csv' (the pipeline timestamps its output). None if
+        the folder has no results CSV."""
+        p = Path(batch_dir)
+        exact = p / "results.csv"
+        if exact.exists():
+            return exact
+        cands = sorted(p.glob("results_*.csv"), key=lambda f: f.stat().st_mtime, reverse=True)
+        return cands[0] if cands else None
+
     def _load_batch(self, batch_dir: Path):
-        """Load results from an archived batch."""
-        results_csv = batch_dir / "results.csv"
-        if not results_csv.exists():
+        """Load results from a filed batch (Straps folder)."""
+        results_csv = self._batch_results_csv(batch_dir)
+        if not results_csv or not results_csv.exists():
             return
 
         results = []
@@ -1644,7 +1648,8 @@ class ResultsList(QWidget):
         if not self._current_batch_path:
             return
 
-        csv_path = self._current_batch_path / "results.csv"
+        csv_path = self._batch_results_csv(self._current_batch_path) or \
+            (self._current_batch_path / "results.csv")
         try:
             with open(csv_path, 'w', newline='') as f:
                 writer = csv.DictWriter(f, fieldnames=[

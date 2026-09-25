@@ -25,6 +25,7 @@ class ProcessingPanel(QWidget):
     profile_changed = Signal(str)  # active crop profile picked from the toolbar
     stop_requested = Signal()
     archive_requested = Signal()  # Archive the current batch
+    watch_toggled = Signal(bool, str)  # Monitor: (on, watch_dir)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -106,6 +107,24 @@ class ProcessingPanel(QWidget):
         """)
         self.process_btn.clicked.connect(self._on_process)
         layout.addWidget(self.process_btn)
+
+        # Watch Folder (Monitor mode): when on, scans dropped into the selected
+        # folder are auto-filed into a Straps batch and processed as they settle.
+        self.watch_btn = QPushButton("Watch Folder")
+        self.watch_btn.setCheckable(True)
+        self.watch_btn.setMinimumWidth(100)
+        self.watch_btn.setToolTip(
+            "Watch the selected folder. New scans are collected, filed into a "
+            "numbered/dated batch under your Straps folder, and processed "
+            "automatically once scanning goes quiet.")
+        self.watch_btn.setStyleSheet("""
+            QPushButton { padding: 8px 16px; border-radius: 4px; }
+            QPushButton:checked {
+                background-color: #2a82da; color: white; font-weight: bold;
+            }
+        """)
+        self.watch_btn.toggled.connect(self._on_watch_toggled)
+        layout.addWidget(self.watch_btn)
 
         # Active crop-profile picker (replaces the old Organize button; Organize
         # moved to Edit -> Organize Folder). Switching here changes the profile
@@ -204,6 +223,15 @@ class ProcessingPanel(QWidget):
         )
         if folder:
             self.output_edit.setText(folder)
+
+    def _on_watch_toggled(self, checked: bool):
+        """Start/stop watching the selected folder for new scans."""
+        watch_dir = self.input_edit.text().strip()
+        if checked and not watch_dir:
+            self.watch_btn.setChecked(False)  # nothing to watch
+            return
+        self.watch_btn.setText("Watching…" if checked else "Watch Folder")
+        self.watch_toggled.emit(checked, watch_dir if checked else "")
 
     def _on_process(self):
         """Handle process button click."""
