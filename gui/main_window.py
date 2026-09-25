@@ -228,6 +228,19 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
+        export_review_action = QAction("Export Review &Bundle...", self)
+        export_review_action.setToolTip(
+            "Pack the bills you saved for review (across all straps) into one .zip to send")
+        export_review_action.triggered.connect(self._export_review_bundle)
+        file_menu.addAction(export_review_action)
+
+        open_review_action = QAction("&Open Review Bundle...", self)
+        open_review_action.setToolTip("Open a review bundle .zip someone sent you and page through the bills")
+        open_review_action.triggered.connect(self._open_review_bundle)
+        file_menu.addAction(open_review_action)
+
+        file_menu.addSeparator()
+
         exit_action = QAction("E&xit", self)
         exit_action.setShortcut(QKeySequence.Quit)
         exit_action.triggered.connect(self.close)
@@ -2163,6 +2176,101 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         return None
+
+    def _review_folder(self) -> Path:
+        """The folder Save-for-Review accumulates into: the configured Review
+        Directory, else the per-user data dir's review/ folder."""
+        from resource_path import user_data_dir
+        configured = (self.settings.ui.review_directory or "").strip()
+        return Path(configured) if configured else (user_data_dir() / "review")
+
+    def _export_review_bundle(self):
+        """File -> Export Review Bundle: zip the accumulated Save-for-Review bills
+        (front/back scans + serial crop + the model's detection) into one .zip to
+        send. Offers to tidy the folder afterward."""
+        import review_bundle
+        from datetime import datetime
+        folder = self._review_folder()
+        stats = review_bundle.review_bundle_stats(folder)
+        if not stats.get("exists") or stats.get("rows", 0) == 0:
+            QMessageBox.information(
+                self, "Export Review Bundle",
+                "No review bills have been saved yet.\n\n"
+                "Right-click a result and choose \"Save for Review…\" to flag bills; "
+                "they accumulate across straps until you export them here.")
+            return
+        default_name = f"review_bundle_{datetime.now():%Y-%m-%d}.zip"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Review Bundle", str(Path.home() / default_name),
+            "Zip archive (*.zip)")
+        if not path:
+            return
+        try:
+            from version import __version__ as _ver
+        except Exception:
+            _ver = ""
+        try:
+            man = review_bundle.export_review_bundle(folder, path, app_version=_ver)
+        except Exception as e:
+            QMessageBox.critical(self, "Export Review Bundle",
+                                 f"Couldn't write the bundle:\n{e}")
+            return
+
+        # Offer to tidy the folder so the next batch starts fresh.
+        box = QMessageBox(self)
+        box.setWindowTitle("Review Bundle Saved")
+        box.setText(f"Saved {man.get('rows', 0)} bill(s) to:\n{path}\n\n"
+                    "Clear the review folder so the next batch starts fresh?")
+        move_btn = box.addButton("Move to 'sent'", QMessageBox.AcceptRole)
+        box.addButton("Keep", QMessageBox.RejectRole)
+        del_btn = box.addButton("Delete", QMessageBox.DestructiveRole)
+        box.setDefaultButton(move_btn)
+        box.exec()
+        clicked = box.clickedButton()
+        try:
+            if clicked is move_btn:
+                n = review_bundle.archive_review_folder(folder, mode="sent")
+                self.status_label.setText(f"Review bundle saved; {n} file(s) moved to 'sent'.")
+            elif clicked is del_btn:
+                if QMessageBox.question(
+                        self, "Delete Review Files",
+                        "Permanently delete the saved review files? "
+                        "The bundle .zip you just wrote keeps a copy.",
+                        QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+                    n = review_bundle.archive_review_folder(folder, mode="delete")
+                    self.status_label.setText(f"Review bundle saved; {n} file(s) deleted.")
+            else:
+                self.status_label.setText("Review bundle saved; review folder kept.")
+        except Exception as e:
+            QMessageBox.warning(self, "Review Bundle",
+                                f"Bundle saved, but tidying the folder failed:\n{e}")
+
+    def _open_review_bundle(self):
+        """File -> Open Review Bundle: extract a bundle .zip and page through the
+        flagged bills in a read-only viewer."""
+        import review_bundle
+        from datetime import datetime
+        from resource_path import user_data_dir
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open Review Bundle", str(Path.home()), "Zip archive (*.zip)")
+        if not path:
+            return
+        extract_dir = user_data_dir() / "review_inbox" / datetime.now().strftime("%Y%m%d_%H%M%S")
+        try:
+            res = review_bundle.read_review_bundle(path, extract_dir)
+        except Exception as e:
+            QMessageBox.critical(self, "Open Review Bundle",
+                                 f"Couldn't read the bundle:\n{e}")
+            return
+        items = res.get("items", [])
+        if not items:
+            QMessageBox.information(
+                self, "Open Review Bundle",
+                "This bundle has no review entries (its review_log.csv was empty "
+                "or missing).")
+            return
+        from .review_bundle_dialog import ReviewBundleDialog
+        ReviewBundleDialog(items, source_name=Path(path).name, parent=self).exec()
 
     def _on_backup(self):
         """File -> Back Up Data. Package selected user data into a portable zip."""
