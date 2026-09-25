@@ -121,6 +121,8 @@ class MainWindow(QMainWindow):
         self.preview_panel.crop_requested.connect(self._on_crop_current)
         self.results_list.crop_requested.connect(self._on_crop_selected)
         self.results_list.serial_lookup_requested.connect(self._open_serial_lookup)
+        # Left/Right in the results list cycles the pattern overlay.
+        self.results_list.overlay_cycle_requested.connect(self.preview_panel._cycle_pattern_overlay)
         self.preview_panel.overlay_colors_requested.connect(self._open_overlay_colors)
         # Apply saved visibility settings
         self.preview_panel.set_serial_region_visible(self.settings.ui.show_serial_region)
@@ -141,6 +143,11 @@ class MainWindow(QMainWindow):
         # (deferred so sizes() reflects real geometry, not the pre-show default).
         QTimer.singleShot(0, lambda: self.preview_panel.set_details_pane_height(
             self.settings.ui.details_pane_height))
+
+        # Reopen in the user's last-chosen preview view mode (front/back/split/...).
+        saved_view = self.settings.ui.view_mode
+        if saved_view and saved_view != "front":
+            QTimer.singleShot(0, lambda: self.preview_panel._on_view_mode_clicked(saved_view))
 
     def _setup_menus(self):
         """Setup the menu bar."""
@@ -2183,6 +2190,10 @@ class MainWindow(QMainWindow):
             available=bool(self.current_results),
             auto_archive_enabled=self.settings.processing.auto_archive
         )
+
+        # Auto-select the top result (respecting the current sort) so the user can
+        # start reviewing immediately without clicking into the list.
+        self.results_list.select_top()
 
     @Slot(str)
     def _on_processing_error(self, error: str):

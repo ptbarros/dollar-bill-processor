@@ -170,6 +170,7 @@ class ResultsList(QWidget):
     crop_requested = Signal(list)  # Emits list of results to crop
     status_changed = Signal()  # Emits when review status fields change (viewed, cropped, etc.)
     serial_lookup_requested = Signal()  # Emits when the Serial Lookup button is clicked
+    overlay_cycle_requested = Signal(int)  # Left/Right in the list: +1 next / -1 prev overlay
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -269,6 +270,10 @@ class ResultsList(QWidget):
         self.tree.setSortingEnabled(True)
         self.tree.setSelectionMode(QTreeWidget.ExtendedSelection)
         self.tree.itemSelectionChanged.connect(self._on_selection_changed)
+        # Left/Right while the list has focus cycles the pattern overlay, so the
+        # user can arrow DOWN the results and arrow RIGHT/LEFT through overlays
+        # without leaving the keyboard. (A flat list has no use for Left/Right.)
+        self.tree.installEventFilter(self)
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
 
@@ -446,8 +451,16 @@ class ResultsList(QWidget):
         return not self.tree.header().isSectionHidden(column)
 
     def eventFilter(self, obj, event):
-        """Log when the batch dropdown gains focus (diagnostic for the
-        accidental archive-load issue). Never consumes the event."""
+        """Left/Right on the results tree cycles the overlay (consumed); otherwise
+        log when the batch dropdown gains focus (diagnostic). Never consumes keys
+        it doesn't handle."""
+        if obj is self.tree and event.type() == QEvent.KeyPress:
+            key = event.key()
+            # Plain Left/Right only -- leave Shift+Left/Right (pan) and any other
+            # modified arrows to their existing behaviour.
+            if key in (Qt.Key_Left, Qt.Key_Right) and event.modifiers() == Qt.NoModifier:
+                self.overlay_cycle_requested.emit(1 if key == Qt.Key_Right else -1)
+                return True
         if obj is self.batch_combo and event.type() == QEvent.FocusIn:
             try:
                 dlog("batch_combo.focus_in", reason=int(event.reason()))
@@ -475,6 +488,15 @@ class ResultsList(QWidget):
         self.results.append(result)
         self._update_pattern_filter(result)
         self._apply_filters()
+
+    def select_top(self):
+        """Select the top visible row (respecting the current sort/filter). No-op
+        if the list is empty. Selecting fires itemSelectionChanged, which loads the
+        bill into the preview."""
+        if self.tree.topLevelItemCount() > 0:
+            item = self.tree.topLevelItem(0)
+            self.tree.setCurrentItem(item)
+            self.tree.scrollToItem(item)
 
     def set_results(self, results: List[dict]):
         """Set all results at once."""

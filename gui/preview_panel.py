@@ -1498,6 +1498,15 @@ class PreviewPanel(QWidget):
 
         self._current_view_mode = mode
 
+        # Remember the chosen view mode so the app reopens in it next time.
+        try:
+            s = get_settings()
+            if s.ui.view_mode != mode:
+                s.ui.view_mode = mode
+                s.save()
+        except Exception:
+            pass
+
         # Map mode to stack index
         mode_to_index = {
             "front": 0,
@@ -2685,16 +2694,18 @@ class PreviewPanel(QWidget):
             if len(serial_crops) >= 2:
                 self.serial_image_2.set_pixmap(serial_crops[1])
 
-    def _cycle_pattern_overlay(self):
-        """Cycle to the next pattern overlay option (called when clicking pattern mode label)."""
+    def _cycle_pattern_overlay(self, step: int = 1):
+        """Cycle the pattern overlay by `step` (+1 = next, -1 = previous). Called
+        by clicking the pattern-mode label (next) and by Left/Right in the results
+        list."""
         # Get current options and index from serial_image_1
         options = self.serial_image_1._get_cycle_options()
         if not options:
             return
 
-        # Get current index and advance to next
+        # Advance from the current index by step (wraps both directions).
         current_idx = self.serial_image_1._current_pattern_index
-        next_idx = (current_idx + 1) % len(options)
+        next_idx = (current_idx + step) % len(options)
         next_pattern = options[next_idx]
 
         # Apply the selection (this will update indices and refresh display)

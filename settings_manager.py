@@ -70,6 +70,8 @@ class UISettings:
     gas_pump_overlay_enabled: bool = False
     # Layout mode: "classic", "wide_preview", "details_right"
     layout_mode: str = "classic"
+    # Preview view mode: "front", "back", "stitched", "split_v", "split_h"
+    view_mode: str = "front"
     # Height (px) of the Bill Details pane below the preview (draggable divider).
     details_pane_height: int = 220
     # Check GitHub for a newer release on startup (in-app updater)
@@ -208,6 +210,7 @@ class SettingsManager:
             self.ui.crosshair_thickness = ui.get('crosshair_thickness', 1)
             self.ui.gas_pump_overlay_enabled = ui.get('gas_pump_overlay_enabled', False)
             self.ui.layout_mode = ui.get('layout_mode', 'classic')
+            self.ui.view_mode = ui.get('view_mode', 'front')
             self.ui.details_pane_height = ui.get('details_pane_height', 220)
             self.ui.check_updates_on_startup = ui.get('check_updates_on_startup', True)
             self.ui.label_uppercase = ui.get('label_uppercase', False)
@@ -407,6 +410,7 @@ class SettingsManager:
                 'crosshair_thickness': self.ui.crosshair_thickness,
                 'gas_pump_overlay_enabled': self.ui.gas_pump_overlay_enabled,
                 'layout_mode': self.ui.layout_mode,
+                'view_mode': self.ui.view_mode,
                 'details_pane_height': self.ui.details_pane_height,
                 'check_updates_on_startup': self.ui.check_updates_on_startup,
                 'label_uppercase': self.ui.label_uppercase,
