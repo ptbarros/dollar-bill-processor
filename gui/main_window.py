@@ -2285,12 +2285,20 @@ class MainWindow(QMainWindow):
         self._monitor_watcher.new_file_detected.connect(self._on_monitor_file)
         self._monitor_watcher.start()
         self._monitor_active = True
+        try:
+            self.preview_panel.show_watch_overlay()
+        except Exception:
+            pass
         self.status_label.setText(
             f"Watching {wd} — scan your strap, then click Stop to file the batch")
         return True
 
     def _stop_monitor(self):
         """Stop watching (does not touch any filed batches)."""
+        try:
+            self.preview_panel.hide_watch_overlay()
+        except Exception:
+            pass
         if self._monitor_watcher:
             try:
                 self._monitor_watcher.stop()
@@ -2309,6 +2317,10 @@ class MainWindow(QMainWindow):
         except Exception:
             return
         n = len(self._monitor_new_files)
+        try:
+            self.preview_panel.set_watch_count(n)
+        except Exception:
+            pass
         self.status_label.setText(
             f"Watching — {n} scan{'s' if n != 1 else ''} collected "
             f"(click Stop to file the batch)")

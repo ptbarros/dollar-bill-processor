@@ -1262,6 +1262,33 @@ class PreviewPanel(QWidget):
         self.split_h_viewer = SyncedSplitViewer(Qt.Horizontal)
         self.view_stack.addWidget(self.split_h_viewer)
 
+        # === Watch-mode page (index 5): takes over the preview while collecting
+        # scans, since the app isn't usable until the batch is filed + processed.
+        self.watch_page = QWidget()
+        _wl = QVBoxLayout(self.watch_page)
+        _wl.setAlignment(Qt.AlignCenter)
+        _wl.setSpacing(6)
+        self._watch_head = QLabel("Watching for scans")
+        self._watch_head.setAlignment(Qt.AlignCenter)
+        self._watch_head.setStyleSheet("font-size: 15px; color: #2a82da; letter-spacing: 1px;")
+        self.watch_count_label = QLabel("0")
+        self.watch_count_label.setAlignment(Qt.AlignCenter)
+        self.watch_count_label.setStyleSheet("font-size: 72px; font-weight: bold; color: #2a82da;")
+        self.watch_sub_label = QLabel("scans collected")
+        self.watch_sub_label.setAlignment(Qt.AlignCenter)
+        self.watch_sub_label.setStyleSheet("font-size: 16px; color: gray;")
+        self._watch_msg = QLabel(
+            "Feed your whole strap through the scanner — as many passes as you "
+            "need.\nWhen it's all through, click Stop to file and process the strap.")
+        self._watch_msg.setAlignment(Qt.AlignCenter)
+        self._watch_msg.setWordWrap(True)
+        self._watch_msg.setStyleSheet("font-size: 14px; margin-top: 22px; max-width: 460px;")
+        for _w in (self._watch_head, self.watch_count_label, self.watch_sub_label, self._watch_msg):
+            _wl.addWidget(_w)
+        self.view_stack.addWidget(self.watch_page)
+        self._watch_page_index = self.view_stack.count() - 1
+        self._pre_watch_index = 0
+
         preview_layout.addWidget(self.view_stack, 1)
 
         # Serial region images (toggleable via View menu)
@@ -1489,6 +1516,27 @@ class PreviewPanel(QWidget):
         self.content_splitter.setCollapsible(1, True)
         self.content_splitter.setSizes([650, 220])
         layout.addWidget(self.content_splitter, 1)
+
+    def show_watch_overlay(self):
+        """Take over the preview area with the watch-mode page (remembers the
+        current view so it can be restored on stop)."""
+        cur = self.view_stack.currentIndex()
+        if cur != self._watch_page_index:
+            self._pre_watch_index = cur
+        self.set_watch_count(0)
+        self.view_stack.setCurrentIndex(self._watch_page_index)
+
+    def set_watch_count(self, n: int):
+        """Update the big scan count on the watch page."""
+        self.watch_count_label.setText(str(n))
+        self.watch_sub_label.setText("scan collected" if n == 1 else "scans collected")
+
+    def hide_watch_overlay(self):
+        """Restore the normal preview view after watching stops."""
+        idx = getattr(self, "_pre_watch_index", 0)
+        if idx == self._watch_page_index:
+            idx = 0
+        self.view_stack.setCurrentIndex(idx)
 
     def _on_view_mode_clicked(self, mode: str):
         """Handle view mode button click."""
