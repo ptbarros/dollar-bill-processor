@@ -125,11 +125,16 @@ class ProcessingPanel(QWidget):
             "Start collecting scans as they come off the scanner (feed your whole "
             "strap in as many passes as you like). Click Stop when the strap is "
             "done to file everything into one batch under Straps and process it.")
+        # Only style the "on" (checked) state blue. The idle state deliberately has
+        # NO base QPushButton rule so it inherits the app's themed button look
+        # (background + border) -- a partial base rule strips the native chrome and
+        # makes the button render as flat text on Windows.
         self.watch_btn.setStyleSheet("""
-            QPushButton { padding: 8px 16px; border-radius: 4px; }
             QPushButton:checked {
                 background-color: #2a82da; color: white; font-weight: bold;
+                border: 1px solid #2a82da;
             }
+            QPushButton:checked:hover { background-color: #2372c4; }
         """)
         self.watch_btn.toggled.connect(self._on_watch_toggled)
         layout.addWidget(self.watch_btn)
