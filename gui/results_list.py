@@ -499,6 +499,9 @@ class ResultsList(QWidget):
             item = self.tree.topLevelItem(0)
             self.tree.setCurrentItem(item)
             self.tree.scrollToItem(item)
+            # Give the list keyboard focus so Up/Down (rows) and Left/Right
+            # (overlay cycling) work immediately, without a mouse click first.
+            self.tree.setFocus()
 
     def set_results(self, results: List[dict]):
         """Set all results at once."""
