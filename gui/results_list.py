@@ -454,7 +454,9 @@ class ResultsList(QWidget):
         """Left/Right on the results tree cycles the overlay (consumed); otherwise
         log when the batch dropdown gains focus (diagnostic). Never consumes keys
         it doesn't handle."""
-        if obj is self.tree and event.type() == QEvent.KeyPress:
+        # getattr: this filter is installed on batch_combo too, and can fire during
+        # setup before self.tree exists.
+        if event.type() == QEvent.KeyPress and obj is getattr(self, 'tree', None):
             key = event.key()
             # Plain Left/Right only -- leave Shift+Left/Right (pan) and any other
             # modified arrows to their existing behaviour.
