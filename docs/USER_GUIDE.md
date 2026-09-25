@@ -12,15 +12,16 @@ reading results, and managing patterns.
 1. [Preparing a folder: Organize vs. Verify](#preparing-a-folder-organize-vs-verify)
 2. [Folder formats the app recognizes](#folder-formats-the-app-recognizes)
 3. [Processing a batch](#processing-a-batch) _(to be expanded)_
-4. [Reading the results & overlays](#reading-the-results--overlays) _(to be expanded)_
-5. [How odds & rarity work](#how-odds--rarity-work)
-6. [Pattern Manager](#pattern-manager) _(to be expanded)_
-7. [Serial Lookup & Strap Check](#serial-lookup--strap-check) _(to be expanded)_
-8. [Physical-print detections](#physical-print-detections-gas-pump-seal-shift-plates) _(to be expanded)_
-9. [Cropping for listings](#cropping-for-listings) _(to be expanded)_
-10. [Labels](#labels) _(to be expanded)_
-11. [Insights report](#insights-report) _(to be expanded)_
-12. [Backup & Restore](#backup--restore) _(to be expanded)_
+4. [Scanning straps directly (Start Scanning)](#scanning-straps-directly-start-scanning)
+5. [Reading the results & overlays](#reading-the-results--overlays) _(to be expanded)_
+6. [How odds & rarity work](#how-odds--rarity-work)
+7. [Pattern Manager](#pattern-manager) _(to be expanded)_
+8. [Serial Lookup & Strap Check](#serial-lookup--strap-check) _(to be expanded)_
+9. [Physical-print detections](#physical-print-detections-gas-pump-seal-shift-plates) _(to be expanded)_
+10. [Cropping for listings](#cropping-for-listings) _(to be expanded)_
+11. [Labels](#labels) _(to be expanded)_
+12. [Insights report](#insights-report) _(to be expanded)_
+13. [Backup & Restore](#backup--restore) _(to be expanded)_
 
 ---
 
@@ -123,6 +124,36 @@ This detection is why an Organized folder processes faster than a raw one.
 _(to be expanded)_ — Point the app at a folder, start processing, and watch the
 results fill in. Each bill's serial is read, classified against the enabled
 patterns, and flagged fancy or sent to review.
+
+## Scanning straps directly (Start Scanning)
+
+Instead of scanning to a folder and then pointing the app at it, you can let the
+app **watch your scanner's output folder** and file each strap for you. Click
+**Start Scanning**, feed the strap (in as many passes as you like), then click
+**Stop & File Batch** — everything that arrived is moved into a new batch under
+your **Straps** folder and processed. Past straps stay in the batch dropdown so
+you can reopen them.
+
+### Live processing (experimental) — depends on how your scanner saves files
+
+There's an experimental **Process live** checkbox that starts classifying scans
+*as they arrive* instead of waiting until you click Stop. Whether it actually
+saves you time depends entirely on **when your scanner writes the image files**:
+
+- **If the scanner writes each page (or each pass) to the folder as it feeds**,
+  live processing works through them while you keep scanning.
+- **If the scanner holds the whole strap in memory and writes every file at once
+  at the end**, there's nothing to process until you finish, so live mode just
+  processes the batch at the end — the same as leaving the box unchecked. No
+  harm, but no time saved.
+
+> **Canon imageFormula R40:** this scanner buffers all pages in the Canon
+> software and only writes them to the output folder when you click **Finish**
+> in its interface — so every file appears at once. **Live processing gives no
+> benefit on the R40**; just scan the strap, then click Stop & File Batch as
+> normal. (Behavior varies by scanner and by its "save" settings — check yours
+> by watching the output folder while you feed a strap: do files trickle in, or
+> appear all at once at the end?)
 
 ## Reading the results & overlays
 _(to be expanded)_ — The results list, the fancy/kept columns, and the on-bill
