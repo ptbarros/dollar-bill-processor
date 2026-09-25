@@ -1793,15 +1793,46 @@ class ResultsList(QWidget):
         self._on_selection_changed()
 
     def _reclassify_all(self):
-        """Re-run pattern matching on all results."""
+        """Re-run pattern matching on all results, with a progress dialog (on a
+        big batch this used to freeze silently for seconds with no feedback)."""
         if not self.results:
             return
 
-        # Reload patterns to pick up any new ones
-        self.pattern_engine.reload()
+        from PySide6.QtWidgets import QProgressDialog, QApplication
+        total = len(self.results)
 
-        for result in self.results:
-            self._reclassify_result(result)
+        prog = QProgressDialog("Reloading patterns…", "Cancel", 0, total, self)
+        prog.setWindowTitle("Re-classifying")
+        prog.setWindowModality(Qt.WindowModal)
+        prog.setMinimumDuration(0)   # show right away, don't wait
+        prog.setValue(0)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.processEvents()
+        try:
+            # Reload patterns to pick up any new ones
+            self.pattern_engine.reload()
+
+            # Build a front_file -> tree item index ONCE so re-classifying all
+            # results is O(n), not O(n^2).
+            index = {}
+            for i in range(self.tree.topLevelItemCount()):
+                it = self.tree.topLevelItem(i)
+                ir = it.data(0, Qt.UserRole)
+                if ir:
+                    index[ir.get('front_file')] = it
+
+            prog.setLabelText("Re-classifying bills…")
+            for n, result in enumerate(self.results, 1):
+                if prog.wasCanceled():
+                    break
+                self._reclassify_result(result, item_index=index)
+                if n % 25 == 0 or n == total:
+                    prog.setValue(n)
+                    QApplication.processEvents()
+            prog.setValue(total)
+        finally:
+            prog.close()
+            QApplication.restoreOverrideCursor()
 
         # Refresh the display
         self._apply_filters()
@@ -1809,8 +1840,12 @@ class ResultsList(QWidget):
         # Re-select to update preview panel
         self._on_selection_changed()
 
-    def _reclassify_result(self, result: dict):
-        """Re-classify a single result and update its data."""
+    def _reclassify_result(self, result: dict, item_index: dict = None):
+        """Re-classify a single result and update its data.
+
+        `item_index` (front_file -> tree item), when provided, avoids the O(n)
+        tree scan below — pass it from bulk callers so re-classifying N bills is
+        O(n), not O(n^2)."""
         serial = result.get('serial', '')
         if not serial:
             return
@@ -1830,21 +1865,28 @@ class ResultsList(QWidget):
         result['fancy_types'] = new_fancy_types
         result['is_fancy'] = len(matches) > 0
 
-        # Update the tree item if it exists
-        for i in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(i)
-            item_result = item.data(0, Qt.UserRole)
-            if item_result and item_result.get('front_file') == result.get('front_file'):
-                # Update the Patterns column (column 2) and its sort count
-                item.setText(2, new_fancy_types or "-")
-                item.setData(2, PATTERN_COUNT_ROLE, len(matches))
+        # Find the tree item: O(1) via the index when a bulk caller supplies one,
+        # else fall back to a linear scan (single-item callers).
+        item = None
+        if item_index is not None:
+            item = item_index.get(result.get('front_file'))
+        else:
+            for i in range(self.tree.topLevelItemCount()):
+                it = self.tree.topLevelItem(i)
+                item_result = it.data(0, Qt.UserRole)
+                if item_result and item_result.get('front_file') == result.get('front_file'):
+                    item = it
+                    break
+        if item is not None:
+            # Update the Patterns column (column 2) and its sort count
+            item.setText(2, new_fancy_types or "-")
+            item.setData(2, PATTERN_COUNT_ROLE, len(matches))
 
-                # Update colors based on fancy status
-                if result.get('is_fancy'):
-                    item.setForeground(2, QBrush(QColor("#2e7d32")))  # Green for fancy
-                else:
-                    item.setForeground(2, QBrush(QColor("#000000")))  # Black for normal
+            # Update colors based on fancy status
+            if result.get('is_fancy'):
+                item.setForeground(2, QBrush(QColor("#2e7d32")))  # Green for fancy
+            else:
+                item.setForeground(2, QBrush(QColor("#000000")))  # Black for normal
 
-                # Update the stored data
-                item.setData(0, Qt.UserRole, result)
-                break
+            # Update the stored data
+            item.setData(0, Qt.UserRole, result)
