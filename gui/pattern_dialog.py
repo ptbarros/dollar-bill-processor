@@ -816,8 +816,12 @@ class PatternDialog(QDialog):
     def _update_library_patterns(self, lib_item, enabled: bool):
         """Enable or disable all patterns under a library item.
 
-        Clears individual pattern overrides so patterns inherit the library state.
-        This ensures library checkbox state is respected on reload.
+        Persists an EXPLICIT enabled state per pattern (same as the individual
+        checkboxes and the global Enable/Disable All buttons). We must NOT just
+        clear the per-pattern override and rely on "inherit from library": a
+        cleared pattern's default is `library_enabled AND (name in shipped
+        whitelist)`, and user patterns aren't in that whitelist -- so enabling a
+        user library would silently revert to unchecked on reload.
         """
         self.pattern_tree.blockSignals(True)
         for i in range(lib_item.childCount()):
@@ -825,12 +829,7 @@ class PatternDialog(QDialog):
             pattern_item.setCheckState(2, Qt.Checked if enabled else Qt.Unchecked)
             data = pattern_item.data(0, Qt.UserRole)
             if data and 'name' in data:
-                # Clear individual pattern state so it inherits from library
-                # (only for v3 engine with clear_pattern_enabled method)
-                if hasattr(self.engine, 'clear_pattern_enabled'):
-                    self.engine.clear_pattern_enabled(data['name'])
-                else:
-                    self.engine.set_pattern_enabled(data['name'], enabled)
+                self.engine.set_pattern_enabled(data['name'], enabled)
         self.pattern_tree.blockSignals(False)
 
     def _select_pattern_by_name(self, pattern_name: str):
