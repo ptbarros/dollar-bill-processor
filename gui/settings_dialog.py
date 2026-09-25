@@ -2,6 +2,7 @@
 Settings Dialog - Configure application settings.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -404,6 +405,40 @@ class SettingsDialog(QDialog):
         dirs_group = QGroupBox("Folders")
         dirs_layout = QFormLayout(dirs_group)
 
+        # Data folder: the visible per-user folder that holds Monitor-mode "Straps"
+        # (batch folders). Default ~/DollarDetective. Manual processing is unaffected.
+        self.data_folder_edit = QLineEdit()
+        self.data_folder_edit.setPlaceholderText("~/DollarDetective (default)")
+        data_layout = QHBoxLayout()
+        data_layout.addWidget(self.data_folder_edit)
+        data_btn = QPushButton("...")
+        data_btn.setMaximumWidth(30)
+        data_btn.clicked.connect(self._browse_data_dir)
+        data_layout.addWidget(data_btn)
+        data_open_btn = QPushButton("Open")
+        data_open_btn.setMaximumWidth(48)
+        data_open_btn.clicked.connect(self._open_data_dir)
+        data_layout.addWidget(data_open_btn)
+        dirs_layout.addRow("Data Folder:", data_layout)
+
+        self.data_folder_hint = QLabel(
+            "Holds your scan batches (Straps). Blank = ~/DollarDetective.")
+        self.data_folder_hint.setStyleSheet("color: gray; font-size: 9px;")
+        dirs_layout.addRow("", self.data_folder_hint)
+        # Soft OneDrive note updates live as the field changes.
+        self.data_folder_edit.textChanged.connect(self._update_data_folder_hint)
+
+        # Batch (strap) folder naming for Monitor mode.
+        self.batch_name_combo = QComboBox()
+        self._batch_fmt_values = ["number", "date", "number_date", "date_number"]
+        self.batch_name_combo.addItems([
+            "Number  (001)",
+            "Date  (2026-09-25)",
+            "Number + Date  (001 - 2026-09-25)",
+            "Date + Number  (2026-09-25 - 001)",
+        ])
+        dirs_layout.addRow("Batch Folder Names:", self.batch_name_combo)
+
         # Archive directory (where 'Archive after processing' moves batches)
         self.archive_dir_edit = QLineEdit()
         self.archive_dir_edit.setPlaceholderText("Directory for completed batches...")
@@ -703,6 +738,13 @@ class SettingsDialog(QDialog):
         self.auto_summary_check.setChecked(self.settings.export.auto_export_summary)
 
         # Folders
+        self.data_folder_edit.setText(self.settings.processing.data_folder)
+        try:
+            self.batch_name_combo.setCurrentIndex(
+                self._batch_fmt_values.index(self.settings.processing.batch_name_format))
+        except ValueError:
+            self.batch_name_combo.setCurrentIndex(0)
+        self._update_data_folder_hint()
         self.archive_dir_edit.setText(self.settings.processing.archive_directory)
         self.review_dir_edit.setText(self.settings.ui.review_directory)
         self.output_subfolder_edit.setText(self.settings.processing.output_subfolder)
@@ -750,6 +792,9 @@ class SettingsDialog(QDialog):
         self.settings.export.auto_export_summary = self.auto_summary_check.isChecked()
 
         # Folders
+        self.settings.processing.data_folder = self.data_folder_edit.text().strip()
+        self.settings.processing.batch_name_format = \
+            self._batch_fmt_values[self.batch_name_combo.currentIndex()]
         self.settings.processing.archive_directory = self.archive_dir_edit.text().strip()
         self.settings.ui.review_directory = self.review_dir_edit.text().strip()
         self.settings.processing.output_subfolder = self.output_subfolder_edit.text().strip() or "fancy_bills"
@@ -810,6 +855,45 @@ class SettingsDialog(QDialog):
             f"background-color: {self._fancy_color}; color: {text_color}; border: 1px solid #555;"
         )
         self.fancy_color_btn.setText(self._fancy_color)
+
+    def _browse_data_dir(self):
+        """Browse for the data (Straps) folder."""
+        from resource_path import content_dir
+        start = self.data_folder_edit.text().strip() or str(content_dir())
+        folder = QFileDialog.getExistingDirectory(self, "Select Data Folder", start)
+        if folder:
+            self.data_folder_edit.setText(folder)
+
+    def _open_data_dir(self):
+        """Open the current data folder in the OS file browser."""
+        from resource_path import content_dir
+        import subprocess
+        chosen = self.data_folder_edit.text().strip()
+        target = Path(chosen).expanduser() if chosen else content_dir()
+        try:
+            target.mkdir(parents=True, exist_ok=True)
+            if sys.platform == "win32":
+                os.startfile(str(target))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(target)])
+            else:
+                subprocess.Popen(["xdg-open", str(target)])
+        except Exception:
+            pass
+
+    def _update_data_folder_hint(self):
+        """Soft note if the chosen data folder looks like it's inside OneDrive."""
+        from resource_path import is_in_onedrive
+        chosen = self.data_folder_edit.text().strip()
+        if chosen and is_in_onedrive(chosen):
+            self.data_folder_hint.setText(
+                "⚠ This looks like a OneDrive folder — OneDrive may sync your "
+                "scans and can cause slowdowns/conflicts. A non-OneDrive folder is safer.")
+            self.data_folder_hint.setStyleSheet("color: #c07a2b; font-size: 9px;")
+        else:
+            self.data_folder_hint.setText(
+                "Holds your scan batches (Straps). Blank = ~/DollarDetective.")
+            self.data_folder_hint.setStyleSheet("color: gray; font-size: 9px;")
 
     def _browse_archive_dir(self):
         """Browse for archive directory."""

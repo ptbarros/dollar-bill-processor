@@ -35,6 +35,13 @@ class ProcessingSettings:
     archive_copy_mode: bool = False  # Copy instead of move when archiving (for testing)
     extract_plate_info: bool = True  # Extract series year, front plate, back plate (cheap + accurate with RapidOCR)
     output_subfolder: str = "fancy_bills"  # Auto-filled output subfolder name (<input>/<name>)
+    # Visible per-user content folder (holds the "Straps" batch folders for Monitor
+    # mode). Empty -> defaults to ~/DollarDetective. Manual processing is unaffected.
+    data_folder: str = ""
+    # Batch folder naming for Monitor: "number" (001), "date" (2026-09-25),
+    # "number_date" (001 - 2026-09-25), or "date_number" (2026-09-25 - 001).
+    batch_name_format: str = "number"
+    batch_counter: int = 0  # Last used sequential batch number (monotonic)
 
 
 @dataclass
@@ -187,6 +194,9 @@ class SettingsManager:
             self.processing.archive_copy_mode = proc.get('archive_copy_mode', False)
             self.processing.extract_plate_info = proc.get('extract_plate_info', True)
             self.processing.output_subfolder = (proc.get('output_subfolder') or 'fancy_bills').strip() or 'fancy_bills'
+            self.processing.data_folder = (proc.get('data_folder') or '').strip()
+            self.processing.batch_name_format = (proc.get('batch_name_format') or 'number').strip() or 'number'
+            self.processing.batch_counter = int(proc.get('batch_counter', 0) or 0)
 
         # Load UI settings
         if 'ui' in data:
@@ -386,6 +396,9 @@ class SettingsManager:
                 'auto_crop': self.processing.auto_crop,
                 'auto_archive': self.processing.auto_archive,
                 'archive_directory': self.processing.archive_directory,
+                'data_folder': self.processing.data_folder,
+                'batch_name_format': self.processing.batch_name_format,
+                'batch_counter': self.processing.batch_counter,
                 'archive_copy_mode': self.processing.archive_copy_mode,
                 'extract_plate_info': self.processing.extract_plate_info,
                 'output_subfolder': self.processing.output_subfolder,

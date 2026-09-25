@@ -46,6 +46,48 @@ def user_data_dir() -> Path:
     return d
 
 
+def content_dir() -> Path:
+    """Visible per-user folder for scan batches (the "Straps" tree used by Monitor
+    mode). Defaults to ~/DollarDetective, which is OneDrive-safe on Windows --
+    Path.home() is the real user profile (C:\\Users\\<user>), not a OneDrive-
+    redirected Documents/Desktop. A user setting (processing.data_folder) can point
+    it anywhere, including the Desktop if they insist. Config and user patterns do
+    NOT live here -- they stay in user_data_dir().
+    """
+    override = ""
+    try:  # lazy import: settings_manager imports this module
+        from settings_manager import get_settings
+        override = (get_settings().processing.data_folder or "").strip()
+    except Exception:
+        override = ""
+    d = Path(override).expanduser() if override else (Path.home() / "DollarDetective")
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    return d
+
+
+def straps_dir() -> Path:
+    """Folder holding the per-batch ("strap") folders, under content_dir()."""
+    d = content_dir() / "Straps"
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    return d
+
+
+def is_in_onedrive(path) -> bool:
+    """True if `path` looks like it lives inside a OneDrive-synced tree (used for a
+    soft warning, never to block the user's choice)."""
+    try:
+        p = str(Path(path).expanduser()).replace("\\", "/").lower()
+        return "/onedrive" in p
+    except Exception:
+        return False
+
+
 def _migrate_legacy_user_data(old: Path, new: Path) -> None:
     """One-time move of the pre-rename user-data dir (DollarBillProcessor ->
     DollarDetective) so upgrading users keep their settings, corrections, saved
