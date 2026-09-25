@@ -7,6 +7,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      windows_only:
+        description: "Build ONLY the standard Windows (OpenVINO) installer (skips CUDA/DirectML/Linux/macOS)"
+        type: boolean
+        default: false
 
 jobs:
   windows:
@@ -57,6 +62,8 @@ jobs:
           if-no-files-found: error
 
   windows-cuda:
+    # Skipped for a manual "windows_only" build; always runs on a v* tag push.
+    if: ${{ github.event.inputs.windows_only != 'true' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -103,6 +110,7 @@ jobs:
           if-no-files-found: error
 
   windows-directml:
+    if: ${{ github.event.inputs.windows_only != 'true' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -146,6 +154,7 @@ jobs:
           if-no-files-found: error
 
   linux:
+    if: ${{ github.event.inputs.windows_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -183,6 +192,7 @@ jobs:
           if-no-files-found: error
 
   macos:
+    if: ${{ github.event.inputs.windows_only != 'true' }}
     runs-on: macos-14           # Apple Silicon (arm64) runner
     continue-on-error: true     # best-effort: a macOS quirk must not block the Windows/Linux release
     steps:
