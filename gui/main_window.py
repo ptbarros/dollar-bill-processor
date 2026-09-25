@@ -77,6 +77,15 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Dollar Detective")
 
+        # Log a one-off machine snapshot (CPU/GPU/RAM/OS + ONNX providers) to the
+        # debug log for support/diagnostics. Off-thread: some probes shell out.
+        try:
+            import threading
+            import system_info
+            threading.Thread(target=system_info.log_system_info, daemon=True).start()
+        except Exception:
+            pass
+
         # Populate the toolbar profile picker + show the active denomination.
         self._refresh_profile_picker()
         self._refresh_process_denomination()
@@ -1589,9 +1598,25 @@ class MainWindow(QMainWindow):
 
     def _on_about(self):
         """Show about dialog."""
+        # Which build is running -- helps users tell the three Windows editions
+        # apart (and helps support know what they're on) at a glance.
+        edition_names = {
+            "openvino": "Standard (OpenVINO)",
+            "directml": "DirectML (GPU)",
+            "cuda": "NVIDIA (CUDA)",
+            "appimage": "Linux (AppImage)",
+            "macos": "macOS",
+            "source": "source checkout",
+        }
+        try:
+            import updater
+            edition = edition_names.get(updater.detect_edition(), updater.detect_edition())
+        except Exception:
+            edition = "unknown"
         QMessageBox.about(
             self, "About Dollar Detective",
-            f"Dollar Detective v{get_version_string()}\n\n"
+            f"Dollar Detective v{get_version_string()}\n"
+            f"Edition: {edition}\n\n"
             "Automated detection of fancy serial numbers\n"
             "on US currency bills.\n\n"
             "Features:\n"
