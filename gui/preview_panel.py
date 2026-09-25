@@ -1274,16 +1274,20 @@ class PreviewPanel(QWidget):
         self.watch_count_label = QLabel("0")
         self.watch_count_label.setAlignment(Qt.AlignCenter)
         self.watch_count_label.setStyleSheet("font-size: 72px; font-weight: bold; color: #2a82da;")
-        self.watch_sub_label = QLabel("scans collected")
+        self.watch_sub_label = QLabel("bills scanned")
         self.watch_sub_label.setAlignment(Qt.AlignCenter)
         self.watch_sub_label.setStyleSheet("font-size: 16px; color: gray;")
+        self.watch_scan_label = QLabel("0 scans (front & back)")
+        self.watch_scan_label.setAlignment(Qt.AlignCenter)
+        self.watch_scan_label.setStyleSheet("font-size: 12px; color: gray;")
         self._watch_msg = QLabel(
             "Feed your whole strap through the scanner — as many passes as you "
             "need.\nWhen it's all through, click Stop to file and process the strap.")
         self._watch_msg.setAlignment(Qt.AlignCenter)
         self._watch_msg.setWordWrap(True)
         self._watch_msg.setStyleSheet("font-size: 14px; margin-top: 22px; max-width: 460px;")
-        for _w in (self._watch_head, self.watch_count_label, self.watch_sub_label, self._watch_msg):
+        for _w in (self._watch_head, self.watch_count_label, self.watch_sub_label,
+                   self.watch_scan_label, self._watch_msg):
             _wl.addWidget(_w)
         self.view_stack.addWidget(self.watch_page)
         self._watch_page_index = self.view_stack.count() - 1
@@ -1527,9 +1531,12 @@ class PreviewPanel(QWidget):
         self.view_stack.setCurrentIndex(self._watch_page_index)
 
     def set_watch_count(self, n: int):
-        """Update the big scan count on the watch page."""
-        self.watch_count_label.setText(str(n))
-        self.watch_sub_label.setText("scan collected" if n == 1 else "scans collected")
+        """Update the watch page from a SCAN count. Shows bills (a duplex scan is
+        2 images = 1 bill) prominently, with the raw scan count below."""
+        bills = n // 2
+        self.watch_count_label.setText(str(bills))
+        self.watch_sub_label.setText("bill scanned" if bills == 1 else "bills scanned")
+        self.watch_scan_label.setText(f"{n} scan{'s' if n != 1 else ''} (front & back)")
 
     def hide_watch_overlay(self):
         """Restore the normal preview view after watching stops."""

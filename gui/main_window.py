@@ -2244,6 +2244,10 @@ class MainWindow(QMainWindow):
             self._monitor_run_active = False
             try:
                 self.results_list.refresh_batch_list()
+                # Show the just-filed strap as the selected batch (the results on
+                # screen already ARE it, so no reload needed).
+                if getattr(self, "_monitor_last_batch", None):
+                    self.results_list.select_batch(self._monitor_last_batch)
             except Exception:
                 pass
             if self._monitor_watcher:
@@ -2342,6 +2346,7 @@ class MainWindow(QMainWindow):
             from resource_path import straps_dir
             from batch_naming import make_batch_dir
             batch = make_batch_dir(straps_dir(), self.settings.processing.batch_name_format, self.settings)
+            self._monitor_last_batch = str(batch)
             for f in files:
                 try:
                     shutil.move(str(f), str(batch / f.name))

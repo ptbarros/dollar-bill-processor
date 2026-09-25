@@ -518,6 +518,30 @@ class ResultsList(QWidget):
         self.filtered_results = []
         self.tree.clear()
         self._update_summary()
+        # A fresh run is the live current session, not a loaded batch -- reset the
+        # picker so a later Monitor run can point it at the strap it just filed.
+        self._current_batch_path = None
+        try:
+            self.batch_combo.blockSignals(True)
+            self.batch_combo.setCurrentIndex(0)  # "Current Session"
+            self.batch_combo.blockSignals(False)
+        except Exception:
+            pass
+
+    def select_batch(self, batch_path):
+        """Show `batch_path` as the selected batch in the dropdown WITHOUT reloading
+        (used right after a Monitor run -- the on-screen results already ARE that
+        batch, so a reload would be redundant)."""
+        try:
+            idx = self.batch_combo.findData(str(batch_path))
+            if idx < 0:
+                return
+            self.batch_combo.blockSignals(True)
+            self.batch_combo.setCurrentIndex(idx)
+            self.batch_combo.blockSignals(False)
+            self._current_batch_path = Path(batch_path)
+        except Exception:
+            pass
 
     def refresh(self):
         """Refresh the display."""
