@@ -1305,7 +1305,11 @@ class PreviewPanel(QWidget):
             }
         """)
         self.pattern_mode_label.setMinimumWidth(80)
-        self.pattern_mode_label.setMaximumWidth(120)
+        # Grow with the name up to a sensible cap, then WRAP rather than truncate,
+        # so long display names ("True Flipper/Rotator", "3 Digit Bookend"...) stay
+        # fully readable instead of being cut off.
+        self.pattern_mode_label.setMaximumWidth(200)
+        self.pattern_mode_label.setWordWrap(True)
         self.pattern_mode_label.setToolTip("Click to cycle through pattern overlays")
         self.pattern_mode_label.clicked.connect(self._cycle_pattern_overlay)
         serial_images_layout.addWidget(self.pattern_mode_label)

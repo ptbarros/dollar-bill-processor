@@ -120,21 +120,24 @@ GAS_PUMP_FILTER = "__gas_pump__"
 NONE_FILTER = "__none__"
 
 
-# Muted/neutral colors are exempt from the rotation -- they carry "de-emphasized
-# / excluded" meaning (e.g. a gray or charcoal X mark) and must stay that color.
-_ROTATION_EXEMPT = ('gray', 'charcoal')
+# Semantic/neutral colors are exempt from the rotation -- they carry a fixed
+# meaning and must render as themselves, not be remapped for contrast:
+#   gray / charcoal -- de-emphasized / excluded (e.g. an X mark or prefix letter)
+#   red             -- danger / "devil" (also used literally for gas-pump shifts),
+#                      so a pattern that asks for red gets red, not the rotation's
+#                      first slot. It stays a strong, distinct color on the bill.
+_ROTATION_EXEMPT = ('gray', 'charcoal', 'red')
 
 # Contrast-optimized rotation order (most visible + most distinct first). Color
-# is assigned by first-appearance within an overlay, NOT by pattern type. Muted
-# colors (_ROTATION_EXEMPT) are reserved for muted/prefix/excluded and never
-# rotated.
+# is assigned by first-appearance within an overlay, NOT by pattern type. Exempt
+# colors (_ROTATION_EXEMPT) are reserved for semantic/muted use and never rotated.
 #
 # Order is tuned so (a) the first four are the maximally-distinct set for the
-# common <=4-group patterns, and (b) adjacent slots stay far apart in CIELAB
-# (min adjacent deltaE ~92) -- the two closest pairs, magenta+hotpink and
-# blue+purple, are never neighbors, and black sits between purple and hotpink as
-# a separator. So similar colors don't land next to each other on the bill.
-_ROTATION = ('blue', 'orange', 'magenta', 'red', 'purple', 'black', 'hotpink')
+# common <=4-group patterns, and (b) adjacent slots stay far apart in CIELAB --
+# the two closest pairs, magenta+hotpink and blue+purple, are never neighbors,
+# and black sits mid-list as a separator. (red was removed from the rotation when
+# it became semantic; black takes the 4th distinct slot in its place.)
+_ROTATION = ('blue', 'orange', 'magenta', 'black', 'purple', 'hotpink')
 
 
 def _build_color_rotation(highlights, connectors, group_boxes):
@@ -418,7 +421,9 @@ def draw_serial_overlay(
                     first_highlight = ph['highlights'][0]
                     color = _resolve(first_highlight.get('color', 'blue'))
                     style = (first_highlight.get('style') or 'box').lower()
-                    # 'x' = X only (excluded digit), 'boxed_x' = box + X, else box.
+                    # 'x' = X only (excluded digit), 'boxed_x' = box + X, 'dim' = a
+                    # pale box in the same hue (a de-emphasized "echo", e.g. the
+                    # rotated second half of a rotator), else a normal box.
                     if style in ('x', 'boxed_x'):
                         if style == 'boxed_x':
                             _rounded_rect(crop, (pdx1, pdy1), (pdx2, pdy2), color, 2)
@@ -428,6 +433,11 @@ def draw_serial_overlay(
                         xt = max(2, int((pdy2 - pdy1) * 0.10))
                         cv2.line(crop, (pdx1, pdy1), (pdx2, pdy2), color, xt, cv2.LINE_AA)
                         cv2.line(crop, (pdx1, pdy2), (pdx2, pdy1), color, xt, cv2.LINE_AA)
+                    elif style == 'dim':
+                        # Blend the resolved color toward light gray so it reads as
+                        # the same hue but muted -- the "echo" of a full-color box.
+                        dim = tuple(int(round(c * 0.42 + 232 * 0.58)) for c in color)
+                        _rounded_rect(crop, (pdx1, pdy1), (pdx2, pdy2), dim, 2)
                     else:
                         _rounded_rect(crop, (pdx1, pdy1), (pdx2, pdy2), color, 2)
 
@@ -472,7 +482,23 @@ def draw_serial_overlay(
                     cv2.line(crop, (pt1[0], bracket_y), (pt2[0], bracket_y), conn_color, 2, cv2.LINE_AA)
                     cv2.line(crop, (pt2[0], bracket_y), (pt2[0], pt2[1] + 5), conn_color, 2, cv2.LINE_AA)
                 elif conn_style == 'arrow':
-                    cv2.arrowedLine(crop, pt1, pt2, conn_color, 2, cv2.LINE_AA, tipLength=0.15)
+                    # Draw the arrow ABOVE the digits (straight, like a flat arc)
+                    # so it points along the run without crossing the glyphs. It
+                    # keeps its direction: tip at pos2 (e.g. right for an ascending
+                    # ladder, left for a descending one).
+                    r1 = digit_rects.get(pos1)
+                    r2 = digit_rects.get(pos2)
+                    if r1 and r2:
+                        x1c = (r1[0] + r1[2]) // 2
+                        x2c = (r2[0] + r2[2]) // 2
+                        top_y = min(r1[1], r2[1])
+                    else:
+                        x1c, x2c = pt1[0], pt2[0]
+                        top_y = min(pt1[1], pt2[1])
+                    level = _nest_level(min(pos1, pos2), max(pos1, pos2))
+                    ay = max(2, top_y - ARC_GAP - level * ARC_STEP - ARC_H // 2)
+                    cv2.arrowedLine(crop, (x1c, ay), (x2c, ay), conn_color, 2,
+                                    cv2.LINE_AA, tipLength=0.12)
                 else:
                     # Default arc connector: a smooth curve arching ABOVE the
                     # digits, matching the DigitPreviewWidget preview. Endpoints

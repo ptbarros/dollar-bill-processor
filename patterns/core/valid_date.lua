@@ -41,10 +41,10 @@ function match(ctx)
         return {
             matched = true,
             message = string.format("%s %d, %d (MMDDYYYY)", MONTH_NAMES[month], day, year),
-            highlights = {
-                {positions = {0, 1}, color = "cyan"},
-                {positions = {2, 3}, color = "lime"},
-                {positions = {4, 5, 6, 7}, color = "gold"}
+            group_boxes = {
+                {from = 0, to = 1, color = "blue", thickness = 3},    -- month
+                {from = 2, to = 3, color = "orange", thickness = 3},   -- day
+                {from = 4, to = 7, color = "magenta", thickness = 3}   -- year
             }
         }
     end
@@ -57,10 +57,10 @@ function match(ctx)
         return {
             matched = true,
             message = string.format("%s %d, %d (YYYYMMDD)", MONTH_NAMES[month], day, year),
-            highlights = {
-                {positions = {0, 1, 2, 3}, color = "gold"},
-                {positions = {4, 5}, color = "cyan"},
-                {positions = {6, 7}, color = "lime"}
+            group_boxes = {
+                {from = 0, to = 3, color = "magenta", thickness = 3},  -- year
+                {from = 4, to = 5, color = "blue", thickness = 3},     -- month
+                {from = 6, to = 7, color = "orange", thickness = 3}    -- day
             }
         }
     end

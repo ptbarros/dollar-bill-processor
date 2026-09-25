@@ -57,11 +57,19 @@ function match(ctx)
                     table.insert(positions, i)
                 end
                 local direction = is_asc and "ascending" or "descending"
-                local color = is_asc and "lime" or "cyan"
+                local from_pos = positions[1]
+                local to_pos = positions[#positions]
+                -- One group box around the run, plus an arrow pointing the way the
+                -- ladder climbs: left->right ascending, right->left descending.
+                local a_from, a_to
+                if is_asc then a_from, a_to = from_pos, to_pos
+                else a_from, a_to = to_pos, from_pos end
                 return {
                     matched = true,
                     message = "4-digit " .. direction .. " ladder",
-                    highlights = {{positions = positions, color = color}}
+                    highlights = {},
+                    group_boxes = {{from = from_pos, to = to_pos, color = "blue", thickness = 3}},
+                    connectors = {{from = a_from, to = a_to, color = "orange", style = "arrow"}}
                 }
             end
         end

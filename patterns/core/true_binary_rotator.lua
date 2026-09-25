@@ -23,14 +23,19 @@ function match(ctx)
     if not all_flip_valid(d) then return {matched = false} end
     if flip_string(d) ~= d then return {matched = false} end
 
-    local positions = {0, 1, 2, 3, 4, 5, 6, 7}
+    -- Colour the two digit values distinctly (0 vs 1); keep the rotation arcs.
+    local highlights = {}
+    for i = 0, 7 do
+        local ch = d:sub(i + 1, i + 1)
+        table.insert(highlights, {positions = {i}, color = (ch == "0") and "blue" or "orange"})
+    end
 
     return {
         matched = true,
-        highlights = {{positions = positions, color = "purple"}},
+        highlights = highlights,
         connectors = {
-            {from = 0, to = 7, color = "purple", style = "arc"},
-            {from = 1, to = 6, color = "purple", style = "arc"},
+            {from = 0, to = 7, color = "magenta", style = "arc"},
+            {from = 1, to = 6, color = "magenta", style = "arc"},
         },
         message = "True Binary Rotator: {0,1} rotator"
     }

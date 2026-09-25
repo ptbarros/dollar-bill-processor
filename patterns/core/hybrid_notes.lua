@@ -35,6 +35,21 @@ function match(ctx)
         return {matched = false}
     end
 
+    -- Arc each outer digit to where it repeats at the end (same order ..AB, or
+    -- reversed ..BA), so the "outer pair echoes at the end" reads at a glance.
+    local outer_arcs
+    if e1 == a and e2 == b then
+        outer_arcs = {
+            {from = 0, to = 6, color = "blue", style = "arc"},
+            {from = 1, to = 7, color = "blue", style = "arc"}
+        }
+    else
+        outer_arcs = {
+            {from = 0, to = 7, color = "blue", style = "arc"},
+            {from = 1, to = 6, color = "blue", style = "arc"}
+        }
+    end
+
     return {
         matched = true,
         highlights = {
@@ -46,7 +61,7 @@ function match(ctx)
             {from = 6, to = 7, color = "blue", thickness = 3},
             {from = 2, to = 5, color = "orange", thickness = 3}
         },
-        connectors = {},
+        connectors = outer_arcs,
         message = "Hybrid: outer pair " .. a .. b .. " + repeated middle " .. m1 .. m2
     }
 end

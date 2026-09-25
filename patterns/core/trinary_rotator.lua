@@ -19,15 +19,30 @@ function match(ctx)
     -- Exactly 3 unique digits
     if unique_count(d) ~= 3 then return {matched = false} end
 
-    local positions = {0, 1, 2, 3, 4, 5, 6, 7}
+    -- Colour the three digit values distinctly (by first appearance), then echo
+    -- the SECOND half in the same hues but muted ("dim"), so the rotated repeat
+    -- reads as a faded copy of the first half.
+    local uniq = get_unique_digits(d)
+    local palette = {"blue", "red", "orange"}
+    local colormap = {}
+    for k = 1, #uniq do
+        colormap[uniq:sub(k, k)] = palette[k] or "magenta"
+    end
+
+    local highlights = {}
+    for i = 0, 7 do
+        local ch = d:sub(i + 1, i + 1)
+        local color = colormap[ch] or "blue"
+        if i < 4 then
+            table.insert(highlights, {positions = {i}, color = color})
+        else
+            table.insert(highlights, {positions = {i}, color = color, style = "dim"})
+        end
+    end
 
     return {
         matched = true,
-        highlights = {{positions = positions, color = "purple"}},
-        connectors = {
-            {from = 0, to = 7, color = "purple", style = "arc"},
-            {from = 1, to = 6, color = "purple", style = "arc"},
-        },
+        highlights = highlights,
         message = "Trinary Rotator: 3-digit rotator"
     }
 end
