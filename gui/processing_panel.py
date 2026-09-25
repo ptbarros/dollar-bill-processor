@@ -25,7 +25,7 @@ class ProcessingPanel(QWidget):
     profile_changed = Signal(str)  # active crop profile picked from the toolbar
     stop_requested = Signal()
     archive_requested = Signal()  # Archive the current batch
-    watch_toggled = Signal(bool, str)  # Monitor: (on, watch_dir)
+    watch_toggled = Signal(bool)  # Monitor: on/off (watches the configured Data Folder)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -225,14 +225,18 @@ class ProcessingPanel(QWidget):
             self.output_edit.setText(folder)
 
     def _on_watch_toggled(self, checked: bool):
-        """Start/stop watching the selected folder for new scans."""
-        watch_dir = self.input_edit.text().strip()
-        if checked and not watch_dir:
-            self.watch_btn.setChecked(False)  # nothing to watch
-            return
-        # While watching, the button says what clicking it will do.
+        """Start/stop watching the Data Folder for new scans. (The button text
+        reflects what a click will do; MainWindow owns the watch folder.)"""
         self.watch_btn.setText("Stop && File Batch" if checked else "Watch Folder")
-        self.watch_toggled.emit(checked, watch_dir if checked else "")
+        self.watch_toggled.emit(checked)
+
+    def set_watching(self, on: bool):
+        """Reflect watch state on the button without re-emitting (used when
+        MainWindow declines to start, e.g. a missing folder)."""
+        self.watch_btn.blockSignals(True)
+        self.watch_btn.setChecked(on)
+        self.watch_btn.setText("Stop && File Batch" if on else "Watch Folder")
+        self.watch_btn.blockSignals(False)
 
     def _on_process(self):
         """Handle process button click."""

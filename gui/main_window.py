@@ -2251,17 +2251,19 @@ class MainWindow(QMainWindow):
 
     # ---- Monitor mode (Option A: watch -> file batch -> normal processing) ----
 
-    def _on_watch_toggled(self, on: bool, watch_dir: str):
-        """Watch Folder toggle. ON = start collecting scans; OFF (= the user's
-        'Stop') = file everything collected into ONE Straps batch and process it.
-        The strap is fed in several passes with gaps, so we never auto-finalize on
-        a pause -- only an explicit Stop closes the batch."""
+    def _on_watch_toggled(self, on: bool):
+        """Watch Folder toggle. ON = start collecting scans dropped into the Data
+        Folder; OFF (= the user's 'Stop') = file everything collected into ONE
+        Straps batch and process it. The strap is fed in several passes with gaps,
+        so we never auto-finalize on a pause -- only an explicit Stop closes it."""
+        from resource_path import content_dir
         if on:
-            if not self._start_monitor(watch_dir):
-                self.processing_panel.watch_btn.setChecked(False)
+            if not self._start_monitor(str(content_dir())):
+                self.processing_panel.set_watching(False)
         else:
             filed = self._finalize_monitor_batch()   # while watcher state is intact
             self._stop_monitor()
+            self.processing_panel.set_watching(False)
             if not filed:
                 self.status_label.setText("Stopped watching (no new scans to file)")
 
@@ -2284,7 +2286,7 @@ class MainWindow(QMainWindow):
         self._monitor_watcher.start()
         self._monitor_active = True
         self.status_label.setText(
-            "Watching — scan your strap, then click Stop to file the batch")
+            f"Watching {wd} — scan your strap, then click Stop to file the batch")
         return True
 
     def _stop_monitor(self):

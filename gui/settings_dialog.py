@@ -39,7 +39,7 @@ class SettingsDialog(QDialog):
         self._fancy_color = settings.ui.default_fancy_color or "#2e7d32"
 
         self.setWindowTitle("Settings")
-        self.setMinimumWidth(500)
+        self.setMinimumWidth(660)
         self._setup_ui()
         self._load_settings()
 
@@ -411,18 +411,19 @@ class SettingsDialog(QDialog):
         self.data_folder_edit.setPlaceholderText("~/DollarDetective (default)")
         data_layout = QHBoxLayout()
         data_layout.addWidget(self.data_folder_edit)
-        data_btn = QPushButton("...")
-        data_btn.setMaximumWidth(30)
+        data_btn = QPushButton("Browse…")
+        data_btn.setToolTip("Choose the folder")
         data_btn.clicked.connect(self._browse_data_dir)
         data_layout.addWidget(data_btn)
         data_open_btn = QPushButton("Open")
-        data_open_btn.setMaximumWidth(48)
+        data_open_btn.setToolTip("Open this folder in your file browser")
         data_open_btn.clicked.connect(self._open_data_dir)
         data_layout.addWidget(data_open_btn)
         dirs_layout.addRow("Data Folder:", data_layout)
 
         self.data_folder_hint = QLabel(
-            "Holds your scan batches (Straps). Blank = ~/DollarDetective.")
+            "Your scanner saves here and the Watch button monitors it; finished "
+            "batches are filed into a 'Straps' subfolder. Blank = ~/DollarDetective.")
         self.data_folder_hint.setStyleSheet("color: gray; font-size: 9px;")
         dirs_layout.addRow("", self.data_folder_hint)
         # Soft OneDrive note updates live as the field changes.
@@ -448,9 +449,9 @@ class SettingsDialog(QDialog):
         archive_btn.setMaximumWidth(30)
         archive_btn.clicked.connect(self._browse_archive_dir)
         archive_layout.addWidget(archive_btn)
-        dirs_layout.addRow("Archive Directory:", archive_layout)
+        dirs_layout.addRow("Straps Folder:", archive_layout)
 
-        archive_hint = QLabel("Where 'Archive after processing' moves batches (blank = <input>/archive)")
+        archive_hint = QLabel("Where finished batches are filed. Blank = a 'Straps' subfolder of the Data Folder.")
         archive_hint.setStyleSheet("color: gray; font-size: 9px;")
         dirs_layout.addRow("", archive_hint)
 
@@ -892,7 +893,8 @@ class SettingsDialog(QDialog):
             self.data_folder_hint.setStyleSheet("color: #c07a2b; font-size: 9px;")
         else:
             self.data_folder_hint.setText(
-                "Holds your scan batches (Straps). Blank = ~/DollarDetective.")
+                "Your scanner saves here and the Watch button monitors it; finished "
+                "batches are filed into a 'Straps' subfolder. Blank = ~/DollarDetective.")
             self.data_folder_hint.setStyleSheet("color: gray; font-size: 9px;")
 
     def _browse_archive_dir(self):

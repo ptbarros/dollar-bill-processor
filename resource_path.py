@@ -69,8 +69,15 @@ def content_dir() -> Path:
 
 
 def straps_dir() -> Path:
-    """Folder holding the per-batch ("strap") folders, under content_dir()."""
-    d = content_dir() / "Straps"
+    """Folder holding the per-batch ("strap") folders. Uses the configured Straps
+    folder (settings.processing.archive_directory) if set, else content_dir()/Straps."""
+    override = ""
+    try:
+        from settings_manager import get_settings
+        override = (get_settings().processing.archive_directory or "").strip()
+    except Exception:
+        override = ""
+    d = Path(override).expanduser() if override else (content_dir() / "Straps")
     try:
         d.mkdir(parents=True, exist_ok=True)
     except Exception:
