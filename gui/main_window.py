@@ -1276,6 +1276,13 @@ class MainWindow(QMainWindow):
         # Clear previous results when starting a new batch
         self.current_results = []
         self.results_list.clear()
+        # Clear the preview and take it over with a "Processing…" overlay so the
+        # PRIOR run's last bill image doesn't linger until this run finishes.
+        try:
+            self.preview_panel.current_result = None
+            self.preview_panel.show_processing_overlay()
+        except Exception:
+            pass
         self._current_input_dir = input_dir
         self._session_dirty = False
 
@@ -1362,6 +1369,10 @@ class MainWindow(QMainWindow):
         self.is_processing = False
         self.status_label.setText("Stopping...")
         self.processing_panel.set_processing(False)
+        try:
+            self.preview_panel.hide_watch_overlay()
+        except Exception:
+            pass
         self.preview_panel.set_batch_processing_active(False)
 
     @Slot(dict)
@@ -1951,6 +1962,12 @@ class MainWindow(QMainWindow):
         self.processing_panel.update_progress(current, total)
         self.progress_label.setText(f"{current}/{total}")
         self.status_label.setText(message)
+        # Feed the big "Processing" overlay (manual runs only reach this slot).
+        try:
+            fancy = sum(1 for r in self.current_results if r.get('is_fancy'))
+            self.preview_panel.set_processing_progress(current, total, fancy)
+        except Exception:
+            pass
 
     @Slot(dict)
     def _on_result_ready(self, result: dict):
@@ -2411,6 +2428,11 @@ class MainWindow(QMainWindow):
         """Handle processing completion."""
         self.is_processing = False
         self.processing_panel.set_processing(False)
+        # Drop the "Processing" overlay so the finished results' images show.
+        try:
+            self.preview_panel.hide_watch_overlay()
+        except Exception:
+            pass
         self.preview_panel.set_batch_processing_active(False)
 
         # Grab the processor from the thread for alignment feature and preview panel
@@ -2792,6 +2814,10 @@ class MainWindow(QMainWindow):
         """Handle processing error."""
         self.is_processing = False
         self.processing_panel.set_processing(False)
+        try:
+            self.preview_panel.hide_watch_overlay()
+        except Exception:
+            pass
         self.preview_panel.set_batch_processing_active(False)
         QMessageBox.critical(self, "Processing Error", error)
         self.status_label.setText(f"Error: {error}")

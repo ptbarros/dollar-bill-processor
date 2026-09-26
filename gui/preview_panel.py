@@ -1557,11 +1557,34 @@ class PreviewPanel(QWidget):
         self.watch_scan_label.setText(f"{n} scan{'s' if n != 1 else ''} (front & back)")
 
     def hide_watch_overlay(self):
-        """Restore the normal preview view after watching stops."""
+        """Restore the normal preview view after watching/processing stops."""
         idx = getattr(self, "_pre_watch_index", 0)
         if idx == self._watch_page_index:
             idx = 0
         self.view_stack.setCurrentIndex(idx)
+
+    def show_processing_overlay(self):
+        """Reuse the overlay page during a manual Process run: images aren't ready
+        until the batch finishes, so take over the preview with a big live count
+        instead of leaving a stale bill on screen."""
+        cur = self.view_stack.currentIndex()
+        if cur != self._watch_page_index:
+            self._pre_watch_index = cur
+        self._watch_head.setText("Processing")
+        self.watch_count_label.setText("0")
+        self.watch_sub_label.setText("bills processed")
+        self.watch_scan_label.setText("")
+        self._watch_msg.setText(
+            "Reading serials and matching patterns…\n"
+            "Bill images appear here when the batch finishes.")
+        self.view_stack.setCurrentIndex(self._watch_page_index)
+
+    def set_processing_progress(self, current: int, total: int, fancy: int):
+        """Update the processing overlay's big count + fancy tally."""
+        self.watch_count_label.setText(f"{current} / {total}" if total else str(current))
+        self.watch_sub_label.setText("bill processed" if current == 1 else "bills processed")
+        self.watch_scan_label.setText(
+            f"{fancy} fancy found so far" if fancy else "")
 
     def _on_view_mode_clicked(self, mode: str):
         """Handle view mode button click."""
