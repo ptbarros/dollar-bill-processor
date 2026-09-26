@@ -61,6 +61,18 @@ class ProcessingThread(QThread):
         self._external_processor = processor
         self.processor = None  # Will be set during run()
 
+    @staticmethod
+    def _back_display_turn(pair):
+        """The single clockwise turn that brings this pair's back to upright
+        landscape, for the preview's instant (no-YOLO) de-rotation. Folds the
+        back's own vertical-feed coarse turn with its 180 back-plate flip so a
+        portrait back never flashes sideways or upside-down before Auto-Align."""
+        bc = getattr(pair, 'back_cache', None) or {}
+        turn = bc.get('coarse_rotation', 0)
+        if bc.get('orientation') == 'upside_down':
+            turn = (turn + 180) % 360
+        return turn
+
     def _backend_desc(self):
         """Human-readable backend line: which provider/device YOLO and OCR bound to."""
         proc = self.processor
@@ -308,6 +320,7 @@ class ProcessingThread(QThread):
                         'front_align_angle': pair.front_align_angle,
                         'front_align_flipped': pair.front_align_flipped,
                         'front_align_coarse': pair.front_align_coarse,
+                        'back_align_coarse': self._back_display_turn(pair),
                         'series_year': pair.series_year,
                         'front_plate': pair.front_plate,
                         'back_plate': pair.back_plate,
@@ -339,6 +352,7 @@ class ProcessingThread(QThread):
                         'front_align_angle': pair.front_align_angle,
                         'front_align_flipped': pair.front_align_flipped,
                         'front_align_coarse': pair.front_align_coarse,
+                        'back_align_coarse': self._back_display_turn(pair),
                         'series_year': pair.series_year,
                         'front_plate': pair.front_plate,
                         'back_plate': pair.back_plate,
@@ -370,6 +384,7 @@ class ProcessingThread(QThread):
                         'front_align_angle': pair.front_align_angle,
                         'front_align_flipped': pair.front_align_flipped,
                         'front_align_coarse': pair.front_align_coarse,
+                        'back_align_coarse': self._back_display_turn(pair),
                         'series_year': pair.series_year,
                         'front_plate': pair.front_plate,
                         'back_plate': pair.back_plate,

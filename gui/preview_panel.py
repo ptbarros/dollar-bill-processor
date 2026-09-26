@@ -362,8 +362,13 @@ class ScrollableImageViewer(QWidget):
 
         layout.addLayout(zoom_layout)
 
-    def set_image(self, path: str, preserve_zoom: bool = False):
-        """Load and display an image from file path."""
+    def set_image(self, path: str, preserve_zoom: bool = False, coarse: int = 0):
+        """Load and display an image from file path.
+
+        ``coarse`` is a known 0/90/180/270 clockwise turn from vertical-feed
+        recovery, applied instantly (no YOLO) so a portrait scan shows landscape
+        right away instead of flashing sideways before Auto-Align refines it.
+        """
         if not path or not Path(path).exists():
             self.original_pixmap = None
             self.image_label.clear()
@@ -376,6 +381,11 @@ class ScrollableImageViewer(QWidget):
             self.image_label.clear()
             self.image_label.setText("Failed to load image")
             return
+
+        # Instant coarse de-rotation (Qt rotate is clockwise for positive angles,
+        # matching process_production.rotate_coarse).
+        if coarse:
+            pixmap = pixmap.transformed(QTransform().rotate(coarse), Qt.SmoothTransformation)
 
         self.original_pixmap = pixmap
         if not preserve_zoom:
@@ -2289,9 +2299,16 @@ class PreviewPanel(QWidget):
         # Determine if we should preserve zoom (only when navigating, not first load)
         preserve = has_previous and self._preserved_zoom is not None
 
-        # Update front and back views
-        self.front_viewer.set_image(self._current_front_file, preserve_zoom=preserve)
-        self.back_viewer.set_image(self._current_back_file, preserve_zoom=preserve)
+        # Update front and back views. Apply the known vertical-feed turn
+        # instantly so a portrait scan shows landscape immediately, before
+        # Auto-Align runs (kills the brief sideways flash while arrowing).
+        # Front: fold the 180 seal-flip into the coarse turn so a flipped front
+        # also lands upright instantly. (Back's turn already includes its flip.)
+        front_coarse = (result.get('front_align_coarse', 0)
+                        + (180 if result.get('front_align_flipped') else 0)) % 360
+        back_coarse = result.get('back_align_coarse', 0)
+        self.front_viewer.set_image(self._current_front_file, preserve_zoom=preserve, coarse=front_coarse)
+        self.back_viewer.set_image(self._current_back_file, preserve_zoom=preserve, coarse=back_coarse)
 
         # Update stitched view
         self._update_combined_view(preserve_zoom=preserve)
