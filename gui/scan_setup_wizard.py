@@ -205,13 +205,13 @@ class _SummaryPage(QWizardPage):
         num = w.naming_page.start_number()
         self.body.setText(
             "Here's how Scan mode is set up:<br><br>"
-            f"&nbsp;&nbsp;<b>Scanner Output Folder:</b><br>&nbsp;&nbsp;{scanner}<br><br>"
-            f"&nbsp;&nbsp;<b>Straps Folder:</b><br>&nbsp;&nbsp;{straps}<br><br>"
-            f"&nbsp;&nbsp;<b>Strap Folder Names:</b> {fmt_label}<br>"
-            f"&nbsp;&nbsp;<b>Next strap number:</b> {num}<br>"
-            f"&nbsp;&nbsp;<b>Process live:</b> {'On' if w.live_page.live_on() else 'Off'}<br><br>"
-            "Click <b>Finish</b> to save. Then click <b>Start Scanning</b> and feed a "
-            "strap. You can revisit any of this under Settings → Folders, or re-run this "
+            f"<b>Scanner Output Folder:</b> {scanner}<br>"
+            f"<b>Straps Folder:</b> {straps}<br>"
+            f"<b>Strap Folder Names:</b> {fmt_label}<br>"
+            f"<b>Next strap number:</b> {num}<br>"
+            f"<b>Process live:</b> {'On' if w.live_page.live_on() else 'Off'}<br><br>"
+            "Click <b>Finish</b> to save, then <b>Start Scanning</b> and feed a strap. "
+            "You can change any of this later under Settings → Folders, or re-run this "
             "wizard from Help → Setup Wizard."
         )
 
@@ -226,6 +226,8 @@ class ScanSetupWizard(QWizard):
         self.setWindowTitle("Scan Mode Setup")
         self.setWizardStyle(QWizard.ModernStyle)
         self.setOption(QWizard.NoBackButtonOnStartPage, True)
+        # Open tall enough that the longest page (the summary) isn't clipped.
+        self.setMinimumSize(600, 560)
 
         # Resolve current values / sensible defaults to pre-fill.
         try:
@@ -244,7 +246,7 @@ class ScanSetupWizard(QWizard):
         self.scanner_page = _FolderPage(
             "Scanner Output Folder",
             "This is the folder <b>where your scanner saves its scanned images</b> — the "
-            "one Scan mode watches while you feed a strap.<br><br>"
+            "one Dollar Detective watches (in Scan mode) while you feed a strap.<br><br>"
             "Set your scanner software to save here, then pick that same folder below.",
             f"Leave blank to use the default: {default_scanner}",
             initial=getattr(p, "data_folder", "") or "",
@@ -254,10 +256,11 @@ class ScanSetupWizard(QWizard):
 
         self.straps_page = _FolderPage(
             "Straps Folder",
-            "This is <b>where finished straps are filed</b> — each strap becomes its own "
-            "numbered folder here, holding its bills, crops, and results.<br><br>"
-            "Most people leave this blank and let the app keep straps in a 'Straps' "
-            "subfolder of the Scanner Output Folder.",
+            "This is <b>where Dollar Detective files finished straps</b> — each strap "
+            "becomes its own numbered folder here, holding its bills, crops, and "
+            "results.<br><br>"
+            "Most people leave this blank and let Dollar Detective keep straps in a "
+            "'Straps' subfolder of the Scanner Output Folder.",
             f"Leave blank to use the default: {default_straps}",
             initial=getattr(p, "archive_directory", "") or "",
             placeholder=default_straps or "Default: a 'Straps' subfolder",
