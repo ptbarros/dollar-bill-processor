@@ -100,10 +100,12 @@ class ProcessingPanel(QWidget):
 
         self.input_edit = QLineEdit()
         self.input_edit.setPlaceholderText("Select folder with scanned bills...")
-        self.input_edit.setMinimumWidth(160)
+        self.input_edit.setMinimumWidth(130)
         input_layout.addWidget(self.input_edit)
 
-        self.browse_input_btn = QPushButton("Browse...")
+        self.browse_input_btn = QPushButton("...")   # compact, matches Straps/Review browse
+        self.browse_input_btn.setMaximumWidth(30)
+        self.browse_input_btn.setToolTip("Browse for the input folder")
         self.browse_input_btn.clicked.connect(self._browse_input)
         input_layout.addWidget(self.browse_input_btn)
 
@@ -119,10 +121,12 @@ class ProcessingPanel(QWidget):
 
         self.output_edit = QLineEdit()
         self.output_edit.setPlaceholderText("Output folder for fancy bills...")
-        self.output_edit.setMinimumWidth(160)
+        self.output_edit.setMinimumWidth(130)
         output_layout.addWidget(self.output_edit)
 
-        self.browse_output_btn = QPushButton("Browse...")
+        self.browse_output_btn = QPushButton("...")
+        self.browse_output_btn.setMaximumWidth(30)
+        self.browse_output_btn.setToolTip("Browse for the output folder")
         self.browse_output_btn.clicked.connect(self._browse_output)
         output_layout.addWidget(self.browse_output_btn)
 
@@ -261,8 +265,8 @@ class ProcessingPanel(QWidget):
 
         # Progress bar
         self.progress_bar = QProgressBar()
-        self.progress_bar.setMinimumWidth(150)
-        self.progress_bar.setMaximumWidth(200)
+        self.progress_bar.setMinimumWidth(100)
+        self.progress_bar.setMaximumWidth(160)
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setFormat("%v/%m")
         self.progress_bar.setValue(0)
