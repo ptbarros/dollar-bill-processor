@@ -141,6 +141,9 @@ class MainWindow(QMainWindow):
         self.processing_panel.stop_requested.connect(self._on_stop_requested)
         self.processing_panel.archive_requested.connect(self._on_archive_requested)
         self.processing_panel.watch_toggled.connect(self._on_watch_toggled)
+        self.processing_panel.mode_changed.connect(self._on_panel_mode_changed)
+        self.processing_panel.open_folders_settings.connect(self._on_settings)
+        self._update_watch_info()  # seed the Scan-mode indicator (panel emits before we connect)
         self.main_layout.addWidget(self.processing_panel)
 
         # Create panels (not added to layout yet - LayoutManager will do that)
@@ -2177,6 +2180,25 @@ class MainWindow(QMainWindow):
             pass
         return None
 
+    def _update_watch_info(self):
+        """Refresh the Scan-mode 'Watching: <folder> · next strap: N' indicator."""
+        try:
+            from resource_path import content_dir
+            from batch_naming import format_batch_name
+            folder = str(content_dir())
+            nxt = int(self.settings.processing.batch_counter or 0) + 1
+            name = format_batch_name(self.settings.processing.batch_name_format, nxt)
+            self.processing_panel.set_watching_info(
+                f"Watching: {folder}   ·   next strap: {name}")
+        except Exception:
+            pass
+
+    @Slot(str)
+    def _on_panel_mode_changed(self, mode: str):
+        """Processing panel toggled between Manual and Scan modes."""
+        if mode == "scan":
+            self._update_watch_info()
+
     def _review_folder(self) -> Path:
         """The folder Save-for-Review accumulates into: the configured Review
         Directory, else the per-user data dir's review/ folder."""
@@ -2766,6 +2788,9 @@ class MainWindow(QMainWindow):
 
         # Refresh batch list from archive directory
         self.results_list.refresh_batch_list()
+
+        # Scanner Output Folder / strap naming may have changed -> refresh indicator
+        self._update_watch_info()
 
         # Update archive button state based on new settings
         self.processing_panel.set_archive_available(

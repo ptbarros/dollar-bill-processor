@@ -59,6 +59,7 @@ class AutosaveSettings:
 class UISettings:
     """UI-related settings."""
     default_working_dir: str = ""  # Starting directory for file browse dialogs
+    panel_mode: str = "manual"  # Processing panel mode: "manual" or "scan"
     last_input_dir: str = ""  # Most recently used input (internal tracking)
     last_output_dir: str = ""  # Most recently used output (internal tracking)
     review_directory: str = ""  # Where "Save for Review" copies bills (blank = per-user data dir)
@@ -207,6 +208,7 @@ class SettingsManager:
         if 'ui' in data:
             ui = data['ui']
             self.ui.default_working_dir = ui.get('default_working_dir', "")
+            self.ui.panel_mode = ui.get('panel_mode', 'manual') or 'manual'
             self.ui.last_input_dir = ui.get('last_input_dir', "")
             self.ui.last_output_dir = ui.get('last_output_dir', "")
             self.ui.review_directory = ui.get('review_directory', "")
@@ -411,6 +413,7 @@ class SettingsManager:
             },
             'ui': {
                 'default_working_dir': self.ui.default_working_dir,
+                'panel_mode': self.ui.panel_mode,
                 'last_input_dir': self.ui.last_input_dir,
                 'last_output_dir': self.ui.last_output_dir,
                 'review_directory': self.ui.review_directory,

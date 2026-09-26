@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLineEdit,
     QProgressBar, QLabel, QFileDialog, QFrame, QComboBox, QMessageBox,
-    QCheckBox
+    QCheckBox, QButtonGroup
 )
 from PySide6.QtCore import Qt, Signal, Slot
 
@@ -28,6 +28,8 @@ class ProcessingPanel(QWidget):
     archive_requested = Signal()  # Archive the current batch
     watch_toggled = Signal(bool)  # Monitor: on/off (watches the configured Data Folder)
     live_toggled = Signal(bool)   # EXPERIMENTAL: process scans live while scanning
+    mode_changed = Signal(str)    # "manual" or "scan" — toolbar reconfigured
+    open_folders_settings = Signal()  # gear next to the Watching indicator
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -39,11 +41,53 @@ class ProcessingPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
+        # Mode toggle (segmented): Manual processing vs Scan straps. Reconfigures
+        # the toolbar below; persisted in settings.ui.panel_mode. Only the checked
+        # state is styled so the idle button keeps the themed look (a partial base
+        # rule renders flat on Windows).
+        _seg_style = ("QPushButton:checked { background-color: #2a82da; "
+                      "color: white; font-weight: bold; }")
+        self.mode_group = QButtonGroup(self)
+        self.mode_group.setExclusive(True)
+        self.manual_mode_btn = QPushButton("Manual")
+        self.manual_mode_btn.setToolTip("Manual processing: pick an input folder and Process it")
+        self.scan_mode_btn = QPushButton("Scan")
+        self.scan_mode_btn.setToolTip("Scan straps: watch the Scanner Output Folder and file straps")
+        for _b in (self.manual_mode_btn, self.scan_mode_btn):
+            _b.setCheckable(True)
+            _b.setMinimumWidth(64)
+            _b.setStyleSheet(_seg_style)
+            self.mode_group.addButton(_b)
+        self.manual_mode_btn.clicked.connect(lambda: self._on_mode_clicked("manual"))
+        self.scan_mode_btn.clicked.connect(lambda: self._on_mode_clicked("scan"))
+        _seg = QHBoxLayout()
+        _seg.setSpacing(0)
+        _seg.addWidget(self.manual_mode_btn)
+        _seg.addWidget(self.scan_mode_btn)
+        layout.addLayout(_seg)
+
         # Separator
         sep1 = QFrame()
         sep1.setFrameShape(QFrame.VLine)
         sep1.setFrameShadow(QFrame.Sunken)
         layout.addWidget(sep1)
+
+        # Scan-mode "Watching: <folder> · next strap: N" indicator (read-only; the
+        # folder + naming live in Settings → Folders). Hidden in Manual mode.
+        self.watch_info_group = QFrame()
+        _wi = QHBoxLayout(self.watch_info_group)
+        _wi.setContentsMargins(0, 0, 0, 0)
+        self.watching_label = QLabel("Watching: …")
+        self.watching_label.setStyleSheet("color: #2a82da;")
+        _wi.addWidget(self.watching_label)
+        self.watch_settings_btn = QPushButton("⚙")
+        self.watch_settings_btn.setMaximumWidth(28)
+        self.watch_settings_btn.setToolTip(
+            "Change the Scanner Output Folder and strap naming in Settings → Folders")
+        self.watch_settings_btn.clicked.connect(self.open_folders_settings.emit)
+        _wi.addWidget(self.watch_settings_btn)
+        _wi.addStretch()
+        layout.addWidget(self.watch_info_group, 1)
 
         # Input folder selection (manual mode)
         self.input_group = QFrame()
@@ -219,6 +263,53 @@ class ProcessingPanel(QWidget):
         self.progress_bar.setValue(0)
         layout.addWidget(self.progress_bar)
 
+        # Apply the saved mode (show/hide the right widgets) without persisting.
+        try:
+            self.set_mode(get_settings().ui.panel_mode, persist=False)
+        except Exception:
+            self.set_mode("manual", persist=False)
+
+    # ---- Mode (Manual processing vs Scan straps) ----------------------------
+
+    def set_mode(self, mode: str, persist: bool = True):
+        """Reconfigure the toolbar for `mode` ("manual" or "scan"). Persists to
+        settings unless persist=False (e.g. applying the saved value at startup)."""
+        mode = "scan" if mode == "scan" else "manual"
+        self._mode = mode
+        self.manual_mode_btn.setChecked(mode == "manual")
+        self.scan_mode_btn.setChecked(mode == "scan")
+        manual = (mode == "manual")
+        # Manual-only widgets
+        self.input_group.setVisible(manual)
+        self.output_group.setVisible(manual)
+        self.process_btn.setVisible(manual)
+        self.archive_btn.setVisible(manual)
+        # Scan-only widgets
+        self.watch_btn.setVisible(not manual)
+        self.live_check.setVisible(not manual)
+        self.watch_info_group.setVisible(not manual)
+        if persist:
+            try:
+                get_settings().ui.panel_mode = mode
+                get_settings().save()
+            except Exception:
+                pass
+        self.mode_changed.emit(mode)
+
+    def _on_mode_clicked(self, mode: str):
+        """A mode button was clicked. Block switching mid-run (revert the toggle)."""
+        if getattr(self, "_watching", False) or getattr(self, "_is_processing", False):
+            self.set_mode(getattr(self, "_mode", "manual"), persist=False)
+            return
+        self.set_mode(mode)
+
+    def set_watching_info(self, text: str):
+        """Set the Scan-mode 'Watching: …' indicator text (MainWindow builds it)."""
+        self.watching_label.setText(text)
+
+    def current_mode(self) -> str:
+        return getattr(self, "_mode", "manual")
+
     def _browse_input(self):
         """Browse for input folder."""
         settings = get_settings()
@@ -257,6 +348,11 @@ class ProcessingPanel(QWidget):
         watching = getattr(self, "_watching", False)
         processing = getattr(self, "_is_processing", False)
         self.process_btn.setEnabled(not watching and not processing)
+        # Can't switch modes mid-run.
+        busy = watching or processing
+        if hasattr(self, "manual_mode_btn"):
+            self.manual_mode_btn.setEnabled(not busy)
+            self.scan_mode_btn.setEnabled(not busy)
 
     def _on_live_toggled(self, checked: bool):
         """Persist the experimental live-processing toggle and notify listeners."""
