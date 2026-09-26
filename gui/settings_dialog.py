@@ -318,7 +318,7 @@ class SettingsDialog(QDialog):
         appearance_layout.addRow("Font size:", self.font_size_spin)
 
         font_hint = QLabel("Larger fonts for easier reading (default: 10 pt)")
-        font_hint.setStyleSheet("color: gray; font-size: 9px;")
+        font_hint.setStyleSheet("color: gray; font-size: 11px;")
         appearance_layout.addRow("", font_hint)
 
         # Default fancy color
@@ -332,7 +332,7 @@ class SettingsDialog(QDialog):
         appearance_layout.addRow("Default Fancy Color:", fancy_color_layout)
 
         fancy_color_hint = QLabel("Color for fancy bills without pattern-specific colors")
-        fancy_color_hint.setStyleSheet("color: gray; font-size: 9px;")
+        fancy_color_hint.setStyleSheet("color: gray; font-size: 11px;")
         appearance_layout.addRow("", fancy_color_hint)
 
         layout.addWidget(appearance_group)
@@ -406,7 +406,7 @@ class SettingsDialog(QDialog):
             "Your scanner saves here and the Start Scanning button watches it; "
             "finished straps are filed into a 'Straps' subfolder. "
             "Blank = ~/DollarDetective.")
-        self.data_folder_hint.setStyleSheet("color: gray; font-size: 9px;")
+        self.data_folder_hint.setStyleSheet("color: gray; font-size: 11px;")
         dirs_layout.addRow("", self.data_folder_hint)
         # Soft OneDrive note updates live as the field changes.
         self.data_folder_edit.textChanged.connect(self._update_data_folder_hint)
@@ -424,7 +424,7 @@ class SettingsDialog(QDialog):
         dirs_layout.addRow("Straps Folder:", archive_layout)
 
         archive_hint = QLabel("Where finished straps are filed. Blank = a 'Straps' subfolder of the Scanner Output Folder.")
-        archive_hint.setStyleSheet("color: gray; font-size: 9px;")
+        archive_hint.setStyleSheet("color: gray; font-size: 11px;")
         dirs_layout.addRow("", archive_hint)
 
         # Strap folder naming.
@@ -458,8 +458,12 @@ class SettingsDialog(QDialog):
         review_layout.addWidget(review_btn)
         dirs_layout.addRow("Review Directory:", review_layout)
 
-        review_hint = QLabel("Blank = default per-user location")
-        review_hint.setStyleSheet("color: gray; font-size: 9px;")
+        review_hint = QLabel(
+            "Where 'Save for Review' copies flagged bills — and what "
+            "Export Review Bundle packs. Blank = a 'review' folder inside the "
+            "app's user-data folder (%APPDATA%\\DollarDetective on Windows).")
+        review_hint.setWordWrap(True)
+        review_hint.setStyleSheet("color: gray; font-size: 11px;")
         dirs_layout.addRow("", review_hint)
 
         # Crop folder: subfolder name for the generated crops (auto-appended as
@@ -471,7 +475,7 @@ class SettingsDialog(QDialog):
         output_sub_hint = QLabel(
             "Subfolder for the generated crops, appended to the input folder "
             "(<input>/<name>). Blank = fancy_bills")
-        output_sub_hint.setStyleSheet("color: gray; font-size: 9px;")
+        output_sub_hint.setStyleSheet("color: gray; font-size: 11px;")
         output_sub_hint.setWordWrap(True)
         dirs_layout.addRow("", output_sub_hint)
 
@@ -488,7 +492,7 @@ class SettingsDialog(QDialog):
         dirs_layout.addRow("Working Directory:", working_layout)
 
         working_hint = QLabel("Browse dialogs will start here instead of your home folder")
-        working_hint.setStyleSheet("color: gray; font-size: 9px;")
+        working_hint.setStyleSheet("color: gray; font-size: 11px;")
         dirs_layout.addRow("", working_hint)
 
         layout.addWidget(dirs_group)
@@ -551,7 +555,7 @@ class SettingsDialog(QDialog):
         keys_layout.addRow("OpenAI:", openai_key_layout)
 
         key_hint = QLabel("API keys are stored locally in user_settings.yaml")
-        key_hint.setStyleSheet("color: gray; font-size: 9px;")
+        key_hint.setStyleSheet("color: gray; font-size: 11px;")
         keys_layout.addRow("", key_hint)
 
         layout.addWidget(keys_group)
@@ -903,13 +907,13 @@ class SettingsDialog(QDialog):
             self.data_folder_hint.setText(
                 "⚠ This looks like a OneDrive folder — OneDrive may sync your "
                 "scans and can cause slowdowns/conflicts. A non-OneDrive folder is safer.")
-            self.data_folder_hint.setStyleSheet("color: #c07a2b; font-size: 9px;")
+            self.data_folder_hint.setStyleSheet("color: #c07a2b; font-size: 11px;")
         else:
             self.data_folder_hint.setText(
                 "Your scanner saves here and the Start Scanning button watches it; "
                 "finished batches are filed into a 'Straps' subfolder. "
                 "Blank = ~/DollarDetective.")
-            self.data_folder_hint.setStyleSheet("color: gray; font-size: 9px;")
+            self.data_folder_hint.setStyleSheet("color: gray; font-size: 11px;")
 
     def _browse_archive_dir(self):
         """Browse for archive directory."""
