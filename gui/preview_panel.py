@@ -1545,6 +1545,9 @@ class PreviewPanel(QWidget):
         cur = self.view_stack.currentIndex()
         if cur != self._watch_page_index:
             self._pre_watch_index = cur
+        self._watch_head.setText("Collecting scans")
+        # Reset the sub-line style (the processing overlay recolors it green).
+        self.watch_scan_label.setStyleSheet("font-size: 12px; color: gray;")
         self.set_watch_count(0)
         self.view_stack.setCurrentIndex(self._watch_page_index)
 
@@ -1577,6 +1580,9 @@ class PreviewPanel(QWidget):
         self._watch_msg.setText(
             "Reading serials and matching patterns…\n"
             "Bill images appear here when the batch finishes.")
+        # Fancy tally stands out: bigger + fancy-green (vs the small gray scan line).
+        self.watch_scan_label.setStyleSheet(
+            "font-size: 22px; font-weight: bold; color: #4caf50;")
         self.view_stack.setCurrentIndex(self._watch_page_index)
 
     def set_processing_progress(self, current: int, total: int, fancy: int):
@@ -2138,11 +2144,14 @@ class PreviewPanel(QWidget):
         self.serial_image_1.clear()
         self.serial_image_2.clear()
 
-        # Reset labels
+        # Reset all Bill Details labels
         self.serial_label.setText("-")
         self.patterns_label.setText("-")
         self.odds_label.setText("-")
         self.price_label.setText("-")
+        self.confidence_label.setText("-")
+        self.status_label.setText("-")
+        self.file_label.setText("-")
 
         # Clear preserved zoom/pan state
         self.clear_preserved_state()

@@ -1276,10 +1276,11 @@ class MainWindow(QMainWindow):
         # Clear previous results when starting a new batch
         self.current_results = []
         self.results_list.clear()
-        # Clear the preview and take it over with a "Processing…" overlay so the
-        # PRIOR run's last bill image doesn't linger until this run finishes.
+        # Fully clear the preview (bill image, the Serials crops + overlay, and the
+        # Bill Details labels) and take it over with a "Processing…" overlay so the
+        # PRIOR run's data doesn't linger until this run finishes.
         try:
-            self.preview_panel.current_result = None
+            self.preview_panel.clear()
             self.preview_panel.show_processing_overlay()
         except Exception:
             pass
