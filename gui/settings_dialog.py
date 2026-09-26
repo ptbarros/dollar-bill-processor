@@ -347,26 +347,6 @@ class SettingsDialog(QDialog):
         updates_layout.addWidget(self.check_updates_check)
         layout.addWidget(updates_group)
 
-        # Default Working Directory
-        dirs_group = QGroupBox("Default Working Directory")
-        dirs_layout = QFormLayout(dirs_group)
-
-        self.working_dir_edit = QLineEdit()
-        self.working_dir_edit.setPlaceholderText("Starting directory for file browse dialogs...")
-        working_layout = QHBoxLayout()
-        working_layout.addWidget(self.working_dir_edit)
-        working_btn = QPushButton("...")
-        working_btn.setMaximumWidth(30)
-        working_btn.clicked.connect(self._browse_working_dir)
-        working_layout.addWidget(working_btn)
-        dirs_layout.addRow("Directory:", working_layout)
-
-        working_hint = QLabel("Browse dialogs will start here instead of your home folder")
-        working_hint.setStyleSheet("color: gray; font-size: 9px;")
-        dirs_layout.addRow("", working_hint)
-
-        layout.addWidget(dirs_group)
-
         layout.addStretch()
 
     def _setup_export_tab(self, tab: QWidget):
@@ -405,8 +385,9 @@ class SettingsDialog(QDialog):
         dirs_group = QGroupBox("Folders")
         dirs_layout = QFormLayout(dirs_group)
 
-        # Data folder: the visible per-user folder that holds Monitor-mode "Straps"
-        # (batch folders). Default ~/DollarDetective. Manual processing is unaffected.
+        # Scanner output folder: the visible per-user folder the scanner dumps into
+        # and Start Scanning watches; finished straps are filed into its "Straps"
+        # subfolder. Default ~/DollarDetective. Manual processing is unaffected.
         self.data_folder_edit = QLineEdit()
         self.data_folder_edit.setPlaceholderText("~/DollarDetective (default)")
         data_layout = QHBoxLayout()
@@ -423,36 +404,17 @@ class SettingsDialog(QDialog):
 
         self.data_folder_hint = QLabel(
             "Your scanner saves here and the Start Scanning button watches it; "
-            "finished batches are filed into a 'Straps' subfolder. "
+            "finished straps are filed into a 'Straps' subfolder. "
             "Blank = ~/DollarDetective.")
         self.data_folder_hint.setStyleSheet("color: gray; font-size: 9px;")
         dirs_layout.addRow("", self.data_folder_hint)
         # Soft OneDrive note updates live as the field changes.
         self.data_folder_edit.textChanged.connect(self._update_data_folder_hint)
 
-        # Batch (strap) folder naming for Monitor mode.
-        self.batch_name_combo = QComboBox()
-        self._batch_fmt_values = ["number", "date", "number_date", "date_number"]
-        self.batch_name_combo.addItems([
-            "Number  (001)",
-            "Date  (2026-09-25)",
-            "Number + Date  (001 - 2026-09-25)",
-            "Date + Number  (2026-09-25 - 001)",
-        ])
-        dirs_layout.addRow("Batch Folder Names:", self.batch_name_combo)
-
-        # Next sequential batch number — lets a user continue an existing numbering
-        # (e.g. resume at 824). Shown as the NEXT number; stored as counter = next-1.
-        self.next_batch_spin = QSpinBox()
-        self.next_batch_spin.setRange(1, 999999)
-        self.next_batch_spin.setToolTip(
-            "The number the next numbered batch folder will use. Set it to continue "
-            "an existing sequence (e.g. 824). Applies to the Number formats.")
-        dirs_layout.addRow("Next Batch Number:", self.next_batch_spin)
-
-        # Archive directory (where 'Archive after processing' moves batches)
+        # Straps folder: where finished straps are filed. Chosen BEFORE its naming
+        # below, since the folder is the destination the names live in.
         self.archive_dir_edit = QLineEdit()
-        self.archive_dir_edit.setPlaceholderText("Directory for completed batches...")
+        self.archive_dir_edit.setPlaceholderText("Directory for completed straps...")
         archive_layout = QHBoxLayout()
         archive_layout.addWidget(self.archive_dir_edit)
         archive_btn = QPushButton("...")
@@ -461,9 +423,29 @@ class SettingsDialog(QDialog):
         archive_layout.addWidget(archive_btn)
         dirs_layout.addRow("Straps Folder:", archive_layout)
 
-        archive_hint = QLabel("Where finished batches are filed. Blank = a 'Straps' subfolder of the Scanner Output Folder.")
+        archive_hint = QLabel("Where finished straps are filed. Blank = a 'Straps' subfolder of the Scanner Output Folder.")
         archive_hint.setStyleSheet("color: gray; font-size: 9px;")
         dirs_layout.addRow("", archive_hint)
+
+        # Strap folder naming.
+        self.batch_name_combo = QComboBox()
+        self._batch_fmt_values = ["number", "date", "number_date", "date_number"]
+        self.batch_name_combo.addItems([
+            "Number  (001)",
+            "Date  (2026-09-25)",
+            "Number + Date  (001 - 2026-09-25)",
+            "Date + Number  (2026-09-25 - 001)",
+        ])
+        dirs_layout.addRow("Strap Folder Names:", self.batch_name_combo)
+
+        # Starting strap number — continue an existing sequence (e.g. 824). Shown as
+        # the NEXT number; stored as counter = next-1.
+        self.next_batch_spin = QSpinBox()
+        self.next_batch_spin.setRange(1, 999999)
+        self.next_batch_spin.setToolTip(
+            "The number the next numbered strap folder will use. Set it to continue "
+            "an existing sequence (e.g. 824). Applies to the Number formats.")
+        dirs_layout.addRow("Strap Start Number:", self.next_batch_spin)
 
         # Review directory
         self.review_dir_edit = QLineEdit()
@@ -480,17 +462,34 @@ class SettingsDialog(QDialog):
         review_hint.setStyleSheet("color: gray; font-size: 9px;")
         dirs_layout.addRow("", review_hint)
 
-        # Output subfolder name (auto-filled as <input>/<name> when picking a folder)
+        # Crop folder: subfolder name for the generated crops (auto-appended as
+        # <input>/<name> when picking a folder).
         self.output_subfolder_edit = QLineEdit()
         self.output_subfolder_edit.setPlaceholderText("fancy_bills")
-        dirs_layout.addRow("Output Subfolder:", self.output_subfolder_edit)
+        dirs_layout.addRow("Crop Folder:", self.output_subfolder_edit)
 
         output_sub_hint = QLabel(
-            "Name auto-appended to the input folder for output "
+            "Subfolder for the generated crops, appended to the input folder "
             "(<input>/<name>). Blank = fancy_bills")
         output_sub_hint.setStyleSheet("color: gray; font-size: 9px;")
         output_sub_hint.setWordWrap(True)
         dirs_layout.addRow("", output_sub_hint)
+
+        # Working directory (moved here from Interface so all folder settings live
+        # together): where file-browse dialogs start.
+        self.working_dir_edit = QLineEdit()
+        self.working_dir_edit.setPlaceholderText("Starting directory for file browse dialogs...")
+        working_layout = QHBoxLayout()
+        working_layout.addWidget(self.working_dir_edit)
+        working_btn = QPushButton("...")
+        working_btn.setMaximumWidth(30)
+        working_btn.clicked.connect(self._browse_working_dir)
+        working_layout.addWidget(working_btn)
+        dirs_layout.addRow("Working Directory:", working_layout)
+
+        working_hint = QLabel("Browse dialogs will start here instead of your home folder")
+        working_hint.setStyleSheet("color: gray; font-size: 9px;")
+        dirs_layout.addRow("", working_hint)
 
         layout.addWidget(dirs_group)
         layout.addStretch()
