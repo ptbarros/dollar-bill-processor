@@ -419,7 +419,7 @@ class SettingsDialog(QDialog):
         data_open_btn.setToolTip("Open this folder in your file browser")
         data_open_btn.clicked.connect(self._open_data_dir)
         data_layout.addWidget(data_open_btn)
-        dirs_layout.addRow("Data Folder:", data_layout)
+        dirs_layout.addRow("Scanner Output Folder:", data_layout)
 
         self.data_folder_hint = QLabel(
             "Your scanner saves here and the Start Scanning button watches it; "
@@ -441,6 +441,15 @@ class SettingsDialog(QDialog):
         ])
         dirs_layout.addRow("Batch Folder Names:", self.batch_name_combo)
 
+        # Next sequential batch number — lets a user continue an existing numbering
+        # (e.g. resume at 824). Shown as the NEXT number; stored as counter = next-1.
+        self.next_batch_spin = QSpinBox()
+        self.next_batch_spin.setRange(1, 999999)
+        self.next_batch_spin.setToolTip(
+            "The number the next numbered batch folder will use. Set it to continue "
+            "an existing sequence (e.g. 824). Applies to the Number formats.")
+        dirs_layout.addRow("Next Batch Number:", self.next_batch_spin)
+
         # Archive directory (where 'Archive after processing' moves batches)
         self.archive_dir_edit = QLineEdit()
         self.archive_dir_edit.setPlaceholderText("Directory for completed batches...")
@@ -452,7 +461,7 @@ class SettingsDialog(QDialog):
         archive_layout.addWidget(archive_btn)
         dirs_layout.addRow("Straps Folder:", archive_layout)
 
-        archive_hint = QLabel("Where finished batches are filed. Blank = a 'Straps' subfolder of the Data Folder.")
+        archive_hint = QLabel("Where finished batches are filed. Blank = a 'Straps' subfolder of the Scanner Output Folder.")
         archive_hint.setStyleSheet("color: gray; font-size: 9px;")
         dirs_layout.addRow("", archive_hint)
 
@@ -746,6 +755,8 @@ class SettingsDialog(QDialog):
                 self._batch_fmt_values.index(self.settings.processing.batch_name_format))
         except ValueError:
             self.batch_name_combo.setCurrentIndex(0)
+        # Show the NEXT number (counter is the last-used one).
+        self.next_batch_spin.setValue(int(self.settings.processing.batch_counter or 0) + 1)
         self._update_data_folder_hint()
         self.archive_dir_edit.setText(self.settings.processing.archive_directory)
         self.review_dir_edit.setText(self.settings.ui.review_directory)
@@ -797,6 +808,8 @@ class SettingsDialog(QDialog):
         self.settings.processing.data_folder = self.data_folder_edit.text().strip()
         self.settings.processing.batch_name_format = \
             self._batch_fmt_values[self.batch_name_combo.currentIndex()]
+        # Store next-1 so make_batch_dir's counter+1 yields the number shown.
+        self.settings.processing.batch_counter = max(0, self.next_batch_spin.value() - 1)
         self.settings.processing.archive_directory = self.archive_dir_edit.text().strip()
         self.settings.ui.review_directory = self.review_dir_edit.text().strip()
         self.settings.processing.output_subfolder = self.output_subfolder_edit.text().strip() or "fancy_bills"
@@ -862,7 +875,7 @@ class SettingsDialog(QDialog):
         """Browse for the data (Straps) folder."""
         from resource_path import content_dir
         start = self.data_folder_edit.text().strip() or str(content_dir())
-        folder = QFileDialog.getExistingDirectory(self, "Select Data Folder", start)
+        folder = QFileDialog.getExistingDirectory(self, "Select Scanner Output Folder", start)
         if folder:
             self.data_folder_edit.setText(folder)
 
