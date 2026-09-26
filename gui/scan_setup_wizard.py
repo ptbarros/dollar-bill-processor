@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QWizard, QWizardPage, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QComboBox, QSpinBox, QFileDialog
+    QPushButton, QComboBox, QSpinBox, QFileDialog, QCheckBox
 )
 from PySide6.QtCore import Qt
 
@@ -140,6 +140,38 @@ class _NamingPage(QWizardPage):
         return self.num_spin.value()
 
 
+class _LivePage(QWizardPage):
+    def __init__(self, live_on):
+        super().__init__()
+        self.setTitle("Process live (optional)")
+        layout = QVBoxLayout(self)
+        body = QLabel(
+            "Normally Scan mode processes the strap when you click "
+            "<b>Stop &amp; File Batch</b>. With <b>Process live</b> on, it starts "
+            "classifying bills <b>as they arrive</b> instead.<br><br>"
+            "Even if your scanner saves all its images at once (many do), this means "
+            "processing begins the moment they land — as soon as you click "
+            "<b>Done</b> in your scanner software — rather than sitting idle until you "
+            "come back and click Stop &amp; File Batch. Handy if you step away to stack "
+            "the strap."
+        )
+        body.setWordWrap(True)
+        body.setTextFormat(Qt.RichText)
+        layout.addWidget(body)
+
+        self.check = QCheckBox("Process bills live as they arrive")
+        self.check.setChecked(bool(live_on))
+        layout.addWidget(self.check)
+
+        layout.addWidget(_hint(
+            "Experimental. You can toggle this any time with the Process live box in "
+            "Scan mode."))
+        layout.addStretch()
+
+    def live_on(self) -> bool:
+        return self.check.isChecked()
+
+
 class _SummaryPage(QWizardPage):
     def __init__(self, wizard):
         super().__init__()
@@ -163,7 +195,8 @@ class _SummaryPage(QWizardPage):
             f"&nbsp;&nbsp;<b>Scanner Output Folder:</b><br>&nbsp;&nbsp;{scanner}<br><br>"
             f"&nbsp;&nbsp;<b>Straps Folder:</b><br>&nbsp;&nbsp;{straps}<br><br>"
             f"&nbsp;&nbsp;<b>Strap Folder Names:</b> {fmt_label}<br>"
-            f"&nbsp;&nbsp;<b>Next strap number:</b> {num}<br><br>"
+            f"&nbsp;&nbsp;<b>Next strap number:</b> {num}<br>"
+            f"&nbsp;&nbsp;<b>Process live:</b> {'On' if w.live_page.live_on() else 'Off'}<br><br>"
             "Click <b>Finish</b> to save. Then click <b>Start Scanning</b> and feed a "
             "strap. You can revisit any of this under Settings → Folders, or re-run this "
             "wizard from Help → Setup Wizard."
@@ -222,6 +255,9 @@ class ScanSetupWizard(QWizard):
             getattr(p, "batch_name_format", "number") or "number", next_number)
         self.addPage(self.naming_page)
 
+        self.live_page = _LivePage(getattr(p, "live_processing", False))
+        self.addPage(self.live_page)
+
         self.addPage(_SummaryPage(self))
 
     def accept(self):
@@ -232,6 +268,7 @@ class ScanSetupWizard(QWizard):
         p.batch_name_format = self.naming_page.fmt_value()
         # Stored counter is (next number - 1); next_batch_number() pre-increments it.
         p.batch_counter = max(0, self.naming_page.start_number() - 1)
+        p.live_processing = self.live_page.live_on()
         try:
             self.settings.ui.scan_wizard_seen = True
             self.settings.save()

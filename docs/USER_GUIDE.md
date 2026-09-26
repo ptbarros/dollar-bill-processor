@@ -212,23 +212,26 @@ batch dropdown so you can reopen them.
 ### Live processing (experimental) — depends on how your scanner saves files
 
 There's an experimental **Process live** checkbox that starts classifying scans
-*as they arrive* instead of waiting until you click Stop. Whether it actually
-saves you time depends entirely on **when your scanner writes the image files**:
+*as they arrive* instead of waiting until you click Stop & File Batch. It helps
+in two ways, depending on **when your scanner writes the image files**:
 
 - **If the scanner writes each page (or each pass) to the folder as it feeds**,
-  live processing works through them while you keep scanning.
-- **If the scanner holds the whole strap in memory and writes every file at once
-  at the end**, there's nothing to process until you finish, so live mode just
-  processes the batch at the end — the same as leaving the box unchecked. No
-  harm, but no time saved.
+  live processing works through them *while you keep scanning* — so processing is
+  largely done by the time you finish the strap.
+- **If the scanner holds the whole strap and writes every file at once at the
+  end**, there's nothing to chew on until you finish — but live mode still starts
+  the moment the files land (i.e. as soon as you click **Done/Finish** in your
+  scanner software), instead of waiting for you to come back and click Stop &
+  File Batch. If you tend to step away to stack the strap, that's real time saved.
 
 > **Canon imageFormula R40:** this scanner buffers all pages in the Canon
-> software and only writes them to the output folder when you click **Finish**
-> in its interface — so every file appears at once. **Live processing gives no
-> benefit on the R40**; just scan the strap, then click Stop & File Batch as
-> normal. (Behavior varies by scanner and by its "save" settings — check yours
-> by watching the output folder while you feed a strap: do files trickle in, or
-> appear all at once at the end?)
+> software and only writes them to the output folder when you click **Finish** in
+> its interface — so every file appears at once. Live processing won't overlap
+> with scanning on the R40, but leaving it **on** still lets Dollar Detective
+> begin processing the instant you click Finish, rather than idling until you
+> click Stop & File Batch. (Behavior varies by scanner and by its "save"
+> settings — check yours by watching the output folder while you feed a strap: do
+> files trickle in, or appear all at once at the end?)
 
 ## Reading the results & overlays
 _(to be expanded)_ — The results list, the fancy/kept columns, and the on-bill

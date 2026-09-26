@@ -1755,6 +1755,12 @@ class MainWindow(QMainWindow):
                 self._apply_settings()
             except Exception:
                 pass
+            # Sync the panel's "Process live" checkbox to whatever the wizard set.
+            try:
+                self.processing_panel.live_check.setChecked(
+                    bool(self.settings.processing.live_processing))
+            except Exception:
+                pass
             self.status_label.setText("Scan mode setup saved.")
 
     def _maybe_scan_wizard(self):

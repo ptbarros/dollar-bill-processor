@@ -13,7 +13,7 @@ no .git folder, so they simply show the plain version.
 import subprocess
 from pathlib import Path
 
-__version__ = "1.7.5-rc11"
+__version__ = "1.7.5-rc12"
 
 
 def _git_short_hash():
