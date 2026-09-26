@@ -8,9 +8,9 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLineEdit,
     QProgressBar, QLabel, QFileDialog, QFrame, QComboBox, QMessageBox,
-    QCheckBox, QButtonGroup
+    QCheckBox, QButtonGroup, QSizePolicy
 )
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Qt, Signal, Slot, QEvent
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -79,16 +79,24 @@ class ProcessingPanel(QWidget):
         _wi.setContentsMargins(0, 0, 0, 0)
         self.watching_label = QLabel("Watching: …")
         self.watching_label.setStyleSheet("color: #2a82da;")
+        # Expand to fill the group so a long path uses the available width, but keep
+        # a small explicit minimum so its size hint can't balloon the toolbar's
+        # minimum width (the path re-elides to whatever room it actually has).
+        self.watching_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.watching_label.setMinimumWidth(120)
+        self.watching_label.installEventFilter(self)   # re-elide on resize
         self._watching_full = ""
-        _wi.addWidget(self.watching_label)
+        _wi.addWidget(self.watching_label, 1)
         self.watch_settings_btn = QPushButton("⚙")
         self.watch_settings_btn.setMaximumWidth(28)
         self.watch_settings_btn.setToolTip(
             "Change the Scanner Output Folder and strap naming in Settings → Folders")
         self.watch_settings_btn.clicked.connect(self.open_folders_settings.emit)
         _wi.addWidget(self.watch_settings_btn)
-        # No stretch here: it would expand and push the Scan buttons off-screen.
-        layout.addWidget(self.watch_info_group)
+        # Stretch 1: the Watching indicator grows to fill the slack up to the divider
+        # (same as the Input/Output fields in Manual mode) instead of the dead space
+        # sitting between the divider and the right-hand controls.
+        layout.addWidget(self.watch_info_group, 1)
 
         # Input folder selection (manual mode)
         self.input_group = QFrame()
@@ -109,7 +117,7 @@ class ProcessingPanel(QWidget):
         self.browse_input_btn.clicked.connect(self._browse_input)
         input_layout.addWidget(self.browse_input_btn)
 
-        layout.addWidget(self.input_group)   # natural width, left-justified
+        layout.addWidget(self.input_group, 1)   # grows to fill slack up to the divider
 
         # Output folder selection (manual mode)
         self.output_group = QFrame()
@@ -130,17 +138,20 @@ class ProcessingPanel(QWidget):
         self.browse_output_btn.clicked.connect(self._browse_output)
         output_layout.addWidget(self.browse_output_btn)
 
-        layout.addWidget(self.output_group)
+        layout.addWidget(self.output_group, 1)   # grows to fill slack up to the divider
 
         # Separator (the divider). Everything BEFORE it is the mode-specific left
-        # group (left-justified); the stretch right after it pushes everything
-        # AFTER it (Process/Start Scanning, Profile, Stop, Archive, progress) to
-        # the right edge (right-justified) in BOTH modes.
+        # group; those frames now carry the stretch (Input/Output in Manual, the
+        # Watching indicator in Scan), so they expand to fill the slack up to the
+        # divider and thereby push everything AFTER it (Process/Start Scanning,
+        # Profile, Stop, Archive, progress) to the right edge in BOTH modes. A small
+        # fixed buffer after the divider keeps a clear gap between the two sides
+        # instead of the fields butting right up against the controls.
         separator = QFrame()
         separator.setFrameShape(QFrame.VLine)
         separator.setFrameShadow(QFrame.Sunken)
         layout.addWidget(separator)
-        layout.addStretch(1)
+        layout.addSpacing(16)
 
         # Process/Stop buttons
         self.process_btn = QPushButton("Process")
@@ -324,13 +335,29 @@ class ProcessingPanel(QWidget):
         self.set_mode(mode)
 
     def set_watching_info(self, text: str):
-        """Set the Scan-mode 'Watching: …' indicator (MainWindow builds it). Elide
-        the middle so a long path can't blow up the toolbar width; full text goes
-        in the tooltip."""
+        """Set the Scan-mode 'Watching: …' indicator (MainWindow builds it). Full
+        text goes in the tooltip; the visible label re-elides to whatever width the
+        (expanding) label currently has."""
         self._watching_full = text
         self.watching_label.setToolTip(text)
+        self._reelide_watching()
+
+    def _reelide_watching(self):
+        """Elide the Watching path to the label's current width (middle-elided) so it
+        shows as much of the path as the available toolbar room allows."""
+        text = self._watching_full
+        if not text:
+            return
         fm = self.watching_label.fontMetrics()
-        self.watching_label.setText(fm.elidedText(text, Qt.ElideMiddle, 460))
+        avail = max(80, self.watching_label.width() - 4)
+        self.watching_label.setText(fm.elidedText(text, Qt.ElideMiddle, avail))
+
+    def eventFilter(self, obj, event):
+        # Re-elide the Watching path whenever the label is resized (mode switch or
+        # window resize) so it fills the width it's been given.
+        if obj is self.watching_label and event.type() == QEvent.Resize:
+            self._reelide_watching()
+        return super().eventFilter(obj, event)
 
     def current_mode(self) -> str:
         return getattr(self, "_mode", "manual")
