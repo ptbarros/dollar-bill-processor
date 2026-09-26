@@ -378,6 +378,11 @@ class MainWindow(QMainWindow):
         user_guide_action.triggered.connect(self._on_user_guide)
         help_menu.addAction(user_guide_action)
 
+        setup_wizard_action = QAction("&Setup Wizard...", self)
+        setup_wizard_action.setToolTip("Walk through the Scan-mode folder and strap-naming setup")
+        setup_wizard_action.triggered.connect(self._on_setup_wizard)
+        help_menu.addAction(setup_wizard_action)
+
         check_updates_action = QAction("Check for &Updates...", self)
         check_updates_action.triggered.connect(lambda: self._start_update_check(manual=True))
         help_menu.addAction(check_updates_action)
@@ -1740,6 +1745,47 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "User Guide",
                                 f"Open the user guide here:\n{url}")
 
+    def _on_setup_wizard(self):
+        """Run the Scan-mode setup wizard (Help menu, and offered on first Scan use)."""
+        from .scan_setup_wizard import ScanSetupWizard
+        wiz = ScanSetupWizard(self.settings, self)
+        if wiz.exec():
+            # Wizard saved new folder/naming settings -> refresh the dependent UI.
+            try:
+                self._apply_settings()
+            except Exception:
+                pass
+            self.status_label.setText("Scan mode setup saved.")
+
+    def _maybe_scan_wizard(self):
+        """First time a user enters Scan mode, offer the setup wizard once. Asks at
+        most once per session unless they pick 'Don't ask again' (which persists)."""
+        if self.settings.ui.scan_wizard_seen:
+            return
+        if getattr(self, "_scan_wizard_asked", False):
+            return
+        self._scan_wizard_asked = True
+        box = QMessageBox(self)
+        box.setWindowTitle("Scan Mode Setup")
+        box.setIcon(QMessageBox.Question)
+        box.setText("Looks like it's your first time using Scan mode.")
+        box.setInformativeText(
+            "Scan mode needs to know where your scanner saves images and how to name "
+            "straps. Would you like a quick setup wizard to walk through it?")
+        yes_btn = box.addButton("Yes, set it up", QMessageBox.AcceptRole)
+        box.addButton("Not now", QMessageBox.RejectRole)
+        never_btn = box.addButton("Don't ask again", QMessageBox.DestructiveRole)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is yes_btn:
+            self._on_setup_wizard()
+        elif clicked is never_btn:
+            self.settings.ui.scan_wizard_seen = True
+            try:
+                self.settings.save()
+            except Exception:
+                pass
+
     def _on_open_debug_log(self):
         """Open the debug log so a user can send it to support. The log lives in
         the per-user data dir (survives updates); if it doesn't exist yet, open
@@ -2279,6 +2325,11 @@ class MainWindow(QMainWindow):
         """Processing panel toggled between Manual and Scan modes."""
         if mode == "scan":
             self._update_watch_info()
+            # First time into Scan mode: offer the setup wizard, but only once the
+            # switch has fully settled (painting is frozen here; a modal now would
+            # appear over a mid-transition window).
+            if not self.settings.ui.scan_wizard_seen:
+                QTimer.singleShot(120, self._maybe_scan_wizard)
         # Capture the window's size/pos BEFORE the layout settles: a mode switch
         # must not resize the user's window (the overall size hint, driven by the
         # preview area, is much larger than the toolbar and Qt/the WM otherwise

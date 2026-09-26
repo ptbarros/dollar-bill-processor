@@ -158,6 +158,11 @@ strap for you, without pointing it at a folder by hand.
 3. Click **Stop & File Batch**. Everything that arrived is filed as the next
    strap and processed.
 
+> **First-time setup:** the first time you enter Scan mode, a short **setup
+> wizard** offers to walk you through the folders and strap naming it needs.
+> You can re-run it any time from **Help → Setup Wizard**, or set the same
+> values directly under **Settings → Folders**.
+
 See [Scanning straps live (Scan mode)](#scanning-straps-live-scan-mode) for the
 optional live-processing option.
 
