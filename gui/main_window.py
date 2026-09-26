@@ -373,6 +373,11 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._on_about)
         help_menu.addAction(about_action)
 
+        user_guide_action = QAction("&User Guide", self)
+        user_guide_action.setToolTip("Open the Dollar Detective user guide in your browser")
+        user_guide_action.triggered.connect(self._on_user_guide)
+        help_menu.addAction(user_guide_action)
+
         check_updates_action = QAction("Check for &Updates...", self)
         check_updates_action.triggered.connect(lambda: self._start_update_check(manual=True))
         help_menu.addAction(check_updates_action)
@@ -1710,6 +1715,30 @@ class MainWindow(QMainWindow):
             "- Manual correction workflow\n\n"
             "Built with PySide6 and OpenCV"
         )
+
+    def _on_user_guide(self):
+        """Open the user guide in the browser. Prefer the online (GitHub-rendered)
+        copy so it's always current and reads nicely; if a bundled copy exists,
+        offer it as an offline fallback when the browser can't be launched."""
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        try:
+            from updater import REPO
+        except Exception:
+            REPO = "ptbarros/dollar-bill-processor"
+        url = f"https://github.com/{REPO}/blob/main/docs/USER_GUIDE.md"
+        if QDesktopServices.openUrl(QUrl(url)):
+            return
+        # Browser wouldn't launch: try a bundled local copy, else show the link.
+        try:
+            from resource_path import app_base
+            local = app_base() / "docs" / "USER_GUIDE.md"
+        except Exception:
+            local = None
+        if local and local.exists() and QDesktopServices.openUrl(QUrl.fromLocalFile(str(local))):
+            return
+        QMessageBox.information(self, "User Guide",
+                                f"Open the user guide here:\n{url}")
 
     def _on_open_debug_log(self):
         """Open the debug log so a user can send it to support. The log lives in

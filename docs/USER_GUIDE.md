@@ -57,11 +57,11 @@ front/back assignment; it does not rotate, straighten, or rename anything.
 
 Either way, nothing is written to disk — it's a per-run behavior.
 
-### Organize Folder (the orange button)
+### Organize Folder (Edit → Organize Folder…)
 
 A heavier, **permanent** prep step you run **once on a folder before
-processing**. It does everything Verify does **and more**, and saves the results
-to disk. For each pair it:
+processing**, from the **Edit → Organize Folder…** menu. It does everything
+Verify does **and more**, and saves the results to disk. For each pair it:
 
 - Classifies front vs. back
 - **Fixes upside-down orientation**
@@ -92,10 +92,10 @@ first.
 
 | | **Verify front/back pairs** | **Organize Folder** |
 |---|---|---|
-| What it is | A checkbox (per-run behavior) | A button (one-time action) |
+| What it is | A checkbox (per-run behavior) | A menu action, **Edit → Organize Folder…** (one-time) |
 | Changes files on disk? | No — memory only | **Yes** — rotates, deskews, renames, deletes originals |
 | Scope | Front/back assignment only | Front/back **+ orientation + skew + renaming** |
-| When it runs | Start of each run (ON), or lazily during it (OFF) | When you click it |
+| When it runs | Start of each run (ON), or lazily during it (OFF) | When you run it from the menu |
 | Effect on later runs | None persists | Folder becomes pre-organized → Verify **and** alignment skipped, so runs are faster |
 | Best for | Choosing a front/back detection strategy per scan style | Prepping a folder once for fast, repeatable processing |
 
