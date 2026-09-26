@@ -3286,115 +3286,120 @@ class MainWindow(QMainWindow):
             dlog("session.restored_to_list", state=fingerprint(self.current_results))
 
     def _archive_manual_batch(self):
-        """Move (or copy) processed files to a timestamped archive directory (for manual processing)."""
+        """File the just-processed manual run as the NEXT strap in the sequence --
+        the same destination and folder layout as clicking Stop in Scan mode -- so
+        it shows up in the batch dropdown alongside scanned straps.
+
+        Source bills are moved (default) or copied per Settings -> archive_copy_mode,
+        exactly like Scan mode, and their fancy crops go into <strap>/fancy_bills. A
+        results.csv is written into the strap so the dropdown can list/reopen it.
+        Returns the strap Path, or None if there was nothing to file."""
         import shutil
-        from datetime import datetime
+        from resource_path import straps_dir
+        from batch_naming import make_batch_dir
 
-        dlog("ARCHIVE_manual.START", has_thread=bool(self.processing_thread),
-             copy_mode=self.settings.processing.archive_copy_mode,
+        if not self.current_results:
+            return None
+
+        dlog("FILE_STRAP.START", copy_mode=self.settings.processing.archive_copy_mode,
              state=fingerprint(self.current_results))
-        if not self.processing_thread:
-            return
 
-        input_dir = self.processing_thread.input_dir
-        output_dir = self.processing_thread.output_dir
+        # Next strap folder under the Straps dir (e.g. straps/004) -- the same helper
+        # Scan mode uses, so manual and scanned straps share one numbering sequence.
+        try:
+            strap_dir = Path(make_batch_dir(
+                straps_dir(), self.settings.processing.batch_name_format, self.settings))
+        except Exception as e:
+            QMessageBox.warning(self, "File Strap",
+                                f"Couldn't create the strap folder:\n{e}")
+            return None
 
-        # Use the configured archive directory, or one based on the input dir
-        archive_base = self.settings.processing.archive_directory
-        if not archive_base:
-            archive_base = str(input_dir.parent / "archive")
-
-        archive_path = Path(archive_base)
-        archive_path.mkdir(parents=True, exist_ok=True)
-
-        # Create timestamped batch directory
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        batch_dir = archive_path / f"batch_{timestamp}"
-        batch_dir.mkdir(parents=True, exist_ok=True)
-
-        # Use copy or move based on settings
         copy_mode = self.settings.processing.archive_copy_mode
         file_op = shutil.copy2 if copy_mode else shutil.move
-        op_name = "copying" if copy_mode else "moving"
+        op_name = "Copied" if copy_mode else "Filed"
 
-        # Get list of processed files from results
-        files_to_archive = set()
+        # Move/copy the source bill images into the strap; track old->new paths so
+        # the on-screen results (and any review already done) keep working.
+        files_to_file = set()
         for result in self.current_results:
-            front_file = result.get('front_file', '')
-            back_file = result.get('back_file', '')
-            if front_file:
-                files_to_archive.add(Path(front_file))
-            if back_file:
-                files_to_archive.add(Path(back_file))
-
-        # Move/copy all source files and track old->new path mapping
+            for key in ("front_file", "back_file"):
+                fp = result.get(key, '')
+                if fp:
+                    files_to_file.add(Path(fp))
         moved_count = 0
-        path_mapping = {}  # old_path -> new_path
-        for file_path in files_to_archive:
+        path_mapping = {}
+        for file_path in files_to_file:
             if file_path.exists():
                 try:
-                    dest = batch_dir / file_path.name
+                    dest = strap_dir / file_path.name
                     file_op(str(file_path), str(dest))
                     path_mapping[str(file_path)] = str(dest)
                     moved_count += 1
                 except Exception as e:
-                    print(f"[MainWindow] Error {op_name} {file_path.name}: {e}")
+                    print(f"[MainWindow] Error filing {file_path.name}: {e}")
 
-        # Move/copy fancy_bills output to batch archive
+        # Move/copy the fancy crops into <strap>/fancy_bills too.
         fancy_moved = 0
-        if output_dir.exists():
+        subfolder = self.settings.processing.output_subfolder or "fancy_bills"
+        out = self.settings.ui.last_output_dir
+        cur_in = getattr(self, "_current_input_dir", None)
+        if not out and cur_in:
+            out = str(Path(cur_in) / subfolder)
+        output_dir = Path(out) if out else None
+        if output_dir and output_dir.exists():
             fancy_items = list(output_dir.glob("*"))
             if fancy_items:
-                # Create fancy_bills subfolder in batch archive
-                batch_fancy_dir = batch_dir / "fancy_bills"
+                batch_fancy_dir = strap_dir / subfolder
                 batch_fancy_dir.mkdir(parents=True, exist_ok=True)
-
                 for item_path in fancy_items:
                     try:
                         dest = batch_fancy_dir / item_path.name
                         if item_path.is_dir():
-                            if copy_mode:
-                                shutil.copytree(str(item_path), str(dest))
-                            else:
-                                shutil.move(str(item_path), str(dest))
+                            (shutil.copytree if copy_mode else shutil.move)(str(item_path), str(dest))
                         else:
                             file_op(str(item_path), str(dest))
                         fancy_moved += 1
                     except Exception as e:
-                        print(f"[MainWindow] Error {op_name} {item_path.name}: {e}")
+                        print(f"[MainWindow] Error filing {item_path.name}: {e}")
 
-        # Update result paths to point to new archive locations
+        # Re-point result paths to their new home inside the strap.
         for result in self.current_results:
-            front_file = result.get('front_file', '')
-            back_file = result.get('back_file', '')
-            if front_file and front_file in path_mapping:
-                result['front_file'] = path_mapping[front_file]
-            if back_file and back_file in path_mapping:
-                result['back_file'] = path_mapping[back_file]
-
-        # Update the results list with new paths
+            for key in ("front_file", "back_file"):
+                fp = result.get(key, '')
+                if fp and fp in path_mapping:
+                    result[key] = path_mapping[fp]
         self.results_list.update_result_paths(path_mapping)
 
-        # Export batch CSV (with updated paths)
-        if self.current_results:
-            csv_path = batch_dir / "results.csv"
-            self._export_batch_csv(csv_path)
+        # Write results.csv INTO the strap so the batch dropdown lists/reopens it
+        # (same self-contained layout Scan mode produces).
+        try:
+            self._export_batch_csv(strap_dir / "results.csv")
+        except Exception as e:
+            print(f"[MainWindow] Error writing strap results.csv: {e}")
 
-        action = "Copied" if copy_mode else "Archived"
-        self.status_label.setText(
-            f"{action} {moved_count} files + {fancy_moved} fancy crops to {batch_dir.name}"
-        )
-
-        # Clear recovery file after successful archive
+        # Clear recovery file (the run is now safely filed).
         self._clear_recovery_after_archive()
 
-        # Refresh batch list to show newly archived batch
-        self.results_list.refresh_batch_list()
+        # Refresh + select the just-filed strap (no reload -- the on-screen results
+        # already ARE it), and advance the "next strap: N" indicator.
+        self._monitor_last_batch = str(strap_dir)
+        try:
+            self.results_list.refresh_batch_list()
+            self.results_list.select_batch(str(strap_dir))
+        except Exception:
+            pass
+        try:
+            self._update_watch_info()
+        except Exception:
+            pass
 
-        return batch_dir
+        self.status_label.setText(
+            f"{op_name} {moved_count} bills + {fancy_moved} crops as strap {strap_dir.name}")
+        dlog("FILE_STRAP.DONE", strap=str(strap_dir), bills=moved_count, fancy=fancy_moved)
+        return strap_dir
 
     def _on_archive_requested(self):
-        """Handle manual archive button click."""
+        """File Strap button clicked: file the current run as the next strap."""
         if not self.current_results:
             return
 

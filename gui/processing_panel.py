@@ -251,11 +251,13 @@ class ProcessingPanel(QWidget):
         self.stop_btn.clicked.connect(self._on_stop)
         layout.addWidget(self.stop_btn)
 
-        # Archive button - for manual archiving after processing
-        self.archive_btn = QPushButton("Archive")
+        # File Strap button - files the current manual run as the next strap in the
+        # sequence (same as clicking Stop in Scan mode), so it joins the batch list.
+        self.archive_btn = QPushButton("File Strap")
         self.archive_btn.setMinimumWidth(60)
         self.archive_btn.setEnabled(False)
-        self.archive_btn.setToolTip("Move processed files to archive folder")
+        self.archive_btn.setToolTip(
+            "File the current run as the next strap in the sequence (like Stop in Scan mode)")
         self.archive_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
@@ -560,24 +562,23 @@ class ProcessingPanel(QWidget):
             self.archive_btn.setEnabled(False)
 
     def set_archive_available(self, available: bool, auto_archive_enabled: bool):
-        """Update archive button state after processing completes.
+        """Update the File Strap button state after processing completes.
 
         Args:
-            available: Whether there are results to archive
-            auto_archive_enabled: Whether auto-archive is enabled in settings
+            available: Whether there are results to file as a strap
+            auto_archive_enabled: Whether auto-file (auto-archive) is on in settings
         """
-        print(f"[ProcessingPanel] set_archive_available(available={available}, auto_archive_enabled={auto_archive_enabled})")
         if auto_archive_enabled:
-            # Auto-archive is on, so hide/disable the manual button
+            # Auto-file is on, so the run is filed automatically -> disable the button.
             self.archive_btn.setEnabled(False)
-            self.archive_btn.setToolTip("Auto-archive is enabled in settings")
+            self.archive_btn.setToolTip("Runs are filed as straps automatically (Settings)")
         else:
-            # Manual archive available
             self.archive_btn.setEnabled(available)
-            self.archive_btn.setToolTip("Move processed files to archive folder")
+            self.archive_btn.setToolTip(
+                "File the current run as the next strap in the sequence (like Stop in Scan mode)")
 
     def reset_archive_button(self):
-        """Reset archive button to disabled state (e.g., after archiving)."""
+        """Reset the File Strap button to disabled (e.g. after a run is filed)."""
         self.archive_btn.setEnabled(False)
 
 
