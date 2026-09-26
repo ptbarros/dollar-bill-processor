@@ -311,11 +311,16 @@ class ProcessingPanel(QWidget):
         self.manual_mode_btn.setChecked(mode == "manual")
         self.scan_mode_btn.setChecked(mode == "scan")
         manual = (mode == "manual")
-        # Manual-only widgets
+        # Manual-only widgets. Stop + the X/total progress bar belong to a manual
+        # Process run: in Scan mode "Stop & File Batch" is the stop control and the
+        # total isn't known (especially with Process live), so they'd just sit idle
+        # and confuse -- hide them. Live/scan progress shows in the preview overlay.
         self.input_group.setVisible(manual)
         self.output_group.setVisible(manual)
         self.process_btn.setVisible(manual)
         self.archive_btn.setVisible(manual)
+        self.stop_btn.setVisible(manual)
+        self.progress_bar.setVisible(manual)
         # Scan-only widgets
         self.watch_btn.setVisible(not manual)
         self.live_check.setVisible(not manual)
