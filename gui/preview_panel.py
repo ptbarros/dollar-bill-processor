@@ -306,6 +306,17 @@ class PannableImageLabel(QLabel):
         settings.save()
 
 
+def _rotate_pixmap(pixmap: QPixmap, coarse: int) -> QPixmap:
+    """Apply a known 0/90/180/270 clockwise turn (from vertical-feed recovery)
+    to a pixmap instantly. Qt's rotate is clockwise for positive angles, which
+    matches process_production.rotate_coarse (verified for 90/180/270). Used so
+    a portrait scan shows landscape the moment it loads, before Auto-Align runs.
+    """
+    if coarse and pixmap is not None and not pixmap.isNull():
+        return pixmap.transformed(QTransform().rotate(coarse), Qt.SmoothTransformation)
+    return pixmap
+
+
 class ScrollableImageViewer(QWidget):
     """Image viewer with zoom and pan capabilities."""
 
@@ -382,10 +393,8 @@ class ScrollableImageViewer(QWidget):
             self.image_label.setText("Failed to load image")
             return
 
-        # Instant coarse de-rotation (Qt rotate is clockwise for positive angles,
-        # matching process_production.rotate_coarse).
-        if coarse:
-            pixmap = pixmap.transformed(QTransform().rotate(coarse), Qt.SmoothTransformation)
+        # Instant coarse de-rotation so a portrait scan shows landscape at once.
+        pixmap = _rotate_pixmap(pixmap, coarse)
 
         self.original_pixmap = pixmap
         if not preserve_zoom:
@@ -567,8 +576,9 @@ class ImagePane(QWidget):
         v_bar.setValue(int(v_frac * v_bar.maximum()))
         self._syncing = False
 
-    def set_image(self, path: str):
-        """Load and display an image."""
+    def set_image(self, path: str, coarse: int = 0):
+        """Load and display an image. ``coarse`` applies a known vertical-feed
+        90-deg turn instantly (no YOLO) so portrait scans show landscape at once."""
         if not path or not Path(path).exists():
             self.original_pixmap = None
             self.image_label.clear()
@@ -582,7 +592,7 @@ class ImagePane(QWidget):
             self.image_label.setText("Failed to load")
             return
 
-        self.original_pixmap = pixmap
+        self.original_pixmap = _rotate_pixmap(pixmap, coarse)
         self._update_display()
 
     def set_zoom(self, factor: float):
@@ -816,10 +826,12 @@ class SyncedSplitViewer(QWidget):
         else:
             self._zoom_out()
 
-    def set_images(self, front_path: str, back_path: str, preserve_zoom: bool = False):
-        """Set both images."""
-        self.front_pane.set_image(front_path)
-        self.back_pane.set_image(back_path)
+    def set_images(self, front_path: str, back_path: str, preserve_zoom: bool = False,
+                   front_coarse: int = 0, back_coarse: int = 0):
+        """Set both images. front_coarse/back_coarse apply each side's known
+        vertical-feed turn instantly so portrait scans show landscape at once."""
+        self.front_pane.set_image(front_path, coarse=front_coarse)
+        self.back_pane.set_image(back_path, coarse=back_coarse)
         if not preserve_zoom:
             self._zoom_fit()
         else:
@@ -1215,6 +1227,10 @@ class PreviewPanel(QWidget):
         # Select "Front" by default
         self.view_buttons[0][0].setChecked(True)
         self._current_view_mode = "front"
+        # Instant vertical-feed display turns for the current bill (front/back);
+        # applied to every view so portrait scans never flash sideways.
+        self._front_coarse = 0
+        self._back_coarse = 0
 
         header_layout.addSpacing(15)
 
@@ -1668,23 +1684,27 @@ class PreviewPanel(QWidget):
 
     def _update_split_views(self, preserve_zoom: bool = False):
         """Update split viewers with current images."""
-        self.split_v_viewer.set_images(self._current_front_file, self._current_back_file, preserve_zoom=preserve_zoom)
-        self.split_h_viewer.set_images(self._current_front_file, self._current_back_file, preserve_zoom=preserve_zoom)
+        self.split_v_viewer.set_images(self._current_front_file, self._current_back_file,
+                                        preserve_zoom=preserve_zoom,
+                                        front_coarse=self._front_coarse, back_coarse=self._back_coarse)
+        self.split_h_viewer.set_images(self._current_front_file, self._current_back_file,
+                                       preserve_zoom=preserve_zoom,
+                                       front_coarse=self._front_coarse, back_coarse=self._back_coarse)
 
     def _create_combined_pixmap(self, front_path: str, back_path: str) -> Optional[QPixmap]:
         """Create a combined pixmap with front on top, back on bottom, edge-to-edge."""
         front_pixmap = None
         back_pixmap = None
 
-        # Load front image
+        # Load front image (instant vertical-feed de-rotation, like the other views)
         if front_path and Path(front_path).exists():
-            front_pixmap = QPixmap(front_path)
+            front_pixmap = _rotate_pixmap(QPixmap(front_path), self._front_coarse)
             if front_pixmap.isNull():
                 front_pixmap = None
 
         # Load back image
         if back_path and Path(back_path).exists():
-            back_pixmap = QPixmap(back_path)
+            back_pixmap = _rotate_pixmap(QPixmap(back_path), self._back_coarse)
             if back_pixmap.isNull():
                 back_pixmap = None
 
@@ -2304,11 +2324,13 @@ class PreviewPanel(QWidget):
         # Auto-Align runs (kills the brief sideways flash while arrowing).
         # Front: fold the 180 seal-flip into the coarse turn so a flipped front
         # also lands upright instantly. (Back's turn already includes its flip.)
-        front_coarse = (result.get('front_align_coarse', 0)
-                        + (180 if result.get('front_align_flipped') else 0)) % 360
-        back_coarse = result.get('back_align_coarse', 0)
-        self.front_viewer.set_image(self._current_front_file, preserve_zoom=preserve, coarse=front_coarse)
-        self.back_viewer.set_image(self._current_back_file, preserve_zoom=preserve, coarse=back_coarse)
+        # Stored on self so every view (front/back, split, stitched) rotates the
+        # same way -- the visible view may be any of them.
+        self._front_coarse = (result.get('front_align_coarse', 0)
+                              + (180 if result.get('front_align_flipped') else 0)) % 360
+        self._back_coarse = result.get('back_align_coarse', 0)
+        self.front_viewer.set_image(self._current_front_file, preserve_zoom=preserve, coarse=self._front_coarse)
+        self.back_viewer.set_image(self._current_back_file, preserve_zoom=preserve, coarse=self._back_coarse)
 
         # Update stitched view
         self._update_combined_view(preserve_zoom=preserve)
