@@ -405,7 +405,7 @@ class SettingsDialog(QDialog):
         self.data_folder_hint = QLabel(
             "Your scanner saves here and the Start Scanning button watches it; "
             "finished straps are filed into a 'Straps' subfolder. "
-            "Blank = ~/DollarDetective.")
+            "Blank = a 'DollarDetective' folder in your home folder.")
         self.data_folder_hint.setStyleSheet("color: gray; font-size: 11px;")
         dirs_layout.addRow("", self.data_folder_hint)
         # Soft OneDrive note updates live as the field changes.
@@ -460,8 +460,8 @@ class SettingsDialog(QDialog):
 
         review_hint = QLabel(
             "Where 'Save for Review' copies flagged bills — and what "
-            "Export Review Bundle packs. Blank = a 'review' folder inside the "
-            "app's user-data folder (%APPDATA%\\DollarDetective on Windows).")
+            "Export Review Bundle packs. Blank = a 'review' folder in the app's "
+            "own data folder.")
         review_hint.setWordWrap(True)
         review_hint.setStyleSheet("color: gray; font-size: 11px;")
         dirs_layout.addRow("", review_hint)
@@ -473,8 +473,9 @@ class SettingsDialog(QDialog):
         dirs_layout.addRow("Crop Folder:", self.output_subfolder_edit)
 
         output_sub_hint = QLabel(
-            "Subfolder for the generated crops, appended to the input folder "
-            "(<input>/<name>). Blank = fancy_bills")
+            "Name of the subfolder the generated crops are saved into — inside the "
+            "processed folder when you Process manually, or inside each strap when "
+            "scanning. Blank = fancy_bills")
         output_sub_hint.setStyleSheet("color: gray; font-size: 11px;")
         output_sub_hint.setWordWrap(True)
         dirs_layout.addRow("", output_sub_hint)
@@ -911,8 +912,8 @@ class SettingsDialog(QDialog):
         else:
             self.data_folder_hint.setText(
                 "Your scanner saves here and the Start Scanning button watches it; "
-                "finished batches are filed into a 'Straps' subfolder. "
-                "Blank = ~/DollarDetective.")
+                "finished straps are filed into a 'Straps' subfolder. "
+                "Blank = a 'DollarDetective' folder in your home folder.")
             self.data_folder_hint.setStyleSheet("color: gray; font-size: 11px;")
 
     def _browse_archive_dir(self):
