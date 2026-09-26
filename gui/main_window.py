@@ -2198,6 +2198,19 @@ class MainWindow(QMainWindow):
         """Processing panel toggled between Manual and Scan modes."""
         if mode == "scan":
             self._update_watch_info()
+        # Belt-and-suspenders: a mode switch must never leave the window wider than
+        # (or hanging off) its screen. Clamp it back into the work area if so.
+        try:
+            scr = self.screen() or QApplication.primaryScreen()
+            ag = scr.availableGeometry()
+            neww = min(self.width(), ag.width())
+            newh = min(self.height(), ag.height())
+            newx = min(max(self.x(), ag.x()), ag.x() + ag.width() - neww)
+            newy = min(max(self.y(), ag.y()), ag.y() + ag.height() - newh)
+            if (neww, newh, newx, newy) != (self.width(), self.height(), self.x(), self.y()):
+                self.setGeometry(newx, newy, neww, newh)
+        except Exception:
+            pass
 
     def _review_folder(self) -> Path:
         """The folder Save-for-Review accumulates into: the configured Review
