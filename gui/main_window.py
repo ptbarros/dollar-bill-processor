@@ -2216,24 +2216,74 @@ class MainWindow(QMainWindow):
         """Processing panel toggled between Manual and Scan modes."""
         if mode == "scan":
             self._update_watch_info()
-        # Belt-and-suspenders: a mode switch must never leave the window wider than
-        # (or hanging off) its screen. Deferred so it runs AFTER the layout settles.
+        # Capture the window's size/pos BEFORE the layout settles: a mode switch
+        # must not resize the user's window (the overall size hint, driven by the
+        # preview area, is much larger than the toolbar and Qt/the WM otherwise
+        # grows the window to it). The deferred handler restores this.
+        self._pre_mode_geo = self.geometry()
+        # Recompute the WINDOW's cached minimum too: toggling the panel's frames
+        # leaves the central layout's size hint stale, so the window min balloons
+        # (~2218px) and forces the window wide. Invalidating the central layout (not
+        # just the panel's) fixes it before the deferred clamp reads the minimum.
+        try:
+            cl = self.centralWidget().layout()
+            if cl is not None:
+                cl.invalidate()
+            self.centralWidget().updateGeometry()
+            self.updateGeometry()
+        except Exception:
+            pass
+        try:
+            g = self._pre_mode_geo; fg = self.frameGeometry()
+            dlog("mode.changed", mode=mode,
+                 geo=f"{g.x()},{g.y()} {g.width()}x{g.height()}",
+                 frame=f"{fg.x()},{fg.y()} {fg.width()}x{fg.height()}",
+                 panelHint=self.processing_panel.sizeHint().width(),
+                 panelMin=self.processing_panel.minimumSizeHint().width(),
+                 winMin=self.minimumSizeHint().width())
+        except Exception:
+            pass
         from PySide6.QtCore import QTimer
         QTimer.singleShot(0, self._clamp_window_to_screen)
 
     def _clamp_window_to_screen(self):
-        """Resize/move the window back into its screen's work area if it spilled."""
+        """Keep the whole window FRAME (incl. title bar) inside the screen work
+        area after a mode switch. Positioning the CLIENT area (geometry()) at the
+        work-area top pushed the title bar off the top on Windows, where the frame
+        sits above the client rect -- so clamp against frameGeometry() instead.
+        Logs geometry to debug_log.txt for diagnosing WM-specific quirks."""
         try:
             scr = self.screen() or QApplication.primaryScreen()
             ag = scr.availableGeometry()
-            neww = min(self.width(), ag.width())
-            newh = min(self.height(), ag.height())
-            newx = min(max(self.x(), ag.x()), ag.x() + ag.width() - neww)
-            newy = min(max(self.y(), ag.y()), ag.y() + ag.height() - newh)
-            if (neww, newh, newx, newy) != (self.width(), self.height(), self.x(), self.y()):
+            cur = self.geometry()        # current client rect (may have grown)
+            fg = self.frameGeometry()    # includes title bar / borders
+            lm, tm = cur.x() - fg.x(), cur.y() - fg.y()      # left/top frame margins
+            rm, bm = fg.right() - cur.right(), fg.bottom() - cur.bottom()
+            # Prefer the size/pos the window had BEFORE the mode switch (don't let a
+            # switch resize the user's window), but never below the layout minimum.
+            pre = getattr(self, "_pre_mode_geo", None) or cur
+            want_w = max(pre.width(), self.minimumSizeHint().width())
+            want_h = max(pre.height(), self.minimumSizeHint().height())
+            # Cap the CLIENT size so the FRAME fits the work area.
+            neww = max(400, min(want_w, ag.width() - lm - rm))
+            newh = max(300, min(want_h, ag.height() - tm - bm))
+            # Position so the FRAME (not just the client) stays fully on-screen.
+            newx = min(max(pre.x(), ag.x() + lm), ag.x() + ag.width() - rm - neww)
+            newy = min(max(pre.y(), ag.y() + tm), ag.y() + ag.height() - bm - newh)
+            changed = (neww, newh, newx, newy) != (cur.width(), cur.height(), cur.x(), cur.y())
+            dlog("window.clamp",
+                 mode=self.processing_panel.current_mode(),
+                 ag=f"{ag.x()},{ag.y()} {ag.width()}x{ag.height()}",
+                 cur=f"{cur.x()},{cur.y()} {cur.width()}x{cur.height()}",
+                 margins=f"l{lm} t{tm} r{rm} b{bm}",
+                 new=f"{newx},{newy} {neww}x{newh}", changed=changed)
+            if changed:
                 self.setGeometry(newx, newy, neww, newh)
-        except Exception:
-            pass
+        except Exception as e:
+            try:
+                dlog("window.clamp.error", err=str(e))
+            except Exception:
+                pass
 
     def _review_folder(self) -> Path:
         """The folder Save-for-Review accumulates into: the configured Review
