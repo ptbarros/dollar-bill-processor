@@ -28,6 +28,7 @@ class ProcessingPanel(QWidget):
     archive_requested = Signal()  # Archive the current batch
     watch_toggled = Signal(bool)  # Monitor: on/off (watches the configured Data Folder)
     live_toggled = Signal(bool)   # EXPERIMENTAL: process scans live while scanning
+    mode_about_to_change = Signal()  # fired BEFORE visibility changes (capture geo)
     mode_changed = Signal(str)    # "manual" or "scan" — toolbar reconfigured
     open_folders_settings = Signal()  # gear next to the Watching indicator
 
@@ -280,6 +281,10 @@ class ProcessingPanel(QWidget):
         settings unless persist=False (e.g. applying the saved value at startup)."""
         mode = "scan" if mode == "scan" else "manual"
         self._mode = mode
+        # Let listeners snapshot the window size BEFORE the visibility changes below
+        # (showing the Input/Output frames grows the window to its overall size hint
+        # synchronously, so a snapshot taken after is already too big).
+        self.mode_about_to_change.emit()
         self.manual_mode_btn.setChecked(mode == "manual")
         self.scan_mode_btn.setChecked(mode == "scan")
         manual = (mode == "manual")

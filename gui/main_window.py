@@ -141,6 +141,7 @@ class MainWindow(QMainWindow):
         self.processing_panel.stop_requested.connect(self._on_stop_requested)
         self.processing_panel.archive_requested.connect(self._on_archive_requested)
         self.processing_panel.watch_toggled.connect(self._on_watch_toggled)
+        self.processing_panel.mode_about_to_change.connect(self._capture_pre_mode_geo)
         self.processing_panel.mode_changed.connect(self._on_panel_mode_changed)
         self.processing_panel.open_folders_settings.connect(self._on_settings)
         self._update_watch_info()  # seed the Scan-mode indicator (panel emits before we connect)
@@ -2211,6 +2212,11 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _capture_pre_mode_geo(self):
+        """Snapshot the window geometry BEFORE a mode switch grows it, so the
+        clamp can restore the user's size (not the grown-to-hint size)."""
+        self._pre_mode_geo = self.geometry()
+
     @Slot(str)
     def _on_panel_mode_changed(self, mode: str):
         """Processing panel toggled between Manual and Scan modes."""
@@ -2220,7 +2226,6 @@ class MainWindow(QMainWindow):
         # must not resize the user's window (the overall size hint, driven by the
         # preview area, is much larger than the toolbar and Qt/the WM otherwise
         # grows the window to it). The deferred handler restores this.
-        self._pre_mode_geo = self.geometry()
         # Recompute the WINDOW's cached minimum too: toggling the panel's frames
         # leaves the central layout's size hint stale, so the window min balloons
         # (~2218px) and forces the window wide. Invalidating the central layout (not
@@ -2275,6 +2280,7 @@ class MainWindow(QMainWindow):
                  mode=self.processing_panel.current_mode(),
                  ag=f"{ag.x()},{ag.y()} {ag.width()}x{ag.height()}",
                  cur=f"{cur.x()},{cur.y()} {cur.width()}x{cur.height()}",
+                 pre=f"{pre.x()},{pre.y()} {pre.width()}x{pre.height()}",
                  margins=f"l{lm} t{tm} r{rm} b{bm}",
                  new=f"{newx},{newy} {neww}x{newh}", changed=changed)
             if changed:
