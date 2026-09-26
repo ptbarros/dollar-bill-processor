@@ -55,7 +55,6 @@ class ProcessingPanel(QWidget):
         self.scan_mode_btn.setToolTip("Scan straps: watch the Scanner Output Folder and file straps")
         for _b in (self.manual_mode_btn, self.scan_mode_btn):
             _b.setCheckable(True)
-            _b.setMinimumWidth(64)
             _b.setStyleSheet(_seg_style)
             self.mode_group.addButton(_b)
         self.manual_mode_btn.clicked.connect(lambda: self._on_mode_clicked("manual"))
@@ -79,6 +78,7 @@ class ProcessingPanel(QWidget):
         _wi.setContentsMargins(0, 0, 0, 0)
         self.watching_label = QLabel("Watching: …")
         self.watching_label.setStyleSheet("color: #2a82da;")
+        self._watching_full = ""
         _wi.addWidget(self.watching_label)
         self.watch_settings_btn = QPushButton("⚙")
         self.watch_settings_btn.setMaximumWidth(28)
@@ -86,8 +86,8 @@ class ProcessingPanel(QWidget):
             "Change the Scanner Output Folder and strap naming in Settings → Folders")
         self.watch_settings_btn.clicked.connect(self.open_folders_settings.emit)
         _wi.addWidget(self.watch_settings_btn)
-        _wi.addStretch()
-        layout.addWidget(self.watch_info_group, 1)
+        # No stretch here: it would expand and push the Scan buttons off-screen.
+        layout.addWidget(self.watch_info_group)
 
         # Input folder selection (manual mode)
         self.input_group = QFrame()
@@ -99,7 +99,7 @@ class ProcessingPanel(QWidget):
 
         self.input_edit = QLineEdit()
         self.input_edit.setPlaceholderText("Select folder with scanned bills...")
-        self.input_edit.setMinimumWidth(200)
+        self.input_edit.setMinimumWidth(110)
         input_layout.addWidget(self.input_edit)
 
         self.browse_input_btn = QPushButton("Browse...")
@@ -118,7 +118,7 @@ class ProcessingPanel(QWidget):
 
         self.output_edit = QLineEdit()
         self.output_edit.setPlaceholderText("Output folder for fancy bills...")
-        self.output_edit.setMinimumWidth(150)
+        self.output_edit.setMinimumWidth(110)
         output_layout.addWidget(self.output_edit)
 
         self.browse_output_btn = QPushButton("Browse...")
@@ -304,8 +304,13 @@ class ProcessingPanel(QWidget):
         self.set_mode(mode)
 
     def set_watching_info(self, text: str):
-        """Set the Scan-mode 'Watching: …' indicator text (MainWindow builds it)."""
-        self.watching_label.setText(text)
+        """Set the Scan-mode 'Watching: …' indicator (MainWindow builds it). Elide
+        the middle so a long path can't blow up the toolbar width; full text goes
+        in the tooltip."""
+        self._watching_full = text
+        self.watching_label.setToolTip(text)
+        fm = self.watching_label.fontMetrics()
+        self.watching_label.setText(fm.elidedText(text, Qt.ElideMiddle, 460))
 
     def current_mode(self) -> str:
         return getattr(self, "_mode", "manual")
