@@ -2708,7 +2708,10 @@ class MainWindow(QMainWindow):
                 self._live_request_stop()   # stop watcher, flush remainder, finalize
                 return
             filed = self._finalize_monitor_batch()   # while watcher state is intact
-            self._stop_monitor()
+            # If a batch was filed, _finalize_monitor_batch has already shown the
+            # processing overlay -- keep it up (it shows X/total + fancy as the strap
+            # processes, then hides on completion) instead of flashing it away.
+            self._stop_monitor(restore_preview=not filed)
             self.processing_panel.set_watching(False)
             if not filed:
                 self.status_label.setText("Stopped scanning (no new scans to file)")
@@ -2739,12 +2742,16 @@ class MainWindow(QMainWindow):
             f"Scanning {wd} — feed your strap, then click Stop to file the batch")
         return True
 
-    def _stop_monitor(self):
-        """Stop watching (does not touch any filed batches)."""
-        try:
-            self.preview_panel.hide_watch_overlay()
-        except Exception:
-            pass
+    def _stop_monitor(self, restore_preview=True):
+        """Stop watching (does not touch any filed batches). By default restores the
+        normal preview; pass restore_preview=False when a processing overlay should
+        stay up because a batch is being processed right after (Stop & File Batch) --
+        _on_processing_complete hides it when that run finishes."""
+        if restore_preview:
+            try:
+                self.preview_panel.hide_watch_overlay()
+            except Exception:
+                pass
         if self._monitor_watcher:
             try:
                 self._monitor_watcher.stop()
@@ -2957,7 +2964,9 @@ class MainWindow(QMainWindow):
         """Stop pressed during a live scan: stop watching, then flush any remaining
         scans as a final chunk and finalize once the worker is idle."""
         self._live_stopping = True
-        self._stop_monitor()
+        # Keep the live overlay up through the final flush (it updates as the tail
+        # processes and hides on completion) rather than clearing it on Stop.
+        self._stop_monitor(restore_preview=False)
         self.processing_panel.set_watching(False)
         self.status_label.setText("Finishing live batch…")
         if not self._live_busy:
