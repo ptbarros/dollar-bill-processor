@@ -99,14 +99,15 @@ class ProcessingPanel(QWidget):
 
         self.input_edit = QLineEdit()
         self.input_edit.setPlaceholderText("Select folder with scanned bills...")
-        self.input_edit.setMinimumWidth(110)
+        self.input_edit.setMinimumWidth(140)
+        self.input_edit.setMaximumWidth(320)  # don't grow greedily and push the window past-screen
         input_layout.addWidget(self.input_edit)
 
         self.browse_input_btn = QPushButton("Browse...")
         self.browse_input_btn.clicked.connect(self._browse_input)
         input_layout.addWidget(self.browse_input_btn)
 
-        layout.addWidget(self.input_group, 1)
+        layout.addWidget(self.input_group)
 
         # Output folder selection (manual mode)
         self.output_group = QFrame()
@@ -118,14 +119,15 @@ class ProcessingPanel(QWidget):
 
         self.output_edit = QLineEdit()
         self.output_edit.setPlaceholderText("Output folder for fancy bills...")
-        self.output_edit.setMinimumWidth(110)
+        self.output_edit.setMinimumWidth(140)
+        self.output_edit.setMaximumWidth(320)
         output_layout.addWidget(self.output_edit)
 
         self.browse_output_btn = QPushButton("Browse...")
         self.browse_output_btn.clicked.connect(self._browse_output)
         output_layout.addWidget(self.browse_output_btn)
 
-        layout.addWidget(self.output_group, 1)
+        layout.addWidget(self.output_group)
 
         # Separator
         separator = QFrame()
@@ -196,6 +198,12 @@ class ProcessingPanel(QWidget):
             pass
         self.live_check.toggled.connect(self._on_live_toggled)
         layout.addWidget(self.live_check)
+
+        # One shared stretch: everything before it is the mode-specific left group
+        # (input/output+Process in Manual, watching+Start Scanning in Scan); the
+        # shared controls after it (Profile, Stop, Archive, progress) stay anchored
+        # to the right in BOTH modes and can't drift apart.
+        layout.addStretch(1)
 
         # Active crop-profile picker (replaces the old Organize button; Organize
         # moved to Edit -> Organize Folder). Switching here changes the profile
