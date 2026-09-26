@@ -164,9 +164,9 @@ class _LivePage(QWizardPage):
             "classifying bills <b>as they arrive</b> instead.<br><br>"
             "Even if your scanner saves all its images at once (many do), this means "
             "processing begins the moment they land — as soon as you click "
-            "<b>Done</b> in your scanner software — rather than sitting idle until you "
-            "come back and click Stop &amp; File Batch. Handy if you step away to stack "
-            "the strap."
+            "<b>Done</b> in your scanner software — rather than Dollar Detective sitting "
+            "idle until you come back and click Stop &amp; File Batch. Handy if you step "
+            "away to stack the strap."
         )
         body.setWordWrap(True)
         body.setTextFormat(Qt.RichText)
