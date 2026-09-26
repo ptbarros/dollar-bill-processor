@@ -195,7 +195,7 @@ class ResultsList(QWidget):
 
         self.batch_combo = QComboBox()
         self.batch_combo.addItem("Current Session", "")
-        self.batch_combo.setMinimumWidth(200)
+        self.batch_combo.setMinimumWidth(140)
         # Click-only focus so arrow-key navigation in the results list can't
         # bleed into the dropdown and silently load an archive (a focused combo
         # box changes its selection on Up/Down without opening the popup).
@@ -223,7 +223,7 @@ class ResultsList(QWidget):
         # Pattern filter dropdown
         self.pattern_filter = QComboBox()
         self.pattern_filter.addItem("All Patterns", "")
-        self.pattern_filter.setMinimumWidth(120)
+        self.pattern_filter.setMinimumWidth(95)
         self.pattern_filter.currentIndexChanged.connect(self._apply_filters)
         filter_layout.addWidget(self.pattern_filter)
 

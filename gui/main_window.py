@@ -2213,9 +2213,12 @@ class MainWindow(QMainWindow):
             pass
 
     def _capture_pre_mode_geo(self):
-        """Snapshot the window geometry BEFORE a mode switch grows it, so the
-        clamp can restore the user's size (not the grown-to-hint size)."""
+        """Snapshot the window geometry BEFORE a mode switch, and LOCK the max
+        width to the current width so the imminent visibility change can't grow the
+        window at all -- that grow-then-restore was the repaint 'glitch'. The lock
+        is released in the deferred clamp once the layout has settled."""
         self._pre_mode_geo = self.geometry()
+        self.setMaximumWidth(self.width())
 
     @Slot(str)
     def _on_panel_mode_changed(self, mode: str):
@@ -2248,6 +2251,10 @@ class MainWindow(QMainWindow):
                  winMin=self.minimumSizeHint().width())
         except Exception:
             pass
+        # Restore the size SYNCHRONOUSLY (before the event loop paints the grown
+        # window -> no visible flicker), then once more deferred as a safety net for
+        # any async re-layout.
+        self._clamp_window_to_screen()
         from PySide6.QtCore import QTimer
         QTimer.singleShot(0, self._clamp_window_to_screen)
 
@@ -2285,7 +2292,14 @@ class MainWindow(QMainWindow):
                  new=f"{newx},{newy} {neww}x{newh}", changed=changed)
             if changed:
                 self.setGeometry(newx, newy, neww, newh)
+            # Release the max-width lock set in _capture_pre_mode_geo (the layout
+            # has settled; the user can resize freely again).
+            self.setMaximumWidth(16777215)  # QWIDGETSIZE_MAX
         except Exception as e:
+            try:
+                self.setMaximumWidth(16777215)
+            except Exception:
+                pass
             try:
                 dlog("window.clamp.error", err=str(e))
             except Exception:

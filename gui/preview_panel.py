@@ -1183,17 +1183,21 @@ class PreviewPanel(QWidget):
 
         # View mode buttons
         self.view_buttons = []
+        # Labels are short (shortcut lives in the tooltip) so the row fits narrow
+        # screens; the numeric/letter shortcuts still work via QShortcut.
         view_modes = [
-            ("Front (1)", "front", "View front of bill (1)"),
-            ("Back (2)", "back", "View back of bill (2)"),
-            ("Stitched (3)", "stitched", "View front and back stitched together (3)"),
-            ("Split V (4)", "split_v", "View front and back side by side vertically (4)"),
-            ("Split H (5)", "split_h", "View front and back side by side horizontally (5)"),
+            ("Front", "front", "View front of bill (1)"),
+            ("Back", "back", "View back of bill (2)"),
+            ("Stitched", "stitched", "View front and back stitched together (3)"),
+            ("Split V", "split_v", "View front and back side by side vertically (4)"),
+            ("Split H", "split_h", "View front and back side by side horizontally (5)"),
         ]
+        _compact = "QPushButton{padding:3px 7px;}"  # keep the button row narrow
         for label, mode, tooltip in view_modes:
             btn = QPushButton(label)
             btn.setToolTip(tooltip)
             btn.setCheckable(True)
+            btn.setStyleSheet(_compact)
             btn.clicked.connect(lambda checked, m=mode: self._on_view_mode_clicked(m))
             header_layout.addWidget(btn)
             self.view_buttons.append((btn, mode))
@@ -1205,13 +1209,14 @@ class PreviewPanel(QWidget):
         header_layout.addSpacing(15)
 
         # Tool buttons
-        self.align_btn = QPushButton("Auto-Align (A)")
+        self.align_btn = QPushButton("Auto-Align")
         self.align_btn.setToolTip("Toggle auto-alignment using YOLO bill detection (A)")
         self.align_btn.setCheckable(True)
         self.align_btn.setChecked(self._auto_align_enabled)
         self.align_btn.setStyleSheet("""
             QPushButton {
                 font-weight: bold;
+                padding: 3px 7px;
             }
             QPushButton:checked {
                 background-color: #4CAF50;
@@ -1221,7 +1226,8 @@ class PreviewPanel(QWidget):
         self.align_btn.clicked.connect(self._on_align_toggled)
         header_layout.addWidget(self.align_btn)
 
-        self.crosshair_btn = QPushButton("Crosshair (X)")
+        self.crosshair_btn = QPushButton("Crosshair")
+        self.crosshair_btn.setStyleSheet(_compact)
         self.crosshair_btn.setToolTip("Toggle crosshair overlay for alignment checking (X)")
         self.crosshair_btn.setCheckable(True)
         self.crosshair_btn.clicked.connect(self._on_crosshair_toggled)
@@ -1229,12 +1235,14 @@ class PreviewPanel(QWidget):
 
         self._crosshair_active = False
 
-        self.crop_btn = QPushButton("Crop (C)")
+        self.crop_btn = QPushButton("Crop")
+        self.crop_btn.setStyleSheet(_compact)
         self.crop_btn.setToolTip("Generate crops for current bill (C)")
         self.crop_btn.clicked.connect(self.crop_requested.emit)
         header_layout.addWidget(self.crop_btn)
 
-        self.magnifier_btn = QPushButton("Plates (M)")
+        self.magnifier_btn = QPushButton("Plates")
+        self.magnifier_btn.setStyleSheet(_compact)
         self.magnifier_btn.setToolTip("Toggle plate magnifier for mule comparison (M)")
         self.magnifier_btn.clicked.connect(self.show_plate_magnifier)
         header_layout.addWidget(self.magnifier_btn)
@@ -1242,12 +1250,14 @@ class PreviewPanel(QWidget):
         header_layout.addStretch()
 
         # Navigation buttons
-        self.prev_btn = QPushButton("Prev (P)")
+        self.prev_btn = QPushButton("Prev")
+        self.prev_btn.setStyleSheet(_compact)
         self.prev_btn.setToolTip("Previous bill (Page Up / P)")
         self.prev_btn.clicked.connect(self.prev_requested.emit)
         header_layout.addWidget(self.prev_btn)
 
-        self.next_btn = QPushButton("Next (N)")
+        self.next_btn = QPushButton("Next")
+        self.next_btn.setStyleSheet(_compact)
         self.next_btn.setToolTip("Next bill (Page Down / N)")
         self.next_btn.clicked.connect(self.next_requested.emit)
         header_layout.addWidget(self.next_btn)
