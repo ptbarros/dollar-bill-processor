@@ -98,15 +98,12 @@ class _NamingPage(QWizardPage):
         super().__init__()
         self.setTitle("Strap names & numbering")
         layout = QVBoxLayout(self)
-        body = QLabel(
-            "Each filed strap gets its own folder. Choose how those folders are named, "
-            "and — if you number them — what number to start from.\n\n"
-            "Set the start number to continue an existing sequence (for example, if your "
-            "last strap was 823, start at 824)."
-        )
+        body = QLabel("Each filed strap gets its own folder. Choose how those "
+                      "folders are named.")
         body.setWordWrap(True)
         layout.addWidget(body)
 
+        # Naming format + a hint that actually covers all the choices (incl. dates).
         form = QHBoxLayout()
         form.addWidget(QLabel("Strap Folder Names:"))
         self.fmt_combo = QComboBox()
@@ -118,7 +115,11 @@ class _NamingPage(QWizardPage):
         form.addWidget(self.fmt_combo)
         form.addStretch()
         layout.addLayout(form)
+        layout.addWidget(_hint(
+            "Number counts up (001, 002, 003…). Date names each strap by the day "
+            "it's filed (2026-09-25). The combined options use both."))
 
+        # Start number + a hint right next to it (this is what it controls).
         numrow = QHBoxLayout()
         numrow.addWidget(QLabel("Strap Start Number:"))
         self.num_spin = QSpinBox()
@@ -127,11 +128,23 @@ class _NamingPage(QWizardPage):
         numrow.addWidget(self.num_spin)
         numrow.addStretch()
         layout.addLayout(numrow)
+        self.num_hint = _hint(
+            "The number the next strap will use — set it to continue an existing "
+            "sequence (e.g. if your last strap was 823, start at 824). Used only by "
+            "the Number formats.")
+        layout.addWidget(self.num_hint)
 
-        layout.addWidget(_hint(
-            "The start number applies to the Number formats. Names can always be "
-            "changed later in Settings → Folders."))
+        # A date-only name doesn't use a number, so grey the field out then to make
+        # the relationship obvious.
+        self.fmt_combo.currentIndexChanged.connect(self._sync_num_enabled)
+        self._sync_num_enabled()
+
         layout.addStretch()
+
+    def _sync_num_enabled(self):
+        uses_number = self.fmt_value() != "date"
+        self.num_spin.setEnabled(uses_number)
+        self.num_hint.setEnabled(uses_number)
 
     def fmt_value(self) -> str:
         return _FMT_VALUES[self.fmt_combo.currentIndex()]
