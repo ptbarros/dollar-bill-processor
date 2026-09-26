@@ -106,7 +106,7 @@ class ProcessingPanel(QWidget):
         self.browse_input_btn.clicked.connect(self._browse_input)
         input_layout.addWidget(self.browse_input_btn)
 
-        layout.addWidget(self.input_group, 1)   # fills the toolbar in Manual mode
+        layout.addWidget(self.input_group)   # natural width, left-justified
 
         # Output folder selection (manual mode)
         self.output_group = QFrame()
@@ -125,13 +125,17 @@ class ProcessingPanel(QWidget):
         self.browse_output_btn.clicked.connect(self._browse_output)
         output_layout.addWidget(self.browse_output_btn)
 
-        layout.addWidget(self.output_group, 1)
+        layout.addWidget(self.output_group)
 
-        # Separator
+        # Separator (the divider). Everything BEFORE it is the mode-specific left
+        # group (left-justified); the stretch right after it pushes everything
+        # AFTER it (Process/Start Scanning, Profile, Stop, Archive, progress) to
+        # the right edge (right-justified) in BOTH modes.
         separator = QFrame()
         separator.setFrameShape(QFrame.VLine)
         separator.setFrameShadow(QFrame.Sunken)
         layout.addWidget(separator)
+        layout.addStretch(1)
 
         # Process/Stop buttons
         self.process_btn = QPushButton("Process")
@@ -263,13 +267,6 @@ class ProcessingPanel(QWidget):
         self.progress_bar.setValue(0)
         layout.addWidget(self.progress_bar)
 
-        # Trailing spacer that absorbs slack in SCAN mode only (controls pack left,
-        # empty space at the far right). In Manual the Input/Output fields fill
-        # instead, so this stays collapsed. set_mode flips its stretch factor.
-        self._end_spacer = QWidget()
-        self._toolbar_layout = layout
-        layout.addWidget(self._end_spacer)
-
         # Apply the saved mode (show/hide the right widgets) without persisting.
         try:
             self.set_mode(get_settings().ui.panel_mode, persist=False)
@@ -295,10 +292,6 @@ class ProcessingPanel(QWidget):
         self.watch_btn.setVisible(not manual)
         self.live_check.setVisible(not manual)
         self.watch_info_group.setVisible(not manual)
-        # Manual: Input/Output fields fill the slack (spacer collapsed). Scan: the
-        # fields are gone, so the trailing spacer fills instead (controls pack left).
-        if getattr(self, "_toolbar_layout", None) is not None:
-            self._toolbar_layout.setStretchFactor(self._end_spacer, 0 if manual else 1)
         # Toggling QFrame visibility leaves the layout's cached size hints stale,
         # so the window's minimumSizeHint can balloon (Manual then forced the
         # window past the screen). Invalidate + updateGeometry recomputes it.

@@ -2199,7 +2199,12 @@ class MainWindow(QMainWindow):
         if mode == "scan":
             self._update_watch_info()
         # Belt-and-suspenders: a mode switch must never leave the window wider than
-        # (or hanging off) its screen. Clamp it back into the work area if so.
+        # (or hanging off) its screen. Deferred so it runs AFTER the layout settles.
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, self._clamp_window_to_screen)
+
+    def _clamp_window_to_screen(self):
+        """Resize/move the window back into its screen's work area if it spilled."""
         try:
             scr = self.screen() or QApplication.primaryScreen()
             ag = scr.availableGeometry()
