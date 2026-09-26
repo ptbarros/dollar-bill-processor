@@ -2213,12 +2213,37 @@ class MainWindow(QMainWindow):
             pass
 
     def _capture_pre_mode_geo(self):
-        """Snapshot the window geometry BEFORE a mode switch, and LOCK the max
-        width to the current width so the imminent visibility change can't grow the
-        window at all -- that grow-then-restore was the repaint 'glitch'. The lock
-        is released in the deferred clamp once the layout has settled."""
+        """Snapshot the window geometry BEFORE a mode switch, LOCK the max width to
+        the current width, and FREEZE painting for the duration of the switch.
+
+        On Windows the max-width lock alone doesn't hold: the central layout's
+        cached minimum goes stale the instant the panel toggles child visibility,
+        and Qt applies that stale (large) minimum to the top-level before our
+        invalidate runs -- so the window briefly grows to its manual-mode preferred
+        width (~1878px) and the synchronous clamp then snaps it back. The OS has
+        already painted the grown client area by then, and that grow->snap-back is
+        the 'ghost flicker'. Disabling updates suppresses the intermediate paint so
+        only the final (clamped) layout is ever drawn. Re-enabled in the deferred
+        clamp; a fallback timer guarantees re-enable even if mode_changed never
+        fires."""
         self._pre_mode_geo = self.geometry()
         self.setMaximumWidth(self.width())
+        try:
+            self.setUpdatesEnabled(False)
+        except Exception:
+            pass
+        # Fallback: never leave the window frozen if the mode_changed path is missed.
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(200, self._ensure_updates_enabled)
+
+    def _ensure_updates_enabled(self):
+        """Re-enable painting (idempotent) and request a repaint."""
+        try:
+            if not self.updatesEnabled():
+                self.setUpdatesEnabled(True)
+                self.update()
+        except Exception:
+            pass
 
     @Slot(str)
     def _on_panel_mode_changed(self, mode: str):
@@ -2251,14 +2276,15 @@ class MainWindow(QMainWindow):
                  winMin=self.minimumSizeHint().width())
         except Exception:
             pass
-        # Restore the size SYNCHRONOUSLY (before the event loop paints the grown
-        # window -> no visible flicker), then once more deferred as a safety net for
-        # any async re-layout.
-        self._clamp_window_to_screen()
+        # Restore the size SYNCHRONOUSLY while painting is still frozen (set in
+        # _capture_pre_mode_geo), then once more deferred as a safety net for any
+        # async re-layout. Only the deferred (final) pass releases the width lock
+        # and re-enables painting, so the grown intermediate frame is never drawn.
+        self._clamp_window_to_screen(final=False)
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(0, self._clamp_window_to_screen)
+        QTimer.singleShot(0, lambda: self._clamp_window_to_screen(final=True))
 
-    def _clamp_window_to_screen(self):
+    def _clamp_window_to_screen(self, final=True):
         """Keep the whole window FRAME (incl. title bar) inside the screen work
         area after a mode switch. Positioning the CLIENT area (geometry()) at the
         work-area top pushed the title bar off the top on Windows, where the frame
@@ -2292,14 +2318,18 @@ class MainWindow(QMainWindow):
                  new=f"{newx},{newy} {neww}x{newh}", changed=changed)
             if changed:
                 self.setGeometry(newx, newy, neww, newh)
-            # Release the max-width lock set in _capture_pre_mode_geo (the layout
-            # has settled; the user can resize freely again).
-            self.setMaximumWidth(16777215)  # QWIDGETSIZE_MAX
+            if final:
+                # Layout has settled: release the max-width lock (user can resize
+                # freely) and un-freeze painting so the final layout is drawn once.
+                self.setMaximumWidth(16777215)  # QWIDGETSIZE_MAX
+                self._ensure_updates_enabled()
         except Exception as e:
-            try:
-                self.setMaximumWidth(16777215)
-            except Exception:
-                pass
+            if final:
+                try:
+                    self.setMaximumWidth(16777215)
+                except Exception:
+                    pass
+                self._ensure_updates_enabled()
             try:
                 dlog("window.clamp.error", err=str(e))
             except Exception:
