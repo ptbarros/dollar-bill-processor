@@ -493,7 +493,7 @@ class MainWindow(QMainWindow):
                 self._last_align_warning_time = current_time
                 QMessageBox.warning(self, "No Alignment Data",
                     "No alignment data available.\n\n"
-                    "For archived batches processed before this update, "
+                    "For straps processed before this update, "
                     "rotation values weren't saved. Reprocess the folder to enable alignment.")
             return
 
@@ -3272,9 +3272,9 @@ class MainWindow(QMainWindow):
     def _on_batch_changed(self, batch_path: str):
         """Handle batch selection change in results list."""
         if batch_path:
-            # Viewing archived batch - set input directory to allow reprocessing
+            # Viewing a filed strap - set input directory to allow reprocessing
             self.preview_panel.clear()
-            self.status_label.setText(f"Viewing archived batch: {Path(batch_path).name}")
+            self.status_label.setText(f"Viewing strap: {Path(batch_path).name}")
             self.processing_panel.set_input_dir(batch_path)
         else:
             # Back to current session. Selecting an archive had replaced the

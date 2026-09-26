@@ -223,7 +223,7 @@ class SettingsDialog(QDialog):
             "Generate cropped images for every bill, not just fancy ones.\n\n"
             "• Checked: Save crops for ALL bills (uses more disk space)\n"
             "• Unchecked: Only save crops for bills with fancy patterns\n\n"
-            "Useful if you want to archive or manually review all serials."
+            "Useful if you want to keep or manually review all serials."
         )
         output_layout.addRow(crop_all_container)
 
@@ -237,20 +237,22 @@ class SettingsDialog(QDialog):
         output_layout.addRow(auto_crop_container)
 
         self.proc_auto_archive_check, auto_archive_container = self._create_checkbox_with_info(
-            "Archive after processing",
-            "Move processed files to a timestamped archive folder.\n\n"
-            "• Checked: Files moved to archive/batch_YYYYMMDD_HHMMSS/\n"
-            "• Unchecked: Files stay in original location\n\n"
-            "Set the archive folder in the Folders tab (blank = <input>/archive)."
+            "File as strap after processing",
+            "Automatically file each processed run as the next strap — the same as\n"
+            "clicking the File Strap button yourself.\n\n"
+            "• Checked: Every manual run is filed as the next strap folder\n"
+            "• Unchecked: Click File Strap when you're ready to file the run\n\n"
+            "Straps use one numbering sequence shared with Scan mode; set where\n"
+            "they're filed under Straps Folder on the Folders tab."
         )
         output_layout.addRow(auto_archive_container)
 
         self.archive_copy_mode_check, copy_mode_container = self._create_checkbox_with_info(
-            "Copy instead of move (testing mode)",
-            "Copy files to archive instead of moving them.\n\n"
-            "• Checked: Original files remain in place (for testing)\n"
-            "• Unchecked: Files are moved to archive (normal behavior)\n\n"
-            "Useful when testing to avoid manually copying files back."
+            "Keep originals when filing a strap",
+            "Copy the bill images into the strap instead of moving them.\n\n"
+            "• Checked: Your source images stay put; copies go into the strap\n"
+            "• Unchecked: Source images are moved into the strap (like Scan mode)\n\n"
+            "Handy when your input folder is a library you don't want emptied."
         )
         output_layout.addRow(copy_mode_container)
 
@@ -379,7 +381,7 @@ class SettingsDialog(QDialog):
 
         layout.addStretch()
     def _setup_folders_tab(self, tab: QWidget):
-        """Setup the Folders tab (archive + review locations)."""
+        """Setup the Folders tab (straps + review locations)."""
         layout = QVBoxLayout(tab)
 
         dirs_group = QGroupBox("Folders")
@@ -917,9 +919,9 @@ class SettingsDialog(QDialog):
             self.data_folder_hint.setStyleSheet("color: gray; font-size: 11px;")
 
     def _browse_archive_dir(self):
-        """Browse for archive directory."""
+        """Browse for the Straps folder."""
         folder = QFileDialog.getExistingDirectory(
-            self, "Select Archive Directory",
+            self, "Select Straps Folder",
             self.archive_dir_edit.text() or str(Path.home())
         )
         if folder:

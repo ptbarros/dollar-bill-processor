@@ -25,7 +25,7 @@ class BackupDialog(QDialog):
 
         intro = QLabel(
             "Choose what to save into one portable backup file. Your scan images "
-            "and archived originals are not included — keep those with your "
+            "and filed strap folders are not included — keep those with your "
             "normal file backups."
         )
         intro.setWordWrap(True)

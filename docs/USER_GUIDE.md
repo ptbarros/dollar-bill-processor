@@ -11,17 +11,18 @@ reading results, and managing patterns.
 
 1. [Preparing a folder: Organize vs. Verify](#preparing-a-folder-organize-vs-verify)
 2. [Folder formats the app recognizes](#folder-formats-the-app-recognizes)
-3. [Processing a batch](#processing-a-batch) _(to be expanded)_
-4. [Scanning straps directly (Start Scanning)](#scanning-straps-directly-start-scanning)
-5. [Reading the results & overlays](#reading-the-results--overlays) _(to be expanded)_
-6. [How odds & rarity work](#how-odds--rarity-work)
-7. [Pattern Manager](#pattern-manager) _(to be expanded)_
-8. [Serial Lookup & Strap Check](#serial-lookup--strap-check) _(to be expanded)_
-9. [Physical-print detections](#physical-print-detections-gas-pump-seal-shift-plates) _(to be expanded)_
-10. [Cropping for listings](#cropping-for-listings) _(to be expanded)_
-11. [Labels](#labels) _(to be expanded)_
-12. [Insights report](#insights-report) _(to be expanded)_
-13. [Backup & Restore](#backup--restore) _(to be expanded)_
+3. [The two modes: Manual vs. Scan](#the-two-modes-manual-vs-scan)
+4. [Processing a folder (Manual mode)](#processing-a-folder-manual-mode) _(to be expanded)_
+5. [Scanning straps live (Scan mode)](#scanning-straps-live-scan-mode)
+6. [Reading the results & overlays](#reading-the-results--overlays) _(to be expanded)_
+7. [How odds & rarity work](#how-odds--rarity-work)
+8. [Pattern Manager](#pattern-manager) _(to be expanded)_
+9. [Serial Lookup & Strap Check](#serial-lookup--strap-check) _(to be expanded)_
+10. [Physical-print detections](#physical-print-detections-gas-pump-seal-shift-plates) _(to be expanded)_
+11. [Cropping for listings](#cropping-for-listings) _(to be expanded)_
+12. [Labels](#labels) _(to be expanded)_
+13. [Insights report](#insights-report) _(to be expanded)_
+14. [Backup & Restore](#backup--restore) _(to be expanded)_
 
 ---
 
@@ -120,19 +121,88 @@ This detection is why an Organized folder processes faster than a raw one.
 
 ---
 
-## Processing a batch
+## The two modes: Manual vs. Scan
+
+The toggle at the **top-left of the toolbar** switches the app between its two
+ways of working. Clicking **Manual** or **Scan** reconfigures the toolbar for
+that workflow — the rest of the app (results list, preview, overlays, patterns)
+is identical in both.
+
+Both modes end the same way: they produce a **strap** — a numbered folder that
+holds a run of bills, their fancy crops, and a `results.csv`. The only
+difference is where the bills *come from*.
+
+### Manual mode — "I already have the images"
+
+Use this when the scans already exist in a folder (you scanned earlier, someone
+sent you a folder, etc.).
+
+1. Set **Input** to the folder of scans (and **Output**, where fancy crops go —
+   it auto-fills to a `fancy_bills` subfolder).
+2. Click **Process**. Each bill's serial is read, classified against the enabled
+   patterns, and flagged fancy or sent to review. The results fill in as it runs.
+3. Review the results.
+4. When you're happy with the run, click **File Strap** to file it as the next
+   strap in your sequence (see below). This is optional — if you just wanted to
+   check a folder, you don't have to file it.
+
+### Scan mode — "scan straps as I go"
+
+Use this to let the app **watch your scanner's output folder** and file each
+strap for you, without pointing it at a folder by hand.
+
+1. Click **Start Scanning**. The toolbar shows a **Watching:** indicator with the
+   folder it's watching and the next strap number.
+2. Feed the strap on your scanner (in as many passes as you like — a pause never
+   ends the strap).
+3. Click **Stop & File Batch**. Everything that arrived is filed as the next
+   strap and processed.
+
+See [Scanning straps live (Scan mode)](#scanning-straps-live-scan-mode) for the
+optional live-processing option.
+
+### Straps are one shared, numbered sequence
+
+However a strap is created — **File Strap** in Manual mode or **Stop & File
+Batch** in Scan mode — it goes into the **same Straps folder** and takes the
+**next number** in one shared sequence (`001`, `002`, `003`, …). So a manually
+filed strap and a scanned strap are indistinguishable afterward: both appear in
+the **batch dropdown** above the results list, and selecting one reopens it.
+
+A filed strap is **self-contained** — the bill images, a `fancy_bills` subfolder
+of crops, and a `results.csv` all live inside that strap's folder. That's what
+lets the batch dropdown list and reopen it later.
+
+> **Where things live:** set the **Straps Folder** (and the scanner's output
+> folder it watches) on **Settings → Folders**. By default, filing a strap
+> **moves** the bills into it; turn on **"Keep originals when filing a strap"**
+> (Settings → Processing) if your input folder is a library you don't want
+> emptied.
+
+| | **Manual mode** | **Scan mode** |
+|---|---|---|
+| Bills come from | A folder you already have | Your scanner's output folder, watched live |
+| You click | **Process**, then optionally **File Strap** | **Start Scanning** → **Stop & File Batch** |
+| Filing is | Optional (only if you want to keep the run as a strap) | The normal end of a scan |
+| Result | The next strap in the sequence | The next strap in the sequence |
+| Best for | Re-checking existing scans, folders sent to you | Working straps live at the scanner |
+
+---
+
+## Processing a folder (Manual mode)
 _(to be expanded)_ — Point the app at a folder, start processing, and watch the
 results fill in. Each bill's serial is read, classified against the enabled
-patterns, and flagged fancy or sent to review.
+patterns, and flagged fancy or sent to review. When you're done, **File Strap**
+files the run as the next strap (see [The two modes](#the-two-modes-manual-vs-scan)).
 
-## Scanning straps directly (Start Scanning)
+## Scanning straps live (Scan mode)
 
 Instead of scanning to a folder and then pointing the app at it, you can let the
-app **watch your scanner's output folder** and file each strap for you. Click
-**Start Scanning**, feed the strap (in as many passes as you like), then click
-**Stop & File Batch** — everything that arrived is moved into a new batch under
-your **Straps** folder and processed. Past straps stay in the batch dropdown so
-you can reopen them.
+app **watch your scanner's output folder** and file each strap for you. Switch to
+**Scan** mode, click **Start Scanning**, feed the strap (in as many passes as you
+like), then click **Stop & File Batch** — everything that arrived is moved into a
+new strap under your **Straps** folder and processed. Past straps stay in the
+batch dropdown so you can reopen them.
 
 ### Live processing (experimental) — depends on how your scanner saves files
 

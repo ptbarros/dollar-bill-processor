@@ -252,7 +252,7 @@ class ResultsList(QWidget):
 
         # Save CSV button (for saving changes to archived batches)
         self.save_csv_btn = QPushButton("Save CSV")
-        self.save_csv_btn.setToolTip("Save current results back to the archive's CSV file")
+        self.save_csv_btn.setToolTip("Save current results back to the strap's CSV file")
         self.save_csv_btn.clicked.connect(self._save_csv)
         self.save_csv_btn.setEnabled(False)  # Disabled until an archived batch is selected
         filter_layout.addWidget(self.save_csv_btn)
