@@ -1942,25 +1942,13 @@ class PreviewPanel(QWidget):
 
             aligned_back = None
             if self._current_back_file and Path(self._current_back_file).exists():
-                # For back, we need to align it. Try using cached alignment from current result.
-                current_result = self.current_result or {}
-                cached_angle = current_result.get('front_align_angle', 0.0)
-                cached_flipped = current_result.get('front_align_flipped', False)
-
-                back_img = cv2.imread(self._current_back_file)
-                if back_img is not None:
-                    h, w = back_img.shape[:2]
-                    # Apply same rotation as front (same scan)
-                    if abs(cached_angle) >= 0.8:
-                        center = (w // 2, h // 2)
-                        M = cv2.getRotationMatrix2D(center, cached_angle, 1.0)
-                        back_img = cv2.warpAffine(back_img, M, (w, h),
-                                                  flags=cv2.INTER_CUBIC,
-                                                  borderMode=cv2.BORDER_CONSTANT,
-                                                  borderValue=(255, 255, 255))
-                    if cached_flipped:
-                        back_img = cv2.rotate(back_img, cv2.ROTATE_180)
-                    aligned_back = back_img
+                # Align the back INDEPENDENTLY so a vertically-fed back is
+                # de-rotated to landscape and flipped upright via its own
+                # back-plate (mirroring the front's rotation would leave it
+                # sideways). Falls back to the raw image if alignment fails.
+                aligned_back, _ = self._processor.align_for_preview(Path(self._current_back_file))
+                if aligned_back is None:
+                    aligned_back = cv2.imread(self._current_back_file)
 
             # Extract front plate from front image
             if aligned_front is not None:

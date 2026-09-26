@@ -490,6 +490,7 @@ class MainWindow(QMainWindow):
         current_result = self.preview_panel.current_result
         cached_angle = current_result.get('front_align_angle', 0.0) if current_result else 0.0
         cached_flipped = current_result.get('front_align_flipped', False) if current_result else False
+        cached_coarse = current_result.get('front_align_coarse', 0) if current_result else 0
         # Check if alignment data was present in CSV (set during _load_batch)
         # This properly handles archives where angle was 0.0 (no rotation needed)
         has_cached_alignment = current_result.get('_has_alignment_data', False) if current_result else False
@@ -525,7 +526,8 @@ class MainWindow(QMainWindow):
             if front_path:
                 if has_cached_alignment:
                     # Use cached values from archived batch (no YOLO needed)
-                    aligned_img = self._apply_cached_alignment(Path(front_path), cached_angle, cached_flipped)
+                    aligned_img = self._apply_cached_alignment(Path(front_path), cached_angle, cached_flipped,
+                                                               coarse=cached_coarse)
                     front_angle = cached_angle
                     front_flipped = cached_flipped
                     status_msg = f"Aligned (cached): {front_angle:.1f}° rotation"
@@ -543,10 +545,20 @@ class MainWindow(QMainWindow):
                     if front_flipped:
                         status_msg += ", flipped 180°"
 
-            # Align back using OPPOSITE rotation from the front
-            # Physical flip mirrors the skew: if front is +2° CW, back appears -2° CCW
+            # Align the back INDEPENDENTLY. A vertically-fed back needs its own
+            # coarse (90-deg) turn and its own up/down flip (decided from the
+            # back-plate), so mirroring the front's rotation leaves it sideways.
+            # The processor's aligner does coarse recovery + back-plate flip;
+            # fall back to the front-mirror only for archived batches with no
+            # live processor (there the front's coarse is the best guess, right
+            # for duplex scanners that share the feed turn between sides).
             if back_path and Path(back_path).exists():
-                aligned_back = self._apply_cached_alignment(Path(back_path), -front_angle, front_flipped)
+                aligned_back = None
+                if processor:
+                    aligned_back, _binfo = processor.align_for_preview(Path(back_path))
+                if aligned_back is None:
+                    aligned_back = self._apply_cached_alignment(
+                        Path(back_path), -front_angle, front_flipped, coarse=cached_coarse)
                 if aligned_back is not None:
                     back_pixmap = self._cv2_to_pixmap(aligned_back)
 
@@ -571,14 +583,22 @@ class MainWindow(QMainWindow):
         q_img = QImage(rgb_img.data, w, h, bytes_per_line, QImage.Format_RGB888)
         return QPixmap.fromImage(q_img)
 
-    def _apply_cached_alignment(self, image_path: Path, angle: float, flipped: bool) -> Optional[np.ndarray]:
+    def _apply_cached_alignment(self, image_path: Path, angle: float, flipped: bool,
+                                coarse: int = 0) -> Optional[np.ndarray]:
         """Apply alignment using cached rotation values (no YOLO needed).
 
         This enables alignment on archived batches without reprocessing.
+        ``coarse`` is the vertical-feed 90-deg turn, applied first so the fine
+        angle/flip act on the de-rotated image.
         """
         img = cv2.imread(str(image_path))
         if img is None:
             return None
+
+        # Vertical-feed recovery first (same coarse turn as processing).
+        if coarse:
+            from process_production import rotate_coarse
+            img = rotate_coarse(img, coarse)
 
         h, w = img.shape[:2]
 
