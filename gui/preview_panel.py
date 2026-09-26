@@ -1602,6 +1602,23 @@ class PreviewPanel(QWidget):
         self.watch_scan_label.setText(
             f"{fancy} fancy found so far" if fancy else "")
 
+    def set_live_progress(self, scans_in: int, processed: int, fancy: int):
+        """Live-scan overlay: the big number stays the bills collected so far, with
+        a prominent 'X processed · Y fancy' line so the user can SEE that live
+        processing has kicked in (rather than only the status bar showing it)."""
+        bills = scans_in // 2
+        self._watch_head.setText("Scanning (live)")
+        self.watch_count_label.setText(str(bills))
+        self.watch_sub_label.setText("bill scanned" if bills == 1 else "bills scanned")
+        line = f"{processed} processed"
+        if fancy:
+            line += f"   ·   {fancy} fancy"
+        self.watch_scan_label.setText(line)
+        # Stand out (bold + fancy-green) so it reads as active work, not the gray
+        # "N scans" collecting line.
+        self.watch_scan_label.setStyleSheet(
+            "font-size: 18px; font-weight: bold; color: #4caf50;")
+
     def _on_view_mode_clicked(self, mode: str):
         """Handle view mode button click."""
         # Update button states

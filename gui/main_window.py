@@ -1722,28 +1722,37 @@ class MainWindow(QMainWindow):
         )
 
     def _on_user_guide(self):
-        """Open the user guide in the browser. Prefer the online (GitHub-rendered)
-        copy so it's always current and reads nicely; if a bundled copy exists,
-        offer it as an offline fallback when the browser can't be launched."""
+        """Render the bundled Markdown user guide to a local HTML page and open it
+        in the browser (like the Insights report) -- no internet, no GitHub. Falls
+        back to the online copy only if the bundled guide is somehow missing."""
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
         try:
-            from updater import REPO
+            from resource_path import app_base, user_data_dir
+            md_path = app_base() / "docs" / "USER_GUIDE.md"
         except Exception:
-            REPO = "ptbarros/dollar-bill-processor"
-        url = f"https://github.com/{REPO}/blob/main/docs/USER_GUIDE.md"
-        if QDesktopServices.openUrl(QUrl(url)):
+            md_path = None
+        if not (md_path and md_path.exists()):
+            # Bundled guide missing: last-resort online copy so Help still works.
+            try:
+                from updater import REPO
+            except Exception:
+                REPO = "ptbarros/dollar-bill-processor"
+            QDesktopServices.openUrl(
+                QUrl(f"https://github.com/{REPO}/blob/main/docs/USER_GUIDE.md"))
             return
-        # Browser wouldn't launch: try a bundled local copy, else show the link.
         try:
-            from resource_path import app_base
-            local = app_base() / "docs" / "USER_GUIDE.md"
-        except Exception:
-            local = None
-        if local and local.exists() and QDesktopServices.openUrl(QUrl.fromLocalFile(str(local))):
+            from .guide_render import render_guide_html
+            html = render_guide_html(md_path.read_text(encoding="utf-8"))
+            out = user_data_dir() / "user_guide.html"
+            out.write_text(html, encoding="utf-8")
+        except Exception as e:
+            QMessageBox.warning(self, "User Guide",
+                                f"Couldn't build the user guide:\n{e}")
             return
-        QMessageBox.information(self, "User Guide",
-                                f"Open the user guide here:\n{url}")
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(out))):
+            QMessageBox.information(self, "User Guide",
+                                    f"The user guide is at:\n{out}")
 
     def _on_setup_wizard(self):
         """Run the Scan-mode setup wizard (Help menu, and offered on first Scan use)."""
@@ -2756,16 +2765,20 @@ class MainWindow(QMainWindow):
         except Exception:
             return
         n = len(self._monitor_new_files)
-        try:
-            self.preview_panel.set_watch_count(n)
-        except Exception:
-            pass
         if getattr(self, "_live_mode", False):
             self._live_pending.append(p)
+            try:
+                self.preview_panel.set_live_progress(n, self._live_total, self._live_fancy)
+            except Exception:
+                pass
             self.status_label.setText(
                 f"Scanning (live) — {n} in, {self._live_total} processed")
             self._live_try_chunk()
         else:
+            try:
+                self.preview_panel.set_watch_count(n)
+            except Exception:
+                pass
             self.status_label.setText(
                 f"Scanning — {n} scan{'s' if n != 1 else ''} collected "
                 f"(click Stop to file the batch)")
@@ -2914,6 +2927,12 @@ class MainWindow(QMainWindow):
             self._live_review += 1
         self._live_total += 1
         self._append_result(result)
+        # Advance the live overlay's processed/fancy tally as each bill completes.
+        try:
+            self.preview_panel.set_live_progress(
+                len(self._monitor_new_files), self._live_total, self._live_fancy)
+        except Exception:
+            pass
 
     @Slot(dict)
     def _on_live_chunk_complete(self, summary: dict):

@@ -179,12 +179,18 @@ class ProcessingPanel(QWidget):
         self.watch_btn = QPushButton("Start Scanning")
         self.watch_btn.setCheckable(True)
         # Size to the WIDEST label ("Stop && File Batch", shown while scanning and
-        # drawn bold) so neither state clips. '&&' renders as a single '&'; add a
-        # cushion for the bold weight + button padding.
+        # drawn BOLD) so neither state clips. '&&' renders as a single '&'. The
+        # checked state is bold and wider, so measure THAT with a bold font (the
+        # non-bold metrics underestimated it and clipped the text); add a cushion
+        # for button padding.
+        from PySide6.QtGui import QFont, QFontMetrics
         _fm = self.watch_btn.fontMetrics()
+        _bold = QFont(self.watch_btn.font())
+        _bold.setBold(True)
+        _fmb = QFontMetrics(_bold)
         _watch_w = max(_fm.horizontalAdvance("Start Scanning"),
-                       _fm.horizontalAdvance("Stop & File Batch"))
-        self.watch_btn.setMinimumWidth(_watch_w + 56)
+                       _fmb.horizontalAdvance("Stop & File Batch"))
+        self.watch_btn.setMinimumWidth(_watch_w + 48)
         self.watch_btn.setToolTip(
             "Start collecting scans as they come off the scanner (feed your whole "
             "strap in as many passes as you like). Click Stop when the strap is "
