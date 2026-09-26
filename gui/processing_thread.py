@@ -12,7 +12,7 @@ from PySide6.QtCore import QThread, Signal
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from process_production import get_timing
+from process_production import get_timing, rotate_coarse
 from debug_logger import dlog_raw
 
 
@@ -209,6 +209,7 @@ class ProcessingThread(QThread):
                 # Cache alignment info for reuse in generate_crops()
                 pair.front_align_angle = align_info.get('angle', 0.0)
                 pair.front_align_flipped = align_info.get('flipped', False)
+                pair.front_align_coarse = align_info.get('coarse_rotation', 0)
                 pair.serial_mismatch = align_info.get('serial_mismatch', False)
 
                 # Cache detection data for later use (plate extraction) if not already cached
@@ -219,6 +220,11 @@ class ProcessingThread(QThread):
                 aligned_front = align_info.get('aligned_image')
                 if aligned_front is None:
                     aligned_front = cv2.imread(str(pair.front_path))
+                    # De-rotate a vertically-fed scan before seal-shift, else the
+                    # seal geometry is measured on a sideways image.
+                    coarse = align_info.get('coarse_rotation', 0)
+                    if aligned_front is not None and coarse:
+                        aligned_front = rotate_coarse(aligned_front, coarse)
                 shift_x, shift_y, containment = self.processor._calculate_seal_shift(aligned_front)
                 pair.seal_shift_x = shift_x
                 pair.seal_shift_y = shift_y

@@ -59,6 +59,26 @@ def _safe_serial_for_filename(serial: str) -> str:
     return s
 
 
+def rotate_coarse(img: np.ndarray, degrees: int) -> np.ndarray:
+    """Rotate an image by a coarse 90-degree multiple (clockwise) for
+    vertical-feed recovery.
+
+    ``degrees`` is how far the image must turn CLOCKWISE to reach the upright
+    landscape orientation, as decided during classification. Only 0/90/180/270
+    are meaningful; anything else is returned unchanged. Keeping this in one
+    place guarantees the classify stage, alignment, and Organize all apply the
+    exact same rotation, so cached detection boxes stay in register with the
+    pixels.
+    """
+    if degrees == 90:
+        return cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+    if degrees == 180:
+        return cv2.rotate(img, cv2.ROTATE_180)
+    if degrees == 270:
+        return cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    return img
+
+
 # =============================================================================
 # TIMING INSTRUMENTATION
 # =============================================================================
@@ -308,6 +328,7 @@ class BillPair:
     # Cached alignment info to avoid redundant YOLO calls in generate_crops()
     front_align_angle: float = 0.0  # Rotation angle from YOLO alignment
     front_align_flipped: bool = False  # Whether front was flipped 180°
+    front_align_coarse: int = 0  # Coarse 90-deg turn (vertical-feed recovery)
     swapped: bool = False  # True if front/back were swapped during lazy detection
     # Optional plate info (extracted when setting enabled)
     series_year: str = ''
@@ -606,6 +627,56 @@ class YOLOBillAligner:
             return 'upside_down'
         return None
 
+    def _probe_score(self, img: np.ndarray) -> float:
+        """Score one orientation of a bill image for the fresh-path (no cache)
+        vertical-feed probe. Mirrors ProductionProcessor._orientation_score but
+        works from this aligner's own lightweight YOLO pass."""
+        get_timing().add_yolo_call()
+        results = self.yolo_model(img, verbose=False, conf=0.1)
+        bill_conf = 0.0
+        serials = 0
+        is_front = False
+        serial_cls = self.YOLO_CLASSES.get('serial_number', 8)
+        for result in results:
+            for box in result.boxes:
+                cls_id = int(box.cls[0])
+                conf = float(box.conf[0])
+                if cls_id == self.YOLO_CLASSES['bill_front']:
+                    bill_conf = max(bill_conf, conf)
+                    is_front = True
+                elif cls_id == self.YOLO_CLASSES['bill_back']:
+                    bill_conf = max(bill_conf, conf)
+                elif cls_id == serial_cls:
+                    serials += 1
+        score = bill_conf
+        # Portrait candidates are not valid bill orientations (see
+        # ProductionProcessor._orientation_score) -- essential for backs.
+        h, w = img.shape[:2]
+        if h > w:
+            score -= 0.8
+        if is_front or serials:
+            if serials in (1, 2):
+                score += 0.5
+            elif serials > 2:
+                score -= 0.15 * (serials - 2)
+        return score
+
+    def _coarse_probe(self, img: np.ndarray) -> int:
+        """Fresh-path vertical-feed check (used when there are no cached
+        detections, e.g. GUI preview of a raw scan). Returns the clockwise
+        rotation (0/90/180/270) that best presents the image as an upright
+        landscape bill. Only engages for portrait input, so the normal
+        landscape path pays nothing."""
+        h, w = img.shape[:2]
+        if h <= w * 1.15:
+            return 0
+        best_rot, best_score = 0, self._probe_score(img)
+        for rot in (90, 180, 270):
+            score = self._probe_score(rotate_coarse(img, rot))
+            if score > best_score:
+                best_rot, best_score = rot, score
+        return best_rot
+
     def align_image(self, image_path: Path, check_flip: bool = True,
                     cached_detections: Optional[dict] = None) -> tuple[Optional[np.ndarray], dict]:
         """
@@ -627,6 +698,20 @@ class YOLOBillAligner:
 
         h, w = img.shape[:2]
         info = {'angle': 0.0, 'flipped': False, 'bill_detected': False}
+
+        # Vertical-feed recovery. When the classify stage found this image was
+        # scanned in portrait, its cached boxes are already in the de-rotated
+        # (landscape) frame, so rotate the pixels to match BEFORE deskew/flip.
+        # With no cache (fresh/preview alignment), probe for it here. Doing this
+        # first is essential: the +/-45 deg deskew mangles a 90-deg image.
+        if cached_detections:
+            coarse = int(cached_detections.get('coarse_rotation', 0) or 0)
+        else:
+            coarse = self._coarse_probe(img)
+        if coarse:
+            img = rotate_coarse(img, coarse)
+            h, w = img.shape[:2]
+        info['coarse_rotation'] = coarse
 
         # Use cached detections if available, otherwise run YOLO
         if cached_detections:
@@ -668,13 +753,17 @@ class YOLOBillAligner:
                         if seal_f_box is None or conf > seal_f_box[4]:
                             seal_f_box = (x1, y1, x2, y2, conf)
 
-            # Store detection data in info for potential caching by caller
+            # Store detection data in info for potential caching by caller.
+            # img_shape and boxes are in the (already de-rotated) working frame,
+            # and coarse_rotation records the turn applied so a re-align from
+            # this cache reproduces it.
             info['_detections'] = {
                 'bill_box': bill_box,
                 'seal_t_box': seal_t_box,
                 'seal_f_box': seal_f_box,
                 'is_back': info.get('is_back', False),
                 'img_shape': (h, w),
+                'coarse_rotation': coarse,
             }
 
         # Calculate rotation angle using bill region (or full image if no bill detected)
@@ -749,7 +838,8 @@ class YOLOBillAligner:
 
         return img, info
 
-    def apply_cached_alignment(self, image_path: Path, angle: float, flipped: bool) -> Optional[np.ndarray]:
+    def apply_cached_alignment(self, image_path: Path, angle: float, flipped: bool,
+                               coarse: int = 0) -> Optional[np.ndarray]:
         """
         Apply previously computed alignment without running YOLO.
 
@@ -760,6 +850,9 @@ class YOLOBillAligner:
             image_path: Path to the image file
             angle: Rotation angle from previous alignment
             flipped: Whether to flip 180 degrees
+            coarse: Coarse 90-deg turn from vertical-feed recovery, applied
+                first so the fine angle/flip act on the de-rotated image (must
+                match the turn used when the serial was extracted)
 
         Returns:
             Aligned image, or None if loading failed
@@ -767,6 +860,10 @@ class YOLOBillAligner:
         img = cv2.imread(str(image_path))
         if img is None:
             return None
+
+        # Vertical-feed recovery first (same coarse turn as extract_serial).
+        if coarse:
+            img = rotate_coarse(img, coarse)
 
         h, w = img.shape[:2]
 
@@ -1040,6 +1137,15 @@ class ProductionProcessor:
         self.cfg = cfg or Config()  # Use provided config or create default
         self.use_gpu = use_gpu
 
+        # Vertical-feed recovery: de-rotate portrait-scanned bills to landscape
+        # before detection/deskew. On by default; set recover_vertical_feed:
+        # false in config.yaml to disable if it ever misbehaves.
+        try:
+            self._recover_vertical_feed = bool(
+                self.cfg.data.get('recover_vertical_feed', True))
+        except Exception:
+            self._recover_vertical_feed = True
+
         print(f"Loading YOLOv8 model: {onnx_model_path or yolo_model_path}")
         self.yolo_model, self.use_onnx = load_detector(
             yolo_model_path, use_gpu=use_gpu, onnx_path=onnx_model_path)
@@ -1301,14 +1407,104 @@ class ProductionProcessor:
         This caches all useful detection data for downstream use in alignment,
         reducing duplicate YOLO calls.
 
+        When vertical-feed recovery is enabled (the default), an image that was
+        scanned in portrait -- or that simply detects poorly at its stored
+        orientation -- is re-evaluated at 90/180/270 degrees and the best
+        landscape orientation is chosen. The returned ``coarse_rotation`` (0, 90,
+        180 or 270) is the clockwise turn that downstream stages must apply to
+        the on-disk pixels; when it is non-zero, every box in the returned dict
+        is already expressed in that de-rotated frame. Fronts and backs fed
+        vertically need OPPOSITE turns, so this is decided per image, never
+        folder-wide.
+
         Returns:
             dict with keys: is_front, front_conf, back_conf, bill_box, seal_t_box,
-            seal_f_box, serial_boxes, orientation, img_shape
+            seal_f_box, serial_boxes, orientation, is_back, img_shape,
+            coarse_rotation
         """
         img = cv2.imread(str(image_path))
         if img is None:
-            return {'is_front': False, 'error': 'Failed to load image'}
+            return {'is_front': False, 'error': 'Failed to load image',
+                    'coarse_rotation': 0}
 
+        data = self._classify_array(img)
+        data['coarse_rotation'] = 0
+
+        if self._recover_vertical_feed and self._needs_orientation_recovery(img, data):
+            best_rot, best_data = 0, data
+            best_score = self._orientation_score(data)
+            for rot_deg in (90, 180, 270):
+                cand = self._classify_array(rotate_coarse(img, rot_deg))
+                score = self._orientation_score(cand)
+                if score > best_score:
+                    best_rot, best_data, best_score = rot_deg, cand, score
+            best_data['coarse_rotation'] = best_rot
+            data = best_data
+
+        return data
+
+    def _needs_orientation_recovery(self, img: np.ndarray, data: dict) -> bool:
+        """Decide whether to probe other 90-degree orientations for this image.
+
+        Fires when the scan is portrait (a note is ~2.6:1 landscape, so fed
+        vertically it is ~2.6:1 portrait -- the strong, cheap signal for the
+        vertical-feed bug), or when a landscape scan detects weakly/ambiguously
+        (a partial or garbled sideways read that happened to land near square).
+        A normal upside-down landscape bill detects fine here, so it keeps the
+        fast single-pass path and is corrected later by the existing 180 flip.
+        """
+        h, w = img.shape[:2]
+        if h > w * 1.15:
+            return True
+        if data.get('bill_box') is None:
+            return True
+        if max(data.get('front_conf', 0.0), data.get('back_conf', 0.0)) < 0.55:
+            return True
+        if data.get('is_front') and len(data.get('serial_boxes', [])) > 2:
+            return True
+        return False
+
+    @staticmethod
+    def _orientation_score(data: dict) -> float:
+        """Rank a candidate orientation: higher = more like an upright landscape
+        bill. The correct orientation maximizes bill/front confidence AND yields
+        a plausible serial count (1-2 regions on a front); a sideways read gives
+        ~half the confidence and a garbage serial count (empirically 6/0/1/9).
+
+        This only needs to pick the right 90-degree class; a residual 180 flip
+        (90 vs 270 both land in landscape, one upside-down) is left to the
+        existing seal-/back-plate-based flip logic downstream.
+        """
+        if data.get('bill_box') is None:
+            return -1.0
+        score = max(data.get('front_conf', 0.0), data.get('back_conf', 0.0))
+
+        # Aspect penalty: a real bill is landscape (~2.6:1). Any candidate whose
+        # frame is still portrait is not a valid bill orientation. This matters
+        # most for BACKS, whose bill_back confidence is nearly rotation-invariant
+        # (a portrait back can score as high as the landscape one), so without
+        # this term the scorer would leave a vertically-fed back sideways. It
+        # forces a landscape pick; the residual 90-vs-270 (a 180 flip) is then
+        # resolved by the back-plate flip logic downstream.
+        h, w = data.get('img_shape', (0, 0))
+        if h and w and h > w:
+            score -= 0.8
+
+        n = len(data.get('serial_boxes', []))
+        if data.get('is_front'):
+            if n in (1, 2):
+                score += 0.5
+            elif n == 0:
+                score -= 0.3
+            else:
+                score -= 0.15 * (n - 2)
+        return score
+
+    def _classify_array(self, img: np.ndarray) -> dict:
+        """Run one YOLO pass on an in-memory BGR image and parse it into the
+        classification/detection dict. Factored out of classify_and_cache_image
+        so vertical-feed recovery can score the same parse at several
+        orientations without re-reading the file."""
         h, w = img.shape[:2]
         get_timing().add_yolo_call()
         results = self.yolo_model(img, verbose=False, conf=0.1)  # Lower threshold like organize_bills.py
@@ -1611,6 +1807,14 @@ class ProductionProcessor:
             front_img = cv2.imread(str(front_path))
 
             if front_img is not None:
+                # Vertical-feed recovery first: de-rotate a portrait scan to
+                # landscape so the cached serial boxes register and deskew isn't
+                # fed a 90-deg image. Fronts/backs are handled independently.
+                front_coarse = int(front_cache.get('coarse_rotation', 0) or 0)
+                if front_coarse:
+                    front_img = rotate_coarse(front_img, front_coarse)
+                    images_corrected += 1
+
                 orientation = front_cache.get('orientation', 'normal')
 
                 # Calculate skew from serial boxes
@@ -1641,6 +1845,14 @@ class ProductionProcessor:
                 back_img = cv2.imread(str(back_path))
 
                 if back_img is not None:
+                    # Independent vertical-feed recovery for the back. Flipping a
+                    # note to scan side 2 inverts the needed turn, so the back's
+                    # coarse rotation is its own, not the front's.
+                    back_coarse = int(back_cache.get('coarse_rotation', 0) or 0)
+                    if back_coarse:
+                        back_img = rotate_coarse(back_img, back_coarse)
+                        images_corrected += 1
+
                     # The back has its OWN orientation (detected from the back-plate
                     # number) -- do not inherit the front's, because feed/duplex
                     # scanners often emit the back rotated 180 deg vs the front.
@@ -3425,7 +3637,8 @@ class ProductionProcessor:
                                              flags=cv2.INTER_CUBIC,
                                              borderMode=cv2.BORDER_CONSTANT,
                                              borderValue=(255, 255, 255))
-            align_info = {'angle': angle, 'flipped': False, 'pre_aligned': True}
+            align_info = {'angle': angle, 'flipped': False, 'pre_aligned': True,
+                          'coarse_rotation': 0}
         else:
             aligned_img, align_info = self.yolo_aligner.align_image(
                 image_path, cached_detections=cached_detections)
@@ -3434,8 +3647,8 @@ class ProductionProcessor:
             aligned_img = self.aligner.align_image(image_path)
             if aligned_img is None:
                 timing.stop('align')
-                return None, 0, False, 0.0, False, {'angle': 0.0, 'flipped': False}
-            align_info = {'angle': 0.0, 'flipped': False}
+                return None, 0, False, 0.0, False, {'angle': 0.0, 'flipped': False, 'coarse_rotation': 0}
+            align_info = {'angle': 0.0, 'flipped': False, 'coarse_rotation': 0}
         timing.stop('align')
 
         # Track if YOLO detected the bill was flipped
@@ -3804,7 +4017,8 @@ class ProductionProcessor:
         if pair.serial is not None:
             # We have cached alignment info - apply it without YOLO
             front_img = self.yolo_aligner.apply_cached_alignment(
-                pair.front_path, pair.front_align_angle, pair.front_align_flipped
+                pair.front_path, pair.front_align_angle, pair.front_align_flipped,
+                coarse=pair.front_align_coarse
             )
             front_flipped = pair.front_align_flipped
         else:
@@ -4191,11 +4405,16 @@ class ProductionProcessor:
             # Cache alignment info for reuse in generate_crops()
             pair.front_align_angle = align_info.get('angle', 0.0)
             pair.front_align_flipped = align_info.get('flipped', False)
+            pair.front_align_coarse = align_info.get('coarse_rotation', 0)
 
             # Calculate overprint shift from aligned front image
             aligned_front = align_info.get('aligned_image')
             if aligned_front is None:
                 aligned_front = cv2.imread(str(pair.front_path))
+                # De-rotate a vertically-fed scan before seal-shift measurement.
+                coarse = align_info.get('coarse_rotation', 0)
+                if aligned_front is not None and coarse:
+                    aligned_front = rotate_coarse(aligned_front, coarse)
             shift_x, shift_y, containment = self._calculate_seal_shift(aligned_front)
             pair.seal_shift_x = shift_x
             pair.seal_shift_y = shift_y

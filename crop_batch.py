@@ -110,6 +110,7 @@ class CropWorker(QThread):
                         pair.is_upside_down = is_ud
                         pair.front_align_angle = align_info.get('angle', 0.0)
                         pair.front_align_flipped = align_info.get('flipped', False)
+                        pair.front_align_coarse = align_info.get('coarse_rotation', 0)
                         processor.generate_crops(pair, self.output_dir)
                     else:
                         pair.serial = None
