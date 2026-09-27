@@ -44,6 +44,12 @@ class MainWindow(QMainWindow):
 
         # Load settings
         self.settings = get_settings()
+        # run_gui() already applied the app stylesheet for this theme/font before
+        # the window was created; record it so _apply_theme_and_font skips a
+        # redundant global re-apply (which re-polishes every widget and can crash
+        # Qt on macOS as the Settings dialog closes).
+        self._applied_theme = self.settings.ui.theme
+        self._applied_font_size = self.settings.ui.font_size
         # Apply any saved overlay-color overrides to the shared palette at startup.
         try:
             import serial_overlay
@@ -3141,19 +3147,34 @@ class MainWindow(QMainWindow):
         )
 
     def _apply_theme_and_font(self):
-        """Apply theme and font size to the application."""
-        from .theme_manager import apply_theme, get_combined_stylesheet
+        """Apply theme and font size to the application.
 
-        app = QApplication.instance()
+        Re-applying a global QApplication stylesheet re-polishes every widget.
+        On macOS (Qt 6.11) doing that synchronously as the Settings dialog closes
+        segfaults inside Cocoa's style application. So: (1) skip entirely when the
+        theme AND font are unchanged -- the common "open Settings, click OK"
+        case, where the stylesheet is already applied; and (2) when they DID
+        change, defer the setStyleSheet to the next event-loop turn so it never
+        runs re-entrantly with the dialog's teardown."""
         theme = self.settings.ui.theme
         font_size = self.settings.ui.font_size
+        if (getattr(self, "_applied_theme", None) == theme
+                and getattr(self, "_applied_font_size", None) == font_size):
+            return
+        self._applied_theme = theme
+        self._applied_font_size = font_size
 
-        # Apply palette (handles most color changes)
+        from .theme_manager import apply_theme, get_combined_stylesheet
+        app = QApplication.instance()
         apply_theme(app, theme)
-
-        # Apply combined stylesheet (font sizes + dark mode polish)
         stylesheet = get_combined_stylesheet(theme, font_size)
-        app.setStyleSheet(stylesheet)
+
+        def _do():
+            try:
+                app.setStyleSheet(stylesheet)
+            except Exception:
+                pass
+        QTimer.singleShot(0, _do)
 
     # =========================================================================
     # Lazy Processor Creation
