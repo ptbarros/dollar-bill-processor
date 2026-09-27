@@ -2079,10 +2079,21 @@ class MainWindow(QMainWindow):
         self.processing_panel.update_progress(current, total)
         self.progress_label.setText(f"{current}/{total}")
         self.status_label.setText(message)
-        # Feed the big "Processing" overlay (manual runs only reach this slot).
+        # Feed the big overlay (manual runs only reach this slot), naming the
+        # current step so the verify count and the processing count -- which both
+        # run 1..N -- don't look like the batch processing itself twice.
         try:
             fancy = sum(1 for r in self.current_results if r.get('is_fancy'))
-            self.preview_panel.set_processing_progress(current, total, fancy)
+            msg = message or ""
+            if msg.startswith("Verifying"):
+                head = "Verifying front/back pairs"
+                sub = "pair verified" if current == 1 else "pairs verified"
+            elif msg.startswith("Processing"):
+                head = "Processing"
+                sub = "bill processed" if current == 1 else "bills processed"
+            else:
+                head, sub = None, None  # setup messages: keep current heading
+            self.preview_panel.set_processing_progress(current, total, fancy, head=head, sub=sub)
         except Exception:
             pass
 

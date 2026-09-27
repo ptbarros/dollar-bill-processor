@@ -1621,10 +1621,21 @@ class PreviewPanel(QWidget):
             "font-size: 22px; font-weight: bold; color: #4caf50;")
         self.view_stack.setCurrentIndex(self._watch_page_index)
 
-    def set_processing_progress(self, current: int, total: int, fancy: int):
-        """Update the processing overlay's big count + fancy tally."""
+    def set_processing_progress(self, current: int, total: int, fancy: int,
+                                head: Optional[str] = None, sub: Optional[str] = None):
+        """Update the processing overlay's big count + fancy tally.
+
+        ``head``/``sub`` name the current step (e.g. verifying vs processing) so
+        the count restarting between phases doesn't look like a second run. When
+        omitted, the existing heading is kept and the default 'bills processed'
+        sub-line is used."""
+        if head is not None:
+            self._watch_head.setText(head)
         self.watch_count_label.setText(f"{current} / {total}" if total else str(current))
-        self.watch_sub_label.setText("bill processed" if current == 1 else "bills processed")
+        if sub is not None:
+            self.watch_sub_label.setText(sub)
+        else:
+            self.watch_sub_label.setText("bill processed" if current == 1 else "bills processed")
         self.watch_scan_label.setText(
             f"{fancy} fancy found so far" if fancy else "")
 
