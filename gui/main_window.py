@@ -3575,9 +3575,30 @@ class MainWindow(QMainWindow):
 
 def run_gui():
     """Launch the GUI application."""
-    from debug_logger import dlog, get_log_path
+    from debug_logger import dlog, dlog_raw, get_log_path, install_crash_diagnostics
     dlog("app.start", log=get_log_path())
     print(f"[DollarBill] Debug log: {get_log_path()}")
+
+    # Arm crash diagnostics before any Qt/CUDA work so a hard crash (e.g. the
+    # experimental live-scan Stop teardown) leaves a native stack instead of
+    # vanishing silently. faulthandler -> crash.log; Qt messages -> debug_log.txt.
+    install_crash_diagnostics()
+    try:
+        from PySide6.QtCore import qInstallMessageHandler, QtMsgType
+        _QT_LEVEL = {
+            QtMsgType.QtDebugMsg: "DEBUG", QtMsgType.QtInfoMsg: "INFO",
+            QtMsgType.QtWarningMsg: "WARNING", QtMsgType.QtCriticalMsg: "CRITICAL",
+            QtMsgType.QtFatalMsg: "FATAL",
+        }
+
+        def _qt_message_handler(mode, context, message):
+            try:
+                dlog_raw(f"[QT {_QT_LEVEL.get(mode, 'MSG')}] {message}")
+            except Exception:
+                pass
+        qInstallMessageHandler(_qt_message_handler)
+    except Exception:
+        pass
 
     app = QApplication(sys.argv)
     app.setApplicationName("Dollar Detective")

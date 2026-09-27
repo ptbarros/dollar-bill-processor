@@ -154,6 +154,40 @@ def dlog_exc(event: str, **context) -> None:
         pass
 
 
+_crash_file = None  # kept open for the whole process so faulthandler can use it
+
+
+def install_crash_diagnostics() -> None:
+    """Arm low-level crash capture so a HARD crash (segfault / abort -- e.g. a
+    QThread destroyed while still running, or a CUDA fault) leaves a native stack
+    behind instead of vanishing silently.
+
+    Two parts work together with the Qt message handler installed in run_gui():
+    faulthandler dumps the C-level stack of every thread to ``crash.log`` in the
+    log dir when a fatal signal fires; the Qt handler mirrors Qt warnings (the
+    "Destroyed while thread is still running" line prints just before the abort)
+    into debug_log.txt, which flushes per line. Idempotent and never raises."""
+    global _crash_file
+    if _crash_file is not None:
+        return
+    try:
+        import faulthandler
+        import os
+        _init_logger()
+        log_dir = _log_path.parent if _log_path else _log_dir()
+        crash_path = log_dir / "crash.log"
+        # Line-buffered append; the handle must stay open for the process life --
+        # faulthandler writes to its file descriptor at crash time.
+        _crash_file = open(str(crash_path), "a", buffering=1, encoding="utf-8")
+        _crash_file.write(f"\n===== faulthandler armed (pid {os.getpid()}) =====\n")
+        _crash_file.flush()
+        faulthandler.enable(file=_crash_file, all_threads=True)
+        dlog("diagnostics.faulthandler_enabled", crash_log=str(crash_path))
+    except Exception:
+        # Diagnostics must never break startup.
+        _crash_file = None
+
+
 def fingerprint(results) -> dict:
     """Summarize the per-bill review state so a silent reset is visible as the
     counts dropping between two consecutive log lines.
