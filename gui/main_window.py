@@ -2724,6 +2724,10 @@ class MainWindow(QMainWindow):
                 pass
             if self._monitor_watcher:
                 self._monitor_watcher.reset_known_files()
+            # This strap consumed a batch number, so the "next strap: N" indicator
+            # is now stale (it showed the number just filed). Refresh it so the top
+            # bar shows the NEXT number without needing an app restart.
+            self._update_watch_info()
 
     # ---- Monitor mode (Option A: watch -> file batch -> normal processing) ----
 
