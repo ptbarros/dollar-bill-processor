@@ -1581,6 +1581,12 @@ class PreviewPanel(QWidget):
         cur = self.view_stack.currentIndex()
         if cur != self._watch_page_index:
             self._pre_watch_index = cur
+        try:
+            from debug_logger import dlog
+            dlog("view.overlay_show", which="watch", captured_pre_watch_index=self._pre_watch_index,
+                 current_view_mode=getattr(self, "_current_view_mode", "?"), cur=cur)
+        except Exception:
+            pass
         self._watch_head.setText("Collecting scans")
         # Reset the sub-line style (the processing overlay recolors it green).
         self.watch_scan_label.setStyleSheet("font-size: 12px; color: gray;")
@@ -1600,6 +1606,19 @@ class PreviewPanel(QWidget):
         idx = getattr(self, "_pre_watch_index", 0)
         if idx == self._watch_page_index:
             idx = 0
+        # DEBUG: the "always shows Front after processing" report. If the restored
+        # index doesn't match the remembered view mode (the button stays on e.g.
+        # Split H while the stack snaps back to Front), mismatch=True pins it here.
+        try:
+            from debug_logger import dlog
+            _m2i = {"front": 0, "back": 1, "stitched": 2, "split_v": 3, "split_h": 4}
+            _expected = _m2i.get(getattr(self, "_current_view_mode", "front"), 0)
+            dlog("view.overlay_hide", restore_index=idx,
+                 current_view_mode=getattr(self, "_current_view_mode", "?"),
+                 pre_watch_index=getattr(self, "_pre_watch_index", 0),
+                 expected_index=_expected, mismatch=(idx != _expected))
+        except Exception:
+            pass
         self.view_stack.setCurrentIndex(idx)
 
     def show_processing_overlay(self):
@@ -1609,6 +1628,12 @@ class PreviewPanel(QWidget):
         cur = self.view_stack.currentIndex()
         if cur != self._watch_page_index:
             self._pre_watch_index = cur
+        try:
+            from debug_logger import dlog
+            dlog("view.overlay_show", which="processing", captured_pre_watch_index=self._pre_watch_index,
+                 current_view_mode=getattr(self, "_current_view_mode", "?"), cur=cur)
+        except Exception:
+            pass
         self._watch_head.setText("Processing")
         self.watch_count_label.setText("0")
         self.watch_sub_label.setText("bills processed")
@@ -1683,6 +1708,11 @@ class PreviewPanel(QWidget):
         }
         index = mode_to_index.get(mode, 0)
         self.view_stack.setCurrentIndex(index)
+        try:
+            from debug_logger import dlog
+            dlog("view.mode_set", mode=mode, index=index)
+        except Exception:
+            pass
 
         # Refresh views when switching modes
         # Use aligned images if we're currently showing aligned view

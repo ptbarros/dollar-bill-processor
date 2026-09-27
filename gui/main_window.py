@@ -187,6 +187,7 @@ class MainWindow(QMainWindow):
 
         # Reopen in the user's last-chosen preview view mode (front/back/split/...).
         saved_view = self.settings.ui.view_mode
+        dlog("view.restore_saved", saved_view=saved_view)
         if saved_view and saved_view != "front":
             QTimer.singleShot(0, lambda: self.preview_panel._on_view_mode_clicked(saved_view))
 
