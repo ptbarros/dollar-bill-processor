@@ -678,9 +678,14 @@ class MainWindow(QMainWindow):
                     serial=result.get('serial', ''),
                     confidence=float(result.get('confidence', 0)),
                 )
-                # Set alignment info for crop generation
+                # Set alignment info for crop generation. front_align_coarse is
+                # the vertical-feed 90-deg turn -- without it, crops of a
+                # portrait-fed bill come out sideways. (The back has no cache
+                # here, so generate_crops re-detects it and recovers its own
+                # orientation independently.)
                 pair.front_align_angle = result.get('front_align_angle', 0.0)
                 pair.front_align_flipped = result.get('front_align_flipped', False)
+                pair.front_align_coarse = result.get('front_align_coarse', 0)
                 # Pattern info drives the serial overlay crop(s). pattern_overrides
                 # (right-click "Set Pattern(s)...") picks which overlays to draw --
                 # one crop each; fancy_types is the fallback set of matched patterns.
