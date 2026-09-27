@@ -1602,21 +1602,21 @@ class PreviewPanel(QWidget):
         self.watch_scan_label.setText(f"{n} scan{'s' if n != 1 else ''} (front & back)")
 
     def hide_watch_overlay(self):
-        """Restore the normal preview view after watching/processing stops."""
-        idx = getattr(self, "_pre_watch_index", 0)
-        if idx == self._watch_page_index:
-            idx = 0
-        # DEBUG: the "always shows Front after processing" report. If the restored
-        # index doesn't match the remembered view mode (the button stays on e.g.
-        # Split H while the stack snaps back to Front), mismatch=True pins it here.
+        """Restore the normal preview view after watching/processing stops.
+
+        Restore the view the user actually chose (the mode the buttons show), NOT
+        the stack index captured when the overlay opened. The captured index could
+        be Front (0) if the overlay opened before the saved view mode had been
+        applied to the stack -- which made processing snap back to Front while the
+        Split H button stayed selected (confirmed on the FIL's machine)."""
+        _m2i = {"front": 0, "back": 1, "stitched": 2, "split_v": 3, "split_h": 4}
+        idx = _m2i.get(getattr(self, "_current_view_mode", "front"), 0)
+        stale = getattr(self, "_pre_watch_index", 0)
         try:
             from debug_logger import dlog
-            _m2i = {"front": 0, "back": 1, "stitched": 2, "split_v": 3, "split_h": 4}
-            _expected = _m2i.get(getattr(self, "_current_view_mode", "front"), 0)
             dlog("view.overlay_hide", restore_index=idx,
                  current_view_mode=getattr(self, "_current_view_mode", "?"),
-                 pre_watch_index=getattr(self, "_pre_watch_index", 0),
-                 expected_index=_expected, mismatch=(idx != _expected))
+                 pre_watch_index=stale, corrected=(stale != idx))
         except Exception:
             pass
         self.view_stack.setCurrentIndex(idx)
