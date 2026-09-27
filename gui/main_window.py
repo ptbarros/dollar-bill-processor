@@ -92,6 +92,9 @@ class MainWindow(QMainWindow):
         self._live_part_seq = 0
         self._live_thread = None              # current chunk thread
         self._live_thread_refs = []           # keep chunk threads alive until finalize
+        self._parked_threads = []             # QThreads stopping but not yet finished
+                                              # (kept referenced so GC can't delete a
+                                              # running QThread -> hard crash)
 
         # Setup UI
         self._setup_ui()
@@ -2779,6 +2782,32 @@ class MainWindow(QMainWindow):
             f"Scanning {wd} — feed your strap, then click Stop to file the batch")
         return True
 
+    def _park_thread(self, t):
+        """Keep a stopping QThread referenced until it actually finishes, then let
+        Qt delete it. Without this, a garbage-collected Python wrapper can delete a
+        still-running QThread, which aborts the process ("QThread: Destroyed while
+        thread is still running") -- the confirmed live-scan Stop crash."""
+        if t is None:
+            return
+        try:
+            if t.isFinished():
+                t.deleteLater()
+                return
+            self._parked_threads.append(t)
+
+            def _reap(t=t):
+                try:
+                    self._parked_threads.remove(t)
+                except ValueError:
+                    pass
+                try:
+                    t.deleteLater()
+                except Exception:
+                    pass
+            t.finished.connect(_reap)
+        except Exception:
+            pass
+
     def _stop_monitor(self, restore_preview=True):
         """Stop watching (does not touch any filed batches). By default restores the
         normal preview; pass restore_preview=False when a processing overlay should
@@ -2789,13 +2818,20 @@ class MainWindow(QMainWindow):
                 self.preview_panel.hide_watch_overlay()
             except Exception:
                 pass
-        if self._monitor_watcher:
+        w = self._monitor_watcher
+        self._monitor_watcher = None
+        if w is not None:
             try:
-                self._monitor_watcher.stop()
-                self._monitor_watcher.wait(2000)
+                w.stop()
+                # Short wait so the common case tears down synchronously. If the
+                # watcher can't stop in time -- e.g. its directory scan is blocked
+                # while the scanner floods the folder with a big chunk -- DO NOT
+                # drop the only reference (that deletes a live QThread and aborts).
+                # Park it so it self-deletes when it finishes.
+                if not w.wait(1500):
+                    self._park_thread(w)
             except Exception:
-                pass
-            self._monitor_watcher = None
+                self._park_thread(w)
         self._monitor_active = False
         self._monitor_new_files = set()
 
@@ -3026,7 +3062,13 @@ class MainWindow(QMainWindow):
         self._monitor_run_active = True   # _monitor_last_batch set in _live_begin
         self._live_mode = False
         self._on_processing_complete(summary)
-        self._live_thread_refs = []       # release chunk threads (all finished)
+        # Release chunk threads safely: any that somehow haven't fully finished
+        # get parked (kept referenced) until they do, so GC can't delete a running
+        # QThread and abort the process.
+        for t in self._live_thread_refs:
+            if t is not None and t.isRunning():
+                self._park_thread(t)
+        self._live_thread_refs = []
 
     def _finalize_monitor_batch(self) -> bool:
         """Stop clicked: move all collected scans into a new Straps batch and run
