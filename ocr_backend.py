@@ -17,6 +17,17 @@ whole_image=True to enable RapidOCR's detector.
 RapidOCR has no native allowlist, so it is emulated by filtering recognized text to
 the allowed characters (uppercased). This is the main behavioral difference from
 EasyOCR and the first thing to check if serial letters regress.
+
+Device: with GPU acceleration on, OCR auto-picks the accelerator its build ships
+(OpenVINO edition -> OpenVINO, DirectML edition -> DirectML) and falls back to CPU
+when none is present. DirectML OCR was measured output-identical to CPU at ~2x speed.
+
+Env vars:
+    DBP_OCR=easy            use EasyOCR instead of RapidOCR
+    DBP_OCR_DEVICE=dml      force RapidOCR onto the DirectML GPU EP
+    DBP_OCR_DEVICE=openvino force RapidOCR onto the OpenVINO EP
+    DBP_OCR_DEVICE=cpu      force plain CPU (skip any accelerator)
+    DBP_OPENVINO_DEVICE_OCR override the OpenVINO device for OCR (default CPU)
 """
 
 import os
@@ -49,6 +60,39 @@ def _enable_openvino_for_rapidocr():
         return f"OpenVINO:{_dev}"
     except Exception:
         return None  # OCR must never fail to load over an optional speedup
+
+
+def _enable_dml_for_rapidocr():
+    """Prepend the DirectML EP to RapidOCR's session provider list (idempotent).
+
+    RapidOCR natively understands the DirectML EP, so this mirrors the OpenVINO
+    patch above: monkeypatch its OrtInferSession to add DmlExecutionProvider ahead
+    of CPU. No-op when the DirectML provider isn't present (e.g. the CUDA or
+    OpenVINO builds), so it is safe as an AUTO default on the DirectML edition.
+
+    Measured on an RTX 5060 (strap 912): ~2x faster than CPU OCR (66.9 -> 141.7
+    bills/min) and output byte-for-byte identical (serials/plates/series/fancy).
+    The earlier worry -- tiny recognition-only calls on variable-width crops being
+    dispatch-bound -- did not bear out on real hardware, so this is no longer an
+    experiment. `DBP_OCR_DEVICE=cpu` forces the old CPU path if ever needed."""
+    try:
+        import onnxruntime as ort
+        if "DmlExecutionProvider" not in ort.get_available_providers():
+            return None
+        from rapidocr_onnxruntime.utils import infer_engine as ie
+        cls = ie.OrtInferSession
+        if getattr(cls, "_dbp_dml_patched", False):
+            return "DirectML"
+        _orig = cls._get_ep_list
+
+        def _get_ep_list(self):
+            return [("DmlExecutionProvider", {})] + list(_orig(self))
+
+        cls._get_ep_list = _get_ep_list
+        cls._dbp_dml_patched = True
+        return "DirectML"
+    except Exception:
+        return None  # OCR must never fail to load over an optional/experimental EP
 
 
 def load_ocr_backend(use_gpu=False):
@@ -84,10 +128,28 @@ class RapidOCRBackend:
     name = "rapidocr"
 
     def __init__(self, use_gpu=False):
-        # When GPU acceleration is on and the OpenVINO wheel is installed, route
-        # RapidOCR's ONNX sessions through OpenVINO (~2x faster on Intel CPUs).
-        # RapidOCR has no native OpenVINO option, so we patch its EP list.
-        self.device = _enable_openvino_for_rapidocr() if use_gpu else None
+        # Device selection (only when GPU acceleration is on):
+        #   DBP_OCR_DEVICE=dml      -> force the DirectML EP
+        #   DBP_OCR_DEVICE=openvino -> force the OpenVINO EP
+        #   DBP_OCR_DEVICE=cpu      -> force plain CPU even if an accelerator exists
+        #   unset -> AUTO: OpenVINO if its wheel is installed (~2x on Intel CPUs),
+        #     else DirectML if that EP is present, else CPU. In practice each build
+        #     ships exactly one accelerator: the OpenVINO edition gets OpenVINO, the
+        #     DirectML edition gets DirectML, everything else CPU.
+        # DirectML OCR was measured output-IDENTICAL to CPU on strap 912 (serials,
+        # plates, series, fancy all byte-for-byte) at ~2x the speed (66.9 -> 141.7
+        # bills/min), which is why it is now an AUTO default, not just a probe.
+        # RapidOCR has no native OpenVINO option, so both accelerated paths are
+        # applied by patching its EP list.
+        pref = os.environ.get("DBP_OCR_DEVICE", "").strip().lower()
+        if not use_gpu or pref == "cpu":
+            self.device = None
+        elif pref == "dml":
+            self.device = _enable_dml_for_rapidocr()
+        elif pref == "openvino":
+            self.device = _enable_openvino_for_rapidocr()
+        else:
+            self.device = _enable_openvino_for_rapidocr() or _enable_dml_for_rapidocr()
         self.device = self.device or "CPU"
         from rapidocr_onnxruntime import RapidOCR
         # RapidOCR bundles a lightweight (mobile) recognizer; DBP_RAPIDOCR_REC can
