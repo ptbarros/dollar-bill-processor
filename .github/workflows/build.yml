@@ -264,8 +264,11 @@ jobs:
         shell: bash
         run: |
           set +e
-          # Previous version tag (v*), if any, so notes cover just this release.
-          PREV=$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_REF_NAME}^" 2>/dev/null)
+          # Previous STABLE version tag, so the notes cover everything since the
+          # last real release. --exclude '*-*' skips prerelease tags (v1.7.7-rc2,
+          # etc.) -- otherwise the baseline would be the most recent rc and the
+          # changelog would collapse to just the "Release vX.Y.Z" commit.
+          PREV=$(git describe --tags --abbrev=0 --match 'v*' --exclude '*-*' "${GITHUB_REF_NAME}^" 2>/dev/null)
           {
             echo "## What's new in ${GITHUB_REF_NAME}"
             echo ""
