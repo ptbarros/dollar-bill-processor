@@ -3,9 +3,11 @@ Results List - Tree/table view of processed bills.
 """
 
 import sys
+import os
 import csv
 import re
 import shutil
+import subprocess
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, List
@@ -13,7 +15,7 @@ from typing import Optional, Dict, List
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
     QLabel, QLineEdit, QComboBox, QPushButton, QMenu, QHeaderView,
-    QInputDialog, QDialog, QCheckBox, QDialogButtonBox
+    QInputDialog, QDialog, QCheckBox, QDialogButtonBox, QStyle
 )
 from PySide6.QtCore import Qt, Signal, Slot, QSettings, QEvent, QByteArray
 
@@ -205,11 +207,26 @@ class ResultsList(QWidget):
         self.batch_combo.currentIndexChanged.connect(self._on_batch_changed)
         batch_layout.addWidget(self.batch_combo, 1)
 
+        # One-click "take me to my crops" -- opens the selected batch's fancy-bill
+        # crops folder in the OS file browser. Deliberately NOT a folder picker;
+        # a computer-challenged user just wants to land in the right folder.
+        self.open_crops_btn = QPushButton("Open Crops Folder")
+        self.open_crops_btn.setIcon(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
+        self.open_crops_btn.setToolTip(
+            "Open this batch's fancy bill crops in your file browser")
+        self.open_crops_btn.clicked.connect(self._open_crops_folder)
+        batch_layout.addWidget(self.open_crops_btn)
+
         self.refresh_batches_btn = QPushButton("Refresh")
+        self.refresh_batches_btn.setToolTip(
+            "Rescan for batches and update the Batch list above")
         self.refresh_batches_btn.clicked.connect(self.refresh_batch_list)
         batch_layout.addWidget(self.refresh_batches_btn)
 
         layout.addLayout(batch_layout)
+        # Enable/disable now that the button exists (nothing loaded yet).
+        self._update_open_crops_btn()
 
         # Filter bar
         filter_layout = QHBoxLayout()
@@ -510,6 +527,7 @@ class ResultsList(QWidget):
         self.results = results
         self._rebuild_pattern_filter()
         self._apply_filters()
+        self._update_open_crops_btn()
 
     def clear(self):
         """Clear all results."""
@@ -527,6 +545,7 @@ class ResultsList(QWidget):
             self.batch_combo.blockSignals(False)
         except Exception:
             pass
+        self._update_open_crops_btn()
 
     def select_batch(self, batch_path):
         """Show `batch_path` as the selected batch in the dropdown WITHOUT reloading
@@ -540,6 +559,7 @@ class ResultsList(QWidget):
             self.batch_combo.setCurrentIndex(idx)
             self.batch_combo.blockSignals(False)
             self._current_batch_path = Path(batch_path)
+            self._update_open_crops_btn()
         except Exception:
             pass
 
@@ -1508,6 +1528,56 @@ class ResultsList(QWidget):
     # Batch Management
     # =========================================================================
 
+    def _resolve_crops_dir(self) -> Optional[Path]:
+        """The fancy-bill crops folder for the batch the dropdown currently shows,
+        or None if there isn't one yet.
+
+        Current Session -> the last run's output folder (settings.ui.last_output_dir,
+        which the pipeline sets to the fancy-bills output on every run). A prior
+        batch -> <batch>/<output_subfolder>. Returns None when nothing has been
+        processed yet or the folder does not exist on disk."""
+        subfolder = (self.settings.processing.output_subfolder or "fancy_bills")
+        batch_path = self.batch_combo.currentData()
+        if batch_path:
+            crops = Path(batch_path) / subfolder
+        else:
+            last = getattr(self.settings.ui, "last_output_dir", "") or ""
+            if not last:
+                return None
+            crops = Path(last)
+        try:
+            return crops if crops.is_dir() else None
+        except Exception:
+            return None
+
+    def _update_open_crops_btn(self):
+        """Enable the Open Crops Folder button only when there is a folder to open."""
+        btn = getattr(self, "open_crops_btn", None)
+        if btn is None:
+            return
+        crops = self._resolve_crops_dir()
+        btn.setEnabled(crops is not None)
+        if crops is not None:
+            btn.setToolTip(f"Open this batch's fancy bill crops:\n{crops}")
+        else:
+            btn.setToolTip(
+                "No crops folder for this batch yet -- process some bills first")
+
+    def _open_crops_folder(self):
+        """Reveal the selected batch's crops folder in the OS file browser."""
+        crops = self._resolve_crops_dir()
+        if crops is None:
+            return
+        try:
+            if sys.platform == "win32":
+                os.startfile(str(crops))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(crops)])
+            else:
+                subprocess.Popen(["xdg-open", str(crops)])
+        except Exception:
+            pass
+
     def refresh_batch_list(self):
         """Scan archive directory and populate batch selector."""
         # Remember current selection
@@ -1545,11 +1615,13 @@ class ResultsList(QWidget):
             self.batch_combo.setCurrentIndex(idx)
 
         self.batch_combo.blockSignals(False)
+        self._update_open_crops_btn()
 
     def _on_batch_changed(self, index: int):
         """Handle batch selection change."""
         batch_path = self.batch_combo.currentData()
         dlog("batch_combo.changed", index=index, batch_path=batch_path or "(current session)")
+        self._update_open_crops_btn()
 
         if not batch_path:
             # Current session selected. NOTE: this does NOT restore the live
