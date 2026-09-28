@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
     QGroupBox, QFormLayout, QSpinBox, QDoubleSpinBox, QCheckBox,
     QComboBox, QLineEdit, QPushButton, QDialogButtonBox, QLabel,
-    QFileDialog, QColorDialog, QMessageBox
+    QFileDialog, QColorDialog, QMessageBox, QStyle
 )
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtCore import Qt, QUrl
@@ -419,8 +419,9 @@ class SettingsDialog(QDialog):
         self.archive_dir_edit.setPlaceholderText("Directory for completed straps...")
         archive_layout = QHBoxLayout()
         archive_layout.addWidget(self.archive_dir_edit)
-        archive_btn = QPushButton("...")
-        archive_btn.setMaximumWidth(30)
+        archive_btn = QPushButton()
+        archive_btn.setIcon(archive_btn.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
+        archive_btn.setMaximumWidth(34)
         archive_btn.clicked.connect(self._browse_archive_dir)
         archive_layout.addWidget(archive_btn)
         dirs_layout.addRow("Straps Folder:", archive_layout)
@@ -454,8 +455,9 @@ class SettingsDialog(QDialog):
         self.review_dir_edit.setPlaceholderText("Where 'Save for Review' copies bills...")
         review_layout = QHBoxLayout()
         review_layout.addWidget(self.review_dir_edit)
-        review_btn = QPushButton("...")
-        review_btn.setMaximumWidth(30)
+        review_btn = QPushButton()
+        review_btn.setIcon(review_btn.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
+        review_btn.setMaximumWidth(34)
         review_btn.clicked.connect(self._browse_review_dir)
         review_layout.addWidget(review_btn)
         dirs_layout.addRow("Review Directory:", review_layout)
@@ -488,8 +490,9 @@ class SettingsDialog(QDialog):
         self.working_dir_edit.setPlaceholderText("Starting directory for file browse dialogs...")
         working_layout = QHBoxLayout()
         working_layout.addWidget(self.working_dir_edit)
-        working_btn = QPushButton("...")
-        working_btn.setMaximumWidth(30)
+        working_btn = QPushButton()
+        working_btn.setIcon(working_btn.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
+        working_btn.setMaximumWidth(34)
         working_btn.clicked.connect(self._browse_working_dir)
         working_layout.addWidget(working_btn)
         dirs_layout.addRow("Working Directory:", working_layout)

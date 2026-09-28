@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLineEdit,
     QProgressBar, QLabel, QFileDialog, QFrame, QComboBox, QMessageBox,
-    QCheckBox, QButtonGroup, QSizePolicy
+    QCheckBox, QButtonGroup, QSizePolicy, QStyle
 )
 from PySide6.QtCore import Qt, Signal, Slot, QEvent
 
@@ -111,8 +111,10 @@ class ProcessingPanel(QWidget):
         self.input_edit.setMinimumWidth(130)
         input_layout.addWidget(self.input_edit)
 
-        self.browse_input_btn = QPushButton("...")   # compact, matches Straps/Review browse
-        self.browse_input_btn.setMaximumWidth(30)
+        self.browse_input_btn = QPushButton()   # native folder icon (see _folder_icon)
+        self.browse_input_btn.setIcon(
+            self.browse_input_btn.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
+        self.browse_input_btn.setMaximumWidth(34)
         self.browse_input_btn.setToolTip("Browse for the input folder")
         self.browse_input_btn.clicked.connect(self._browse_input)
         input_layout.addWidget(self.browse_input_btn)
@@ -132,8 +134,10 @@ class ProcessingPanel(QWidget):
         self.output_edit.setMinimumWidth(130)
         output_layout.addWidget(self.output_edit)
 
-        self.browse_output_btn = QPushButton("...")
-        self.browse_output_btn.setMaximumWidth(30)
+        self.browse_output_btn = QPushButton()   # native folder icon
+        self.browse_output_btn.setIcon(
+            self.browse_output_btn.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
+        self.browse_output_btn.setMaximumWidth(34)
         self.browse_output_btn.setToolTip("Browse for the output folder")
         self.browse_output_btn.clicked.connect(self._browse_output)
         output_layout.addWidget(self.browse_output_btn)
