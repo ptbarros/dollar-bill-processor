@@ -268,6 +268,11 @@ class MainWindow(QMainWindow):
 
         settings_action = QAction("&Settings...", self)
         settings_action.setShortcut(QKeySequence("Ctrl+,"))
+        # macOS: pin this as THE Preferences item. Without an explicit role, Qt's
+        # text heuristic also tags "Setup Wizard..." as Preferences (it starts
+        # with "setup"), and the two merge -- the app-menu Preferences then fired
+        # the wizard instead of Settings.
+        settings_action.setMenuRole(QAction.MenuRole.PreferencesRole)
         settings_action.triggered.connect(self._on_settings)
         edit_menu.addAction(settings_action)
 
@@ -390,6 +395,9 @@ class MainWindow(QMainWindow):
 
         setup_wizard_action = QAction("&Setup Wizard...", self)
         setup_wizard_action.setToolTip("Walk through the Scan-mode folder and strap-naming setup")
+        # Keep this in the Help menu on macOS -- its "Setup..." text would
+        # otherwise be auto-detected as the Preferences item and hijack it.
+        setup_wizard_action.setMenuRole(QAction.MenuRole.NoRole)
         setup_wizard_action.triggered.connect(self._on_setup_wizard)
         help_menu.addAction(setup_wizard_action)
 
