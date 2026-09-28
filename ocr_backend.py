@@ -17,6 +17,12 @@ whole_image=True to enable RapidOCR's detector.
 RapidOCR has no native allowlist, so it is emulated by filtering recognized text to
 the allowed characters (uppercased). This is the main behavioral difference from
 EasyOCR and the first thing to check if serial letters regress.
+
+Env vars:
+    DBP_OCR=easy            use EasyOCR instead of RapidOCR
+    DBP_OCR_DEVICE=dml      EXPERIMENTAL: run RapidOCR on the DirectML GPU EP
+    DBP_OCR_DEVICE=cpu      force plain CPU (skip OpenVINO even if installed)
+    DBP_OPENVINO_DEVICE_OCR override the OpenVINO device for OCR (default CPU)
 """
 
 import os
@@ -49,6 +55,40 @@ def _enable_openvino_for_rapidocr():
         return f"OpenVINO:{_dev}"
     except Exception:
         return None  # OCR must never fail to load over an optional speedup
+
+
+def _enable_dml_for_rapidocr():
+    """Prepend the DirectML EP to RapidOCR's session provider list (idempotent).
+
+    EXPERIMENTAL, opt-in via DBP_OCR_DEVICE=dml. RapidOCR natively understands the
+    DirectML EP, so this mirrors the OpenVINO patch above: monkeypatch its
+    OrtInferSession to add DmlExecutionProvider ahead of CPU. No-op when the
+    DirectML provider isn't present (e.g. the CUDA or OpenVINO builds).
+
+    CAVEAT worth measuring, not assuming: the OCR models are tiny and called ~7x
+    per bill on recognition-only, VARIABLE-WIDTH crops. That is the worst case for
+    a GPU EP's per-call dispatch overhead + dynamic-shape handling -- the very
+    reason OCR is pinned to CPU even when YOLO uses the iGPU (see the OpenVINO
+    comment above). DirectML may be a wash or slower here; this flag exists so the
+    real number can be gathered on NVIDIA/AMD hardware instead of guessed at."""
+    try:
+        import onnxruntime as ort
+        if "DmlExecutionProvider" not in ort.get_available_providers():
+            return None
+        from rapidocr_onnxruntime.utils import infer_engine as ie
+        cls = ie.OrtInferSession
+        if getattr(cls, "_dbp_dml_patched", False):
+            return "DirectML"
+        _orig = cls._get_ep_list
+
+        def _get_ep_list(self):
+            return [("DmlExecutionProvider", {})] + list(_orig(self))
+
+        cls._get_ep_list = _get_ep_list
+        cls._dbp_dml_patched = True
+        return "DirectML"
+    except Exception:
+        return None  # OCR must never fail to load over an optional/experimental EP
 
 
 def load_ocr_backend(use_gpu=False):
@@ -84,10 +124,19 @@ class RapidOCRBackend:
     name = "rapidocr"
 
     def __init__(self, use_gpu=False):
-        # When GPU acceleration is on and the OpenVINO wheel is installed, route
-        # RapidOCR's ONNX sessions through OpenVINO (~2x faster on Intel CPUs).
-        # RapidOCR has no native OpenVINO option, so we patch its EP list.
-        self.device = _enable_openvino_for_rapidocr() if use_gpu else None
+        # Device selection (only when GPU acceleration is on):
+        #   DBP_OCR_DEVICE=dml  -> EXPERIMENTAL DirectML EP (measure, don't assume)
+        #   DBP_OCR_DEVICE=cpu  -> force plain CPU even if OpenVINO is present
+        #   unset / anything else -> default: OpenVINO if its wheel is installed
+        #     (~2x faster on Intel CPUs), else CPU. RapidOCR has no native OpenVINO
+        #     option, so both accelerated paths are applied by patching its EP list.
+        pref = os.environ.get("DBP_OCR_DEVICE", "").strip().lower()
+        if not use_gpu or pref == "cpu":
+            self.device = None
+        elif pref == "dml":
+            self.device = _enable_dml_for_rapidocr()
+        else:
+            self.device = _enable_openvino_for_rapidocr()
         self.device = self.device or "CPU"
         from rapidocr_onnxruntime import RapidOCR
         # RapidOCR bundles a lightweight (mobile) recognizer; DBP_RAPIDOCR_REC can
