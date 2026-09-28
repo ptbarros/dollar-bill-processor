@@ -60,7 +60,8 @@ class SerialLookupDialog(QDialog):
         # Start at 10 (a full serial: 2 letters + 8 digits). _on_changed then
         # tightens to 8 the moment the entry is digit-led.
         self.serial_edit.setMaxLength(10)
-        mono = QFont("Consolas, Monaco, monospace")
+        mono = QFont()
+        mono.setFamilies(["Consolas", "Menlo", "Monaco", "DejaVu Sans Mono", "Courier New"])
         mono.setPointSize(14)
         self.serial_edit.setFont(mono)
         self.serial_edit.textChanged.connect(self._on_changed)

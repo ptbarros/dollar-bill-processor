@@ -10,6 +10,14 @@ import sys
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 
+# App version for the macOS bundle's Info.plist (CFBundleShortVersionString /
+# CFBundleVersion). Windows gets its version via Inno Setup's /DMyAppVersion;
+# the .app had no version, so it showed "0.0.0" in the crash report / About.
+try:
+    from version import __version__ as APP_VERSION
+except Exception:
+    APP_VERSION = "0.0.0"
+
 # --- app data files ---
 datas = [
     ('best.onnx', '.'),
@@ -112,4 +120,5 @@ if sys.platform == 'darwin':
         name='Dollar Detective.app',
         icon=None,   # .icns not generated yet; uses the default app icon
         bundle_identifier='com.paulbarros.dollardetective',
+        version=APP_VERSION,   # -> CFBundleShortVersionString / CFBundleVersion
     )
