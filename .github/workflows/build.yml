@@ -218,9 +218,22 @@ jobs:
 
       - name: Package .dmg (unsigned)
         run: |
-          hdiutil create -volname "Dollar Detective" \
-            -srcfolder "dist/Dollar Detective.app" \
-            -ov -format UDZO dist/DollarDetective-arm64.dmg
+          # hdiutil intermittently fails with "hdiutil: create failed - Resource
+          # busy" on GitHub's macOS runners (the diskimages service is transiently
+          # busy / a prior image is still detaching). Retry a few times before
+          # giving up so a flake doesn't drop the .dmg from the release.
+          for i in 1 2 3 4 5; do
+            if hdiutil create -volname "Dollar Detective" \
+                 -srcfolder "dist/Dollar Detective.app" \
+                 -ov -format UDZO dist/DollarDetective-arm64.dmg; then
+              echo "dmg created on attempt $i"
+              exit 0
+            fi
+            echo "hdiutil attempt $i failed (Resource busy?); retrying in 15s..."
+            sleep 15
+          done
+          echo "hdiutil create failed after 5 attempts" >&2
+          exit 1
 
       - uses: actions/upload-artifact@v4
         with:
