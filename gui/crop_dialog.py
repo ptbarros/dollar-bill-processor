@@ -49,7 +49,7 @@ class EbayCropDialog(QDialog):
         super().__init__(parent)
         self.full_config = config if isinstance(config, dict) else {}
         self.preview_ctx = preview_ctx
-        # standalone = opened from the Dollar Detective Crop tool, which doesn't
+        # standalone = opened from the Crop Detective tool, which doesn't
         # classify patterns, so the per-serial overlay can't draw one -- there the
         # toggle is relabeled to describe what it actually does: a 2x close-up crop.
         self.standalone = standalone

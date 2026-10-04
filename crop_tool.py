@@ -146,9 +146,9 @@ class CropToolWindow(QWidget):
         super().__init__()
         try:
             from version import get_version_string
-            self.setWindowTitle(f"Dollar Detective Crop {get_version_string()}")
+            self.setWindowTitle(f"Crop Detective {get_version_string()}")
         except Exception:
-            self.setWindowTitle("Dollar Detective Crop")
+            self.setWindowTitle("Crop Detective")
         self.setMinimumWidth(560)
         self.worker: CropWorker | None = None
         self._shown_once = False

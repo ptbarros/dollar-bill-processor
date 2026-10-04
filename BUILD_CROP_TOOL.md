@@ -2,7 +2,7 @@
 
 `crop_tool.py` is the eBay cropping feature packaged on its own, for distributing
 to other collectors without shipping the full Dollar Detective app. This
-builds a single self-contained `DollarBillCropTool.exe`.
+builds a single self-contained `CropDetective.exe`.
 
 ## What it ships (and what it deliberately doesn't)
 
@@ -27,7 +27,7 @@ The `crop-tool-windows` job in `.github/workflows/build.yml` builds the exe on a
 - **Trigger:** Actions tab → "Build installers" → **Run workflow** (workflow_dispatch),
   or push a `v*` tag (it also builds then).
 - **Download:** open the finished run → **Artifacts** → `crop-tool-windows`
-  (`DollarBillCropTool-<version>.exe`).
+  (`CropDetective-<version>.exe`).
 - It is uploaded as a **workflow artifact only** — deliberately **not** attached to
   the public GitHub Release, so you can hand it to FIL's friends privately without
   exposing the full app. To publish it in the Release later, add
@@ -57,7 +57,7 @@ From the repo root, in the build venv:
 ```
 pyinstaller crop_tool.spec
 ```
-Output: `dist\DollarBillCropTool.exe`.
+Output: `dist\CropDetective.exe`.
 
 - Keep a console window for debugging: `set DBP_BUILD_CONSOLE=1` before building.
 - The exe icon uses `assets/icon.ico` if present (Windows only).
@@ -75,7 +75,7 @@ folder (the tool passes `write_reports=False`).
   launch (slower first paint). For faster startup, switch the spec to a `COLLECT`
   (onedir) build like `DollarDetective.spec` — you then distribute a folder.
 - **Installer:** to wrap the exe in a Windows installer, adapt
-  `installer/DollarDetective.iss` (Inno Setup) to point at `DollarBillCropTool`.
+  `installer/DollarDetective.iss` (Inno Setup) to point at `CropDetective`.
 - **Model updates:** re-export `best.onnx` and rebuild — the spec re-copies
   `detector.bin` when `best.onnx` is newer.
 - **Stronger protection (later):** Tier 2 would encrypt `detector.bin` and decrypt

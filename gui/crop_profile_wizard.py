@@ -90,7 +90,7 @@ class CropProfileWizard(QDialog):
         self.samples = crop_samples.discover()
         self.saved_profiles = {}              # name -> profile dict (also persisted)
         self.input_dir = initial_input
-        self.output_dir = initial_output or str(Path.home() / "Dollar Detective Crops")
+        self.output_dir = initial_output or str(Path.home() / "Crop Detective Output")
 
         # Per-profile working state (reset each denomination)
         self._sample = None
