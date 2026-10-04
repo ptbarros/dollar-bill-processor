@@ -1523,6 +1523,12 @@ class MainWindow(QMainWindow):
             config = {}
 
         preview_ctx = self._build_crop_preview_ctx()
+        if preview_ctx is None:
+            # The selected bill couldn't be previewed (none selected, or a restored
+            # session whose image files don't resolve). Fall back to the built-in
+            # SAMPLE for the active profile's denomination, so the Crop Manager
+            # always has a bill to adjust crops on.
+            preview_ctx = self._fallback_sample_ctx(config)
         dialog = EbayCropDialog(config, self, preview_ctx=preview_ctx,
                                 wizard_ctx_factory=self._crop_sample_ctx_factory)
         if dialog.exec():
@@ -1637,6 +1643,26 @@ class MainWindow(QMainWindow):
             self._refresh_process_denomination()
         except Exception:
             pass
+
+    _SAMPLE_KEY_BY_DENOM = {1: 'one_dollar', 2: 'two_dollar', 5: 'five_dollar',
+                            10: 'ten_dollar', 20: 'twenty_dollar',
+                            50: 'fifty_dollar', 100: 'hundred_dollar'}
+
+    def _fallback_sample_ctx(self, config):
+        """A built-in-sample preview context for the active profile's denomination
+        (else $1 / the first available sample). None if nothing usable."""
+        try:
+            import crop_samples
+            active = config.get('active_crop_profile')
+            prof = (config.get('crop_profiles') or {}).get(active) or {}
+            key = self._SAMPLE_KEY_BY_DENOM.get(prof.get('denomination'), 'one_dollar')
+            s = crop_samples.get(key)
+            if s is None:
+                avail = crop_samples.discover()
+                s = avail[0] if avail else None
+            return self._crop_sample_ctx_factory(s['dir']) if s else None
+        except Exception:
+            return None
 
     def _crop_sample_ctx_factory(self, sample_dir):
         """Build a crop preview context from a bundled SAMPLE folder, for the Crop
