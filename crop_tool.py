@@ -151,6 +151,7 @@ class CropToolWindow(QWidget):
             self.setWindowTitle("Dollar Detective Crop")
         self.setMinimumWidth(560)
         self.worker: CropWorker | None = None
+        self._shown_once = False
         icon = app_base() / "assets" / "DD-Crop.png"
         if icon.exists():
             from PySide6.QtGui import QIcon
@@ -160,11 +161,18 @@ class CropToolWindow(QWidget):
     def _build_ui(self):
         v = QVBoxLayout(self)
 
+        introrow = QHBoxLayout()
         intro = QLabel(
             "Crop a folder of scanned bills using your Crop Manager settings.\n"
             "Meant for individually scanned bills that skip the feed scanner.")
         intro.setWordWrap(True)
-        v.addWidget(intro)
+        introrow.addWidget(intro, 1)
+        wiz_btn = QPushButton("Setup Wizard")
+        wiz_btn.setToolTip("A guided walk-through — try a sample bill or set up your "
+                           "own folders.")
+        wiz_btn.clicked.connect(lambda: self._run_wizard(first_run=False))
+        introrow.addWidget(wiz_btn, 0, Qt.AlignTop)
+        v.addLayout(introrow)
 
         folders = QGroupBox("Folders")
         g = QGridLayout(folders)
@@ -211,10 +219,18 @@ class CropToolWindow(QWidget):
         opts.addWidget(settings_btn)
         v.addLayout(opts)
 
+        runrow = QHBoxLayout()
         self.run_btn = QPushButton("Run")
         self.run_btn.setMinimumHeight(38)
         self.run_btn.clicked.connect(self._run)
-        v.addWidget(self.run_btn)
+        runrow.addWidget(self.run_btn, 1)
+        self.open_btn = QPushButton("Open crops folder")
+        self.open_btn.setMinimumHeight(38)
+        self.open_btn.setToolTip("Open the folder the crops were saved to.")
+        self.open_btn.setEnabled(False)
+        self.open_btn.clicked.connect(self._open_output_folder)
+        runrow.addWidget(self.open_btn)
+        v.addLayout(runrow)
 
         self.progress = QProgressBar()
         self.progress.setTextVisible(True)
@@ -226,6 +242,92 @@ class CropToolWindow(QWidget):
         v.addWidget(self.log)
 
         self._refresh_profiles()
+
+    # --- setup wizard -----------------------------------------------------
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Offer the setup wizard on first launch, once the window is up so it
+        # centres over it. Guarded so a resize/refocus doesn't re-trigger it.
+        if not self._shown_once:
+            self._shown_once = True
+            if not self._wizard_seen():
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(0, lambda: self._run_wizard(first_run=True))
+
+    def _wizard_seen(self) -> bool:
+        return bool(self._read_config().get('crop_tool_wizard_seen'))
+
+    def _mark_wizard_seen(self):
+        import yaml
+        cfg = self._read_config()
+        cfg['crop_tool_wizard_seen'] = True
+        user_cfg = user_data_dir() / "config.yaml"
+        user_cfg.parent.mkdir(parents=True, exist_ok=True)
+        with open(user_cfg, 'w') as f:
+            yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+
+    def _run_wizard(self, first_run: bool):
+        from gui.crop_profile_wizard import CropProfileWizard
+        from crop_preview import build_context_from_folder
+
+        def ctx_factory(sample_dir):
+            try:
+                return build_context_from_folder(self._get_preview_processor(),
+                                                 Path(sample_dir))
+            except Exception as e:
+                self._append_log(f"Preview unavailable: {e}")
+                return None
+
+        wiz = CropProfileWizard(
+            ctx_factory, self._save_wizard_profiles,
+            base_yolo_crops=self._active_yolo_crops(), parent=self,
+            initial_input=self.in_edit.text().strip(),
+            initial_output=self.out_edit.text().strip(),
+            existing_profiles=self._read_config().get('crop_profiles') or {})
+        accepted = bool(wiz.exec())
+        # Don't nag: mark seen after the first-run offer whether or not they finished.
+        if first_run:
+            self._mark_wizard_seen()
+        if not accepted:
+            return
+        if wiz.input_dir:
+            self.in_edit.setText(wiz.input_dir)
+        if wiz.output_dir:
+            self.out_edit.setText(wiz.output_dir)
+        self._refresh_profiles()   # new profiles + active were saved by the wizard
+        names = ", ".join(wiz.saved_profiles) or "none"
+        self._append_log(f"Setup complete. Profiles: {names}. Pick one and press Run.")
+
+    def _active_yolo_crops(self) -> dict:
+        """The active profile's yolo_crops (seed for a new profile), or {}."""
+        cfg = self._read_config()
+        profiles = cfg.get('crop_profiles') or {}
+        active = cfg.get('active_crop_profile')
+        if active in profiles and isinstance(profiles[active], dict):
+            return profiles[active].get('yolo_crops', {}) or {}
+        return cfg.get('yolo_crops', {}) or {}
+
+    def _save_wizard_profiles(self, profiles: dict, active: str | None):
+        """Merge wizard-built profiles into config.yaml and set the active one."""
+        import yaml
+        cfg = self._read_config()
+        existing = cfg.get('crop_profiles') or {}
+        if not existing:
+            # Migrate the current flat crop setup to a 'Default' profile so the new
+            # named profiles sit alongside it (mirrors the Crop Manager's migration).
+            flat = {k: cfg[k] for k in ('crop_order', 'yolo_crops',
+                                        'include_serial_overlay', 'denomination',
+                                        'min_dimension') if k in cfg}
+            if flat:
+                existing = {'Default': flat}
+        existing.update(profiles)
+        cfg['crop_profiles'] = existing
+        if active:
+            cfg['active_crop_profile'] = active
+        user_cfg = user_data_dir() / "config.yaml"
+        user_cfg.parent.mkdir(parents=True, exist_ok=True)
+        with open(user_cfg, 'w') as f:
+            yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
 
     # --- crop profiles ----------------------------------------------------
     def _read_config(self) -> dict:
@@ -366,12 +468,30 @@ class CropToolWindow(QWidget):
         self.progress.setValue(i)
         self.progress.setFormat(f"%v / %m  —  {name}")
 
+    def _open_output_folder(self):
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        out = self.out_edit.text().strip()
+        if out and Path(out).is_dir():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(out))
+        else:
+            QMessageBox.information(self, "Open crops folder",
+                                    "The output folder doesn't exist yet.")
+
     def _on_done(self, results):
         self.progress.setValue(self.progress.maximum())
         out = self.out_edit.text().strip()
         self._append_log(f"Done. Crops written to {out}")
         self.run_btn.setEnabled(True)
-        QMessageBox.information(self, "Done", f"Cropping complete.\nCrops saved to:\n{out}")
+        self.open_btn.setEnabled(bool(out) and Path(out).is_dir())
+        box = QMessageBox(self)
+        box.setWindowTitle("Done")
+        box.setText(f"Cropping complete.\nCrops saved to:\n{out}")
+        open_b = box.addButton("Open crops folder", QMessageBox.AcceptRole)
+        box.addButton("Close", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is open_b:
+            self._open_output_folder()
 
     def _on_failed(self, msg):
         self._append_log("ERROR:\n" + msg)

@@ -117,44 +117,466 @@ crops:
       w: 0.373
       h: 1.0
       description: Right third of bill
-crop_order:
-- - front
-  - seal
-- - front
-  - full
-- - back
-  - full
-- - front
-  - left
-- - front
-  - center
-- - front
-  - right
-- - back
-  - left
-- - back
-  - center
-- - back
-  - right
-- - back
-  - seal
 options:
   jpeg_quality: 95
   min_confidence: 0.0
   star_notes_always_fancy: true
-yolo_crops:
-  padding:
-    seal_h: 0.03
-    seal_v: 0.08
-    thirds_overlap: 0.03
-  front_seal:
-    min_width: 500
-    min_height: 500
-    offset_x: 0
-    offset_y: 0
-  back_seal:
-    width: 500
-    height: 500
-    offset_x: -25
-    offset_y: -50
-  fallback_on_missing: true
+crop_profiles:
+  Default:
+    crop_order:
+    - - front
+      - seal
+    - - front
+      - full
+    - - back
+      - full
+    - - front
+      - left
+    - - front
+      - center
+    - - front
+      - right
+    - - back
+      - left
+    - - back
+      - center
+    - - back
+      - right
+    - - back
+      - seal
+    - - front
+      - serial_left
+    - - front
+      - serial_right
+    yolo_crops:
+      padding:
+        seal_h: 0.03
+        seal_v: 0.08
+        thirds_overlap: 0.03
+      front_seal:
+        min_width: 581
+        min_height: 524
+        offset_x: 102
+        offset_y: 24
+      back_seal:
+        width: 500
+        height: 500
+        offset_x: -25
+        offset_y: -50
+      fallback_on_missing: true
+      serial_left:
+        min_width: 492
+        min_height: 80
+        offset_x: -4
+        offset_y: -3
+        overlay: true
+        zoom: true
+        border: true
+      serial_right:
+        min_width: 500
+        min_height: 0
+        offset_x: 0
+        offset_y: 0
+        zoom: true
+        overlay: true
+        border: false
+    serial_border: true
+    include_serial_overlay: false
+  $1:
+    crop_order:
+    - - front
+      - seal
+    - - front
+      - full
+    - - front
+      - left
+    - - front
+      - center
+    - - front
+      - right
+    - - back
+      - seal
+    - - back
+      - full
+    - - back
+      - left
+    - - back
+      - center
+    - - back
+      - right
+    - - front
+      - serial_left
+    - - front
+      - serial_right
+    yolo_crops:
+      back_seal:
+        offset_x: -58
+        offset_y: -91
+        width: 500
+        height: 500
+    include_serial_overlay: false
+    min_dimension: 500
+    denomination: 1
+  $20:
+    crop_order:
+    - - front
+      - seal
+    - - front
+      - full
+    - - front
+      - left
+    - - front
+      - center
+    - - front
+      - right
+    - - back
+      - seal
+    - - back
+      - full
+    - - back
+      - left
+    - - back
+      - center
+    - - back
+      - right
+    - - front
+      - serial_left
+    - - front
+      - serial_right
+    yolo_crops:
+      front_seal:
+        offset_x: 36
+        offset_y: -10
+        min_width: 702
+        min_height: 528
+        mode: fixed
+        fixed:
+          x: 0.5630482456140351
+          y: 0.17219387755102042
+          w: 0.3744517543859649
+          h: 0.6951530612244898
+      thirds:
+        front:
+          center_left: 120
+          center_right: 0
+      back_seal:
+        offset_x: 32
+        offset_y: -124
+        width: 564
+        height: 525
+        mode: fixed
+        fixed:
+          x: 0.6661193212917351
+          y: 0.29449423815621
+          w: 0.2999452654625068
+          h: 0.647887323943662
+      serial_left:
+        mode: fixed
+        fixed:
+          x: 0.0581140350877193
+          y: 0.1875
+          w: 0.25548245614035087
+          h: 0.09948979591836735
+      serial_right:
+        mode: fixed
+        fixed:
+          x: 0.6392543859649122
+          y: 0.6096938775510204
+          w: 0.25274122807017546
+          h: 0.10076530612244898
+    include_serial_overlay: false
+    min_dimension: 500
+    denomination: 20
+  $5:
+    crop_order:
+    - - front
+      - seal
+    - - front
+      - full
+    - - front
+      - left
+    - - front
+      - center
+    - - front
+      - right
+    - - back
+      - seal
+    - - back
+      - full
+    - - back
+      - left
+    - - back
+      - center
+    - - back
+      - right
+    - - front
+      - serial_left
+    - - front
+      - serial_right
+    yolo_crops:
+      front_seal:
+        offset_x: 116
+        offset_y: -30
+        min_width: 703
+        min_height: 606
+      thirds:
+        front:
+          center_left: 141
+          center_right: 50
+      back_seal:
+        offset_x: -247
+        offset_y: -106
+        width: 552
+        height: 552
+        mode: fixed
+        fixed:
+          x: 0.6700919415900487
+          y: 0.24935064935064935
+          w: 0.298539751216874
+          h: 0.7168831168831169
+      serial_left:
+        offset_x: 20
+        offset_y: -1
+        min_width: 460
+        min_height: 75
+      serial_right:
+        offset_x: 8
+        offset_y: 0
+        min_width: 482
+        min_height: 75
+    include_serial_overlay: false
+    min_dimension: 500
+    denomination: 5
+  $2:
+    crop_order:
+    - - front
+      - seal
+    - - front
+      - full
+    - - front
+      - left
+    - - front
+      - center
+    - - front
+      - right
+    - - back
+      - seal
+    - - back
+      - full
+    - - back
+      - left
+    - - back
+      - center
+    - - back
+      - right
+    - - front
+      - serial_left
+    - - front
+      - serial_right
+    yolo_crops:
+      front_seal:
+        offset_x: 0
+        offset_y: 10
+        min_width: 602
+        min_height: 526
+      back_seal:
+        offset_x: -372
+        offset_y: -83
+        width: 576
+        height: 500
+      serial_left:
+        offset_x: 1
+        offset_y: -1
+        min_width: 415
+        min_height: 73
+      serial_right:
+        offset_x: 5
+        offset_y: -1
+        min_width: 424
+        min_height: 75
+    include_serial_overlay: false
+    min_dimension: 500
+    denomination: 2
+  $10:
+    crop_order:
+    - - front
+      - seal
+    - - front
+      - full
+    - - front
+      - left
+    - - front
+      - center
+    - - front
+      - right
+    - - back
+      - seal
+    - - back
+      - full
+    - - back
+      - left
+    - - back
+      - center
+    - - back
+      - right
+    - - front
+      - serial_left
+    - - front
+      - serial_right
+    yolo_crops:
+      front_seal:
+        offset_x: 458
+        offset_y: 45
+        min_width: 583
+        min_height: 529
+        mode: fixed
+        fixed:
+          x: 0.525319977740679
+          y: 0.14566929133858267
+          w: 0.4245965498052309
+          h: 0.6968503937007874
+      thirds:
+        front:
+          center_left: 137
+          center_right: 0
+      back_seal:
+        mode: fixed
+        fixed:
+          x: 0.6775986659255142
+          y: 0.29133858267716534
+          w: 0.3035019455252918
+          h: 0.6627296587926509
+      serial_right:
+        offset_x: 14
+        offset_y: -2
+        min_width: 501
+        min_height: 77
+      serial_left:
+        offset_x: 7
+        offset_y: 2
+        min_width: 501
+        min_height: 79
+    include_serial_overlay: false
+    min_dimension: 500
+    denomination: 10
+  $50:
+    crop_order:
+    - - front
+      - seal
+    - - front
+      - full
+    - - front
+      - left
+    - - front
+      - center
+    - - front
+      - right
+    - - back
+      - seal
+    - - back
+      - full
+    - - back
+      - left
+    - - back
+      - center
+    - - back
+      - right
+    - - front
+      - serial_left
+    - - front
+      - serial_right
+    yolo_crops:
+      front_seal:
+        offset_x: 48
+        offset_y: 18
+        min_width: 541
+        min_height: 535
+        mode: fixed
+        fixed:
+          x: 0.6463076068850638
+          y: 0.13385826771653545
+          w: 0.300388672959467
+          h: 0.7020997375328084
+      thirds:
+        front:
+          center_left: 99
+          center_right: 0
+      back_seal:
+        mode: fixed
+        fixed:
+          x: 0.6871880199667221
+          y: 0.29697766097240474
+          w: 0.2995008319467554
+          h: 0.657030223390276
+      serial_left:
+        offset_x: -3
+        offset_y: -4
+        min_width: 501
+        min_height: 77
+      serial_right:
+        offset_x: 36
+        offset_y: 0
+        min_width: 500
+        min_height: 75
+    include_serial_overlay: false
+    min_dimension: 500
+    denomination: 50
+  $100:
+    crop_order:
+    - - front
+      - seal
+    - - front
+      - full
+    - - front
+      - left
+    - - front
+      - center
+    - - front
+      - right
+    - - back
+      - seal
+    - - back
+      - full
+    - - back
+      - left
+    - - back
+      - center
+    - - back
+      - right
+    - - front
+      - serial_left
+    - - front
+      - serial_right
+    yolo_crops:
+      front_seal:
+        offset_x: 24
+        offset_y: 5
+        min_width: 539
+        min_height: 501
+        mode: fixed
+        fixed:
+          x: 0.6571113561190739
+          y: 0.2774869109947644
+          w: 0.29713340683572215
+          h: 0.6557591623036649
+      thirds:
+        front:
+          center_left: 125
+          center_right: 0
+      back_seal:
+        mode: fixed
+        fixed:
+          x: 0.6822945394373966
+          y: 0.31413612565445026
+          w: 0.30005515719801434
+          h: 0.6570680628272252
+      serial_left:
+        offset_x: 14
+        offset_y: -2
+        min_width: 501
+        min_height: 76
+    include_serial_overlay: false
+    min_dimension: 500
+    denomination: 100
+active_crop_profile: $1
+crop_tool_wizard_seen: true

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QGroupBox, QPushButton, QDialogButtonBox, QLabel, QSpinBox,
     QHeaderView, QCheckBox, QAbstractItemView, QMessageBox, QWidget, QFrame,
-    QComboBox, QInputDialog
+    QComboBox, QInputDialog, QApplication
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor
@@ -39,7 +39,8 @@ class EbayCropDialog(QDialog):
 
     # Keys that belong to a crop profile (per-denomination settings). Everything
     # else in config.yaml (crops %, options, ...) stays global.
-    PROFILE_KEYS = ('crop_order', 'yolo_crops', 'include_serial_overlay', 'denomination', 'min_dimension')
+    PROFILE_KEYS = ('crop_order', 'yolo_crops', 'include_serial_overlay', 'denomination',
+                    'min_dimension', 'border_px', 'border_color')
     # Denominations offered in the profile's denomination selector. $5+ use the
     # two-letter serial prefix (series + district); $1/$2 use one letter.
     DENOMINATIONS = (1, 2, 5, 10, 20, 50, 100)
@@ -56,7 +57,7 @@ class EbayCropDialog(QDialog):
         self._preview_initialized = False  # first render is deferred to showEvent
         self._init_profiles()        # sets self.profiles, self.active_name, self.config
         self.setWindowTitle("Crop Manager")
-        self.setMinimumSize(1080 if preview_ctx else 700, 560)
+        self.setMinimumSize(1000 if preview_ctx else 640, 560)
         # Give the dialog a full window frame with min/maximize buttons (a modal
         # child dialog otherwise shows only a close button on some window managers).
         self.setWindowFlags(Qt.Window | Qt.WindowMinMaxButtonsHint
@@ -64,6 +65,21 @@ class EbayCropDialog(QDialog):
         self._setup_ui()
         self._load_settings()
         self._refresh_profile_combo()
+        self._open_large(preview_ctx)
+
+    def _open_large(self, preview_ctx):
+        """Open big: a larger bill/crop preview and room for all 12 crop rows,
+        clamped to the screen so it still fits small laptops (e.g. 1366x768)."""
+        try:
+            screen = self.screen() or QApplication.primaryScreen()
+            avail = screen.availableGeometry()
+            want_w = 1500 if preview_ctx else 900
+            want_h = 960
+            w = min(want_w, max(self.minimumWidth(), avail.width() - 60))
+            h = min(want_h, max(self.minimumHeight(), avail.height() - 60))
+            self.resize(w, h)
+        except Exception:
+            pass
 
     def _init_profiles(self):
         """Load named crop profiles, migrating a legacy flat config into 'Default'."""
@@ -107,6 +123,31 @@ class EbayCropDialog(QDialog):
         if getattr(self, '_loading_denom', False):
             return
         self.config['min_dimension'] = self.min_dim_spin.value()
+
+    def _on_border_changed(self):
+        if getattr(self, '_loading_denom', False):
+            return
+        self.config['border_px'] = self.border_px_spin.value()
+        self._refresh_preview()
+
+    def _border_color_hex(self) -> str:
+        return str(self.config.get('border_color', '#000000') or '#000000')
+
+    def _update_border_swatch(self):
+        hexc = self._border_color_hex()
+        self.border_color_btn.setStyleSheet(
+            f"background-color: {hexc}; border: 1px solid #888;")
+        self.border_color_btn.setText("")
+
+    def _pick_border_color(self):
+        from PySide6.QtWidgets import QColorDialog
+        from PySide6.QtGui import QColor
+        cur = QColor(self._border_color_hex())
+        col = QColorDialog.getColor(cur, self, "Border / padding color")
+        if col.isValid():
+            self.config['border_color'] = col.name()   # '#rrggbb'
+            self._update_border_swatch()
+            self._refresh_preview()
 
     def _save_as_profile(self):
         import copy
@@ -181,11 +222,16 @@ class EbayCropDialog(QDialog):
         rename_btn = QPushButton("Rename"); rename_btn.clicked.connect(self._rename_profile)
         del_btn = QPushButton("Delete"); del_btn.clicked.connect(self._delete_profile)
         prof.addWidget(new_profile_btn); prof.addWidget(rename_btn); prof.addWidget(del_btn)
+        prof.addStretch()
+        layout.addLayout(prof)
+
+        # Second row: the per-profile OUTPUT settings. Kept off the profile row so
+        # the left column doesn't need to be wide enough for everything at once.
+        prof2 = QHBoxLayout()
 
         # Denomination for this profile -> drives the serial-number format
         # ($5+ have a two-letter prefix). Stored per profile.
-        prof.addSpacing(12)
-        prof.addWidget(QLabel("Denomination:"))
+        prof2.addWidget(QLabel("Denomination:"))
         self.denom_combo = QComboBox()
         self.denom_combo.setToolTip("Bill denomination for this profile. $5 and up have a\n"
                                     "two-letter serial prefix (series + district); $1/$2 have one.\n"
@@ -193,13 +239,13 @@ class EbayCropDialog(QDialog):
         for d in self.DENOMINATIONS:
             self.denom_combo.addItem(f"${d}", d)
         self.denom_combo.currentIndexChanged.connect(self._on_denomination_changed)
-        prof.addWidget(self.denom_combo)
+        prof2.addWidget(self.denom_combo)
 
         # Global minimum crop dimension: ANY crop whose shorter side is under this
         # gets black-bar padding so it clears eBay's 500px floor (not just overlay
         # serial crops). 0 disables padding.
-        prof.addSpacing(12)
-        prof.addWidget(QLabel("Min crop size:"))
+        prof2.addSpacing(16)
+        prof2.addWidget(QLabel("Min crop size:"))
         self.min_dim_spin = QSpinBox()
         self.min_dim_spin.setRange(0, 4000)
         self.min_dim_spin.setSingleStep(50)
@@ -209,9 +255,28 @@ class EbayCropDialog(QDialog):
             "under this is centered on a black canvas to reach it -- so eBay won't\n"
             "reject it for being under 500px. Applies to ALL crops. 0 = no padding.")
         self.min_dim_spin.valueChanged.connect(self._on_min_dim_changed)
-        prof.addWidget(self.min_dim_spin)
-        prof.addStretch()
-        layout.addLayout(prof)
+        prof2.addWidget(self.min_dim_spin)
+
+        # Always-on border (px) around EVERY crop + the pad/border color.
+        prof2.addSpacing(16)
+        prof2.addWidget(QLabel("Border:"))
+        self.border_px_spin = QSpinBox()
+        self.border_px_spin.setRange(0, 400)
+        self.border_px_spin.setSingleStep(5)
+        self.border_px_spin.setSuffix(" px")
+        self.border_px_spin.setToolTip(
+            "Draw a solid border this many pixels wide around EVERY saved crop,\n"
+            "in the color at right. 0 = no border. (The min-size padding uses the\n"
+            "same color.)")
+        self.border_px_spin.valueChanged.connect(self._on_border_changed)
+        prof2.addWidget(self.border_px_spin)
+        self.border_color_btn = QPushButton()
+        self.border_color_btn.setFixedWidth(44)
+        self.border_color_btn.setToolTip("Border / padding color. Click to change.")
+        self.border_color_btn.clicked.connect(self._pick_border_color)
+        prof2.addWidget(self.border_color_btn)
+        prof2.addStretch()
+        layout.addLayout(prof2)
 
         # Instructions
         instructions = QLabel(
@@ -259,7 +324,10 @@ class EbayCropDialog(QDialog):
         btn_layout.addWidget(reset_order_btn)
 
         order_layout.addLayout(btn_layout)
-        layout.addWidget(order_group)
+        # Let the crop table take the spare vertical space so a tall window shows
+        # all 12 crop rows without scrolling.
+        self.crop_table.setMinimumHeight(300)
+        layout.addWidget(order_group, 1)
 
         # Front Seal Settings
         front_seal_group = QGroupBox("Front Seal Settings")
@@ -435,14 +503,31 @@ class EbayCropDialog(QDialog):
         self.preview_hint.setStyleSheet("color:#888")
         v.addWidget(self.preview_hint)
 
-        v.addWidget(QLabel("Region on the bill:"))
+        # In the standalone crop tool the bill preview is INTERACTIVE: the selected
+        # seal/serial box can be dragged/resized directly on the bill, which writes
+        # back to the same offset/size spinboxes (see _on_canvas_drag). The main app
+        # keeps the static painted-rect label for now. Both share _refresh_preview.
+        self._interactive = bool(self.standalone)
+        self._canvas = None
+        self._canvas_side = None
+        if self._interactive:
+            from gui.crop_canvas import CropCanvas
+            v.addWidget(QLabel("Region on the bill  (drag the blue box to adjust):"))
+            self._canvas = CropCanvas()
+            self._canvas.setMinimumHeight(200)
+            self._canvas.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+            self._canvas.geometryChanged.connect(self._on_canvas_drag)
+            v.addWidget(self._canvas, 3)
+        else:
+            v.addWidget(QLabel("Region on the bill:"))
         self.preview_bill = QLabel()
         self.preview_bill.setMinimumHeight(180)
         self.preview_bill.setAlignment(Qt.AlignCenter)
         self.preview_bill.setFrameShape(QFrame.Box)
         self.preview_bill.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-        # Bill preview gets the extra vertical space when the window grows.
-        v.addWidget(self.preview_bill, 3)
+        if not self._interactive:
+            # Bill preview gets the extra vertical space when the window grows.
+            v.addWidget(self.preview_bill, 3)
 
         v.addWidget(QLabel("Resulting crop:"))
         self.preview_crop = QLabel()
@@ -472,10 +557,13 @@ class EbayCropDialog(QDialog):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        # Re-render the preview to fill the (possibly larger) labels.
+        # Re-render the preview to fill the (possibly larger) labels. The
+        # interactive canvas refits itself, so only the resulting-crop label needs
+        # redrawing there; the static path redraws both.
         if getattr(self, '_preview_cache', None):
             bill, rect, crop = self._preview_cache
-            self._show_bill_with_rect(bill, rect)
+            if not getattr(self, '_interactive', False):
+                self._show_bill_with_rect(bill, rect)
             self._show_crop(crop)
 
     def _build_serial_settings_group(self, title, which) -> QWidget:
@@ -574,6 +662,9 @@ class EbayCropDialog(QDialog):
             self.denom_combo.setCurrentIndex(idx if idx >= 0 else 0)
             if hasattr(self, 'min_dim_spin'):
                 self.min_dim_spin.setValue(int(self.config.get('min_dimension', 500) or 0))
+            if hasattr(self, 'border_px_spin'):
+                self.border_px_spin.setValue(int(self.config.get('border_px', 0) or 0))
+                self._update_border_swatch()
             self._loading_denom = False
 
         # Get current crop order from config
@@ -758,6 +849,32 @@ class EbayCropDialog(QDialog):
         self.front_seal_group.setVisible(is_seal and side == 'front')
         self.back_seal_group.setVisible(is_seal and side == 'back')
 
+    def _border_bgr(self):
+        h = self._border_color_hex().lstrip('#')
+        try:
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        except (ValueError, IndexError):
+            r, g, b = 0, 0, 0
+        return (b, g, r)
+
+    def _crop_with_border(self, cropimg):
+        """Mirror generate_crops' _write: apply the always-on border + min-size pad
+        (in the border color) so the preview shows what actually gets saved."""
+        if cropimg is None or getattr(cropimg, 'size', 0) == 0:
+            return cropimg
+        import cv2
+        bgr = self._border_bgr()
+        out = cropimg
+        bpx = int(self.config.get('border_px', 0) or 0)
+        if bpx > 0:
+            out = cv2.copyMakeBorder(out, bpx, bpx, bpx, bpx,
+                                     cv2.BORDER_CONSTANT, value=bgr)
+        min_dim = int(self.config.get('min_dimension', 500) or 0)
+        if min_dim > 0:
+            from serial_overlay import pad_to_min
+            out = pad_to_min(out, min_size=min_dim, color=bgr)
+        return out
+
     def _current_config_overrides(self):
         import copy
         cfg = copy.deepcopy(self.config) if isinstance(self.config, dict) else {}
@@ -790,17 +907,130 @@ class EbayCropDialog(QDialog):
             self._preview_cache = None
             return
         self.preview_hint.setText(f"{crop['name']}  ({side} / {region})")
-        bill, rect, cropimg = self.preview_ctx.render(side, region, self._current_config_overrides())
+        overrides = self._current_config_overrides()
+        bill, rect, cropimg = self.preview_ctx.render(side, region, overrides)
         if bill is None:
             return
-        self._preview_cache = (bill, rect, cropimg)   # for resize re-render
-        self._show_bill_with_rect(bill, rect)
-        self._show_crop(cropimg)
+        disp = self._crop_with_border(cropimg)   # show border/min-pad as it'll save
+        self._preview_cache = (bill, rect, disp)   # for resize re-render
+        if self._interactive and self._canvas is not None:
+            self._draw_canvas(side, region, bill, rect, overrides)
+        else:
+            self._show_bill_with_rect(bill, rect)
+        self._show_crop(disp)
         if rect:
             x1, y1, x2, y2 = rect
             self.preview_info.setText(f"crop region: {x2 - x1}×{y2 - y1}px  @ ({x1}, {y1})")
         else:
             self.preview_info.setText("(no region for this crop on the sample)")
+
+    # ------------------------------------------------------------------
+    # Interactive canvas (standalone crop tool): drag the box on the bill
+    # ------------------------------------------------------------------
+    _DRAGGABLE_BY_SIDE = {
+        'front': ['seal', 'serial_left', 'serial_right'],
+        'back': ['seal'],
+    }
+
+    def _draw_canvas(self, side, region, bill, rect, overrides):
+        """Show the sample bill in the canvas with the selected region editable:
+        seal/serial as a movable/resizable box, thirds as constrained boundary
+        edges, full as a static outline. (No faint 'other region' outlines -- they
+        read as stray ghost boxes when switching crops.)"""
+        import crop_geometry as cg
+        if self._canvas_side != side:
+            self._canvas.set_bill(bill)
+            self._canvas_side = side
+        if region in cg.THIRDS_REGIONS:
+            self._canvas.show_region(rect, others=[], editable=True,
+                                     mode="edges", edges=cg.thirds_edges(region))
+            which = ("its right edge" if region == 'left'
+                     else "its left edge" if region == 'right' else "either side")
+            self.preview_hint.setText(
+                f"{self._selected_crop()['name']} — drag {which} to overlap into the "
+                "neighbouring crop.")
+        elif cg.is_draggable(side, region):
+            self._canvas.show_region(rect, others=[], editable=True, mode="box")
+        else:
+            self._canvas.show_region(rect, others=[], editable=False)
+            self.preview_hint.setText(
+                f"{self._selected_crop()['name']}  ({side} / {region}) — "
+                "this crop follows the bill automatically and isn't dragged.")
+
+    def _on_canvas_drag(self, dragged_rect):
+        """A box drag/resize finished: invert it to config and push the values
+        into the matching spinboxes (which re-renders the preview)."""
+        import crop_geometry as cg
+        crop = self._selected_crop()
+        if not crop:
+            return
+        side, region = crop['side'], crop['region']
+        overrides = self._current_config_overrides()
+        # Thirds: dragging a boundary edge maps to the overlap spinboxes.
+        if region in cg.THIRDS_REGIONS:
+            render = lambda c: self.preview_ctx.render(side, region, c)[1]
+            base = cg.base_thirds_rect(render, overrides, side)
+            if base is None:
+                return
+            self._apply_thirds_drag(side, region,
+                                    cg.invert_thirds(base, tuple(dragged_rect), region))
+            return
+        key = cg.region_config_key(side, region)
+        if key is None:
+            return
+        render = lambda c: self.preview_ctx.render(side, region, c)[1]
+        base = cg.base_rect(render, overrides, key)
+        if base is None:
+            return
+        updates = cg.invert_drag(base, tuple(dragged_rect), key)
+        self._apply_drag_to_spins(side, region, key, updates)
+
+    def _apply_thirds_drag(self, side, region, updates):
+        """Write a thirds edge-drag into the overlap spinboxes, then refresh via
+        the existing thirds handler."""
+        spins = {'left_inner': self.left_inner, 'right_inner': self.right_inner,
+                 'center_left': self.center_left, 'center_right': self.center_right}
+        for ukey, val in updates.items():
+            sp = spins.get(ukey)
+            if sp is not None:
+                sp.blockSignals(True)
+                sp.setValue(int(val))
+                sp.blockSignals(False)
+        self._on_thirds_changed()
+
+    def _apply_drag_to_spins(self, side, region, key, updates):
+        """Write inverted drag values into the region's spinboxes, then refresh."""
+        if key == 'front_seal':
+            targets = [(self.front_seal_width, 'min_width'),
+                       (self.front_seal_height, 'min_height'),
+                       (self.front_seal_offset_x, 'offset_x'),
+                       (self.front_seal_offset_y, 'offset_y')]
+        elif key == 'back_seal':
+            targets = [(self.back_seal_width, 'width'),
+                       (self.back_seal_height, 'height'),
+                       (self.back_seal_offset_x, 'offset_x'),
+                       (self.back_seal_offset_y, 'offset_y')]
+        elif key in ('serial_left', 'serial_right'):
+            which = 'left' if key == 'serial_left' else 'right'
+            spins = self.serial_spins[which]
+            targets = [(spins['min_width'], 'min_width'),
+                       (spins['min_height'], 'min_height'),
+                       (spins['offset_x'], 'offset_x'),
+                       (spins['offset_y'], 'offset_y')]
+        else:
+            return
+        for sp, ukey in targets:
+            if ukey in updates:
+                sp.blockSignals(True)
+                sp.setValue(int(updates[ukey]))
+                sp.blockSignals(False)
+        # Sync config + one preview refresh. Serial values live directly in config
+        # (via _on_serial_setting_changed); seal values are read from the spins by
+        # _current_config_overrides, so a plain refresh suffices there.
+        if key in ('serial_left', 'serial_right'):
+            self._on_serial_setting_changed('left' if key == 'serial_left' else 'right')
+        else:
+            self._refresh_preview()
 
     def _bgr_to_pixmap(self, bgr, max_w, max_h):
         import cv2

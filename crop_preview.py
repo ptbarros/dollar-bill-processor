@@ -89,8 +89,16 @@ def build_context_from_paths(processor, front_path, back_path=None) -> Optional[
     front_flipped = bool(finfo.get('flipped', False)) if isinstance(finfo, dict) else False
     if back_path:
         try:
-            back_img, _ = processor.yolo_aligner.align_image(str(back_path), check_flip=False)
-            if front_flipped and back_img is not None:
+            # Orient the back the SAME way generate_crops() does: independently, via
+            # the back-plate number (check_flip=True), NOT by inheriting the front's
+            # flip. Feed/duplex scanners emit the back rotated 180 vs the front, so
+            # "follow the front" leaves the back upside down in the preview even
+            # though the real crop is correct. Only when the back-plate can't decide
+            # do we fall back to matching the front's flip (simple flatbed case).
+            back_img, back_info = processor.yolo_aligner.align_image(
+                str(back_path), check_flip=True)
+            if (back_img is not None and not back_info.get('flipped')
+                    and back_info.get('back_orientation_undecided') and front_flipped):
                 back_img = cv2.rotate(back_img, cv2.ROTATE_180)
         except Exception:
             back_img = None

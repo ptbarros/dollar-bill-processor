@@ -268,6 +268,27 @@ class Config:
         return max(0, v)
 
     @property
+    def border_px(self) -> int:
+        """Always-on border (px) drawn around EVERY saved crop, in the border color.
+        0 = no border. Set in the Crop Manager. Default 0."""
+        try:
+            return max(0, int(self.active_profile_data.get('border_px', 0)))
+        except (TypeError, ValueError):
+            return 0
+
+    @property
+    def border_color_bgr(self) -> tuple:
+        """Border / min-dim pad color as a BGR tuple for OpenCV. Stored as a
+        '#rrggbb' hex string (``border_color``); default black."""
+        hexstr = str(self.active_profile_data.get('border_color', '#000000')).strip()
+        h = hexstr.lstrip('#')
+        try:
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        except (ValueError, IndexError):
+            r, g, b = 0, 0, 0
+        return (b, g, r)
+
+    @property
     def serial_sides(self) -> str:
         """Which serial region(s) the serial crop targets: 'auto' (highest-conf,
         default), 'left', 'right', or 'both'. Set in the eBay Crop Manager."""
@@ -3006,6 +3027,11 @@ class ProductionProcessor:
         config = self._get_yolo_crop_config()
         h, w = img.shape[:2]
 
+        # Hand-placed fixed box (denominations the model can't anchor) wins.
+        fixed = self._fixed_box_for('front_seal')
+        if fixed is not None:
+            return self._fixed_box_rect(img, fixed)
+
         # Collect boxes for seal_t, series_year, and front_plate
         all_boxes = []
         for class_name in ['series_year', 'seal_t', 'front_plate']:
@@ -3102,6 +3128,11 @@ class ProductionProcessor:
         """
         config = self._get_yolo_crop_config()
         h, w = img.shape[:2]
+
+        # Hand-placed fixed box (denominations the model can't anchor) wins.
+        fixed = self._fixed_box_for('back_seal')
+        if fixed is not None:
+            return self._fixed_box_rect(img, fixed)
 
         # Get back seal config
         back_seal_cfg = config['back_seal']
@@ -3903,6 +3934,33 @@ class ProductionProcessor:
         x1, y1, x2, y2 = self.create_crop_rect(image, side, region)
         return image[y1:y2, x1:x2]
 
+    def _fixed_box_rect(self, img: np.ndarray, box: dict) -> Optional[tuple]:
+        """Return (x1,y1,x2,y2) for a hand-placed ``fixed`` crop box stored as
+        fractions of the bill {x, y, w, h}. Used for seal/serial crops on
+        denominations the ($1-trained) model can't anchor -- the Crop Setup Wizard
+        lets the user drag a plain box, saved as a fraction of the bill so it holds
+        across scans of that denomination. None if the box is degenerate."""
+        h, w = img.shape[:2]
+        try:
+            x1 = int(round(box['x'] * w)); y1 = int(round(box['y'] * h))
+            x2 = int(round((box['x'] + box['w']) * w))
+            y2 = int(round((box['y'] + box['h']) * h))
+        except (KeyError, TypeError):
+            return None
+        x1 = max(0, min(x1, w)); x2 = max(0, min(x2, w))
+        y1 = max(0, min(y1, h)); y2 = max(0, min(y2, h))
+        if x2 <= x1 or y2 <= y1:
+            return None
+        return (x1, y1, x2, y2)
+
+    def _fixed_box_for(self, region_key: str) -> Optional[dict]:
+        """The stored fixed-box dict for a seal/serial region, if that region is in
+        ``mode: 'fixed'`` (else None -- use the anchored path)."""
+        sub = self._get_yolo_crop_config().get(region_key, {})
+        if sub.get('mode') == 'fixed' and isinstance(sub.get('fixed'), dict):
+            return sub['fixed']
+        return None
+
     def crop_region_rect(self, img: np.ndarray, detections: dict, side: str, region: str):
         """Return (x1,y1,x2,y2) for one crop, mirroring generate_crops() dispatch.
 
@@ -3925,6 +3983,11 @@ class ProductionProcessor:
         """Rect for the left/right serial crop: anchored to that serial_number
         detection, padded, expanded to the configured min size, and shifted by the
         configured offsets (positive x = right, positive y = up). None if missing."""
+        # Hand-placed fixed box (denominations the model can't anchor) wins.
+        fixed = self._fixed_box_for('serial_' + which)
+        if fixed is not None:
+            return self._fixed_box_rect(img, fixed)
+
         boxes = detections.get('serial_number') or []
         if not boxes:
             return None
@@ -4079,17 +4142,24 @@ class ProductionProcessor:
         seq = [0]
 
         min_dim = self.cfg.min_crop_dimension
+        border_px = self.cfg.border_px
+        border_bgr = self.cfg.border_color_bgr
 
         def _write(crop_img, pad=True):
             if crop_img is None or getattr(crop_img, 'size', 1) == 0:
                 return
-            # Global minimum-dimension padding: black-bar ANY crop under the min so
-            # it clears eBay's 500px floor -- not just the overlay serial crops.
-            # (pad_to_min is a no-op when the crop already meets the minimum.)
+            # Always-on border: a solid frame (border color) around EVERY crop.
+            if border_px > 0:
+                crop_img = cv2.copyMakeBorder(
+                    crop_img, border_px, border_px, border_px, border_px,
+                    cv2.BORDER_CONSTANT, value=border_bgr)
+            # Global minimum-dimension padding: bar ANY crop under the min so it
+            # clears eBay's 500px floor -- not just the overlay serial crops, and in
+            # the chosen border color (black by default). (No-op when already >= min.)
             # Serial crops pass pad=False and handle their own border via _write_serial.
             if pad and min_dim > 0:
                 from serial_overlay import pad_to_min
-                crop_img = pad_to_min(crop_img, min_size=min_dim)
+                crop_img = pad_to_min(crop_img, min_size=min_dim, color=border_bgr)
             seq[0] += 1
             path = output_dir / f"{safe_serial}_{seq[0]:02d}.jpg"
             ok = cv2.imwrite(str(path), crop_img, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])

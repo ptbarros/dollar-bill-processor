@@ -38,6 +38,11 @@ datas = [
     ('config.yaml', '.'),
     ('assets/DD-Crop.png', 'assets'),   # window / taskbar icon
 ]
+# Built-in sample bills for the Setup Wizard's "try a sample" mode
+# (assets/samples/<denom>/<denom>.jpg + _b.jpg).
+for p in Path('assets/samples').rglob('*'):
+    if p.is_file():
+        datas.append((str(p), str(p.parent)))
 # patterns/ tree (needed by the pattern engine for serial-based crop naming),
 # skipping caches and the writable user dir.
 for p in Path('patterns').rglob('*'):
@@ -49,6 +54,7 @@ hiddenimports = [
     'yaml', 'pandas', 'openpyxl', 'PIL',
     # lazily imported inside crop_tool / main paths:
     'gui.crop_dialog', 'crop_preview', 'process_production', 'resource_path',
+    'gui.crop_canvas', 'gui.crop_profile_wizard', 'crop_geometry', 'crop_samples',
 ]
 
 # Packages that ship data and/or dynamically load native libs / submodules.
