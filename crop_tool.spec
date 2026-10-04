@@ -122,6 +122,6 @@ if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
         name='Crop Detective.app',
-        icon=None,   # .icns not generated yet; uses the default app icon
+        icon='assets/DD-Crop.icns' if Path('assets/DD-Crop.icns').exists() else None,
         bundle_identifier='com.paulbarros.cropdetective',
     )
