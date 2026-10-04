@@ -1523,14 +1523,18 @@ class MainWindow(QMainWindow):
             config = {}
 
         preview_ctx = self._build_crop_preview_ctx()
+        preview_is_sample = False
         if preview_ctx is None:
             # The selected bill couldn't be previewed (none selected, or a restored
             # session whose image files don't resolve). Fall back to the built-in
             # SAMPLE for the active profile's denomination, so the Crop Manager
             # always has a bill to adjust crops on.
             preview_ctx = self._fallback_sample_ctx(config)
+            preview_is_sample = preview_ctx is not None
         dialog = EbayCropDialog(config, self, preview_ctx=preview_ctx,
-                                wizard_ctx_factory=self._crop_sample_ctx_factory)
+                                wizard_ctx_factory=self._crop_sample_ctx_factory,
+                                preview_is_sample=preview_is_sample,
+                                sample_ctx_for_denom=self._sample_ctx_for_denom)
         if dialog.exec():
             # Save updated config to the writable location
             updated_config = dialog.get_config()
@@ -1648,14 +1652,12 @@ class MainWindow(QMainWindow):
                             10: 'ten_dollar', 20: 'twenty_dollar',
                             50: 'fifty_dollar', 100: 'hundred_dollar'}
 
-    def _fallback_sample_ctx(self, config):
-        """A built-in-sample preview context for the active profile's denomination
-        (else $1 / the first available sample). None if nothing usable."""
+    def _sample_ctx_for_denom(self, denom):
+        """A built-in-sample preview context for a denomination number (else $1 /
+        the first available sample). None if nothing usable."""
         try:
             import crop_samples
-            active = config.get('active_crop_profile')
-            prof = (config.get('crop_profiles') or {}).get(active) or {}
-            key = self._SAMPLE_KEY_BY_DENOM.get(prof.get('denomination'), 'one_dollar')
+            key = self._SAMPLE_KEY_BY_DENOM.get(denom, 'one_dollar')
             s = crop_samples.get(key)
             if s is None:
                 avail = crop_samples.discover()
@@ -1663,6 +1665,12 @@ class MainWindow(QMainWindow):
             return self._crop_sample_ctx_factory(s['dir']) if s else None
         except Exception:
             return None
+
+    def _fallback_sample_ctx(self, config):
+        """A built-in-sample preview context for the active profile's denomination."""
+        active = config.get('active_crop_profile')
+        prof = (config.get('crop_profiles') or {}).get(active) or {}
+        return self._sample_ctx_for_denom(prof.get('denomination'))
 
     def _crop_sample_ctx_factory(self, sample_dir):
         """Build a crop preview context from a bundled SAMPLE folder, for the Crop

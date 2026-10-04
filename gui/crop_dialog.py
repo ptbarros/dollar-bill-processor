@@ -46,10 +46,16 @@ class EbayCropDialog(QDialog):
     DENOMINATIONS = (1, 2, 5, 10, 20, 50, 100)
 
     def __init__(self, config, parent=None, preview_ctx=None, standalone=False,
-                 wizard_ctx_factory=None):
+                 wizard_ctx_factory=None, preview_is_sample=False,
+                 sample_ctx_for_denom=None):
         super().__init__(parent)
         self.full_config = config if isinstance(config, dict) else {}
         self.preview_ctx = preview_ctx
+        # When the preview is a built-in SAMPLE (not the user's real bill), swap it
+        # to the chosen profile's denomination as they switch profiles/denomination.
+        # sample_ctx_for_denom(denom) -> a new CropPreviewContext (or None).
+        self._preview_is_sample = bool(preview_is_sample)
+        self._sample_ctx_for_denom = sample_ctx_for_denom
         # When provided, a "Setup Wizard…" button launches the guided per-
         # denomination profile builder. The callable takes a sample folder and
         # returns a CropPreviewContext (the caller supplies the processor).
@@ -123,11 +129,27 @@ class EbayCropDialog(QDialog):
         self.active_name = name
         self.config = self.profiles[name]
         self._load_settings()                           # rebuild table + panels
+        self._maybe_reload_sample_preview()
+
+    def _maybe_reload_sample_preview(self):
+        """If the preview is a built-in sample (not the user's bill), swap it to the
+        current profile's denomination sample so the shown bill matches."""
+        if not (self._preview_is_sample and self._sample_ctx_for_denom):
+            return
+        try:
+            ctx = self._sample_ctx_for_denom(self.config.get('denomination'))
+        except Exception:
+            ctx = None
+        if ctx is not None:
+            self.preview_ctx = ctx
+            self._canvas_side = None   # force set_bill with the new bill
+            self._refresh_preview()
 
     def _on_denomination_changed(self):
         if getattr(self, '_loading_denom', False):
             return
         self.config['denomination'] = self.denom_combo.currentData()
+        self._maybe_reload_sample_preview()
 
     def _on_min_dim_changed(self):
         if getattr(self, '_loading_denom', False):
