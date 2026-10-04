@@ -110,6 +110,14 @@
   .cta .section-sub{color:color-mix(in srgb,var(--brand-ink) 82%,transparent)}
   .cta .btn-ghost{background:var(--brand-ink);color:var(--brand);border-color:transparent}
 
+  /* Crop Detective companion */
+  .cropdet{display:flex;gap:26px;align-items:center;background:var(--surface);border:1px solid var(--border);
+    border-radius:20px;padding:28px;box-shadow:var(--shadow);margin-top:8px}
+  .cropdet-logo{width:96px;height:96px;border-radius:22px;object-fit:contain;flex:0 0 auto;display:block}
+  .cropdet-body{flex:1 1 auto;min-width:0}
+  @media (max-width:640px){.cropdet{flex-direction:column;text-align:center}
+    .cropdet-body .downloads{justify-content:center}}
+
   /* Footer */
   footer{border-top:1px solid var(--border);padding:32px 0;color:var(--muted);font-size:14px}
   .foot{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}
@@ -123,6 +131,7 @@
     <nav class="nav-links">
       <a href="#features">Features</a>
       <a href="#how">How it works</a>
+      <a href="#crop-detective">Crop Detective</a>
       <a href="#download">Download</a>
       <a class="ghlink" href="https://github.com/ptbarros/dollar-bill-processor">GitHub&nbsp;↗</a>
     </nav>
@@ -199,6 +208,34 @@
     </div>
   </section>
 
+  <!-- CROP DETECTIVE -->
+  <section id="crop-detective" class="wrap">
+    <div class="eyebrow">Companion tool</div>
+    <h2>Just need the crops? Meet Crop Detective.</h2>
+    <p class="section-sub">A small, standalone app that turns your scanned bills into clean,
+      listing-ready crops — seals, serials, and each third of the note — without opening the full
+      program. A guided wizard builds crop profiles for $1 through $100 on built-in sample bills, so
+      you can set everything up before you've scanned a thing.</p>
+    <div class="cropdet">
+      <img class="cropdet-logo" src="crop-detective-icon.png" alt="Crop Detective logo">
+      <div class="cropdet-body">
+        <div class="downloads" style="justify-content:flex-start;margin-bottom:8px">
+          <a class="btn btn-primary" id="cd-win"
+             href="https://github.com/ptbarros/dollar-bill-processor/releases/tag/croptool-v1.8.0">
+            <span class="os">⊞</span><span>Download Crop Detective<small>Windows · installer</small></span>
+          </a>
+          <a class="btn btn-ghost" id="cd-all"
+             href="https://github.com/ptbarros/dollar-bill-processor/releases/tag/croptool-v1.8.0">
+            <span class="os"></span><span>macOS &amp; Linux<small>.dmg · AppImage</small></span>
+          </a>
+        </div>
+        <p class="subnote" style="margin-top:0">Free &amp; open source — part of the Dollar Detective
+          suite. <a href="https://github.com/ptbarros/dollar-bill-processor/releases" id="cd-browse">Browse
+          Crop Detective releases →</a></p>
+      </div>
+    </div>
+  </section>
+
   <!-- CTA -->
   <section class="wrap">
     <div class="cta">
@@ -240,6 +277,29 @@
             {headers:{'Accept':'application/vnd.github+json'}})
         .then(function(r){return r.ok?r.json():null;})
         .then(function(d){ if(d&&d.tag_name){document.getElementById('version').textContent=d.tag_name;} })
+        .catch(function(){});
+    }catch(e){}
+  })();
+
+  // Point the Crop Detective buttons at the latest `croptool-*` release. It ships
+  // as a prerelease, so /releases/latest won't find it — we scan the releases list
+  // for the newest croptool tag. Static hrefs stay as the fallback if this fails.
+  (function(){
+    try{
+      fetch('https://api.github.com/repos/ptbarros/dollar-bill-processor/releases?per_page=30',
+            {headers:{'Accept':'application/vnd.github+json'}})
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(list){
+          if(!list||!list.length) return;
+          var rel=list.find(function(x){return x.tag_name&&x.tag_name.indexOf('croptool-')===0;});
+          if(!rel) return;
+          ['cd-all','cd-browse'].forEach(function(id){
+            var el=document.getElementById(id); if(el) el.href=rel.html_url;
+          });
+          var win=(rel.assets||[]).find(function(a){return /setup\.exe$/i.test(a.name);});
+          var w=document.getElementById('cd-win');
+          if(w) w.href=win?win.browser_download_url:rel.html_url;
+        })
         .catch(function(){});
     }catch(e){}
   })();
