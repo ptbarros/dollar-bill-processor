@@ -7,20 +7,29 @@
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0"
 #endif
-#define MyAppName "Crop Detective"
+; Optional per-edition overrides (passed from CI for the DirectML build):
+;   EditionTag  -> filename/dir suffix, e.g. "-directml"
+;   EditionName -> display suffix, e.g. " (DirectML)"
+#ifndef EditionTag
+  #define EditionTag ""
+#endif
+#ifndef EditionName
+  #define EditionName ""
+#endif
+#define MyAppName "Crop Detective" + EditionName
 
 [Setup]
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher=Paul Barros
-DefaultDirName={autopf}\CropDetective
+DefaultDirName={autopf}\CropDetective{#EditionTag}
 DefaultGroupName={#MyAppName}
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=..\assets\DD-Crop.ico
 ; Paths are relative to this .iss file (installer/), so reach up to the repo root.
 OutputDir=..\dist
-OutputBaseFilename=CropDetective-{#MyAppVersion}-setup
+OutputBaseFilename=CropDetective-{#MyAppVersion}{#EditionTag}-setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible

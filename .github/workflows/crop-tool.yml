@@ -57,6 +57,49 @@ jobs:
           path: dist/CropDetective-*-setup.exe
           if-no-files-found: error
 
+  windows-directml:
+    # DirectML edition: accelerates YOLO (and RapidOCR, which auto-detects the
+    # DirectML EP) on ANY DX12 GPU — AMD/NVIDIA discrete or Intel — where the
+    # OpenVINO edition would fall back to CPU. Same crop_tool.spec; only the
+    # onnxruntime wheel differs (collect_all bundles DirectML.dll).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies (DirectML, torch-free)
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip uninstall -y onnxruntime onnxruntime-gpu onnxruntime-openvino onnxruntime-directml || true
+          pip install "onnxruntime-directml>=1.17.0"
+          python -c "import onnxruntime as o; p=o.get_available_providers(); print('providers:',p); assert 'DmlExecutionProvider' in p, 'DirectML EP missing'"
+          pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
+          pip install pyinstaller
+
+      - name: Build onedir crop tool (PyInstaller)
+        run: pyinstaller --noconfirm --clean crop_tool.spec
+
+      - name: Read app version
+        id: ver
+        shell: bash
+        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Build installer (Inno Setup, DirectML edition)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} /DEditionTag=-directml "/DEditionName= (DirectML)" installer\CropDetective.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crop-tool-windows-directml
+          path: dist/CropDetective-*-directml-setup.exe
+          if-no-files-found: error
+
   linux:
     runs-on: ubuntu-latest
     steps:
@@ -125,7 +168,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [windows, linux, macos]
+    needs: [windows, windows-directml, linux, macos]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/croptool-v')
     permissions:
@@ -139,6 +182,7 @@ jobs:
         with:
           files: |
             artifacts/crop-tool-windows/*
+            artifacts/crop-tool-windows-directml/*
             artifacts/crop-tool-linux/*
             artifacts/crop-tool-macos/*
           name: "Crop Detective ${{ github.ref_name }}"
@@ -146,10 +190,14 @@ jobs:
             Standalone Crop Tool — crop a folder of bill scans using your Crop
             Manager settings, without the full app.
 
-            **Windows:** download `CropDetective-*-setup.exe` and run the
-            installer (Start-menu shortcut + uninstaller, per-user, no admin
-            needed). Windows may show a SmartScreen warning for an unsigned app
-            (More info -> Run anyway).
+            **Windows — two editions** (run the installer: Start-menu shortcut +
+            uninstaller, per-user, no admin needed; SmartScreen may warn on an
+            unsigned app → More info → Run anyway):
+            - `CropDetective-*-setup.exe` — **Standard (OpenVINO).** Best on
+              Intel machines; falls back to CPU elsewhere.
+            - `CropDetective-*-directml-setup.exe` — **DirectML.** GPU-accelerated
+              on any DirectX 12 GPU (NVIDIA / AMD / Intel) — pick this on an
+              NVIDIA or AMD machine. Installs alongside the Standard edition.
 
             **Linux:** download `CropDetective-x86_64.AppImage`, then
             `chmod +x` it and run.
