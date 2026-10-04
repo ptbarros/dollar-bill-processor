@@ -1523,7 +1523,8 @@ class MainWindow(QMainWindow):
             config = {}
 
         preview_ctx = self._build_crop_preview_ctx()
-        dialog = EbayCropDialog(config, self, preview_ctx=preview_ctx)
+        dialog = EbayCropDialog(config, self, preview_ctx=preview_ctx,
+                                wizard_ctx_factory=self._crop_sample_ctx_factory)
         if dialog.exec():
             # Save updated config to the writable location
             updated_config = dialog.get_config()
@@ -1636,6 +1637,17 @@ class MainWindow(QMainWindow):
             self._refresh_process_denomination()
         except Exception:
             pass
+
+    def _crop_sample_ctx_factory(self, sample_dir):
+        """Build a crop preview context from a bundled SAMPLE folder, for the Crop
+        Manager's Setup Wizard. Unlike the live preview, this MAY load the model
+        (the user explicitly opened the wizard); reuses it if already loaded."""
+        from pathlib import Path
+        from crop_preview import build_context_from_folder
+        proc = self._get_or_create_processor(silent=True)
+        if proc is None:
+            return None
+        return build_context_from_folder(proc, Path(sample_dir))
 
     def _build_crop_preview_ctx(self):
         """Build a crop-settings preview from the currently selected bill, reusing

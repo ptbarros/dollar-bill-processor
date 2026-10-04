@@ -76,8 +76,12 @@ class CropProfileWizard(QDialog):
 
     def __init__(self, ctx_factory, save_config, base_yolo_crops=None,
                  parent=None, initial_input="", initial_output="",
-                 existing_profiles=None):
+                 existing_profiles=None, folder_setup=True):
         super().__init__(parent)
+        # folder_setup=False (main app): the wizard only BUILDS profiles -- skip the
+        # input/output folder + "ready to crop a folder" pages, which are specific
+        # to the standalone Crop Detective tool.
+        self._folder_setup = folder_setup
         self.setWindowTitle("Crop Setup Wizard")
         self.setMinimumSize(900, 620)
         self._ctx_factory = ctx_factory
@@ -287,7 +291,7 @@ class CropProfileWizard(QDialog):
             self.next_btn.setText("Finish crops" if last else "Next crop ▸")
         elif page == self._DONE:
             self._enter_done()
-            self.next_btn.setText("I'm done ▸")
+            self.next_btn.setText("I'm done ▸" if self._folder_setup else "Finish")
         elif page == self._READY:
             self._enter_ready()
             self.next_btn.setText("Finish")
@@ -313,7 +317,10 @@ class CropProfileWizard(QDialog):
                 self._crop_idx += 1
                 self._goto(self._CROP)
         elif p == self._DONE:
-            self._goto(self._FOLDERS)
+            if self._folder_setup:
+                self._goto(self._FOLDERS)
+            else:
+                self.accept()   # main app: profiles only, no folder step
         elif p == self._FOLDERS:
             self.input_dir = self.in_edit.text().strip()
             self.output_dir = self.out_edit.text().strip()

@@ -45,10 +45,20 @@ class EbayCropDialog(QDialog):
     # two-letter serial prefix (series + district); $1/$2 use one letter.
     DENOMINATIONS = (1, 2, 5, 10, 20, 50, 100)
 
-    def __init__(self, config, parent=None, preview_ctx=None, standalone=False):
+    def __init__(self, config, parent=None, preview_ctx=None, standalone=False,
+                 wizard_ctx_factory=None):
         super().__init__(parent)
         self.full_config = config if isinstance(config, dict) else {}
         self.preview_ctx = preview_ctx
+        # When provided, a "Setup Wizard…" button launches the guided per-
+        # denomination profile builder. The callable takes a sample folder and
+        # returns a CropPreviewContext (the caller supplies the processor).
+        self._wizard_ctx_factory = wizard_ctx_factory
+        # Preview/canvas attrs default off; _build_preview_panel turns them on when
+        # a preview context exists (it isn't built when no bill is available).
+        self._interactive = False
+        self._canvas = None
+        self._canvas_side = None
         # standalone = opened from the Crop Detective tool, which doesn't
         # classify patterns, so the per-serial overlay can't draw one -- there the
         # toggle is relabeled to describe what it actually does: a 2x close-up crop.
@@ -202,6 +212,28 @@ class EbayCropDialog(QDialog):
         self._refresh_profile_combo()
         self._load_settings()
 
+    def _open_wizard(self):
+        """Launch the guided per-denomination profile builder. It writes finished
+        profiles into this dialog's in-memory set (persisted when the dialog is
+        OK'd via get_config). folder_setup=False: profile-building only, no crop-
+        folder step (that's the standalone tool's job)."""
+        from gui.crop_profile_wizard import CropProfileWizard
+        wiz = CropProfileWizard(
+            self._wizard_ctx_factory, self._wizard_save,
+            existing_profiles=self.profiles, parent=self, folder_setup=False)
+        wiz.exec()
+
+    def _wizard_save(self, profiles, active):
+        """Merge wizard-built profiles into this dialog (not config.yaml directly)."""
+        self._sync_to_config()
+        self.profiles[self.active_name] = self.config
+        self.profiles.update(profiles)
+        if active and active in self.profiles:
+            self.active_name = active
+            self.config = self.profiles[active]
+        self._refresh_profile_combo()
+        self._load_settings()
+
     def _setup_ui(self):
         """Setup the dialog UI."""
         outer = QHBoxLayout(self)
@@ -222,6 +254,13 @@ class EbayCropDialog(QDialog):
         rename_btn = QPushButton("Rename"); rename_btn.clicked.connect(self._rename_profile)
         del_btn = QPushButton("Delete"); del_btn.clicked.connect(self._delete_profile)
         prof.addWidget(new_profile_btn); prof.addWidget(rename_btn); prof.addWidget(del_btn)
+        if self._wizard_ctx_factory is not None:
+            prof.addSpacing(12)
+            wiz_btn = QPushButton("Setup Wizard…")
+            wiz_btn.setToolTip("Guided, crop-by-crop setup of a profile for a "
+                               "denomination, on a built-in sample bill.")
+            wiz_btn.clicked.connect(self._open_wizard)
+            prof.addWidget(wiz_btn)
         prof.addStretch()
         layout.addLayout(prof)
 
@@ -503,11 +542,12 @@ class EbayCropDialog(QDialog):
         self.preview_hint.setStyleSheet("color:#888")
         v.addWidget(self.preview_hint)
 
-        # In the standalone crop tool the bill preview is INTERACTIVE: the selected
-        # seal/serial box can be dragged/resized directly on the bill, which writes
-        # back to the same offset/size spinboxes (see _on_canvas_drag). The main app
-        # keeps the static painted-rect label for now. Both share _refresh_preview.
-        self._interactive = bool(self.standalone)
+        # The bill preview is INTERACTIVE wherever there's a sample to show: the
+        # selected seal/serial box drags/resizes directly on the bill (writing back
+        # to the same spinboxes) and thirds edges drag. Enabled for both the
+        # standalone crop tool AND the main app (this panel is only built when a
+        # preview context exists). Both share _refresh_preview.
+        self._interactive = True
         self._canvas = None
         self._canvas_side = None
         if self._interactive:
