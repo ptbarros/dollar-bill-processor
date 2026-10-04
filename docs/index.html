@@ -221,17 +221,14 @@
       <div class="cropdet-body">
         <div class="downloads" style="justify-content:flex-start;margin-bottom:8px">
           <a class="btn btn-primary" id="cd-win"
-             href="https://github.com/ptbarros/dollar-bill-processor/releases/tag/croptool-v1.8.1">
-            <span class="os">⊞</span><span>Download Crop Detective<small>Windows · installer</small></span>
+             href="https://github.com/ptbarros/dollar-bill-processor/releases/tag/croptool-v1.8.2">
+            <span class="os">⊞</span><span>Download Crop Detective<small>Windows · GPU-accelerated</small></span>
           </a>
           <a class="btn btn-ghost" id="cd-all"
-             href="https://github.com/ptbarros/dollar-bill-processor/releases/tag/croptool-v1.8.1">
+             href="https://github.com/ptbarros/dollar-bill-processor/releases/tag/croptool-v1.8.2">
             <span class="os"></span><span>macOS &amp; Linux<small>.dmg · AppImage</small></span>
           </a>
         </div>
-        <p class="subnote" style="margin-top:0">On an NVIDIA or AMD GPU?
-          <a id="cd-dml" href="https://github.com/ptbarros/dollar-bill-processor/releases/tag/croptool-v1.8.1">Get
-          the DirectML build →</a> (GPU-accelerated).</p>
         <p class="subnote" style="margin-top:0">Free &amp; open source — part of the Dollar Detective
           suite. <a href="https://github.com/ptbarros/dollar-bill-processor/releases" id="cd-browse">Browse
           Crop Detective releases →</a></p>
@@ -299,15 +296,9 @@
           ['cd-all','cd-browse'].forEach(function(id){
             var el=document.getElementById(id); if(el) el.href=rel.html_url;
           });
-          // Direct button -> the Standard (OpenVINO) installer; DirectML is linked
-          // separately for NVIDIA/AMD users.
-          var wins=(rel.assets||[]).filter(function(a){return /setup\.exe$/i.test(a.name);});
-          var win=wins.find(function(a){return !/directml/i.test(a.name);})||wins[0];
-          var dml=wins.find(function(a){return /directml/i.test(a.name);});
+          var win=(rel.assets||[]).find(function(a){return /setup\.exe$/i.test(a.name);});
           var w=document.getElementById('cd-win');
           if(w) w.href=win?win.browser_download_url:rel.html_url;
-          var dl=document.getElementById('cd-dml');
-          if(dl&&dml) dl.href=dml.browser_download_url;
         })
         .catch(function(){});
     }catch(e){}
