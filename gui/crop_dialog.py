@@ -333,8 +333,11 @@ class EbayCropDialog(QDialog):
         order_layout = QVBoxLayout(order_group)
 
         self.crop_table = QTableWidget()
-        self.crop_table.setColumnCount(4)
-        self.crop_table.setHorizontalHeaderLabels(["Enabled", "Crop", "Order", "Settings"])
+        # No "Settings" column: almost every crop now has settings (seal/serial
+        # offsets or fixed box, thirds overlap), so the checkmark no longer tells
+        # you anything — select a row to see its settings below.
+        self.crop_table.setColumnCount(3)
+        self.crop_table.setHorizontalHeaderLabels(["Enabled", "Crop", "Order"])
         self.crop_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.crop_table.setSelectionMode(QAbstractItemView.SingleSelection)
 
@@ -342,7 +345,6 @@ class EbayCropDialog(QDialog):
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
         order_layout.addWidget(self.crop_table)
 
@@ -399,6 +401,8 @@ class EbayCropDialog(QDialog):
         self.front_seal_offset_y.setToolTip("Positive = shift up, Negative = shift down")
         front_seal_layout.addWidget(self.front_seal_offset_y)
 
+        front_seal_layout.addSpacing(12)
+        self._add_fixed_cb(front_seal_layout, 'front_seal')
         front_seal_layout.addStretch()
         layout.addWidget(front_seal_group)
 
@@ -433,6 +437,8 @@ class EbayCropDialog(QDialog):
         self.back_seal_offset_y.setToolTip("Positive = shift up, Negative = shift down")
         back_seal_layout.addWidget(self.back_seal_offset_y)
 
+        back_seal_layout.addSpacing(12)
+        self._add_fixed_cb(back_seal_layout, 'back_seal')
         back_seal_layout.addStretch()
         layout.addWidget(back_seal_group)
 
@@ -677,6 +683,8 @@ class EbayCropDialog(QDialog):
         outer.addWidget(border_cb)
         self.serial_border_cbs[which] = border_cb
 
+        self._add_fixed_cb(outer, 'serial_' + which)
+
         self.serial_spins[which] = spins
         box.setVisible(False)
         return box
@@ -750,15 +758,6 @@ class EbayCropDialog(QDialog):
             order_item.setTextAlignment(Qt.AlignCenter)
             self.crop_table.setItem(i, 2, order_item)
 
-            # Settings indicator
-            if crop['has_settings']:
-                settings_item = QTableWidgetItem("✓")
-                settings_item.setTextAlignment(Qt.AlignCenter)
-            else:
-                settings_item = QTableWidgetItem("")
-            settings_item.setFlags(settings_item.flags() & ~Qt.ItemIsEditable)
-            self.crop_table.setItem(i, 3, settings_item)
-
         # Load seal settings
         yolo_crops = self.config.get('yolo_crops', {})
 
@@ -829,6 +828,19 @@ class EbayCropDialog(QDialog):
         region = crop['region'] if crop else None
         self.serial_left_group.setVisible(region == 'serial_left')
         self.serial_right_group.setVisible(region == 'serial_right')
+        if region in ('serial_left', 'serial_right'):
+            self._load_fixed_cb(region)
+
+    def _load_fixed_cb(self, key):
+        """Reflect the config's fixed/anchored mode in the key's checkbox + spins."""
+        import crop_geometry as cg
+        cb = self.fixed_cbs.get(key)
+        if cb is None:
+            return
+        self._loading_fixed = True
+        cb.setChecked(cg.is_fixed(self.config, key))
+        self._loading_fixed = False
+        self._sync_fixed_enabled(key)
 
     def _update_thirds_group(self):
         """Show the overlap knobs relevant to the selected left/center/right crop."""
@@ -888,6 +900,8 @@ class EbayCropDialog(QDialog):
         is_seal = bool(crop and crop['region'] == 'seal')
         self.front_seal_group.setVisible(is_seal and side == 'front')
         self.back_seal_group.setVisible(is_seal and side == 'back')
+        if is_seal:
+            self._load_fixed_cb('front_seal' if side == 'front' else 'back_seal')
 
     def _border_bgr(self):
         h = self._border_color_hex().lstrip('#')
@@ -997,6 +1011,69 @@ class EbayCropDialog(QDialog):
                 f"{self._selected_crop()['name']}  ({side} / {region}) — "
                 "this crop follows the bill automatically and isn't dragged.")
 
+    # --- fixed (hand-placed) box toggle ----------------------------------
+    def _add_fixed_cb(self, layout, key):
+        """Add a 'Fixed box' checkbox for a seal/serial settings group."""
+        if not hasattr(self, 'fixed_cbs'):
+            self.fixed_cbs = {}
+        cb = QCheckBox("Fixed box")
+        cb.setToolTip(
+            "Place this crop by hand — drag it on the bill — instead of anchoring\n"
+            "to the detected seal/serial. Use for denominations the ($1-trained)\n"
+            "model can't find. The size/offset boxes don't apply to a fixed crop.")
+        cb.toggled.connect(lambda _on, k=key: self._on_fixed_toggled(k))
+        layout.addWidget(cb)
+        self.fixed_cbs[key] = cb
+
+    def _spins_for_key(self, key):
+        if key == 'front_seal':
+            return [self.front_seal_width, self.front_seal_height,
+                    self.front_seal_offset_x, self.front_seal_offset_y]
+        if key == 'back_seal':
+            return [self.back_seal_width, self.back_seal_height,
+                    self.back_seal_offset_x, self.back_seal_offset_y]
+        which = 'left' if key == 'serial_left' else 'right'
+        return list(self.serial_spins.get(which, {}).values())
+
+    def _sync_fixed_enabled(self, key):
+        """Grey out the size/offset spins when the crop is a fixed box."""
+        import crop_geometry as cg
+        fixed = cg.is_fixed(self.config, key)
+        for sp in self._spins_for_key(key):
+            sp.setEnabled(not fixed)
+
+    def _region_side_for_key(self, key):
+        if key == 'back_seal':
+            return 'back', 'seal'
+        if key == 'front_seal':
+            return 'front', 'seal'
+        return 'front', key   # serial_left / serial_right
+
+    def _on_fixed_toggled(self, key):
+        if getattr(self, '_loading_fixed', False):
+            return
+        import crop_geometry as cg
+        side, region = self._region_side_for_key(key)
+        if self.fixed_cbs[key].isChecked():
+            rect = None
+            if self.preview_ctx and self.preview_ctx.has_side(side):
+                rect = self.preview_ctx.render(side, region,
+                                               self._current_config_overrides())[1]
+            if rect is not None:
+                h, w = self.preview_ctx.imgs[side].shape[:2]
+                cg.set_fixed(self.config, key, tuple(rect), w, h)
+            else:
+                # No preview to seed from -> a sensible centred default box.
+                cg.apply_updates(self.config, key,
+                                 {'mode': 'fixed',
+                                  'fixed': {'x': 0.35, 'y': 0.3, 'w': 0.3, 'h': 0.4}})
+        else:
+            cg.clear_fixed(self.config, key)
+            if key in ('serial_left', 'serial_right'):
+                self._on_serial_setting_changed(key.split('_')[1])  # re-write spins
+        self._sync_fixed_enabled(key)
+        self._refresh_preview()
+
     def _on_canvas_drag(self, dragged_rect):
         """A box drag/resize finished: invert it to config and push the values
         into the matching spinboxes (which re-renders the preview)."""
@@ -1006,6 +1083,14 @@ class EbayCropDialog(QDialog):
             return
         side, region = crop['side'], crop['region']
         overrides = self._current_config_overrides()
+        # A fixed (hand-placed) box: store the dragged rect as fractions directly.
+        key0 = cg.region_config_key(side, region)
+        if key0 is not None and cg.is_fixed(self.config, key0):
+            if self.preview_ctx and self.preview_ctx.has_side(side):
+                h, w = self.preview_ctx.imgs[side].shape[:2]
+                cg.set_fixed(self.config, key0, tuple(dragged_rect), w, h)
+                self._refresh_preview()
+            return
         # Thirds: dragging a boundary edge maps to the overlap spinboxes.
         if region in cg.THIRDS_REGIONS:
             render = lambda c: self.preview_ctx.render(side, region, c)[1]
