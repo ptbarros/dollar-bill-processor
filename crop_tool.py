@@ -272,8 +272,10 @@ class CropToolWindow(QWidget):
 
         def ctx_factory(sample_dir):
             try:
+                # Samples are curated clean/upright — skip alignment (the $1-trained
+                # aligner can mis-rotate non-$1 notes).
                 return build_context_from_folder(self._get_preview_processor(),
-                                                 Path(sample_dir))
+                                                 Path(sample_dir), align=False)
             except Exception as e:
                 self._append_log(f"Preview unavailable: {e}")
                 return None

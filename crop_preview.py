@@ -71,13 +71,24 @@ class CropPreviewContext:
         return img, rect, crop
 
 
-def build_context_from_paths(processor, front_path, back_path=None) -> Optional[CropPreviewContext]:
+def build_context_from_paths(processor, front_path, back_path=None,
+                             align=True) -> Optional[CropPreviewContext]:
     """Build a preview context from explicit front/back scan paths.
 
-    Aligns them exactly as generate_crops() does (front checks flip; back follows
-    the front's flip). Returns None if the front cannot be aligned.
+    align=True (real bills): aligns them exactly as generate_crops() does (front
+    checks flip; back oriented independently). align=False: loads the images
+    as-is — for the built-in wizard SAMPLES, which are already clean, upright and
+    bill-cropped; the ($1-trained) aligner can mis-rotate/flip non-$1 notes, so we
+    skip it and trust the curated image. Returns None if the front can't load.
     """
     import cv2
+
+    if not align:
+        front_img = cv2.imread(str(front_path))
+        if front_img is None:
+            return None
+        back_img = cv2.imread(str(back_path)) if back_path else None
+        return CropPreviewContext(processor, front_img, back_img)
 
     front_img = back_img = None
     try:
@@ -105,14 +116,16 @@ def build_context_from_paths(processor, front_path, back_path=None) -> Optional[
     return CropPreviewContext(processor, front_img, back_img)
 
 
-def build_context_from_folder(processor, input_dir: Path) -> Optional[CropPreviewContext]:
+def build_context_from_folder(processor, input_dir: Path,
+                              align=True) -> Optional[CropPreviewContext]:
     """Build a preview context from the first bill pair in a folder.
 
-    Aligns the first detected front (and back, if present) exactly as the
-    pipeline does. Returns None if no usable bill is found.
+    align=True (real bills): aligns the first detected front/back as the pipeline
+    does. align=False (wizard SAMPLES): skip alignment AND the YOLO front/back
+    verify (the pair's front = the base file, back = its ``_b`` sibling already),
+    so the curated sample is shown exactly as stored.
     """
     from process_production import ScannerFormatDetector
-    import cv2
 
     input_dir = Path(input_dir)
     if not input_dir.is_dir():
@@ -123,13 +136,14 @@ def build_context_from_folder(processor, input_dir: Path) -> Optional[CropPrevie
         pairs = []
     if not pairs:
         return None
-    # Only verify the FIRST pair — verifying the whole folder would run YOLO on
-    # every bill (30s+ on a 200-image folder) just to preview one sample.
-    try:
-        pairs = processor.verify_and_swap_pairs(pairs[:1])
-    except Exception:
-        pairs = pairs[:1]
+    if align:
+        # Only verify the FIRST pair — verifying the whole folder would run YOLO on
+        # every bill (30s+ on a 200-image folder) just to preview one sample.
+        try:
+            pairs = processor.verify_and_swap_pairs(pairs[:1])
+        except Exception:
+            pairs = pairs[:1]
 
     pair = pairs[0]
     return build_context_from_paths(processor, pair.front_path,
-                                    getattr(pair, 'back_path', None))
+                                    getattr(pair, 'back_path', None), align=align)

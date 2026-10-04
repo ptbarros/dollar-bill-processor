@@ -1647,7 +1647,9 @@ class MainWindow(QMainWindow):
         proc = self._get_or_create_processor(silent=True)
         if proc is None:
             return None
-        return build_context_from_folder(proc, Path(sample_dir))
+        # Samples are curated clean/upright — skip alignment (the $1-trained aligner
+        # can mis-rotate non-$1 notes).
+        return build_context_from_folder(proc, Path(sample_dir), align=False)
 
     def _build_crop_preview_ctx(self):
         """Build a crop-settings preview from the currently selected bill, reusing
