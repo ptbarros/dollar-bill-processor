@@ -357,6 +357,14 @@ class CropProfileWizard(QDialog):
         key = self.denom_combo.currentData()
         self._sample = crop_samples.get(key)
         if not self._sample:
+            # No sample for the chosen denomination (or none bundled at all) ->
+            # say so instead of silently doing nothing on Next.
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, "Sample bill not found",
+                "The built-in sample bills weren't found, so the wizard can't set up "
+                "crops.\n\nTry reinstalling the latest version; if it keeps happening, "
+                "let us know.")
             return False
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:

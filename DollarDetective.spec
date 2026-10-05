@@ -32,6 +32,11 @@ datas = [
 for p in Path('patterns').rglob('*'):
     if p.is_file() and '__pycache__' not in p.parts and 'user' not in p.parts:
         datas.append((str(p), str(p.parent)))
+# Built-in sample bills for the Crop Manager's Setup Wizard
+# (assets/samples/<denom>/<denom>.jpg + _b.jpg).
+for p in Path('assets/samples').rglob('*'):
+    if p.is_file():
+        datas.append((str(p), str(p.parent)))
 
 binaries = []
 hiddenimports = ['yaml', 'pandas', 'openpyxl', 'docx', 'PIL', 'updater', 'gui.updater_ui']
