@@ -22,7 +22,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root
-from yolo_backend import OnnxYoloDetector
+from dollar_detective.yolo_backend import OnnxYoloDetector
 
 
 def iou(a, b):

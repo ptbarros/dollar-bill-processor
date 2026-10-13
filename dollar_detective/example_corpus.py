@@ -41,7 +41,7 @@ CORPUS_VERSION = 2
 
 def cache_path() -> Path:
     """Where the built corpus is cached (per user, alongside user_settings.yaml)."""
-    from resource_path import user_data_dir
+    from dollar_detective.resource_path import user_data_dir
     return user_data_dir() / "example_corpus.json"
 
 

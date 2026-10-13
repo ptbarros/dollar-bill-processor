@@ -15,10 +15,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pattern_engine_v3 import PatternEngineV3
-import ai_pattern_chat
-
-
+from dollar_detective.pattern_engine_v3 import PatternEngineV3
+from dollar_detective import ai_pattern_chat
 def _patterns_with_examples(engine, n=2):
     picked = []
     for name, info in engine.lua_patterns.items():

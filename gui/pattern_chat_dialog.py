@@ -20,9 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import ai_pattern_chat
-
-
+from dollar_detective import ai_pattern_chat
 class _ChatWorker(QThread):
     """Runs one session.ask() off the UI thread."""
     finished_ok = Signal(str)

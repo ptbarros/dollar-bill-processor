@@ -50,7 +50,7 @@ class SessionRecoveryManager:
             path: Custom path for recovery file. Defaults to the writable
                 per-user data dir (repo root in dev, user config dir when frozen).
         """
-        from resource_path import user_data_dir
+        from dollar_detective.resource_path import user_data_dir
         self.path = path or (user_data_dir() / ".session_recovery.json")
         self._dirty = False
         self._last_save_hash: Optional[int] = None

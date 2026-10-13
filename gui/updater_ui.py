@@ -11,9 +11,7 @@ import webbrowser
 from PySide6.QtCore import QThread, Signal, Qt, QEventLoop
 from PySide6.QtWidgets import QMessageBox, QProgressDialog, QApplication
 
-import updater
-
-
+from dollar_detective import updater
 class UpdateCheckThread(QThread):
     """Background GitHub Releases check; emits UpdateInfo or None."""
     finished_check = Signal(object)
@@ -104,7 +102,7 @@ def prompt_and_apply(parent, info):
 
     # Windows: download + launch the installer. Record the version we're leaving
     # first, so it can be one-click reverted to afterwards.
-    from settings_manager import get_settings
+    from dollar_detective.settings_manager import get_settings
     _download_and_launch(
         parent, asset, info.release_url,
         on_before_launch=lambda: get_settings().set_previous_version(info.current_version),
@@ -224,7 +222,7 @@ def revert_to_previous(parent, version):
 
     # Clear the recorded revert target once we commit to reinstalling it, so we
     # don't keep offering to "revert" to the version we're now going back to.
-    from settings_manager import get_settings
+    from dollar_detective.settings_manager import get_settings
     _download_and_launch(
         parent, asset, release_url,
         on_before_launch=lambda: get_settings().set_previous_version(None),

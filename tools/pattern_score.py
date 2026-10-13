@@ -56,7 +56,7 @@ DEFAULT_WEIGHTS = {"value": 0.30, "volume": 0.25, "keep": 0.30, "rarity": 0.15}
 # --------------------------------------------------------------------------- #
 def load_patterns():
     """{internal_name: {display, tier}} for all installed patterns."""
-    from pattern_engine_v3 import PatternEngineV3
+    from dollar_detective.pattern_engine_v3 import PatternEngineV3
     eng = PatternEngineV3()
     out = {}
     for name, info in eng.lua_patterns.items():

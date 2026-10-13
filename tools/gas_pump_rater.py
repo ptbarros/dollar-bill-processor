@@ -231,8 +231,8 @@ class GasPumpRater(QMainWindow):
         if self.processor is not None:
             return True
         try:
-            from process_production import ProductionProcessor
-            from settings_manager import get_settings
+            from dollar_detective.process_production import ProductionProcessor
+            from dollar_detective.settings_manager import get_settings
             model = REPO_ROOT / "best.pt"
             if not model.exists():
                 QMessageBox.critical(self, "Missing model", f"best.pt not found at {model}")

@@ -20,11 +20,11 @@ from PySide6.QtGui import QPixmap, QImage, QMouseEvent, QWheelEvent, QCursor, QP
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pattern_engine_v3 import PatternEngineV3 as PatternEngine
+from dollar_detective.pattern_engine_v3 import PatternEngineV3 as PatternEngine
 
-from settings_manager import get_settings
-from debug_logger import dlog
-from serial_overlay import draw_serial_overlay
+from dollar_detective.settings_manager import get_settings
+from dollar_detective.debug_logger import dlog
+from dollar_detective.serial_overlay import draw_serial_overlay
 
 
 def _load_crosshair_settings():
@@ -1582,7 +1582,7 @@ class PreviewPanel(QWidget):
         if cur != self._watch_page_index:
             self._pre_watch_index = cur
         try:
-            from debug_logger import dlog
+            from dollar_detective.debug_logger import dlog
             dlog("view.overlay_show", which="watch", captured_pre_watch_index=self._pre_watch_index,
                  current_view_mode=getattr(self, "_current_view_mode", "?"), cur=cur)
         except Exception:
@@ -1613,7 +1613,7 @@ class PreviewPanel(QWidget):
         idx = _m2i.get(getattr(self, "_current_view_mode", "front"), 0)
         stale = getattr(self, "_pre_watch_index", 0)
         try:
-            from debug_logger import dlog
+            from dollar_detective.debug_logger import dlog
             dlog("view.overlay_hide", restore_index=idx,
                  current_view_mode=getattr(self, "_current_view_mode", "?"),
                  pre_watch_index=stale, corrected=(stale != idx))
@@ -1629,7 +1629,7 @@ class PreviewPanel(QWidget):
         if cur != self._watch_page_index:
             self._pre_watch_index = cur
         try:
-            from debug_logger import dlog
+            from dollar_detective.debug_logger import dlog
             dlog("view.overlay_show", which="processing", captured_pre_watch_index=self._pre_watch_index,
                  current_view_mode=getattr(self, "_current_view_mode", "?"), cur=cur)
         except Exception:
@@ -1709,7 +1709,7 @@ class PreviewPanel(QWidget):
         index = mode_to_index.get(mode, 0)
         self.view_stack.setCurrentIndex(index)
         try:
-            from debug_logger import dlog
+            from dollar_detective.debug_logger import dlog
             dlog("view.mode_set", mode=mode, index=index)
         except Exception:
             pass
@@ -1839,7 +1839,7 @@ class PreviewPanel(QWidget):
 
         try:
             # Import processor lazily to avoid circular imports
-            from process_production import ProductionProcessor
+            from dollar_detective.process_production import ProductionProcessor
 
             # Use cached processor if available, otherwise create one
             if not hasattr(self, '_processor'):
@@ -1989,7 +1989,7 @@ class PreviewPanel(QWidget):
 
         try:
             # Import processor lazily to avoid circular imports
-            from process_production import ProductionProcessor
+            from dollar_detective.process_production import ProductionProcessor
 
             # Use cached processor if available, otherwise create one
             if not hasattr(self, '_processor'):

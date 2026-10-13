@@ -24,7 +24,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
-from version import __version__
+from dollar_detective.version import __version__
 
 REPO = "ptbarros/dollar-bill-processor"
 RELEASES_API = f"https://api.github.com/repos/{REPO}/releases?per_page=30"

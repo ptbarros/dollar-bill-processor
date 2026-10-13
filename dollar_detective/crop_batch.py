@@ -13,7 +13,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
-from resource_path import app_base, user_data_dir
+from dollar_detective.resource_path import app_base, user_data_dir
 
 
 def _active_config_path() -> Path:
@@ -55,7 +55,7 @@ class CropWorker(QThread):
 
     def run(self):
         try:
-            from process_production import ProductionProcessor, Config, ScannerFormatDetector
+            from dollar_detective.process_production import ProductionProcessor, Config, ScannerFormatDetector
 
             base = app_base()
             yolo_path, onnx_path = _resolve_model()

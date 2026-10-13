@@ -27,7 +27,7 @@ class ClickableInfoLabel(QLabel):
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from settings_manager import SettingsManager
+from dollar_detective.settings_manager import SettingsManager
 
 
 class SettingsDialog(QDialog):
@@ -709,7 +709,7 @@ class SettingsDialog(QDialog):
 
     def _open_debug_log(self):
         """Open debug_log.txt in the OS default text viewer."""
-        from debug_logger import get_log_path
+        from dollar_detective.debug_logger import get_log_path
         path = get_log_path()
         if path and Path(path).exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
@@ -837,7 +837,7 @@ class SettingsDialog(QDialog):
 
     def _restore_defaults(self):
         """Restore default settings."""
-        from settings_manager import ProcessingSettings, UISettings, ExportSettings, AutosaveSettings, AISettings
+        from dollar_detective.settings_manager import ProcessingSettings, UISettings, ExportSettings, AutosaveSettings, AISettings
 
         # Reset to defaults
         self.settings.processing = ProcessingSettings()
@@ -882,7 +882,7 @@ class SettingsDialog(QDialog):
 
     def _browse_data_dir(self):
         """Browse for the data (Straps) folder."""
-        from resource_path import content_dir
+        from dollar_detective.resource_path import content_dir
         start = self.data_folder_edit.text().strip() or str(content_dir())
         folder = QFileDialog.getExistingDirectory(self, "Select Scanner Output Folder", start)
         if folder:
@@ -890,7 +890,7 @@ class SettingsDialog(QDialog):
 
     def _open_data_dir(self):
         """Open the current data folder in the OS file browser."""
-        from resource_path import content_dir
+        from dollar_detective.resource_path import content_dir
         import subprocess
         chosen = self.data_folder_edit.text().strip()
         target = Path(chosen).expanduser() if chosen else content_dir()
@@ -907,7 +907,7 @@ class SettingsDialog(QDialog):
 
     def _update_data_folder_hint(self):
         """Soft note if the chosen data folder looks like it's inside OneDrive."""
-        from resource_path import is_in_onedrive
+        from dollar_detective.resource_path import is_in_onedrive
         chosen = self.data_folder_edit.text().strip()
         if chosen and is_in_onedrive(chosen):
             self.data_folder_hint.setText(

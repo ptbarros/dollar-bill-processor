@@ -22,10 +22,10 @@ from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QF
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pattern_engine_v3 import PatternEngineV3 as PatternEngine
+from dollar_detective.pattern_engine_v3 import PatternEngineV3 as PatternEngine
 HAS_V3_ENGINE = True
 
-from settings_manager import get_settings
+from dollar_detective.settings_manager import get_settings
 
 # Import pattern recipes for wizard
 from gui.pattern_recipes import get_all_recipes, ParameterDef
@@ -132,8 +132,8 @@ class CorpusBuildThread(QThread):
 
     def run(self):
         try:
-            import example_corpus
-            from pattern_engine_v3 import PatternEngineV3
+            from dollar_detective import example_corpus
+            from dollar_detective.pattern_engine_v3 import PatternEngineV3
             engine = PatternEngineV3()
             for info in engine.lua_patterns.values():
                 info.enabled = True
@@ -1083,8 +1083,8 @@ class PatternDialog(QDialog):
             self.duplicate_pattern_btn.show()  # works on core + user patterns
             # "Ask Claude…" only when an AI provider is configured.
             try:
-                from ai_pattern_chat import is_configured
-                from settings_manager import get_settings
+                from dollar_detective.ai_pattern_chat import is_configured
+                from dollar_detective.settings_manager import get_settings
                 self.ask_ai_btn.setVisible(is_configured(get_settings()))
             except Exception:
                 self.ask_ai_btn.hide()
@@ -1428,7 +1428,7 @@ class PatternDialog(QDialog):
         Generate Random uses the structure-mutator, so there's never a wait."""
         if self._corpus is not None or self._corpus_thread is not None:
             return
-        import example_corpus
+        from dollar_detective import example_corpus
         try:
             data = example_corpus.load(self.engine)
         except Exception:
@@ -1477,7 +1477,7 @@ class PatternDialog(QDialog):
         # matches. Falls through to structure-mutation when the corpus isn't
         # ready yet or recorded no hits for this pattern.
         if self._corpus:
-            import example_corpus
+            from dollar_detective import example_corpus
             corpus_serial = example_corpus.random_serial(self._corpus, pattern_name)
             if corpus_serial:
                 return corpus_serial, None
@@ -1845,8 +1845,8 @@ class PatternDialog(QDialog):
         if not self._current_lua_pattern:
             return
         try:
-            from settings_manager import get_settings
-            from ai_pattern_chat import is_configured
+            from dollar_detective.settings_manager import get_settings
+            from dollar_detective.ai_pattern_chat import is_configured
             from gui.pattern_chat_dialog import PatternChatDialog
         except Exception as e:
             QMessageBox.warning(self, "Chat unavailable", str(e))
@@ -2324,8 +2324,7 @@ class PatternDialog(QDialog):
     def _export_bundle(self):
         """Export the selected pattern(s) — plus any data files — to a .ddpat bundle."""
         from PySide6.QtWidgets import QFileDialog
-        import pattern_bundle
-
+        from dollar_detective import pattern_bundle
         names = self._selected_pattern_names()
         if not names:
             # Nothing selected -> offer to export all of the user's own patterns.
@@ -2377,8 +2376,7 @@ class PatternDialog(QDialog):
     def _import_bundle(self):
         """Import patterns (and their data files) from a shared .ddpat bundle."""
         from PySide6.QtWidgets import QFileDialog
-        import pattern_bundle
-
+        from dollar_detective import pattern_bundle
         path, _ = QFileDialog.getOpenFileName(
             self, "Import Pattern Bundle", "",
             f"Pattern bundle (*{pattern_bundle.BUNDLE_EXT} *.zip)")
@@ -2959,7 +2957,7 @@ class DigitPreviewWidget(QWidget):
         # (serial_overlay.PATTERN_COLORS, including any user overrides from the
         # Overlay Colors tool), converting BGR -> QColor, so the preview always
         # matches the drawn crop with no second palette to keep in sync.
-        import serial_overlay
+        from dollar_detective import serial_overlay
         _palette = self._palette_override or serial_overlay.PATTERN_COLORS
         color_map = {nm: QColor(bgr[2], bgr[1], bgr[0])
                      for nm, bgr in _palette.items()}
@@ -3726,7 +3724,7 @@ class CustomPatternDialog(QDialog):
 
     def _populate_ai_provider_combo(self):
         """Populate the AI provider combo with configured providers."""
-        from settings_manager import get_settings
+        from dollar_detective.settings_manager import get_settings
 
         settings = get_settings()
         self.ai_provider_combo.clear()
@@ -3753,7 +3751,7 @@ class CustomPatternDialog(QDialog):
 
     def _on_ai_generate(self):
         """Handle AI generate button click."""
-        from settings_manager import get_settings
+        from dollar_detective.settings_manager import get_settings
 
         settings = get_settings()
 

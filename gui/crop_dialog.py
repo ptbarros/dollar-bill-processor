@@ -855,7 +855,7 @@ class EbayCropDialog(QDialog):
 
     def _load_fixed_cb(self, key):
         """Reflect the config's fixed/anchored mode in the key's checkbox + spins."""
-        import crop_geometry as cg
+        from dollar_detective import crop_geometry as cg
         cb = self.fixed_cbs.get(key)
         if cb is None:
             return
@@ -947,7 +947,7 @@ class EbayCropDialog(QDialog):
                                      cv2.BORDER_CONSTANT, value=bgr)
         min_dim = int(self.config.get('min_dimension', 500) or 0)
         if min_dim > 0:
-            from serial_overlay import pad_to_min
+            from dollar_detective.serial_overlay import pad_to_min
             out = pad_to_min(out, min_size=min_dim, color=bgr)
         return out
 
@@ -1013,7 +1013,7 @@ class EbayCropDialog(QDialog):
         seal/serial as a movable/resizable box, thirds as constrained boundary
         edges, full as a static outline. (No faint 'other region' outlines -- they
         read as stray ghost boxes when switching crops.)"""
-        import crop_geometry as cg
+        from dollar_detective import crop_geometry as cg
         if self._canvas_side != side:
             self._canvas.set_bill(bill)
             self._canvas_side = side
@@ -1059,7 +1059,7 @@ class EbayCropDialog(QDialog):
 
     def _sync_fixed_enabled(self, key):
         """Grey out the size/offset spins when the crop is a fixed box."""
-        import crop_geometry as cg
+        from dollar_detective import crop_geometry as cg
         fixed = cg.is_fixed(self.config, key)
         for sp in self._spins_for_key(key):
             sp.setEnabled(not fixed)
@@ -1074,7 +1074,7 @@ class EbayCropDialog(QDialog):
     def _on_fixed_toggled(self, key):
         if getattr(self, '_loading_fixed', False):
             return
-        import crop_geometry as cg
+        from dollar_detective import crop_geometry as cg
         side, region = self._region_side_for_key(key)
         if self.fixed_cbs[key].isChecked():
             rect = None
@@ -1099,7 +1099,7 @@ class EbayCropDialog(QDialog):
     def _on_canvas_drag(self, dragged_rect):
         """A box drag/resize finished: invert it to config and push the values
         into the matching spinboxes (which re-renders the preview)."""
-        import crop_geometry as cg
+        from dollar_detective import crop_geometry as cg
         crop = self._selected_crop()
         if not crop:
             return
@@ -1335,12 +1335,12 @@ class EbayCropDialog(QDialog):
         # Honor the app's GPU setting (default on) for the batch.
         use_gpu = True
         try:
-            from settings_manager import SettingsManager
+            from dollar_detective.settings_manager import SettingsManager
             use_gpu = bool(SettingsManager().processing.gpu_acceleration)
         except Exception:
             pass
 
-        from crop_batch import CropWorker
+        from dollar_detective.crop_batch import CropWorker
         worker = CropWorker(Path(in_dir), Path(out_dir), use_gpu=use_gpu,
                             read_serial=True, config_path=Path(tmp.name))
 

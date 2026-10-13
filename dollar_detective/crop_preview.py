@@ -125,7 +125,7 @@ def build_context_from_folder(processor, input_dir: Path,
     verify (the pair's front = the base file, back = its ``_b`` sibling already),
     so the curated sample is shown exactly as stored.
     """
-    from process_production import ScannerFormatDetector
+    from dollar_detective.process_production import ScannerFormatDetector
 
     input_dir = Path(input_dir)
     if not input_dir.is_dir():

@@ -67,7 +67,7 @@ _SINGLE_FILES = {
 
 def _app_version() -> str:
     try:
-        from version import __version__
+        from dollar_detective.version import __version__
         return __version__
     except Exception:
         return "unknown"
@@ -76,7 +76,7 @@ def _app_version() -> str:
 def _data_dir(data_dir=None) -> Path:
     if data_dir:
         return Path(data_dir)
-    from resource_path import user_data_dir
+    from dollar_detective.resource_path import user_data_dir
     return user_data_dir()
 
 
@@ -257,7 +257,7 @@ def restore_backup(zip_path, categories: Optional[Iterable[str]] = None, *,
                         if live_ledger is not None:
                             res = live_ledger.merge_from(snap)
                         else:
-                            from ledger import Ledger
+                            from dollar_detective.ledger import Ledger
                             lg = Ledger(target)
                             res = lg.merge_from(snap)
                             lg.close()

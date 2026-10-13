@@ -27,11 +27,11 @@ from PySide6.QtGui import QColor, QBrush, QAction, QIcon
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pattern_engine_v3 import PatternEngineV3 as PatternEngine
+from dollar_detective.pattern_engine_v3 import PatternEngineV3 as PatternEngine
 
-from settings_manager import get_settings
+from dollar_detective.settings_manager import get_settings
 from gui.correction_dialog import CorrectionDialog, ReviewNoteDialog
-from debug_logger import dlog, fingerprint
+from dollar_detective.debug_logger import dlog, fingerprint
 
 
 def _natural_sort_key(text: str):
@@ -1397,7 +1397,7 @@ class ResultsList(QWidget):
 
         # Review folder: the user-configured Review Directory if set, else the
         # writable per-user data dir (repo root in dev; ~/.config/... when frozen).
-        from resource_path import user_data_dir
+        from dollar_detective.resource_path import user_data_dir
         configured = (self.settings.ui.review_directory or "").strip()
         review_folder = Path(configured) if configured else (user_data_dir() / "review")
         review_folder.mkdir(parents=True, exist_ok=True)
@@ -1590,7 +1590,7 @@ class ResultsList(QWidget):
 
         # Batches live under the Straps folder (Monitor mode files them there).
         try:
-            from resource_path import straps_dir
+            from dollar_detective.resource_path import straps_dir
             straps = straps_dir()
         except Exception:
             straps = None

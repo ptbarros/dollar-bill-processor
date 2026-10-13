@@ -132,7 +132,7 @@ def _torch_cuda():
 
 def _edition():
     try:
-        import updater
+        from dollar_detective import updater
         return updater.detect_edition()
     except Exception:
         return "unknown"
@@ -165,7 +165,7 @@ def collect():
 def log_system_info():
     """Write a [SYSINFO] block to the debug log. Never raises; safe off-thread."""
     try:
-        from debug_logger import dlog_raw
+        from dollar_detective.debug_logger import dlog_raw
         info = collect()
         order = ("edition", "os", "arch", "cpu", "cpu_cores", "ram_gb", "gpu",
                  "torch_cuda_gpu", "onnx_providers", "onnxruntime", "torch", "python")
