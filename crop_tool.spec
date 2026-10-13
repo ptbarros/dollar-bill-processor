@@ -53,8 +53,8 @@ binaries = []
 hiddenimports = [
     'yaml', 'pandas', 'openpyxl', 'PIL',
     # lazily imported inside crop_tool / main paths:
-    'gui.crop_dialog', 'crop_preview', 'process_production', 'resource_path',
-    'gui.crop_canvas', 'gui.crop_profile_wizard', 'crop_geometry', 'crop_samples',
+    'gui.crop_dialog', 'dollar_detective.crop_preview', 'dollar_detective.process_production', 'dollar_detective.resource_path',
+    'gui.crop_canvas', 'gui.crop_profile_wizard', 'dollar_detective.crop_geometry', 'dollar_detective.crop_samples',
 ]
 
 # Packages that ship data and/or dynamically load native libs / submodules.

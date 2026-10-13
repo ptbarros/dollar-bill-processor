@@ -31,7 +31,7 @@ for p in Path('assets/samples').rglob('*'):
         datas.append((str(p), str(p.parent)))
 
 binaries = []
-hiddenimports = ['yaml', 'pandas', 'openpyxl', 'docx', 'PIL', 'updater', 'gui.updater_ui',
+hiddenimports = ['yaml', 'pandas', 'openpyxl', 'docx', 'PIL', 'dollar_detective.updater', 'gui.updater_ui',
                  'scipy', 'skimage', 'torchvision']
 
 # Collect packages that ship data and/or dynamically load native libs:
