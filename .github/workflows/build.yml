@@ -56,7 +56,7 @@ jobs:
       - name: Read app version
         id: ver
         shell: bash
-        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(python -c 'from dollar_detective.version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
       - name: Build installer (Inno Setup, default OpenVINO edition)
         shell: pwsh
@@ -104,7 +104,7 @@ jobs:
       - name: Read app version
         id: ver
         shell: bash
-        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(python -c 'from dollar_detective.version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
       - name: Build installer (Inno Setup, CUDA edition)
         shell: pwsh
@@ -149,7 +149,7 @@ jobs:
       - name: Read app version
         id: ver
         shell: bash
-        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(python -c 'from dollar_detective.version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
       - name: "Build installer (Inno Setup, DirectML edition)"
         shell: pwsh
