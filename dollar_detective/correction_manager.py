@@ -62,7 +62,7 @@ class CorrectionManager:
 
     def __init__(self, path: Optional[Path] = None):
         # Writable per-user location (bundle is read-only when frozen).
-        from resource_path import user_data_dir
+        from dollar_detective.resource_path import user_data_dir
         self.path = path or (user_data_dir() / "corrections.yaml")
         self.corrections: Dict[str, Correction] = {}
         self._load()

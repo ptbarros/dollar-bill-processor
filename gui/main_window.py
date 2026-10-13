@@ -29,11 +29,11 @@ from .layout_manager import (
 
 # Import backend
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from settings_manager import SettingsManager, get_settings
-from version import get_version_string
-from correction_manager import CorrectionManager
-from session_recovery import SessionRecoveryManager, get_recovery_manager
-from debug_logger import dlog, fingerprint
+from dollar_detective.settings_manager import SettingsManager, get_settings
+from dollar_detective.version import get_version_string
+from dollar_detective.correction_manager import CorrectionManager
+from dollar_detective.session_recovery import SessionRecoveryManager, get_recovery_manager
+from dollar_detective.debug_logger import dlog, fingerprint
 
 
 class MainWindow(QMainWindow):
@@ -52,7 +52,7 @@ class MainWindow(QMainWindow):
         self._applied_font_size = self.settings.ui.font_size
         # Apply any saved overlay-color overrides to the shared palette at startup.
         try:
-            import serial_overlay
+            from dollar_detective import serial_overlay
             serial_overlay.set_overlay_overrides(self.settings.get_overlay_colors())
         except Exception:
             pass
@@ -117,7 +117,7 @@ class MainWindow(QMainWindow):
         # debug log for support/diagnostics. Off-thread: some probes shell out.
         try:
             import threading
-            import system_info
+            from dollar_detective import system_info
             threading.Thread(target=system_info.log_system_info, daemon=True).start()
         except Exception:
             pass
@@ -412,7 +412,7 @@ class MainWindow(QMainWindow):
         # Offer a one-click revert only when the last in-app update recorded the
         # version we came from (and it isn't the one we're already running).
         try:
-            from version import __version__
+            from dollar_detective.version import __version__
             prev = self.settings.get_previous_version()
             if prev and prev != __version__:
                 revert_action = QAction(f"&Revert to Previous Version ({prev})...", self)
@@ -615,7 +615,7 @@ class MainWindow(QMainWindow):
 
         # Vertical-feed recovery first (same coarse turn as processing).
         if coarse:
-            from process_production import rotate_coarse
+            from dollar_detective.process_production import rotate_coarse
             img = rotate_coarse(img, coarse)
 
         h, w = img.shape[:2]
@@ -683,7 +683,7 @@ class MainWindow(QMainWindow):
         processor.cfg.reload()
 
         # Generate crops for each result
-        from process_production import BillPair
+        from dollar_detective.process_production import BillPair
         cropped_count = 0
 
         for result in results:
@@ -1127,7 +1127,7 @@ class MainWindow(QMainWindow):
     def _open_overlay_colors(self):
         """Open the Overlay Colors tool; apply + persist overrides on OK."""
         from .overlay_colors_dialog import OverlayColorsDialog
-        import serial_overlay
+        from dollar_detective import serial_overlay
         dlg = OverlayColorsDialog(self.settings.get_overlay_colors(), self)
         if dlg.exec():
             overrides = dlg.result_overrides()
@@ -1512,7 +1512,7 @@ class MainWindow(QMainWindow):
         # Load current config: prefer the user's saved copy (writable dir), else
         # the bundled default. Always SAVE to the writable dir (the bundle is
         # read-only when frozen).
-        from resource_path import app_base, user_data_dir
+        from dollar_detective.resource_path import app_base, user_data_dir
         user_config = user_data_dir() / "config.yaml"
         bundled_config = app_base() / "config.yaml"
         load_path = user_config if user_config.exists() else bundled_config
@@ -1564,7 +1564,7 @@ class MainWindow(QMainWindow):
         """Handle the update-check result on the UI thread."""
         try:
             from .updater_ui import prompt_and_apply, show_up_to_date
-            from version import __version__
+            from dollar_detective.version import __version__
             if info is not None:
                 prompt_and_apply(self, info)
             elif manual:
@@ -1585,7 +1585,7 @@ class MainWindow(QMainWindow):
         the Process button label). Reads the same config the pipeline uses."""
         try:
             import yaml
-            from resource_path import app_base, user_data_dir
+            from dollar_detective.resource_path import app_base, user_data_dir
             user_config = user_data_dir() / "config.yaml"
             path = user_config if user_config.exists() else app_base() / "config.yaml"
             if not path.exists():
@@ -1612,7 +1612,7 @@ class MainWindow(QMainWindow):
         """Populate the toolbar profile picker from config (names + active)."""
         try:
             import yaml
-            from resource_path import app_base, user_data_dir
+            from dollar_detective.resource_path import app_base, user_data_dir
             user_config = user_data_dir() / "config.yaml"
             path = user_config if user_config.exists() else app_base() / "config.yaml"
             names, active = [], None
@@ -1633,7 +1633,7 @@ class MainWindow(QMainWindow):
         same active_crop_profile the Crop Manager sets, so the two stay in sync."""
         try:
             import yaml
-            from resource_path import app_base, user_data_dir
+            from dollar_detective.resource_path import app_base, user_data_dir
             user_config = user_data_dir() / "config.yaml"
             path = user_config if user_config.exists() else app_base() / "config.yaml"
             if not path.exists():
@@ -1656,7 +1656,7 @@ class MainWindow(QMainWindow):
         """A built-in-sample preview context for a denomination number (else $1 /
         the first available sample). None if nothing usable."""
         try:
-            import crop_samples
+            from dollar_detective import crop_samples
             key = self._SAMPLE_KEY_BY_DENOM.get(denom, 'one_dollar')
             s = crop_samples.get(key)
             if s is None:
@@ -1677,7 +1677,7 @@ class MainWindow(QMainWindow):
         Manager's Setup Wizard. Unlike the live preview, this MAY load the model
         (the user explicitly opened the wizard); reuses it if already loaded."""
         from pathlib import Path
-        from crop_preview import build_context_from_folder
+        from dollar_detective.crop_preview import build_context_from_folder
         proc = self._get_or_create_processor(silent=True)
         if proc is None:
             return None
@@ -1703,7 +1703,7 @@ class MainWindow(QMainWindow):
             return None
         from PySide6.QtCore import Qt
         from PySide6.QtWidgets import QApplication
-        from crop_preview import build_context_from_paths
+        from dollar_detective.crop_preview import build_context_from_paths
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             return build_context_from_paths(
@@ -1795,7 +1795,7 @@ class MainWindow(QMainWindow):
             "source": "source checkout",
         }
         try:
-            import updater
+            from dollar_detective import updater
             edition = edition_names.get(updater.detect_edition(), updater.detect_edition())
         except Exception:
             edition = "unknown"
@@ -1819,14 +1819,14 @@ class MainWindow(QMainWindow):
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
         try:
-            from resource_path import app_base, user_data_dir
+            from dollar_detective.resource_path import app_base, user_data_dir
             md_path = app_base() / "docs" / "USER_GUIDE.md"
         except Exception:
             md_path = None
         if not (md_path and md_path.exists()):
             # Bundled guide missing: last-resort online copy so Help still works.
             try:
-                from updater import REPO
+                from dollar_detective.updater import REPO
             except Exception:
                 REPO = "ptbarros/dollar-bill-processor"
             QDesktopServices.openUrl(
@@ -1900,7 +1900,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
         try:
-            from debug_logger import get_log_path
+            from dollar_detective.debug_logger import get_log_path
             log_path = Path(get_log_path())
         except Exception as e:
             QMessageBox.warning(self, "Open Debug Log",
@@ -2128,7 +2128,7 @@ class MainWindow(QMainWindow):
         led = self._get_ledger()
         if led:
             try:
-                from version import __version__
+                from dollar_detective.version import __version__
                 self._ledger_session = led.start_session(
                     source_folder=Path(input_dir).name,
                     label=str(input_dir),
@@ -2191,8 +2191,8 @@ class MainWindow(QMainWindow):
         if getattr(self, "_ledger_obj", "unset") == "unset":
             self._ledger_obj = None
             try:
-                from ledger import Ledger
-                from resource_path import user_data_dir
+                from dollar_detective.ledger import Ledger
+                from dollar_detective.resource_path import user_data_dir
                 self._ledger_obj = Ledger(user_data_dir() / "ledger.db")
             except Exception as e:
                 print(f"Ledger unavailable: {e}")
@@ -2274,7 +2274,7 @@ class MainWindow(QMainWindow):
                 if getattr(self, "processing_thread", None) else None)
             eng = getattr(proc, "pattern_engine", None) if proc else None
             if eng is None:
-                from pattern_engine_v3 import PatternEngineV3
+                from dollar_detective.pattern_engine_v3 import PatternEngineV3
                 eng = PatternEngineV3()
             valid = set(getattr(eng, "lua_patterns", {}).keys()) or None
         except Exception:
@@ -2293,7 +2293,7 @@ class MainWindow(QMainWindow):
             payload["report"]["patterns"] = kept_rows
 
         try:
-            from resource_path import user_data_dir
+            from dollar_detective.resource_path import user_data_dir
             tmpl_path = Path(__file__).parent / "insights_template.html"
             html = tmpl_path.read_text(encoding="utf-8")
             html = html.replace("__LEDGER_DATA__", json.dumps(payload))
@@ -2394,8 +2394,8 @@ class MainWindow(QMainWindow):
     def _update_watch_info(self):
         """Refresh the Scan-mode 'Watching: <folder> · next strap: N' indicator."""
         try:
-            from resource_path import content_dir
-            from batch_naming import format_batch_name
+            from dollar_detective.resource_path import content_dir
+            from dollar_detective.batch_naming import format_batch_name
             folder = str(content_dir())
             nxt = int(self.settings.processing.batch_counter or 0) + 1
             name = format_batch_name(self.settings.processing.batch_name_format, nxt)
@@ -2535,7 +2535,7 @@ class MainWindow(QMainWindow):
     def _review_folder(self) -> Path:
         """The folder Save-for-Review accumulates into: the configured Review
         Directory, else the per-user data dir's review/ folder."""
-        from resource_path import user_data_dir
+        from dollar_detective.resource_path import user_data_dir
         configured = (self.settings.ui.review_directory or "").strip()
         return Path(configured) if configured else (user_data_dir() / "review")
 
@@ -2543,7 +2543,7 @@ class MainWindow(QMainWindow):
         """File -> Export Review Bundle: zip the accumulated Save-for-Review bills
         (front/back scans + serial crop + the model's detection) into one .zip to
         send. Offers to tidy the folder afterward."""
-        import review_bundle
+        from dollar_detective import review_bundle
         from datetime import datetime
         folder = self._review_folder()
         stats = review_bundle.review_bundle_stats(folder)
@@ -2561,7 +2561,7 @@ class MainWindow(QMainWindow):
         if not path:
             return
         try:
-            from version import __version__ as _ver
+            from dollar_detective.version import __version__ as _ver
         except Exception:
             _ver = ""
         try:
@@ -2603,9 +2603,9 @@ class MainWindow(QMainWindow):
     def _open_review_bundle(self):
         """File -> Open Review Bundle: extract a bundle .zip and page through the
         flagged bills in a read-only viewer."""
-        import review_bundle
+        from dollar_detective import review_bundle
         from datetime import datetime
-        from resource_path import user_data_dir
+        from dollar_detective.resource_path import user_data_dir
         path, _ = QFileDialog.getOpenFileName(
             self, "Open Review Bundle", str(Path.home()), "Zip archive (*.zip)")
         if not path:
@@ -2630,7 +2630,7 @@ class MainWindow(QMainWindow):
     def _on_backup(self):
         """File -> Back Up Data. Package selected user data into a portable zip."""
         from datetime import datetime
-        import backup_manager
+        from dollar_detective import backup_manager
         from .backup_dialog import BackupDialog
         dlg = BackupDialog(self)
         if dlg.exec() != dlg.DialogCode.Accepted:
@@ -2664,9 +2664,9 @@ class MainWindow(QMainWindow):
     def _on_restore(self):
         """File -> Restore from Backup. Selectively restore from a backup zip."""
         from datetime import datetime
-        import backup_manager
+        from dollar_detective import backup_manager
         from .backup_dialog import RestoreDialog
-        from resource_path import user_data_dir
+        from dollar_detective.resource_path import user_data_dir
         path, _ = QFileDialog.getOpenFileName(
             self, "Open Backup", str(Path.home()), "Backup files (*.zip)")
         if not path:
@@ -2798,7 +2798,7 @@ class MainWindow(QMainWindow):
         Folder; OFF (= the user's 'Stop') = file everything collected into ONE
         Straps batch and process it. The strap is fed in several passes with gaps,
         so we never auto-finalize on a pause -- only an explicit Stop closes it."""
-        from resource_path import content_dir
+        from dollar_detective.resource_path import content_dir
         if on:
             # Decide the mode for THIS scan session up front (can't change mid-scan).
             self._live_mode = bool(self.settings.processing.live_processing)
@@ -2938,8 +2938,8 @@ class MainWindow(QMainWindow):
         """Set up a live scan session: create the batch folder now (scans land in
         it as they process) and open a ledger session. Returns False on failure."""
         try:
-            from resource_path import straps_dir
-            from batch_naming import make_batch_dir
+            from dollar_detective.resource_path import straps_dir
+            from dollar_detective.batch_naming import make_batch_dir
             batch = Path(make_batch_dir(
                 straps_dir(), self.settings.processing.batch_name_format, self.settings))
         except Exception as e:
@@ -2980,7 +2980,7 @@ class MainWindow(QMainWindow):
         led = self._get_ledger()
         if led:
             try:
-                from version import __version__
+                from dollar_detective.version import __version__
                 self._ledger_session = led.start_session(
                     source_folder=batch.name, label=str(batch),
                     app_version=__version__)
@@ -3150,8 +3150,8 @@ class MainWindow(QMainWindow):
             return False
         try:
             import shutil
-            from resource_path import straps_dir
-            from batch_naming import make_batch_dir
+            from dollar_detective.resource_path import straps_dir
+            from dollar_detective.batch_naming import make_batch_dir
             batch = make_batch_dir(straps_dir(), self.settings.processing.batch_name_format, self.settings)
             self._monitor_last_batch = str(batch)
             for f in files:
@@ -3267,12 +3267,12 @@ class MainWindow(QMainWindow):
         QApplication.processEvents()
 
         try:
-            from process_production import ProductionProcessor, Config
+            from dollar_detective.process_production import ProductionProcessor, Config
 
             # Find the YOLO model (resolve against the app base so it works both
             # from source and when frozen by PyInstaller). The ONNX backend loads
             # best.onnx derived from this path; best.pt only needs to exist.
-            from resource_path import app_base
+            from dollar_detective.resource_path import app_base
             base = app_base()
             model_path = base / "models" / "best.pt"
             if not model_path.exists():
@@ -3291,7 +3291,7 @@ class MainWindow(QMainWindow):
 
             # Load config from config.yaml (crop settings). Prefer the user's
             # saved copy (writable dir) over the bundled default.
-            from resource_path import user_data_dir
+            from dollar_detective.resource_path import user_data_dir
             script_dir = base
             patterns_dir = script_dir / "patterns"
             user_config = user_data_dir() / "config.yaml"
@@ -3569,8 +3569,8 @@ class MainWindow(QMainWindow):
         results.csv is written into the strap so the dropdown can list/reopen it.
         Returns the strap Path, or None if there was nothing to file."""
         import shutil
-        from resource_path import straps_dir
-        from batch_naming import make_batch_dir
+        from dollar_detective.resource_path import straps_dir
+        from dollar_detective.batch_naming import make_batch_dir
 
         if not self.current_results:
             return None
@@ -3699,7 +3699,7 @@ class MainWindow(QMainWindow):
 
 def run_gui():
     """Launch the GUI application."""
-    from debug_logger import dlog, dlog_raw, get_log_path, install_crash_diagnostics
+    from dollar_detective.debug_logger import dlog, dlog_raw, get_log_path, install_crash_diagnostics
     dlog("app.start", log=get_log_path())
     print(f"[DollarBill] Debug log: {get_log_path()}")
 
@@ -3730,7 +3730,7 @@ def run_gui():
 
     # App / window / taskbar icon (bundled under assets/).
     from PySide6.QtGui import QIcon
-    from resource_path import app_base
+    from dollar_detective.resource_path import app_base
     _icon_path = app_base() / "assets" / "icon.png"
     if _icon_path.exists():
         app.setWindowIcon(QIcon(str(_icon_path)))

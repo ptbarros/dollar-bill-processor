@@ -117,7 +117,7 @@ def _count_chunk(rng):
 # --- pattern selection -----------------------------------------------------
 def load_targets(shipped_only=True, only=None, include_skipped=False):
     """Return (targets, skipped) where each is list of (name, script, info)."""
-    from pattern_engine_v3 import PatternEngineV3
+    from dollar_detective.pattern_engine_v3 import PatternEngineV3
 
     eng = PatternEngineV3()
     installed = eng.lua_patterns
@@ -230,7 +230,7 @@ def find_pattern_file(eng, name):
 def _bake_from_report(report_path: Path):
     """Rewrite each pattern's Odds: header from a saved report (.json or .csv).
     No sweep -- uses the counts computed earlier. Takes seconds."""
-    from pattern_engine_v3 import PatternEngineV3
+    from dollar_detective.pattern_engine_v3 import PatternEngineV3
 
     if report_path.suffix == ".json":
         rows = json.loads(report_path.read_text())

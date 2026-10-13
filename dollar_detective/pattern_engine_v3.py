@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from dataclasses import dataclass, field
 
-from pattern_sandbox import PatternSandbox, create_context, LuaExecutionResult
+from dollar_detective.pattern_sandbox import PatternSandbox, create_context, LuaExecutionResult
 
 if TYPE_CHECKING:
-    from settings_manager import SettingsManager
+    from dollar_detective.settings_manager import SettingsManager
 
 
 @dataclass
@@ -86,7 +86,7 @@ class PatternEngineV3:
         """
         # Base directory (repo root when running from source, bundle data dir
         # when frozen by PyInstaller).
-        from resource_path import app_base
+        from dollar_detective.resource_path import app_base
         base_dir = app_base()
 
         # Settings manager (lazy loaded)
@@ -107,7 +107,7 @@ class PatternEngineV3:
         # (bundled) patterns/ tree. Set before loading so they get picked up.
         import sys
         if getattr(sys, "frozen", False):
-            from resource_path import user_data_dir
+            from dollar_detective.resource_path import user_data_dir
             self.user_patterns_dir = user_data_dir() / "patterns" / "user"
             try:
                 self.user_patterns_dir.mkdir(parents=True, exist_ok=True)
@@ -129,7 +129,7 @@ class PatternEngineV3:
         """Lazy-load settings manager."""
         if self._settings is None:
             try:
-                from settings_manager import get_settings
+                from dollar_detective.settings_manager import get_settings
                 self._settings = get_settings()
             except ImportError:
                 self._settings = None

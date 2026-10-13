@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:
-    from version import __version__
+    from dollar_detective.version import __version__
 except Exception:  # pragma: no cover - version is always present in the app
     __version__ = "?"
 

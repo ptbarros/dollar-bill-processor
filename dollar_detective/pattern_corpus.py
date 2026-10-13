@@ -52,7 +52,7 @@ SEARCH_TRIES = 60000
 def default_hits_path() -> Path:
     """Where the generated corpus lives — the writable user data dir, not the repo."""
     try:
-        from resource_path import user_data_dir
+        from dollar_detective.resource_path import user_data_dir
         return user_data_dir() / "pattern_hits.json"
     except Exception:
         return Path(__file__).resolve().parent / "pattern_hits.json"

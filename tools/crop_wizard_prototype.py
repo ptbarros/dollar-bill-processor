@@ -49,7 +49,7 @@ from shiboken6 import isValid
 # --- Reuse the real app's model location + class map --------------------------
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 try:
-    from resource_path import app_base
+    from dollar_detective.resource_path import app_base
     DEFAULT_MODEL = app_base() / "best.pt"
 except Exception:
     DEFAULT_MODEL = Path(__file__).resolve().parent.parent / "best.pt"

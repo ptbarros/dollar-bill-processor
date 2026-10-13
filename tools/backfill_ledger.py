@@ -37,14 +37,14 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from ledger import Ledger, normalize_serial  # noqa: E402
+from dollar_detective.ledger import Ledger, normalize_serial  # noqa: E402
 
 CROP_RE = re.compile(r"^(?P<serial>.+?)_\d{2,}\.(?:jpg|jpeg|png)$", re.IGNORECASE)
 
 
 def _default_db() -> Path:
     try:
-        from resource_path import user_data_dir
+        from dollar_detective.resource_path import user_data_dir
         return user_data_dir() / "ledger.db"
     except Exception:
         return Path.cwd() / "ledger.db"

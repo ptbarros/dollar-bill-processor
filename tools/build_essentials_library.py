@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from pattern_engine_v3 import PatternEngineV3  # noqa: E402
+from dollar_detective.pattern_engine_v3 import PatternEngineV3  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 DEST = REPO / "patterns" / "Essentials"

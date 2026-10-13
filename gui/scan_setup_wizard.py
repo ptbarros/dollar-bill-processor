@@ -231,7 +231,7 @@ class ScanSetupWizard(QWizard):
 
         # Resolve current values / sensible defaults to pre-fill.
         try:
-            from resource_path import content_dir, straps_dir
+            from dollar_detective.resource_path import content_dir, straps_dir
             default_scanner = str(content_dir())
             default_straps = str(straps_dir())
         except Exception:

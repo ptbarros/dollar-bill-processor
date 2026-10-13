@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from backup_manager import CATEGORIES, CATEGORY_LABELS
+from dollar_detective.backup_manager import CATEGORIES, CATEGORY_LABELS
 
 
 class BackupDialog(QDialog):

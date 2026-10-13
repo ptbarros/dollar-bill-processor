@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QColorDialog, QDialogButtonBox, QWidget,
 )
 
-import serial_overlay
+from dollar_detective import serial_overlay
 from .pattern_dialog import DigitPreviewWidget
 
 

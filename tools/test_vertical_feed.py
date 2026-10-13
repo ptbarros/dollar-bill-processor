@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import cv2  # noqa: E402
-from process_production import (  # noqa: E402
+from dollar_detective.process_production import (  # noqa: E402
     ProductionProcessor, Config, rotate_coarse,
 )
 

@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from resource_path import app_base, user_data_dir
+from dollar_detective.resource_path import app_base, user_data_dir
 
 
 def _active_config_path() -> Path:
@@ -71,7 +71,7 @@ class CropWorker(QThread):
 
     def run(self):
         try:
-            from process_production import ProductionProcessor, Config, ScannerFormatDetector
+            from dollar_detective.process_production import ProductionProcessor, Config, ScannerFormatDetector
 
             base = app_base()
             yolo_path, onnx_path = _resolve_model()
@@ -145,7 +145,7 @@ class CropToolWindow(QWidget):
     def __init__(self):
         super().__init__()
         try:
-            from version import get_version_string
+            from dollar_detective.version import get_version_string
             self.setWindowTitle(f"Crop Detective {get_version_string()}")
         except Exception:
             self.setWindowTitle("Crop Detective")
@@ -268,7 +268,7 @@ class CropToolWindow(QWidget):
 
     def _run_wizard(self, first_run: bool):
         from gui.crop_profile_wizard import CropProfileWizard
-        from crop_preview import build_context_from_folder
+        from dollar_detective.crop_preview import build_context_from_folder
 
         def ctx_factory(sample_dir):
             try:
@@ -382,7 +382,7 @@ class CropToolWindow(QWidget):
     def _get_preview_processor(self):
         """Lazily build (and cache) a ProductionProcessor for crop previews."""
         if getattr(self, "_preview_processor", None) is None:
-            from process_production import ProductionProcessor, Config
+            from dollar_detective.process_production import ProductionProcessor, Config
             base = app_base()
             cfg_path = _active_config_path()
             cfg = Config(cfg_path if cfg_path.exists() else None, None)
@@ -400,7 +400,7 @@ class CropToolWindow(QWidget):
         if not in_dir or not Path(in_dir).is_dir():
             return None
         from PySide6.QtWidgets import QApplication
-        from crop_preview import build_context_from_folder
+        from dollar_detective.crop_preview import build_context_from_folder
         QApplication.setOverrideCursor(Qt.WaitCursor)
         self._append_log("Preparing crop preview (loading model + sample bill)…")
         QApplication.processEvents()
@@ -506,7 +506,7 @@ def main():
     # before shipping the .dmg). Shares run_gui's verifier.
     import os
     if os.environ.get("DBP_VERIFY_IMPORTS") == "1":
-        from verify_imports import verify_imports
+        from dollar_detective.verify_imports import verify_imports
         sys.exit(verify_imports())
 
     app = QApplication(sys.argv)

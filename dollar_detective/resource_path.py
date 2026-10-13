@@ -10,12 +10,28 @@ import sys
 from pathlib import Path
 
 
+def _source_base() -> Path:
+    """Repo root when running from source.
+
+    This module may live inside the dollar_detective/ package (desktop, where
+    patterns/ is one level up at the repo root) or flat beside patterns/ (the web
+    app's vendored copy in api/vendor/). Locate the directory that actually
+    contains patterns/ rather than assuming a fixed depth, so both layouts
+    resolve correctly without a hard-coded number of .parent hops.
+    """
+    here = Path(__file__).resolve().parent
+    for cand in (here, here.parent):
+        if (cand / "patterns").is_dir():
+            return cand
+    return here.parent  # package layout fallback (repo root)
+
+
 def app_base() -> Path:
     """Base dir for bundled READ-ONLY data (patterns/, model, config)."""
     if getattr(sys, "frozen", False):
         # PyInstaller onedir/onefile: bundled datas live under _MEIPASS.
         return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
-    return Path(__file__).resolve().parent
+    return _source_base()
 
 
 def user_data_dir() -> Path:
@@ -38,7 +54,7 @@ def user_data_dir() -> Path:
         # existing user-data dir across so upgraders keep their settings.
         _migrate_legacy_user_data(base / "DollarBillProcessor", d)
     else:
-        d = Path(__file__).resolve().parent
+        d = _source_base()
     try:
         d.mkdir(parents=True, exist_ok=True)
     except Exception:
@@ -56,7 +72,7 @@ def content_dir() -> Path:
     """
     override = ""
     try:  # lazy import: settings_manager imports this module
-        from settings_manager import get_settings
+        from dollar_detective.settings_manager import get_settings
         override = (get_settings().processing.data_folder or "").strip()
     except Exception:
         override = ""
@@ -73,7 +89,7 @@ def straps_dir() -> Path:
     folder (settings.processing.archive_directory) if set, else content_dir()/Straps."""
     override = ""
     try:
-        from settings_manager import get_settings
+        from dollar_detective.settings_manager import get_settings
         override = (get_settings().processing.archive_directory or "").strip()
     except Exception:
         override = ""

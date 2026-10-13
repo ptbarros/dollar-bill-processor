@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from process_production import ProductionProcessor
+from dollar_detective.process_production import ProductionProcessor
 
 # Initialize processor once
 script_dir = Path(__file__).parent.parent

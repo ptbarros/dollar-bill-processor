@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional
 
-from resource_path import app_base
+from dollar_detective.resource_path import app_base
 
 # Nice labels + display order for the denominations we know. Unknown folder names
 # fall back to a title-cased label and sort last (alphabetically).

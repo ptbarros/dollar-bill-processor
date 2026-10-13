@@ -34,7 +34,7 @@ def check_dependencies():
     if missing:
         frozen = getattr(sys, "frozen", False)
         try:
-            from version import __version__
+            from dollar_detective.version import __version__
             print(f"Dollar Detective {__version__}")
         except Exception:
             pass
@@ -65,11 +65,11 @@ def _selftest(image_path: str) -> int:
     """
     from pathlib import Path
     import cv2
-    from resource_path import app_base, user_data_dir
-    from process_production import ProductionProcessor
+    from dollar_detective.resource_path import app_base, user_data_dir
+    from dollar_detective.process_production import ProductionProcessor
 
     # Writable user-data check: the read-only bundle must not be written to.
-    from settings_manager import get_settings
+    from dollar_detective.settings_manager import get_settings
     try:
         settings = get_settings()
         settings.save()  # the call that failed inside the read-only bundle
@@ -102,7 +102,7 @@ def main():
     """Main entry point."""
     import os
     if os.environ.get("DBP_VERIFY_IMPORTS") == "1":
-        from verify_imports import verify_imports
+        from dollar_detective.verify_imports import verify_imports
         sys.exit(verify_imports())
 
     selftest_img = os.environ.get("DBP_SELFTEST")

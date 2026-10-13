@@ -11,7 +11,7 @@ EXACTLY what happened leading up to a suspected reset/archive.
 
 Usage
 -----
-    from debug_logger import dlog, fingerprint, get_log_path
+    from dollar_detective.debug_logger import dlog, fingerprint, get_log_path
 
     dlog("crop.requested", count=len(results))
     dlog("state.before", **fingerprint(self.current_results))
@@ -46,7 +46,7 @@ def _log_dir() -> Path:
     candidates = []
     try:
         # Lazy import: resource_path is dependency-light and safe this early.
-        from resource_path import user_data_dir
+        from dollar_detective.resource_path import user_data_dir
         candidates.append(user_data_dir() / "logs")
     except Exception:
         pass

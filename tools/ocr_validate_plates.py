@@ -18,8 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root
 
-from process_production import ProductionProcessor
-from ocr_backend import EasyOCRBackend, RapidOCRBackend
+from dollar_detective.process_production import ProductionProcessor
+from dollar_detective.ocr_backend import EasyOCRBackend, RapidOCRBackend
 
 
 def norm(s):

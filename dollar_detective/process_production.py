@@ -38,10 +38,10 @@ import argparse
 import shutil
 import yaml
 
-from pattern_engine_v3 import PatternEngineV3 as PatternEngine
-from yolo_backend import load_detector
-from ocr_backend import load_ocr_backend
-from debug_logger import dlog
+from dollar_detective.pattern_engine_v3 import PatternEngineV3 as PatternEngine
+from dollar_detective.yolo_backend import load_detector
+from dollar_detective.ocr_backend import load_ocr_backend
+from dollar_detective.debug_logger import dlog
 
 
 def _safe_serial_for_filename(serial: str) -> str:
@@ -4022,7 +4022,7 @@ class ProductionProcessor:
         per-serial "draw pattern overlay" toggle. GAS_PUMP maps to the deviation-
         coloring mode and is drawn on this side's box (so it shows whether THIS
         serial is the shifted one)."""
-        from serial_overlay import resolve_overlay_filter, GAS_PUMP_FILTER
+        from dollar_detective.serial_overlay import resolve_overlay_filter, GAS_PUMP_FILTER
 
         if front_img is None or not front_detections:
             return []
@@ -4158,7 +4158,7 @@ class ProductionProcessor:
             # the chosen border color (black by default). (No-op when already >= min.)
             # Serial crops pass pad=False and handle their own border via _write_serial.
             if pad and min_dim > 0:
-                from serial_overlay import pad_to_min
+                from dollar_detective.serial_overlay import pad_to_min
                 crop_img = pad_to_min(crop_img, min_size=min_dim, color=border_bgr)
             seq[0] += 1
             path = output_dir / f"{safe_serial}_{seq[0]:02d}.jpg"
@@ -4268,7 +4268,7 @@ class ProductionProcessor:
         other pattern uses the highest-confidence serial (both serials are
         identical for pattern purposes). Returns a list of BGR images.
         """
-        from serial_overlay import resolve_overlay_filter, GAS_PUMP_FILTER
+        from dollar_detective.serial_overlay import resolve_overlay_filter, GAS_PUMP_FILTER
 
         if front_img is None or not front_detections:
             return []
@@ -4338,7 +4338,7 @@ class ProductionProcessor:
         """Crop one serial region and draw one overlay onto it; return the BGR
         crop (min-dimension padding is applied globally in _write) or None.
         ``zoom`` is the close-up factor (2.0 = 2x; 1.0 = native scale)."""
-        from serial_overlay import draw_serial_overlay
+        from dollar_detective.serial_overlay import draw_serial_overlay
 
         x1, y1, x2, y2 = box[0], box[1], box[2], box[3]
         h, w = front_img.shape[:2]

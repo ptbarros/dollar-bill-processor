@@ -12,8 +12,8 @@ from PySide6.QtCore import QThread, Signal
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from process_production import get_timing, rotate_coarse
-from debug_logger import dlog_raw
+from dollar_detective.process_production import get_timing, rotate_coarse
+from dollar_detective.debug_logger import dlog_raw
 
 
 class ProcessingThread(QThread):
@@ -87,7 +87,7 @@ class ProcessingThread(QThread):
         """Main processing loop."""
         try:
             # Import processor
-            from process_production import ProductionProcessor, Config, ScannerFormatDetector
+            from dollar_detective.process_production import ProductionProcessor, Config, ScannerFormatDetector
 
             # Create output directory
             self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -101,7 +101,7 @@ class ProcessingThread(QThread):
                 # The Crop Manager saves to the user-writable config dir; prefer it so
                 # crop/denomination/profile changes actually apply. In a frozen build
                 # script_dir is the read-only bundle (the default config only).
-                from resource_path import user_data_dir
+                from dollar_detective.resource_path import user_data_dir
                 _user_cfg = user_data_dir() / "config.yaml"
                 config_path = _user_cfg if _user_cfg.exists() else script_dir / "config.yaml"
                 patterns_dir = script_dir / "patterns"
@@ -499,14 +499,14 @@ class OrganizeThread(QThread):
     def run(self):
         """Main organization loop."""
         try:
-            from process_production import ProductionProcessor, Config
+            from dollar_detective.process_production import ProductionProcessor, Config
 
             # Find config and model
             script_dir = Path(__file__).parent.parent
             # The Crop Manager saves to the user-writable config dir; prefer it so
             # crop/denomination/profile changes actually apply. In a frozen build
             # script_dir is the read-only bundle (the default config only).
-            from resource_path import user_data_dir
+            from dollar_detective.resource_path import user_data_dir
             _user_cfg = user_data_dir() / "config.yaml"
             config_path = _user_cfg if _user_cfg.exists() else script_dir / "config.yaml"
             patterns_dir = script_dir / "patterns"

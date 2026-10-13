@@ -10,7 +10,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pattern_engine_v3 import PatternEngineV3
+from dollar_detective.pattern_engine_v3 import PatternEngineV3
 
 
 def test_datafile_loading():
@@ -86,7 +86,7 @@ def test_missing_datafile():
     print("=" * 60)
 
     # Create a temporary pattern with a missing data file
-    from pattern_sandbox import PatternSandbox, create_context
+    from dollar_detective.pattern_sandbox import PatternSandbox, create_context
 
     script = '''--[[
 Pattern: TEST_MISSING
@@ -121,7 +121,7 @@ def test_data_injection():
     print("\nTesting Data Injection")
     print("=" * 60)
 
-    from pattern_sandbox import PatternSandbox, create_context
+    from dollar_detective.pattern_sandbox import PatternSandbox, create_context
 
     # Load helpers
     sandbox = PatternSandbox()

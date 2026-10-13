@@ -56,7 +56,7 @@ jobs:
       - name: Read app version
         id: ver
         shell: bash
-        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(python -c 'from dollar_detective.version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
       - name: Build installer (Inno Setup, default OpenVINO edition)
         shell: pwsh
@@ -104,7 +104,7 @@ jobs:
       - name: Read app version
         id: ver
         shell: bash
-        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(python -c 'from dollar_detective.version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
       - name: Build installer (Inno Setup, CUDA edition)
         shell: pwsh
@@ -146,10 +146,25 @@ jobs:
       - name: Build onedir (PyInstaller)
         run: pyinstaller --noconfirm --clean DollarDetective.spec
 
+      - name: Verify frozen build loads patterns + reads a serial (self-test)
+        # Runs the REAL frozen exe headless: loads the bundled ONNX model + OCR,
+        # loads patterns from the bundle (proves resource_path finds them after
+        # the dollar_detective/ package move), and reads a serial from a bundled
+        # sample bill. Exits 0 only on PASS. Start-Process -Wait is used because a
+        # windowed (console=False) exe would not block a bare `&` call in pwsh.
+        shell: pwsh
+        env:
+          DBP_SELFTEST: ${{ github.workspace }}\assets\samples\five_dollar\five_dollar.jpg
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $p = Start-Process -FilePath "dist\DollarDetective\DollarDetective.exe" -Wait -PassThru -NoNewWindow
+          if ($p.ExitCode -ne 0) { throw "frozen self-test FAILED (exit $($p.ExitCode))" }
+          Write-Host "frozen self-test PASSED"
+
       - name: Read app version
         id: ver
         shell: bash
-        run: echo "version=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(python -c 'from dollar_detective.version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
       - name: "Build installer (Inno Setup, DirectML edition)"
         shell: pwsh

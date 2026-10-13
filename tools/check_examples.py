@@ -35,7 +35,7 @@ EXPECTED_BOOKREFS = 45
 
 
 def main() -> int:
-    from pattern_engine_v3 import PatternEngineV3
+    from dollar_detective.pattern_engine_v3 import PatternEngineV3
 
     eng = PatternEngineV3()
     shipped = json.loads((PROJECT_ROOT / "patterns" / "shipped_enabled.json").read_text())

@@ -14,7 +14,7 @@ from PySide6.QtCore import Qt, Signal, Slot, QEvent
 
 # Add parent for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from settings_manager import get_settings
+from dollar_detective.settings_manager import get_settings
 
 
 class ProcessingPanel(QWidget):

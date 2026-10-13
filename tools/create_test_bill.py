@@ -531,7 +531,7 @@ def main():
     print(f"  Found {len(bills)} bills")
 
     # Initialize pattern engine for serial generation/verification
-    from pattern_engine_v3 import PatternEngineV3
+    from dollar_detective.pattern_engine_v3 import PatternEngineV3
     engine = PatternEngineV3()
 
     # Determine target serials

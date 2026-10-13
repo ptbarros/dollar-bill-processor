@@ -37,8 +37,8 @@ from PySide6.QtCore import Qt
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import crop_samples
-import crop_geometry as cg
+from dollar_detective import crop_samples
+from dollar_detective import crop_geometry as cg
 from gui.crop_canvas import CropCanvas
 
 # The canonical crop list + friendly names (kept in sync with the Crop Manager).

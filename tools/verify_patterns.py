@@ -28,7 +28,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 _PROJECT_DIR = _SCRIPT_DIR.parent
 sys.path.insert(0, str(_PROJECT_DIR))
 
-from pattern_engine_v3 import PatternEngineV3
+from dollar_detective.pattern_engine_v3 import PatternEngineV3
 
 # ---------------------------------------------------------------------------
 # ODS constants (0-based column indices, verified 2026-02-23)

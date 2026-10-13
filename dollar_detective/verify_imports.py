@@ -14,7 +14,7 @@ import sys
 def verify_imports() -> int:
     import traceback
     try:
-        from version import __version__
+        from dollar_detective.version import __version__
         print(f"Dollar Detective {__version__} — import verification")
     except Exception:
         pass

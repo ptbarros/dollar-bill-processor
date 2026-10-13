@@ -28,7 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from pattern_corpus import (  # noqa: E402
+from dollar_detective.pattern_corpus import (  # noqa: E402
     META, SEED, Corpus, default_hits_path, duplicate_groups, patterns_version,
 )
 
@@ -124,7 +124,7 @@ _names = None
 
 def _init():
     global _engine, _names
-    from pattern_engine_v3 import PatternEngineV3
+    from dollar_detective.pattern_engine_v3 import PatternEngineV3
     _engine = PatternEngineV3()
     _names = sorted(_engine.lua_patterns)
 
@@ -204,7 +204,7 @@ def main():
     ap.add_argument("--jobs", type=int, default=mp.cpu_count(), help="worker processes")
     args = ap.parse_args()
 
-    from pattern_engine_v3 import PatternEngineV3
+    from dollar_detective.pattern_engine_v3 import PatternEngineV3
     engine = PatternEngineV3()
     out = args.out or default_hits_path()
 
