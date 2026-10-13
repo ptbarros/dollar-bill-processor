@@ -96,3 +96,40 @@ pattern_hits.json
 
 # Pattern Manager "random matching serial" corpus (regenerable cache; user data dir)
 example_corpus.json
+
+# --- Local scratch / exports / data (keep the repo root clean; none of this is
+#     part of the project — see docs/REFACTOR_PLAN.md Phase 0) ---
+
+# Editor backup files
+*~
+
+# Ad-hoc scratch notes and logs
+chatgpt*.txt
+*-chat.txt
+error.txt
+kernel.errors.txt
+timings_gpu.txt
+gpu_test.bat
+
+# App exports (regenerable, user-specific): selections, labels, Essentials set
+essentials.json
+pattern_labels.json
+pattern_selection.json
+shipped_selection.json
+
+# Generated User Guide (source of truth is docs/USER_GUIDE.md)
+user_guide.html
+
+# Backup archives from Backup/Restore
+pre-restore-*.zip
+
+# User scratch patterns (per project convention; keep the dir placeholder)
+patterns/user/*
+!patterns/user/.gitkeep
+
+# Large local-only batch / review / test-data directories
+archive/
+review/
+review_inbox/
+test_bills/
+test_low_runs/
