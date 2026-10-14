@@ -2297,17 +2297,19 @@ class PreviewPanel(QWidget):
                 continue
             entry = (name, self._format_pattern_with_library(name))
             (cyclable if self._pattern_shows_overlay(name) else excluded).append(entry)
-        # Gas Pump is available on every bill (even ones with no pattern match) so
-        # the user can nudge the threshold and reveal the box. When this bill
-        # actually trips the threshold, rank it by its (user-tunable) tier like
-        # any pattern; otherwise park it just ahead of No Overlay.
-        cyclable.append(("__gas_pump__", "Gas Pump (deviation)"))
+        # Gas Pump joins the overlay cycle only when THIS bill actually trips the
+        # threshold (Ed review: don't show "Gas Pump" in the window when there's no
+        # hit). The threshold slider stays visible regardless, and nudging it shows
+        # the gas-pump overlay live (see _on_gp_threshold_changed), so a borderline
+        # box can still be revealed -- lowering past a real deviation also makes
+        # GAS_PUMP a match, which re-adds it here on the next classify.
+        if gas_pump_hit:
+            cyclable.append(("__gas_pump__", "Gas Pump (deviation)"))
 
         def _sort_key(entry):
-            name = entry[0]
-            if name == "__gas_pump__" and not gas_pump_hit:
-                return 10_000  # not a hit: keep it last, just before No Overlay
-            return self._pattern_tier(name)
+            # __gas_pump__ is only present on a real hit now, so rank it by its
+            # (user-tunable) tier like any other pattern.
+            return self._pattern_tier(entry[0])
 
         # Stable sort keeps the original (comma) order within a tier.
         cyclable.sort(key=_sort_key)
@@ -2924,7 +2926,11 @@ class PreviewPanel(QWidget):
         """
         default = matched_pattern_names[0] if matched_pattern_names else "__none__"
         sticky = getattr(self, '_sticky_overlay', None)
-        if sticky in ("__gas_pump__", "__none__") or sticky in matched_pattern_names:
+        # __none__ always carries. A pattern (including __gas_pump__) carries only
+        # if THIS bill has it -- matched_pattern_names now contains __gas_pump__
+        # only on a real hit (Ed review), so a stickied Gas Pump no longer sticks
+        # to a bill that didn't trip the threshold.
+        if sticky == "__none__" or sticky in matched_pattern_names:
             effective = sticky
         else:
             effective = default
@@ -3005,6 +3011,14 @@ class PreviewPanel(QWidget):
 
         # Only refresh if overlay is enabled and we have a bill displayed
         if self._pattern_overlay_enabled and self._current_front_file and self.serial_frame.isVisible():
+            # Nudging the threshold is an explicit request to SEE the gas-pump
+            # result, so switch the live overlay to Gas Pump even on a bill that
+            # didn't trip the threshold (it's otherwise hidden from the cycle when
+            # there's no hit -- Ed review). This is what keeps the slider a
+            # discovery tool: drag it down and the box appears when a deviation
+            # clears the new threshold.
+            self._pattern_overlay_filter = "__gas_pump__"
+            self._update_overlay_label("__gas_pump__")
             serial_crops, _ = self._generate_serial_region_crops(self._current_front_file)
             if len(serial_crops) >= 1:
                 self.serial_image_1.set_pixmap(serial_crops[0])
