@@ -1,50 +1,65 @@
 --[[
 Pattern: COUNTING_10S_LADDER
-Description: Counting by 10s (21314151)
-Tier: 2
-Examples: ["21314151", "31415161"]
-Odds: 1 in 1,371,429 (70 per 96M)
+DisplayName: Count By 10s Ladder
+Description: Reads as four two-digit numbers climbing (or dropping) by ten each time (e.g. 10·20·30·40 or 40·30·20·10).
+Tier: 3
+Odds: 1 in 705,882 (136 per 96M)
+Examples: ["10203040", "40302010", "21314151", "51413121"]
 Price: $100-$1,000+
 --]]
 
+-- Merged 2026-10-14 (Ed review): this was ascending-only and was a strict subset
+-- of "Count by 10" (COUNT_TENS), which did ascending AND descending -- so an
+-- ascending step-10 serial showed two near-identical cards. Per Paul's call we keep
+-- this name ("Count By 10s Ladder", consistent with the other Count By patterns)
+-- but adopt the asc+desc behavior, and COUNT_TENS was removed. Odds recomputed for
+-- the merged (asc+desc) match set: 140 serials exist, 136 fall in the [1, 96M]
+-- counting range (the 4 descending runs starting 96..99 exceed 96M).
 function match(ctx)
-    local digits = ctx.digits
-    if #digits ~= 8 then
-        return {matched = false}
+    local d = ctx.digits
+    if #d ~= 8 then return {matched = false} end
+
+    -- Check ascending by 10
+    local result = is_counting_pairs(d, 10)
+    if result and result.matched then
+        local start_val = result.start_value
+        return {
+            matched = true,
+            group_boxes = {
+                {from = 0, to = 1, color = "orange", thickness = 2},
+                {from = 2, to = 3, color = "orange", thickness = 2},
+                {from = 4, to = 5, color = "orange", thickness = 2},
+                {from = 6, to = 7, color = "orange", thickness = 2},
+            },
+            connectors = {
+                {from = 1, to = 2, color = "lime", style = "line"},
+                {from = 3, to = 4, color = "lime", style = "line"},
+                {from = 5, to = 6, color = "lime", style = "line"},
+            },
+            message = string.format("Counts by 10s: %02d %02d %02d %02d", start_val, start_val+10, start_val+20, start_val+30)
+        }
     end
 
-    -- Parse as four 2-digit numbers
-    local nums = {}
-    for i = 1, 4 do
-        local pair = digits:sub((i-1)*2 + 1, i*2)
-        table.insert(nums, tonumber(pair))
+    -- Check descending by 10
+    local result_desc = is_counting_pairs(d, -10)
+    if result_desc and result_desc.matched then
+        local start_val = result_desc.start_value
+        return {
+            matched = true,
+            group_boxes = {
+                {from = 0, to = 1, color = "orange", thickness = 2},
+                {from = 2, to = 3, color = "orange", thickness = 2},
+                {from = 4, to = 5, color = "orange", thickness = 2},
+                {from = 6, to = 7, color = "orange", thickness = 2},
+            },
+            connectors = {
+                {from = 1, to = 2, color = "coral", style = "line"},
+                {from = 3, to = 4, color = "coral", style = "line"},
+                {from = 5, to = 6, color = "coral", style = "line"},
+            },
+            message = string.format("Counts down by 10s: %02d %02d %02d %02d", start_val, start_val-10, start_val-20, start_val-30)
+        }
     end
 
-    -- Check if they form arithmetic sequence with step 10
-    local valid = true
-    for i = 1, 3 do
-        if nums[i+1] - nums[i] ~= 10 then
-            valid = false
-            break
-        end
-    end
-
-    if not valid then
-        return {matched = false}
-    end
-
-    return {
-        matched = true,
-        -- Per-digit inner boxes removed (Ed review): each 2-digit pair is shown
-        -- by its single group box only, no arcs.
-        highlights = {},
-        group_boxes = {
-            {from = 0, to = 1, color = "blue", thickness = 3},
-            {from = 2, to = 3, color = "orange", thickness = 3},
-            {from = 4, to = 5, color = "magenta", thickness = 3},
-            {from = 6, to = 7, color = "red", thickness = 3}
-        },
-        connectors = {},
-        message = string.format("Counting by 10s: %d->%d->%d->%d", nums[1], nums[2], nums[3], nums[4])
-    }
+    return {matched = false}
 end
