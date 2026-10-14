@@ -773,8 +773,14 @@ class PatternDialog(QDialog):
                 desc = data['defn'].get('description', '').lower()
                 enabled = pattern_item.checkState(2) == Qt.Checked  # Column 2 = Enabled
 
-                # Filter by text (searches pattern name, description, and library name)
-                text_match = not filter_text or filter_text in name or filter_text in desc or filter_text in library
+                # Filter by text. Search the DISPLAYED label too (what the user
+                # actually sees, e.g. "Seal Shift"), and treat "_" and " " as
+                # interchangeable so a multi-word search finds "SEAL_SHIFT" -- Ed
+                # review (plain-name search missed every multi-word pattern).
+                label = pattern_item.text(0).lower()
+                haystack = " ".join((name, name.replace("_", " "), label, desc, library))
+                needle = filter_text.replace("_", " ")
+                text_match = not needle or needle in haystack
 
                 # Filter by enabled state
                 enabled_match = show_disabled or enabled

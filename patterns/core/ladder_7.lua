@@ -43,10 +43,14 @@ function match(ctx)
                 for i = start - 1, start + 5 do
                     table.insert(positions, i)
                 end
+                -- Group box + arrow matching 4 Digit Ladder (Ed review): ascending
+                -- points left->right.
                 return {
                     matched = true,
                     message = "7-digit ascending ladder",
-                    highlights = {{positions = positions, color = "lime"}}
+                    highlights = {},
+                    group_boxes = {{from = positions[1], to = positions[#positions], color = "blue", thickness = 3}},
+                    connectors = {{from = positions[1], to = positions[#positions], color = "orange", style = "arrow"}}
                 }
             end
         end
@@ -80,10 +84,14 @@ function match(ctx)
                 for i = start - 1, start + 5 do
                     table.insert(positions, i)
                 end
+                -- Group box + arrow matching 4 Digit Ladder (Ed review): descending
+                -- points right->left.
                 return {
                     matched = true,
                     message = "7-digit descending ladder",
-                    highlights = {{positions = positions, color = "cyan"}}
+                    highlights = {},
+                    group_boxes = {{from = positions[1], to = positions[#positions], color = "blue", thickness = 3}},
+                    connectors = {{from = positions[#positions], to = positions[1], color = "orange", style = "arrow"}}
                 }
             end
         end
