@@ -386,10 +386,20 @@ class ProcessingPanel(QWidget):
         start_dir = (self.input_edit.text() or
                      settings.ui.default_working_dir or
                      str(Path.home()))
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select Input Folder", start_dir
+        # "Pick any scan in the folder" (Option C, Paul 2026-10-15). The native
+        # folder picker hides files on Windows/macOS, so a user can't tell a folder
+        # of scans from an empty parent -- the trip hazard behind Jon's "picked the
+        # parent -> 0 bills". A file picker uses the familiar NATIVE dialog (which
+        # always shows images), and we take the chosen file's folder, so you can't
+        # land on the wrong level. Case variants are listed because Qt name filters
+        # are case-sensitive in some dialogs; All files is the escape hatch.
+        exts = "*.jpg *.jpeg *.png *.tif *.tiff *.bmp *.JPG *.JPEG *.PNG"
+        sel, _ = QFileDialog.getOpenFileName(
+            self, "Select any scan in the folder to process", start_dir,
+            f"Bill scans ({exts});;All files (*)"
         )
-        if folder:
+        if sel:
+            folder = str(Path(sel).parent)
             old_input = self.input_edit.text()
             self.input_edit.setText(folder)
 
@@ -459,6 +469,29 @@ class ProcessingPanel(QWidget):
         output_dir = self.output_edit.text().strip()
 
         if not input_dir:
+            return
+
+        # Pre-flight: confirm the folder actually holds images we can read, so a
+        # mistargeted folder gives a clear message instead of a progress bar that
+        # finishes instantly with zero bills (reported by Jon, 2026-10-14 -- he had
+        # pointed at a parent folder / non-.jpg files and it looked stuck).
+        from dollar_detective.process_production import ScannerFormatDetector
+        rep = ScannerFormatDetector.scan_report(Path(input_dir))
+        if rep['supported'] == 0:
+            msg = ["No readable images (.jpg, .jpeg, .png, .tif, .bmp) were found "
+                   "directly in this folder:", f"\n{input_dir}\n"]
+            if rep['image_subdirs']:
+                subs = ", ".join(rep['image_subdirs'][:5])
+                msg.append(f"A sub-folder here does have images: {subs}. "
+                           "Select that sub-folder instead.")
+            if rep['heic']:
+                msg.append(f"This folder has {rep['heic']} HEIC/HEIF photo(s) "
+                           "(e.g. straight from an iPhone). The app can't read HEIC "
+                           "-- convert them to JPG first.")
+            if not rep['image_subdirs'] and not rep['heic']:
+                msg.append("Double-check this is the right folder and that the "
+                           "scans are .jpg files.")
+            QMessageBox.warning(self, "No images to process", "\n".join(msg))
             return
 
         if not output_dir:

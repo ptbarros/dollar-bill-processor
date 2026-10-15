@@ -912,7 +912,44 @@ class ScannerFormatDetector:
     """Detects scanner naming conventions and pairs front/back images."""
 
     # Pattern for pre-organized Dollar_NNN.jpg files (odd=front, even=back)
-    DOLLAR_PATTERN = re.compile(r'^Dollar_(\d+)\.(jpg|jpeg)$', re.IGNORECASE)
+    DOLLAR_PATTERN = re.compile(r'^Dollar_(\d+)\.(jpg|jpeg|png|tif|tiff|bmp)$', re.IGNORECASE)
+
+    # Scanner outputs we can decode with cv2.imread. NOT .heic/.heif -- OpenCV
+    # can't read those without libheif, so we detect them separately (scan_report)
+    # to tell the user to convert rather than silently finding zero bills.
+    IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.tif', '.tiff', '.bmp')
+    HEIC_EXTS = ('.heic', '.heif')
+
+    @staticmethod
+    def list_images(folder: Path) -> list:
+        """Decodable image files directly in `folder`, matched case-INSENSITIVELY
+        on the extension so a scanner's or Mac's ``.JPG`` is found, not only
+        ``.jpg``. Non-recursive -- mirrors the user picking one strap folder."""
+        try:
+            return [p for p in Path(folder).iterdir()
+                    if p.is_file() and p.suffix.lower() in ScannerFormatDetector.IMAGE_EXTS]
+        except OSError:
+            return []
+
+    @staticmethod
+    def scan_report(folder: Path) -> dict:
+        """Diagnose why a folder might yield no bills, for a helpful message:
+        how many supported images it holds, how many HEIC (unsupported), and any
+        immediate subfolders that DO contain supported images -- the common
+        "picked the parent folder" mistake."""
+        folder = Path(folder)
+        try:
+            entries = list(folder.iterdir())
+        except OSError:
+            entries = []
+        supported = [p for p in entries
+                     if p.is_file() and p.suffix.lower() in ScannerFormatDetector.IMAGE_EXTS]
+        heic = [p for p in entries
+                if p.is_file() and p.suffix.lower() in ScannerFormatDetector.HEIC_EXTS]
+        image_subdirs = [d.name for d in entries
+                         if d.is_dir() and ScannerFormatDetector.list_images(d)]
+        return {'supported': len(supported), 'heic': len(heic),
+                'image_subdirs': image_subdirs}
 
     @staticmethod
     def detect_format(image_folder: Path) -> str:
@@ -923,7 +960,7 @@ class ScannerFormatDetector:
             'suffix': Has _b suffix files (e.g., 0001.jpg + 0001_b.jpg)
             'sequential': Alternating numbered pairs
         """
-        files = list(image_folder.glob("*.jpg")) + list(image_folder.glob("*.jpeg"))
+        files = ScannerFormatDetector.list_images(image_folder)
 
         # Check for Dollar_NNN.jpg pattern (pre-organized from bill wizard)
         dollar_files = [f for f in files if ScannerFormatDetector.DOLLAR_PATTERN.match(f.name)]
@@ -948,7 +985,7 @@ class ScannerFormatDetector:
         Find front/back pairs using suffix naming (e.g., 0001.jpg + 0001_b.jpg)
         """
         files = sorted(
-            list(image_folder.glob("*.jpg")) + list(image_folder.glob("*.jpeg")),
+            ScannerFormatDetector.list_images(image_folder),
             key=ScannerFormatDetector._natural_sort_key
         )
         pairs = []
@@ -1023,7 +1060,7 @@ class ScannerFormatDetector:
         Will verify using YOLO detection later.
         """
         files = sorted(
-            list(image_folder.glob("*.jpg")) + list(image_folder.glob("*.jpeg")),
+            ScannerFormatDetector.list_images(image_folder),
             key=ScannerFormatDetector._natural_sort_key
         )
 
@@ -1051,7 +1088,7 @@ class ScannerFormatDetector:
 
         These files are already verified and oriented, so no YOLO verification needed.
         """
-        files = list(image_folder.glob("Dollar_*.jpg")) + list(image_folder.glob("Dollar_*.jpeg"))
+        files = ScannerFormatDetector.list_images(image_folder)
 
         # Parse numbers and group
         file_map = {}
@@ -1706,7 +1743,7 @@ class ProductionProcessor:
 
         # Find all images
         files = sorted(
-            list(input_dir.glob("*.jpg")) + list(input_dir.glob("*.jpeg")),
+            ScannerFormatDetector.list_images(input_dir),
             key=lambda p: ScannerFormatDetector._natural_sort_key(p)
         )
 
