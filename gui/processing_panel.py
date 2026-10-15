@@ -461,6 +461,29 @@ class ProcessingPanel(QWidget):
         if not input_dir:
             return
 
+        # Pre-flight: confirm the folder actually holds images we can read, so a
+        # mistargeted folder gives a clear message instead of a progress bar that
+        # finishes instantly with zero bills (reported by Jon, 2026-10-14 -- he had
+        # pointed at a parent folder / non-.jpg files and it looked stuck).
+        from dollar_detective.process_production import ScannerFormatDetector
+        rep = ScannerFormatDetector.scan_report(Path(input_dir))
+        if rep['supported'] == 0:
+            msg = ["No readable images (.jpg, .jpeg, .png, .tif, .bmp) were found "
+                   "directly in this folder:", f"\n{input_dir}\n"]
+            if rep['image_subdirs']:
+                subs = ", ".join(rep['image_subdirs'][:5])
+                msg.append(f"A sub-folder here does have images: {subs}. "
+                           "Select that sub-folder instead.")
+            if rep['heic']:
+                msg.append(f"This folder has {rep['heic']} HEIC/HEIF photo(s) "
+                           "(e.g. straight from an iPhone). The app can't read HEIC "
+                           "-- convert them to JPG first.")
+            if not rep['image_subdirs'] and not rep['heic']:
+                msg.append("Double-check this is the right folder and that the "
+                           "scans are .jpg files.")
+            QMessageBox.warning(self, "No images to process", "\n".join(msg))
+            return
+
         if not output_dir:
             output_dir = self._default_output_for(input_dir)
             self.output_edit.setText(output_dir)
