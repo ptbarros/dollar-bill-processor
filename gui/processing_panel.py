@@ -386,10 +386,20 @@ class ProcessingPanel(QWidget):
         start_dir = (self.input_edit.text() or
                      settings.ui.default_working_dir or
                      str(Path.home()))
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select Input Folder", start_dir
+        # "Pick any scan in the folder" (Option C, Paul 2026-10-15). The native
+        # folder picker hides files on Windows/macOS, so a user can't tell a folder
+        # of scans from an empty parent -- the trip hazard behind Jon's "picked the
+        # parent -> 0 bills". A file picker uses the familiar NATIVE dialog (which
+        # always shows images), and we take the chosen file's folder, so you can't
+        # land on the wrong level. Case variants are listed because Qt name filters
+        # are case-sensitive in some dialogs; All files is the escape hatch.
+        exts = "*.jpg *.jpeg *.png *.tif *.tiff *.bmp *.JPG *.JPEG *.PNG"
+        sel, _ = QFileDialog.getOpenFileName(
+            self, "Select any scan in the folder to process", start_dir,
+            f"Bill scans ({exts});;All files (*)"
         )
-        if folder:
+        if sel:
+            folder = str(Path(sel).parent)
             old_input = self.input_edit.text()
             self.input_edit.setText(folder)
 
