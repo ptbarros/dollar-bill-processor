@@ -4974,19 +4974,80 @@ log("checking condition:", some_value)
         self.hint_label.setText(hints.get(rule, ""))
 
     def _validate_script(self):
-        """Validate the Lua script syntax."""
+        """Validate the Lua for whatever tab is in front, and ALWAYS show a
+        visible result.
+
+        The Validate button lives at the bottom of the dialog, shared by every
+        tab, but historically it only ever checked the Lua Script tab's editor
+        and wrote the outcome to that tab's inline status label. From the
+        Pattern Wizard (or AI / Simple Rule) tab that looked like it did nothing
+        -- the wrong script was checked and the result landed on a hidden tab.
+        So pick the script that matches the active tab and report with a dialog
+        the user can't miss."""
         if not self.engine:
             return
 
-        script = self.script_edit.toPlainText()
+        tab_name = self.tab_widget.tabText(self.tab_widget.currentIndex())
+
+        if tab_name == "Pattern Wizard":
+            recipe = self._get_current_recipe()
+            if not recipe:
+                QMessageBox.information(
+                    self, "Validate Script",
+                    "Pick a recipe type in the Pattern Wizard first.")
+                return
+            try:
+                params = self._get_wizard_params()
+                color = self.wizard_color_combo.currentText()
+                name = self.name_edit.text().strip().upper().replace(' ', '_') or "WIZARD_PATTERN"
+                description = self.desc_edit.text().strip() or recipe.description
+                tier = self.tier_spin.value()
+                script = recipe.generate_lua(params, name, description, tier, color)
+            except Exception as e:
+                QMessageBox.warning(
+                    self, "Validate Script",
+                    f"Couldn't build Lua from the wizard settings:\n\n{e}")
+                return
+            # Refresh the wizard's own live preview so its match feedback is
+            # current alongside the validation result.
+            self._update_wizard_preview()
+        elif tab_name == "AI Generate":
+            script = getattr(self, "_ai_generated_code", "") or ""
+            if not script.strip():
+                QMessageBox.information(
+                    self, "Validate Script",
+                    "Generate a pattern with AI first, then validate it.")
+                return
+        elif tab_name == "Simple Rule":
+            QMessageBox.information(
+                self, "Validate Script",
+                "The Simple Rule tab doesn't use a Lua script, so there's "
+                "nothing to validate here. The rule is checked automatically "
+                "when you click OK.")
+            return
+        else:
+            # Lua Script tab (or any other) -> validate the editor contents.
+            script = self.script_edit.toPlainText()
+
         valid, error = self.engine.validate_script(script)
 
+        # Keep the Lua Script tab's inline status label in sync when it exists,
+        # so that tab still shows its quiet green/red indicator too.
+        if hasattr(self, "script_status"):
+            if valid:
+                self.script_status.setText("Syntax OK")
+                self.script_status.setStyleSheet("color: green;")
+            else:
+                self.script_status.setText(f"Syntax Error: {error}")
+                self.script_status.setStyleSheet("color: red;")
+
+        # Always surface the outcome where the user is actually looking.
         if valid:
-            self.script_status.setText("Syntax OK")
-            self.script_status.setStyleSheet("color: green;")
+            QMessageBox.information(
+                self, "Validate Script", "Syntax OK — the Lua script is valid.")
         else:
-            self.script_status.setText(f"Syntax Error: {error}")
-            self.script_status.setStyleSheet("color: red;")
+            QMessageBox.warning(
+                self, "Validate Script", f"Syntax error:\n\n{error}")
 
     def _format_script(self):
         """Auto-format the Lua script (basic indentation)."""
