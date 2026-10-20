@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QSplitter, QHeaderView, QCheckBox, QListWidget,
     QListWidgetItem, QFormLayout, QComboBox, QMessageBox, QColorDialog,
     QTabWidget, QWidget, QSpinBox, QFrame, QApplication, QPlainTextEdit,
-    QInputDialog, QMenu, QSizePolicy
+    QInputDialog, QMenu, QSizePolicy, QScrollArea
 )
 from PySide6.QtCore import Qt, QTimer, Signal, QThread
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QFontMetrics
@@ -3569,7 +3569,17 @@ class CustomPatternDialog(QDialog):
         # Initialize with first recipe
         self._on_recipe_changed(0)
 
-        return widget
+        # The wizard has several stacked groups (recipe / params / visualization
+        # / live preview / generated code). On a short or display-scaled dialog
+        # they don't all fit, and without scrolling the tall digit preview would
+        # overflow onto the message/odds labels below it. Wrap in a scroll area
+        # so the content keeps its natural height and never overlaps.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(widget)
+        return scroll
 
     def _on_code_group_toggled(self, checked: bool):
         """Show/hide generated code content."""

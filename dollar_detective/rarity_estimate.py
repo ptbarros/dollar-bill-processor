@@ -191,11 +191,10 @@ def format_estimate(result: dict) -> str:
     hits = result.get("hits", 0)
     n = result.get("sample_size", 0)
     if hits == 0:
-        return (f"Estimated odds: rarer than ~1 in {n:,} "
-                f"(0 hits in sample — use exact compute)")
+        return f"Est. odds: rarer than ~1 in {n:,} (too rare to sample)"
     one_in_x = result.get("one_in_x")
     per_96m = result.get("per_96m", 0)
-    base = f"Estimated odds: ~1 in {one_in_x:,} ({per_96m:,} per 96M)"
+    base = f"Est. odds: ~1 in {one_in_x:,} ({per_96m:,} per 96M)"
     if not result.get("reliable", True):
-        return base + " — rough, few sample hits; confirm with exact compute"
-    return base + f" (estimated from {n:,} sample)"
+        return base + " (rough)"
+    return base
