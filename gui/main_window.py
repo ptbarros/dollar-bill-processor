@@ -152,7 +152,7 @@ class MainWindow(QMainWindow):
         self.processing_panel.watch_toggled.connect(self._on_watch_toggled)
         self.processing_panel.mode_about_to_change.connect(self._capture_pre_mode_geo)
         self.processing_panel.mode_changed.connect(self._on_panel_mode_changed)
-        self.processing_panel.open_folders_settings.connect(self._on_settings)
+        self.processing_panel.open_folders_settings.connect(self._on_folders_settings)
         self._update_watch_info()  # seed the Scan-mode indicator (panel emits before we connect)
         self.main_layout.addWidget(self.processing_panel)
 
@@ -1480,13 +1480,18 @@ class MainWindow(QMainWindow):
         if folder:
             self.processing_panel.set_input_dir(folder)
 
-    def _on_settings(self):
-        """Open settings dialog."""
+    def _on_settings(self, initial_tab: str = ""):
+        """Open settings dialog (optionally on a specific tab)."""
         from .settings_dialog import SettingsDialog
-        dialog = SettingsDialog(self.settings, self)
+        dialog = SettingsDialog(self.settings, self, initial_tab=initial_tab)
         if dialog.exec():
             self.settings.save()
             self._apply_settings()
+
+    def _on_folders_settings(self):
+        """Open settings straight to the Folders tab (from the Monitor-mode
+        folder button next to the Watching indicator)."""
+        self._on_settings(initial_tab="Folders")
 
     def _on_pattern_manager(self):
         """Open pattern manager dialog."""

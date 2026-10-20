@@ -87,8 +87,12 @@ class ProcessingPanel(QWidget):
         self.watching_label.installEventFilter(self)   # re-elide on resize
         self._watching_full = ""
         _wi.addWidget(self.watching_label, 1)
-        self.watch_settings_btn = QPushButton("⚙")
-        self.watch_settings_btn.setMaximumWidth(28)
+        # Use a native folder icon + a short label instead of a "⚙" glyph: the
+        # gear character rendered as a tofu box on Linux (no glyph in the font)
+        # and gave no hint of what the button did.
+        self.watch_settings_btn = QPushButton(" Folders…")
+        self.watch_settings_btn.setIcon(
+            self.watch_settings_btn.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
         self.watch_settings_btn.setToolTip(
             "Change the Scanner Output Folder and strap naming in Settings → Folders")
         self.watch_settings_btn.clicked.connect(self.open_folders_settings.emit)
