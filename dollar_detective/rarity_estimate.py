@@ -42,6 +42,31 @@ def can_estimate(script: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _compile(script: str, helpers_path: Optional[Path]):
+    """Compile the pattern's match() once and return (match_fn, build_ctx).
+
+    match_fn(ctx) -> bool; build_ctx(n) -> a Lua ctx table for serial n. Shared
+    by the sampled estimate and the exact sweep so they agree bit-for-bit."""
+    import lupa
+    lua = lupa.LuaRuntime(unpack_returned_tuples=True)
+    lua.execute("function log(...) end")
+    if helpers_path is None:
+        from dollar_detective.resource_path import app_base
+        helpers_path = app_base() / "patterns" / "lib" / "helpers.lua"
+    if helpers_path and Path(helpers_path).exists():
+        lua.execute(Path(helpers_path).read_text(encoding="utf-8"))
+    fn = lua.execute(script + _WRAP)
+    build = lua.eval(
+        "function(n)"
+        "  local s = string.format('%08d', n)"
+        "  local dl = {}"
+        "  for i=1,8 do dl[i] = tonumber(string.sub(s,i,i)) end"
+        "  return {digits=s, full_serial=s, digit_list=dl, metadata={}}"
+        "end"
+    )
+    return fn, build
+
+
 def estimate(script: str, sample_size: int = 200_000, seed: Optional[int] = None,
              helpers_path: Optional[Path] = None) -> dict:
     """Estimate how often `script` matches, over a random sample of serials.
@@ -60,23 +85,7 @@ def estimate(script: str, sample_size: int = 200_000, seed: Optional[int] = None
         return {"estimable": False, "reason": reason}
 
     try:
-        import lupa
-        lua = lupa.LuaRuntime(unpack_returned_tuples=True)
-        lua.execute("function log(...) end")
-        if helpers_path is None:
-            from dollar_detective.resource_path import app_base
-            helpers_path = app_base() / "patterns" / "lib" / "helpers.lua"
-        if helpers_path and Path(helpers_path).exists():
-            lua.execute(Path(helpers_path).read_text(encoding="utf-8"))
-        fn = lua.execute(script + _WRAP)
-        build = lua.eval(
-            "function(n)"
-            "  local s = string.format('%08d', n)"
-            "  local dl = {}"
-            "  for i=1,8 do dl[i] = tonumber(string.sub(s,i,i)) end"
-            "  return {digits=s, full_serial=s, digit_list=dl, metadata={}}"
-            "end"
-        )
+        fn, build = _compile(script, helpers_path)
     except Exception as e:  # compile/load failure -- surface, don't crash the wizard
         return {"estimable": True, "error": str(e)}
 
@@ -101,6 +110,76 @@ def estimate(script: str, sample_size: int = 200_000, seed: Optional[int] = None
         "one_in_x": one_in_x,
         "reliable": reliable,
     }
+
+
+def sweep_exact(script: str, helpers_path: Optional[Path] = None,
+                cancel=None, progress=None) -> dict:
+    """Exact match count over the whole printed range [1, 96M], single process.
+
+    This is the same ground-truth brute force as tools/compute_rarity.py, but
+    in-process so it works in the shipped app (no venv / tool script). ~5 min on
+    one core, so callers run it on a background thread. `cancel()` -> True aborts
+    (checked periodically); `progress(done, total)` is called occasionally.
+
+    Returns {estimable: False, reason} for a non-digit pattern, {cancelled: True},
+    {error: str}, or {exact: True, count, one_in_x, per_96m}."""
+    ok, reason = can_estimate(script)
+    if not ok:
+        return {"estimable": False, "reason": reason}
+    try:
+        fn, build = _compile(script, helpers_path)
+    except Exception as e:
+        return {"estimable": True, "error": str(e)}
+
+    count = 0
+    next_progress = 2_000_000
+    try:
+        for n in range(1, RANGE_MAX + 1):
+            if fn(build(n)):
+                count += 1
+            if (n & 0xFFFF) == 0:  # ~every 65k serials: cheap cancel/progress check
+                if cancel and cancel():
+                    return {"estimable": True, "cancelled": True}
+                if progress and n >= next_progress:
+                    progress(n, RANGE_MAX)
+                    next_progress += 2_000_000
+    except Exception as e:
+        return {"estimable": True, "error": str(e)}
+
+    one_in_x = round(RANGE_MAX / count) if count else None
+    return {"estimable": True, "exact": True, "count": count,
+            "one_in_x": one_in_x, "per_96m": count}
+
+
+def odds_string(one_in_x: int, count: int) -> str:
+    """The Odds: header format (matches tools/compute_rarity.py verbatim so the
+    desktop and dd-web render identically)."""
+    return f"1 in {one_in_x:,} ({count:,} per 96M)"
+
+
+_ODDS_RE = re.compile(r"^(\s*Odds:\s*).*$", re.MULTILINE)
+_TIER_RE = re.compile(r"^(\s*)Tier:.*$", re.MULTILINE)
+
+
+def write_odds_header(path, one_in_x: int, count: int) -> bool:
+    """Replace the Odds: line in a pattern .lua header, or insert one after the
+    Tier: line if absent (newly-saved patterns have no Odds line). Returns True
+    if the file changed."""
+    p = Path(path)
+    text = p.read_text(encoding="utf-8")
+    value = odds_string(one_in_x, count)
+    if _ODDS_RE.search(text):
+        new = _ODDS_RE.sub(lambda m: m.group(1) + value, text, count=1)
+    else:
+        m = _TIER_RE.search(text)
+        if not m:
+            return False
+        indent = m.group(1)
+        new = text[:m.end()] + f"\n{indent}Odds: {value}" + text[m.end():]
+    if new != text:
+        p.write_text(new, encoding="utf-8")
+        return True
+    return False
 
 
 def format_estimate(result: dict) -> str:

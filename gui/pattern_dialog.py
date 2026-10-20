@@ -148,6 +148,53 @@ class CorpusBuildThread(QThread):
             print(f"[corpus] build failed: {e}")
 
 
+class OddsExactThread(QThread):
+    """Computes a pattern's EXACT odds over all 96M serials off the GUI thread
+    (~5 min, one core) and writes the precise Odds: header into its .lua file.
+
+    The file rewrite is the durable deliverable and happens inside run(), so it
+    completes even if the dialog has since closed. Emits progress(name, done,
+    total) and done(name, result)."""
+    progress = Signal(str, int, int)
+    done = Signal(str, object)
+
+    def __init__(self, name: str, script: str, file_path, helpers_path, parent=None):
+        super().__init__(parent)
+        self._name = name
+        self._script = script
+        self._file_path = file_path
+        self._helpers = helpers_path
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
+
+    def run(self):
+        from dollar_detective import rarity_estimate
+        try:
+            result = rarity_estimate.sweep_exact(
+                self._script, helpers_path=self._helpers,
+                cancel=lambda: self._cancel,
+                progress=lambda d, t: self.progress.emit(self._name, d, t))
+        except Exception as e:
+            result = {"estimable": True, "error": str(e)}
+        # Bake the header for a clean, non-cancelled exact count.
+        if (result.get("exact") and not result.get("cancelled")
+                and result.get("count") and self._file_path):
+            try:
+                rarity_estimate.write_odds_header(
+                    self._file_path, result["one_in_x"], result["count"])
+                result["written"] = True
+            except Exception as e:
+                result["write_error"] = str(e)
+        self.done.emit(self._name, result)
+
+
+# Background exact-odds jobs are kept alive here so a running QThread is never
+# garbage-collected when the dialog that launched it closes mid-sweep.
+_EXACT_JOBS: list = []
+
+
 class OddsEstimateThread(QThread):
     """Samples a pattern's match() off the GUI thread for a live odds estimate.
 
@@ -187,6 +234,7 @@ class PatternDialog(QDialog):
         self._corpus = None
         self._corpus_thread = None
         self._corpus_notice_shown = False  # show the "building in background" notice once per session
+        self._exact_thread = None          # background exact-odds sweep (one at a time)
 
         self.setWindowTitle("Pattern Manager")
         self.setMinimumSize(900, 600)
@@ -218,6 +266,23 @@ class PatternDialog(QDialog):
             "QWidget { background:#fff3cd; border:1px solid #ffe08a; border-radius:4px; }")
         self.collision_bar.hide()
         layout.addWidget(self.collision_bar)
+
+        # Exact-odds bake banner: shown while a background sweep computes the
+        # precise Odds: header for a just-saved digit-based pattern (~5 min).
+        self.odds_bar = QWidget()
+        _ob = QHBoxLayout(self.odds_bar)
+        _ob.setContentsMargins(8, 4, 8, 4)
+        self.odds_bar_label = QLabel("")
+        self.odds_bar_label.setWordWrap(True)
+        self.odds_bar_label.setStyleSheet("color:#15507a;")
+        _ob.addWidget(self.odds_bar_label, 1)
+        self.odds_bar_cancel = QPushButton("Cancel")
+        self.odds_bar_cancel.clicked.connect(self._cancel_exact_odds)
+        _ob.addWidget(self.odds_bar_cancel)
+        self.odds_bar.setStyleSheet(
+            "QWidget { background:#e6f0f7; border:1px solid #a9ccea; border-radius:4px; }")
+        self.odds_bar.hide()
+        layout.addWidget(self.odds_bar)
 
         # Main splitter
         splitter = QSplitter(Qt.Horizontal)
@@ -1452,6 +1517,70 @@ class PatternDialog(QDialog):
         self.engine.reload()
         self._corpus = None
 
+    def _maybe_bake_exact_odds(self, name: str):
+        """After saving a Lua pattern, compute its exact odds in the background
+        and bake the Odds: header. Only for digit-deterministic patterns (the
+        sweep can't score image/data/date patterns); one job at a time."""
+        info = self.engine.lua_patterns.get(name)
+        if not info or not info.file_path:
+            return
+        from dollar_detective import rarity_estimate
+        ok, reason = rarity_estimate.can_estimate(info.script or "")
+        if not ok:
+            return  # odds stay hand-set / blank; nothing to compute
+        if self._exact_thread is not None and self._exact_thread.isRunning():
+            # Let the in-flight one finish rather than piling up 5-min sweeps.
+            return
+        helpers = None
+        try:
+            helpers = self.engine.patterns_dir / "lib" / "helpers.lua"
+        except Exception:
+            helpers = None
+        thread = OddsExactThread(name, info.script, info.file_path, helpers)
+        thread.progress.connect(self._on_exact_odds_progress)
+        thread.done.connect(self._on_exact_odds_done)
+        self._exact_thread = thread
+        _EXACT_JOBS.append(thread)
+        thread.finished.connect(
+            lambda t=thread: _EXACT_JOBS.remove(t) if t in _EXACT_JOBS else None)
+        self.odds_bar_label.setText(
+            f"Computing exact odds for {name} in the background "
+            f"(about 5 minutes)…")
+        self.odds_bar.show()
+        thread.start()
+
+    def _cancel_exact_odds(self):
+        if self._exact_thread is not None and self._exact_thread.isRunning():
+            self._exact_thread.cancel()
+            self.odds_bar_label.setText("Cancelling exact-odds computation…")
+
+    def _on_exact_odds_progress(self, name: str, done: int, total: int):
+        pct = int(done / total * 100) if total else 0
+        self.odds_bar_label.setText(
+            f"Computing exact odds for {name} — {pct}%…")
+
+    def _on_exact_odds_done(self, name: str, result: object):
+        if result.get("cancelled"):
+            self.odds_bar_label.setText(f"Exact odds for {name}: cancelled.")
+        elif result.get("error") or result.get("write_error"):
+            self.odds_bar_label.setText(
+                f"Exact odds for {name}: couldn't compute "
+                f"({result.get('error') or result.get('write_error')}).")
+        elif result.get("exact") and result.get("count"):
+            from dollar_detective import rarity_estimate
+            self.odds_bar_label.setText(
+                f"Exact odds for {name}: "
+                f"{rarity_estimate.odds_string(result['one_in_x'], result['count'])} "
+                f"— saved to the pattern.")
+            # Pick up the rewritten header and refresh the list.
+            self._reload_engine()
+            self._load_patterns()
+        else:
+            self.odds_bar_label.setText(f"Exact odds for {name}: no matches found.")
+        # Leave the result visible; hide the Cancel button now it's finished.
+        self.odds_bar_cancel.setVisible(bool(
+            self._exact_thread is not None and self._exact_thread.isRunning()))
+
     def _ensure_corpus(self):
         """Load the cached example corpus, or start building it in the background.
 
@@ -1964,6 +2093,9 @@ class PatternDialog(QDialog):
                     # Re-select the pattern in the tree
                     if new_pattern_name:
                         self._select_pattern_by_name(new_pattern_name)
+                        # The rule changed, so recompute exact odds in the
+                        # background (digit-based patterns only).
+                        self._maybe_bake_exact_odds(new_pattern_name)
 
                     QMessageBox.information(
                         self, "Saved",
@@ -2076,6 +2208,11 @@ class PatternDialog(QDialog):
                 # Reload patterns
                 self._reload_engine()
                 self._load_patterns()
+
+                # Recompute exact odds in the background (the rule may have
+                # changed) for digit-based patterns.
+                if defn.get('source') == 'lua' and HAS_V3_ENGINE:
+                    self._maybe_bake_exact_odds(name)
 
                 QMessageBox.information(
                     self, "Pattern Created",
@@ -2810,6 +2947,10 @@ Logs appear in batch test results and "Copy for AI Debug" output.
                 # Reload patterns to show the new one
                 self._reload_engine()
                 self._load_patterns()
+
+                # Compute exact odds in the background for digit-based patterns.
+                if defn.get('source') == 'lua' and HAS_V3_ENGINE:
+                    self._maybe_bake_exact_odds(name)
 
 
 class LuaSyntaxHighlighter(QSyntaxHighlighter):
