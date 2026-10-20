@@ -832,8 +832,9 @@ class PatternDialog(QDialog):
                     pattern_item.setText(3, "○")
                     pattern_item.setForeground(3, QColor("#888888"))
 
-                # Catalog location (double-click to edit)
-                catalog = self.settings.get_pattern_catalog(name)
+                # Catalog SKU (double-click to edit): shipped header value,
+                # overridden by a per-user setting when one exists.
+                catalog = self.engine.resolve_pattern_catalog(name)
                 pattern_item.setText(4, catalog if catalog else "-")
 
                 # Purple tint for Lua patterns
@@ -987,16 +988,20 @@ class PatternDialog(QDialog):
                 self._clear_pattern_color(item, name)
 
         elif column == 4:
-            # Catalog column - show input dialog
-            current_catalog = self.settings.get_pattern_catalog(name)
+            # Catalog SKU column - show input dialog. Start from the resolved
+            # value (shipped header SKU, or an existing override).
+            current_catalog = self.engine.resolve_pattern_catalog(name)
             catalog, ok = QInputDialog.getText(
                 self, f"Catalog for {name}",
-                "Enter catalog location (e.g., A1, B2, 12):",
+                "Catalog number (e.g., C-004). Blank clears your override and\n"
+                "restores the pattern's shipped number:",
                 text=current_catalog
             )
             if ok:
+                # Store as a per-user override; blank removes it so the shipped
+                # SKU shows again.
                 self.settings.set_pattern_catalog(name, catalog.strip())
-                item.setText(4, catalog.strip() if catalog.strip() else "-")
+                item.setText(4, self.engine.resolve_pattern_catalog(name) or "-")
 
     def _on_context_menu(self, pos):
         """Show context menu for clearing colors."""
