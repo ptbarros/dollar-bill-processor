@@ -4068,7 +4068,7 @@ class CustomPatternDialog(QDialog):
         try:
             from dollar_detective.settings_manager import get_settings
             from .settings_dialog import SettingsDialog
-            dlg = SettingsDialog(get_settings(), self)
+            dlg = SettingsDialog(get_settings(), self, initial_tab="AI")
             if dlg.exec():
                 get_settings().save()
         except Exception:

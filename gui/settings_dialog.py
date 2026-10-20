@@ -33,7 +33,7 @@ from dollar_detective.settings_manager import SettingsManager
 class SettingsDialog(QDialog):
     """Dialog for configuring application settings."""
 
-    def __init__(self, settings: SettingsManager, parent=None):
+    def __init__(self, settings: SettingsManager, parent=None, initial_tab: str = ""):
         super().__init__(parent)
         self.settings = settings
         self._fancy_color = settings.ui.default_fancy_color or "#2e7d32"
@@ -42,6 +42,18 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(660)
         self._setup_ui()
         self._load_settings()
+        if initial_tab:
+            self.select_tab(initial_tab)
+
+    def select_tab(self, name: str):
+        """Make the tab whose label matches `name` (case-insensitive) current."""
+        tabs = getattr(self, "tabs", None)
+        if tabs is None:
+            return
+        for i in range(tabs.count()):
+            if tabs.tabText(i).lower() == name.lower():
+                tabs.setCurrentIndex(i)
+                return
 
     def _create_checkbox_with_info(self, label: str, tooltip: str) -> tuple[QCheckBox, QWidget]:
         """Create a checkbox with an info icon that shows a tooltip.
@@ -85,8 +97,9 @@ class SettingsDialog(QDialog):
         """Setup the dialog UI."""
         layout = QVBoxLayout(self)
 
-        # Tab widget
+        # Tab widget (kept on self so callers can jump to a tab, e.g. "AI")
         tabs = QTabWidget()
+        self.tabs = tabs
 
         # Processing tab
         processing_tab = QWidget()
