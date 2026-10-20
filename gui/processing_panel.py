@@ -178,6 +178,23 @@ class ProcessingPanel(QWidget):
         self.process_btn.clicked.connect(self._on_process)
         layout.addWidget(self.process_btn)
 
+        # EXPERIMENTAL: process scans live (in small chunks) while scanning,
+        # instead of waiting for Stop. Can't be changed mid-scan. Placed BEFORE
+        # Monitor Folder: you choose it before starting a watch, and keeping it
+        # off the Profile picker stops the two reading as one "Process live
+        # Profile" clump.
+        self.live_check = QCheckBox("Process live")
+        self.live_check.setToolTip(
+            "EXPERIMENTAL: process scans in small batches as they come in, "
+            "instead of all at once when you click Stop. Set this before you "
+            "click Monitor Folder.")
+        try:
+            self.live_check.setChecked(bool(get_settings().processing.live_processing))
+        except Exception:
+            pass
+        self.live_check.toggled.connect(self._on_live_toggled)
+        layout.addWidget(self.live_check)
+
         # Watch Folder (Monitor mode): when on, scans dropped into the selected
         # folder are auto-filed into a Straps batch and processed as they settle.
         self.watch_btn = QPushButton("Monitor Folder")
@@ -195,12 +212,15 @@ class ProcessingPanel(QWidget):
         _watch_w = max(_fm.horizontalAdvance("Monitor Folder"),
                        _fmb.horizontalAdvance("Stop & File Batch"))
         self.watch_btn.setMinimumWidth(_watch_w + 48)
+        # Rich text (<qt>) so Qt word-wraps the tooltip instead of drawing one
+        # very long line -- a line wider than the screen flickered / repositioned
+        # on a smaller display.
         self.watch_btn.setToolTip(
-            "Watch your scan folder and collect scans as they land in it (this "
-            "does NOT run the scanner -- keep scanning with your scanner software; "
-            "feed your whole strap in as many passes as you like). Click Stop when "
-            "the strap is done to file everything into one batch under Straps and "
-            "process it.")
+            "<qt>Watch your scan folder and collect scans as they land in it. "
+            "This does <b>not</b> run the scanner &mdash; keep scanning with your "
+            "scanner software; feed your whole strap in as many passes as you like. "
+            "Click Stop when the strap is done to file everything into one batch "
+            "under Straps and process it.</qt>")
         # Only style the "on" (checked) state blue. The idle state deliberately has
         # NO base QPushButton rule so it inherits the app's themed button look
         # (background + border) -- a partial base rule strips the native chrome and
@@ -214,20 +234,6 @@ class ProcessingPanel(QWidget):
         """)
         self.watch_btn.toggled.connect(self._on_watch_toggled)
         layout.addWidget(self.watch_btn)
-
-        # EXPERIMENTAL: process scans live (in small chunks) while scanning,
-        # instead of waiting for Stop. Can't be changed mid-scan.
-        self.live_check = QCheckBox("Process live")
-        self.live_check.setToolTip(
-            "EXPERIMENTAL: process scans in small batches as they come in, "
-            "instead of all at once when you click Stop. Set this before you "
-            "click Monitor Folder.")
-        try:
-            self.live_check.setChecked(bool(get_settings().processing.live_processing))
-        except Exception:
-            pass
-        self.live_check.toggled.connect(self._on_live_toggled)
-        layout.addWidget(self.live_check)
 
         # Active crop-profile picker (replaces the old Organize button; Organize
         # moved to Edit -> Organize Folder). Switching here changes the profile
