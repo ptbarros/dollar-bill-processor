@@ -1,6 +1,7 @@
 --[[
 Pattern: EU_BIRTHDAY_NOTE
 DisplayName: Birthday Note D/M/Y
+Catalog: C-151
 Description: Reads as a real day-month-year birthday in the day-first style, from within the last hundred years (e.g. 22·11·1975).
 Tier: 7
 Odds: Depends on the date

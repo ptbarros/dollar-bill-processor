@@ -1,6 +1,7 @@
 --[[
 Pattern: INTL_LEAP_YEAR_BIRTHDAY
 DisplayName: Birthday Note Leap Year Y/M/D
+Catalog: C-146
 Description: Reads as a leap-day birthday — February 29th in the year-first style — from within the last hundred years (e.g. 2000·02·29).
 Tier: 6
 Odds: Depends on the date

@@ -1,5 +1,6 @@
 --[[
 Pattern: SUM_70_OR_2
+Catalog: C-015
 Description: Digit sum equals 70 or 2
 Tier: 2
 Examples: ["00002000", "00010100", "00101000"]

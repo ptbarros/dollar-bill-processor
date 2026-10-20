@@ -1,5 +1,6 @@
 --[[
 Pattern: TRUE_BINARY
+Catalog: C-048
 Description: Binary using only 0 and 1
 Tier: 3
 Examples: ["01101001", "10010110", "10100100"]

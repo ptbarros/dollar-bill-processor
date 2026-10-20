@@ -1,6 +1,7 @@
 --[[
 Pattern: QUAD_BOOKEND_RADAR
 DisplayName: Quad Bookend Radar
+Catalog: C-023
 Description: A pair of one digit at each end wrapping a solid block of four of another digit (e.g. 22·4444·22).
 Tier: 2
 Examples: ["22444422", "33666633", "11999911"]

@@ -1,5 +1,6 @@
 --[[
 Pattern: DOUBLE_QUADS
+Catalog: C-022
 Description: Two groups of 4 identical digits (AAAABBBB)
 Tier: 2
 Examples: ["11112222", "99990000", "22226666"]

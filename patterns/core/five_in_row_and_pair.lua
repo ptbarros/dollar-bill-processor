@@ -1,6 +1,7 @@
 --[[
 Pattern: FIVE_IN_ROW_AND_PAIR
 DisplayName: 5 in a Row & Pair
+Catalog: C-072
 Description: Exactly five of a kind in a row plus a single separate pair whose two digits TOUCH (e.g. 11111·22·3). A split pair like 11111·2·3·2 does not count.
 Tier: 5
 Examples: ["11111223", "55555667", "99999100"]

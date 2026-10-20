@@ -1,6 +1,7 @@
 --[[
 Pattern: LADDER_QUAD
 DisplayName: Ladder & Quad
+Catalog: C-047
 Description: 4 consecutive identical digits with remaining 4 forming a ladder
 Tier: 3
 Odds: 1 in 395,062 (243 per 96M)

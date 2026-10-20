@@ -1,5 +1,6 @@
 --[[
 Pattern: SOLID
+Catalog: C-004
 Description: All 8 digits are identical (e.g., 88888888)
 Tier: 1
 Examples: ["88888888", "11111111", "00000000"]

@@ -1,5 +1,6 @@
 --[[
 Pattern: BROKEN_RADAR
+Catalog: C-119
 Description: One digit away from radar
 Tier: 8
 Examples: ["12344322", "22344321", "12344320"]

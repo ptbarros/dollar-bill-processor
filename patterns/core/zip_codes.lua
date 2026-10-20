@@ -1,6 +1,7 @@
 --[[
 Pattern: ZIP_CODE
 DisplayName: Zip Code (Zeros)
+Catalog: C-160
 Description: A valid US ZIP code as 5 consecutive digits, with every other digit a 0 (e.g. 0 ZZZZZ 00)
 Tier: 7
 Examples: ["90210000", "09021000", "00902100", "00090210"]

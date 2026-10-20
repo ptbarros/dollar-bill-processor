@@ -1,5 +1,6 @@
 --[[
 Pattern: LADDER_BOOKEND
+Catalog: C-106
 Description: Ladder sequence bookended by same digits
 Tier: 6
 Examples: ["12345621", "77234577", "11234511"]

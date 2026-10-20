@@ -1,5 +1,6 @@
 --[[
 Pattern: RADAR_REPEATER
+Catalog: C-034
 Description: Both radar AND repeater (e.g., 12121212)
 Tier: 2
 Examples: ["59955995", "34433443", "70077007"]

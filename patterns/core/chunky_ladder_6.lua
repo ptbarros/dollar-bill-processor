@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_CHUNKY_LADDER_6
 DisplayName: 6 Digit Chunky Ladder
+Catalog: C-045
 Description: Six consecutive digits, each in its own chunk, the whole serial sorted up or down (e.g. 00·1·2·3·4·55).
 Tier: 3
 Odds: 1 in 507,937 (189 per 96M)

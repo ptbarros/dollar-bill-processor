@@ -1,5 +1,6 @@
 --[[
 Pattern: SUM_69_OR_3
+Catalog: C-041
 Description: Digit sum equals 69 or 3
 Tier: 3
 Examples: ["00000003", "00000030", "00000300"]

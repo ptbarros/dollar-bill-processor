@@ -1,5 +1,6 @@
 --[[
 Pattern: SUM_61_OR_11
+Catalog: C-107
 Description: Digit sum equals 61 or 11
 Tier: 6
 Examples: ["91000010", "71000111", "81000002"]

@@ -1,6 +1,7 @@
 --[[
 Pattern: BOOKEND_FULL_RADAR
 DisplayName: Bookended Radar
+Catalog: C-058
 Description: Reads the same forwards and backwards, and both ends open with a matching pair of the same digit (e.g. 44·1331·44).
 Tier: 4
 Odds: 1 in 106,785 (899 per 96M)

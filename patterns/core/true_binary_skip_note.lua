@@ -1,6 +1,7 @@
 --[[
 Pattern: TRUE_BINARY_SKIP_NOTE
 DisplayName: True Binary Alternator
+Catalog: C-001
 Description: 0 and 1 strictly alternate across all 8 digits, 01010101 or 10101010, and nothing else.
 Tier: 1
 Odds: 1 in 48,000,000 (2 per 96M)

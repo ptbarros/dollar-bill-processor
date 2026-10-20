@@ -1,5 +1,6 @@
 --[[
 Pattern: ALL_EVENS
+Catalog: C-122
 Description: All digits even (0,2,4,6,8)
 Tier: 8
 Examples: ["24680246", "20486420", "24688864"]

@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_DOUBLES_LADDER
 DisplayName: Doubles Ladder
+Catalog: C-010
 Description: AABBCCDD -- four doubled digits stepping by one (BB=AA+1, CC=BB+1, DD=CC+1), ascending or descending.
 Tier: 1
 Odds: 1 in 7,384,615 (13 per 96M)

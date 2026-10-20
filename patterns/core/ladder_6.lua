@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_LADDER_6
 DisplayName: 6 Digit Ladder
+Catalog: C-066
 Description: Exactly 6 consecutive digits in strictly ascending or descending order
 Tier: 4
 Odds: 1 in 37,900 (2,533 per 96M)

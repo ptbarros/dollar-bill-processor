@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_BROKEN_LADDER_8
 DisplayName: 8 Digit Scattered Ladder
+Catalog: C-114
 Description: All 8 unique digits that form consecutive sequence when sorted
 Tier: 7
 Odds: 1 in 808 (118,795 per 96M)

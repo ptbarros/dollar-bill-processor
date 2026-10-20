@@ -1,6 +1,7 @@
 --[[
 Pattern: LOOPING_LADDER_ASC
 DisplayName: Looping Ladder
+Catalog: C-037
 Description: Eight digits climbing or dropping by one that wrap around — the straight run rolls off one end and picks back up at the other (e.g. 7812·3456).
 Tier: 3
 Examples: ["78123456", "45678923", "32987654", "18765432"]

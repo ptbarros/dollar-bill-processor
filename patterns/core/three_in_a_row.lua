@@ -1,6 +1,7 @@
 --[[
 Pattern: THREE_IN_A_ROW
 DisplayName: 3 in a Row
+Catalog: C-134
 Description: 3 consecutive identical digits (triple)
 Tier: 9
 Odds: 1 in 20 (4,746,789 per 96M)

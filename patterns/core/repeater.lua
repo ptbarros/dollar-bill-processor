@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_REPEATER
 DisplayName: Repeater
+Catalog: C-083
 Description: First 4 digits repeat in positions 5-8 (ABCDABCD)
 Tier: 5
 Odds: 1 in 10,001 (9,599 per 96M)

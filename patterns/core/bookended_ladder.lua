@@ -1,5 +1,6 @@
 --[[
 Pattern: BOOKENDED_LADDER
+Catalog: C-036
 Description: Ladder bookended by matching digits
 Tier: 3
 Examples: ["77234577", "11234511"]

@@ -1,5 +1,6 @@
 --[[
 Pattern: FLIPPER
+Catalog: C-118
 Description: Only flippable digits (0,1,6,8,9)
 Tier: 8
 Flippable: true

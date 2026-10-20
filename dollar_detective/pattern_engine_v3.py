@@ -53,6 +53,9 @@ class LuaPatternInfo:
     data_file: str = ""           # Relative path to external data file (CSV/JSON)
     data: Any = None              # Loaded data (list of dicts for CSV, any for JSON)
     data_by_key: dict = None      # Dict keyed by first column (CSV only)
+    catalog: str = ""             # Shipped catalog SKU (e.g. "C-004"), set from the
+                                  # header "Catalog:" line. Stable identifier; the
+                                  # rarity RANK is derived separately, not this.
     book_ref: str = ""            # legacy reference field (unused; kept for compat)
     flippable: bool = False       # True => the overlay is meaningful drawn 180-flipped
                                   # (flippers/rotators). Serial Lookup then also shows
@@ -363,6 +366,7 @@ class PatternEngineV3:
                 examples=metadata.get('examples', []),
                 odds=metadata.get('odds', ''),
                 price=metadata.get('price', ''),
+                catalog=metadata.get('catalog', ''),
                 book_ref=metadata.get('bookref', ''),
                 flippable=bool(metadata.get('flippable', False)),
                 # "Overlay: none/off/false/no" hides the pattern from the serial
@@ -936,6 +940,7 @@ class PatternEngineV3:
                 'odds': info.odds,
                 'price': info.price,
                 'price_range': info.price,  # Alias for backward compatibility
+                'catalog': info.catalog,    # Shipped catalog SKU (e.g. "C-004")
                 'script': info.script
             }
             # Include data file info if present
@@ -944,6 +949,23 @@ class PatternEngineV3:
                 result['data_loaded'] = info.data is not None
             return result
         return None
+
+    def resolve_pattern_catalog(self, name: str) -> str:
+        """Catalog SKU for a pattern: the per-user override wins, else the
+        shipped header 'Catalog:' value (e.g. "C-004"). Empty if neither.
+
+        This is the single resolution point for labels etc. -- the header SKU
+        ships with the pattern and travels in bundles / to dd-web, while a user
+        can still override one through settings.pattern_catalogs."""
+        if self.settings:
+            try:
+                override = self.settings.get_pattern_catalog(name, "")
+            except Exception:
+                override = ""
+            if override:
+                return override
+        info = self.lua_patterns.get(name)
+        return info.catalog if info else ""
 
     def get_all_patterns(self) -> dict:
         """Get all patterns."""

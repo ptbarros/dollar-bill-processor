@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_SUPER_TRINARY
 DisplayName: Super Trinary
+Catalog: C-071
 Description: Two triples and one double, or one quad and two doubles
 Tier: 5
 Odds: 1 in 24,691 (3,888 per 96M)

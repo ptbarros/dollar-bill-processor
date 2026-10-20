@@ -1,5 +1,6 @@
 --[[
 Pattern: SUM_68_OR_4
+Catalog: C-052
 Description: Digit sum equals 68 or 4
 Tier: 3
 Examples: ["00300100", "10000300", "00001030"]

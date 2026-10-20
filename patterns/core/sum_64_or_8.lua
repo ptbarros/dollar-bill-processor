@@ -1,5 +1,6 @@
 --[[
 Pattern: SUM_64_OR_8
+Catalog: C-087
 Description: Digit sum equals 64 or 8
 Tier: 5
 Examples: ["05000111", "08000000", "16001000"]

@@ -1,6 +1,7 @@
 --[[
 Pattern: ASCENDING_LADDERED_RADAR
 DisplayName: Radar Ladder
+Catalog: C-009
 Description: Reads the same forwards and backwards, and the first four digits step straight up or straight down (e.g. 4567·7654).
 Tier: 1
 Odds: 1 in 7,384,615 (13 per 96M)

@@ -1,6 +1,7 @@
 --[[
 Pattern: TRUE_FLIPPER_ROTATOR
 DisplayName: True Flipper/Rotator
+Catalog: C-017
 Description: Reads the SAME number upside down, using only 0, 6 and 9. A stricter cousin of the True Flipper: not just symmetric digits, but rotationally identical end-to-end.
 Tier: 2
 Flippable: true

@@ -1,6 +1,7 @@
 --[[
 Pattern: TRUE_BINARY_FLIPPER
 DisplayName: True Binary Flipper
+Catalog: C-012
 Description: Built from only 0s and 1s, and it reads the same turned upside-down (e.g. 1010·0101).
 Tier: 1
 Flippable: true

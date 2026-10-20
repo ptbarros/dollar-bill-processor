@@ -1,5 +1,6 @@
 --[[
 Pattern: TRIPLE_AND_QUAD
+Catalog: C-073
 Description: Triple + Quad combination
 Tier: 5
 Examples: ["11122223", "33334445", "00011112"]

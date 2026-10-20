@@ -1,6 +1,7 @@
 --[[
 Pattern: EU_LEAP_YEAR_BIRTHDAY
 DisplayName: Birthday Note Leap Year
+Catalog: C-144
 Description: Reads as a leap-day birthday — the 29th of February in the day-first style — from within the last hundred years (e.g. 29·02·2000).
 Tier: 6
 Odds: Depends on the date

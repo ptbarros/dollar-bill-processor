@@ -774,6 +774,19 @@ class MainWindow(QMainWindow):
             return [single]
         return [p.strip() for p in (result.get('fancy_types', '') or '').split(',') if p.strip()]
 
+    def _resolve_catalog(self, pattern_name: str) -> str:
+        """Catalog SKU for a pattern for label output: a per-user override wins,
+        else the shipped header 'Catalog:' value. Routes through the engine's
+        resolver when it's available, falling back to the settings-only lookup
+        (so labels still work before a run has built an engine)."""
+        engine = getattr(self.results_list, 'pattern_engine', None)
+        if engine is not None:
+            try:
+                return engine.resolve_pattern_catalog(pattern_name)
+            except Exception:
+                pass
+        return self.settings.get_pattern_catalog(pattern_name, '')
+
     def _generate_labels(self, results: list, output_dir: Path):
         """Generate printable labels file for bills.
 
@@ -796,7 +809,7 @@ class MainWindow(QMainWindow):
                     selected = ['No Pattern']
                 pattern_display = ', '.join(self._pattern_display_name(p) for p in selected)
                 catalog = ', '.join(
-                    c for c in (self.settings.get_pattern_catalog(p, '') for p in selected
+                    c for c in (self._resolve_catalog(p) for p in selected
                                 if p != 'No Pattern') if c
                 )
 
@@ -851,7 +864,7 @@ class MainWindow(QMainWindow):
                 selected = ['No Pattern']
             pattern_display = ', '.join(self._pattern_display_name(p) for p in selected)
             catalog = ', '.join(
-                c for c in (self.settings.get_pattern_catalog(p, '') for p in selected
+                c for c in (self._resolve_catalog(p) for p in selected
                             if p != 'No Pattern') if c
             )
 
@@ -1180,7 +1193,7 @@ class MainWindow(QMainWindow):
                 selected = ['No Pattern']
             pattern_display = ', '.join(self._pattern_display_name(p) for p in selected)
             catalog = ', '.join(
-                c for c in (self.settings.get_pattern_catalog(p, '') for p in selected
+                c for c in (self._resolve_catalog(p) for p in selected
                             if p != 'No Pattern') if c
             )
             # Auto-derived line-3 suggestion from the pattern match (ladder digits,

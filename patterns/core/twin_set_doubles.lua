@@ -1,6 +1,7 @@
 --[[
 Pattern: TWIN_SET_DOUBLES
 DisplayName: Twin Sets Doubles
+Catalog: C-085
 Description: Pattern ABABCDCD where positions 1&3, 2&4, 5&7, 6&8 match
 Tier: 5
 Odds: 1 in 10,001 (9,599 per 96M)

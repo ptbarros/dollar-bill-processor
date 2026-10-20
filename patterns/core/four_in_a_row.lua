@@ -1,6 +1,7 @@
 --[[
 Pattern: FOUR_IN_A_ROW
 DisplayName: 4 in a Row
+Catalog: C-123
 Description: 4 consecutive identical digits (quad)
 Tier: 8
 Odds: 1 in 239 (401,139 per 96M)

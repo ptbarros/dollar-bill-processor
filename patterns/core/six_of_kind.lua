@@ -1,6 +1,7 @@
 --[[
 Pattern: SIX_OF_KIND
 DisplayName: 6 of a Kind
+Catalog: C-095
 Description: 6 of the same digit (anywhere)
 Tier: 6
 Examples: ["77777070", "66666106", "99999090"]

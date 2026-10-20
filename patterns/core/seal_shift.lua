@@ -1,6 +1,7 @@
 --[[
 Pattern: SEAL_SHIFT
 DisplayName: Seal Shift
+Catalog: C-142
 Description: Overprint elements shifted from normal position
 Overlay: none
 Tier: 5

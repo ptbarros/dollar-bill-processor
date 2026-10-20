@@ -1,5 +1,6 @@
 --[[
 Pattern: SUM_66_OR_6
+Catalog: C-067
 Description: Digit sum equals 66 or 6
 Tier: 4
 Examples: ["00420000", "10000050", "00402000"]

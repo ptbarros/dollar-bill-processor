@@ -1,5 +1,6 @@
 --[[
 Pattern: LOW_0000
+Catalog: C-082
 Description: Exactly four leading zeros — no fewer, no more (e.g. 0000·1234).
 Tier: 5
 Examples: ["00001234", "00009999"]

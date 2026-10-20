@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_TRUE_TRINARY
 DisplayName: True Trinary
+Catalog: C-077
 Description: Only digits 0, 1, 2 used, all three present
 Tier: 5
 Odds: 1 in 16,563 (5,796 per 96M)

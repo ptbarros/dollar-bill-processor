@@ -1,5 +1,6 @@
 --[[
 Pattern: SUM_63_OR_9
+Catalog: C-093
 Description: Digit sum equals 63 or 9
 Tier: 6
 Examples: ["33101001", "00010008", "90000000"]

@@ -1,5 +1,6 @@
 --[[
 Pattern: ALL_ODDS
+Catalog: C-121
 Description: All digits odd (1,3,5,7,9)
 Tier: 8
 Examples: ["13579135", "97531975", "13579997"]

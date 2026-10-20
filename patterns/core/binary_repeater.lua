@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_BINARY_REPEATER
 DisplayName: Binary Repeater
+Catalog: C-057
 Description: Repeater with only 2 unique digits
 Tier: 4
 Odds: 1 in 162,437 (591 per 96M)

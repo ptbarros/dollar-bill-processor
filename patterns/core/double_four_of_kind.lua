@@ -1,6 +1,7 @@
 --[[
 Pattern: DOUBLE_FOUR_OF_KIND
 DisplayName: Double Four of a Kind
+Catalog: C-069
 Description: Two groups of 4 of a kind (33343444)
 Tier: 5
 Examples: ["33343444", "11121222", "55556666"]

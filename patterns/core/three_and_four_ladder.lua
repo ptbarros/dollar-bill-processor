@@ -1,5 +1,6 @@
 --[[
 Pattern: THREE_AND_FOUR_LADDER
+Catalog: C-092
 Description: A 3-digit ladder and a 4-digit ladder, in either order, sitting in the serial (e.g. 123·8765·0).
 Tier: 6
 Examples: ["12387650", "32145670", "56781230"]

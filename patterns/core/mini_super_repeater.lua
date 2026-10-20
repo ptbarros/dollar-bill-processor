@@ -1,5 +1,6 @@
 --[[
 Pattern: MINI_SUPER_REPEATER
+Catalog: C-080
 Description: Alternating start pattern (12121234)
 Tier: 5
 Examples: ["12121234", "89898912", "80808093"]

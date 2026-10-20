@@ -1,6 +1,7 @@
 --[[
 Pattern: FOUR_CONSEC_PAIRS
 DisplayName: 4 Consec Pairs
+Catalog: C-081
 Description: Four consecutive pairs (AABBCCDD)
 Tier: 5
 Examples: ["11223344", "55667788", "44227733"]

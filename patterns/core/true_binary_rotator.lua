@@ -1,6 +1,7 @@
 --[[
 Pattern: TRUE_BINARY_ROTATOR
 DisplayName: True Binary Rotator
+Catalog: C-011
 Description: Built from only 0s and 1s, both present, and it reads the same turned upside-down (e.g. 0100·0010).
 Tier: 1
 Flippable: true

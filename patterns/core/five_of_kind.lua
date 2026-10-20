@@ -1,6 +1,7 @@
 --[[
 Pattern: FIVE_OF_KIND
 DisplayName: 5 of a Kind
+Catalog: C-120
 Description: 5 of the same digit (anywhere)
 Tier: 8
 Examples: ["50505055", "49446144", "50550505"]

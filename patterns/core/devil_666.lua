@@ -1,5 +1,6 @@
 --[[
 Pattern: DEVIL_666
+Catalog: C-125
 Description: Contains 666
 Tier: 8
 Examples: ["12366612", "66612345"]

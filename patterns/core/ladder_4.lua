@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_LADDER_4
 DisplayName: 4 Digit Ladder
+Catalog: C-127
 Description: Exactly 4 consecutive digits in strictly ascending or descending order
 Tier: 8
 Odds: 1 in 166 (579,344 per 96M)

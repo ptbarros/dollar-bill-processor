@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_LADDER_5
 DisplayName: 5 Digit Ladder
+Catalog: C-099
 Description: Exactly 5 consecutive digits in strictly ascending or descending order
 Tier: 6
 Odds: 1 in 2,391 (40,146 per 96M)

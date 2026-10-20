@@ -1,6 +1,7 @@
 --[[
 Pattern: TETRADIC
 DisplayName: Rotator 018
+Catalog: C-021
 Description: Built only from 0s, 1s and 8s, and it reads the same forwards, backwards, and turned upside-down (e.g. 0811·1180).
 Tier: 2
 Odds: 1 in 1,200,000 (80 per 96M)

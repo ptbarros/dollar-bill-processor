@@ -1,5 +1,6 @@
 --[[
 Pattern: DOUBLES_BOOKEND
+Catalog: C-109
 Description: Double digits on each end match (11XXXX11)
 Tier: 7
 Examples: ["11234511", "99123499", "22567822"]
