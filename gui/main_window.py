@@ -394,7 +394,7 @@ class MainWindow(QMainWindow):
         help_menu.addAction(user_guide_action)
 
         setup_wizard_action = QAction("&Setup Wizard...", self)
-        setup_wizard_action.setToolTip("Walk through the Scan-mode folder and strap-naming setup")
+        setup_wizard_action.setToolTip("Walk through the Monitor-mode folder and strap-naming setup")
         # Keep this in the Help menu on macOS -- its "Setup..." text would
         # otherwise be auto-detected as the Preferences item and hijack it.
         setup_wizard_action.setMenuRole(QAction.MenuRole.NoRole)
@@ -1861,7 +1861,7 @@ class MainWindow(QMainWindow):
                     bool(self.settings.processing.live_processing))
             except Exception:
                 pass
-            self.status_label.setText("Scan mode setup saved.")
+            self.status_label.setText("Monitor mode setup saved.")
 
     def _maybe_scan_wizard(self):
         """First time a user enters Scan mode, offer the setup wizard once. Asks at
@@ -1872,11 +1872,11 @@ class MainWindow(QMainWindow):
             return
         self._scan_wizard_asked = True
         box = QMessageBox(self)
-        box.setWindowTitle("Scan Mode Setup")
+        box.setWindowTitle("Monitor Mode Setup")
         box.setIcon(QMessageBox.Question)
-        box.setText("Looks like it's your first time using Scan mode.")
+        box.setText("Looks like it's your first time using Monitor mode.")
         box.setInformativeText(
-            "Scan mode needs to know where your scanner saves images and how to name "
+            "Monitor mode needs to know where your scanner saves images and how to name "
             "straps. Would you like a quick setup wizard to walk through it?")
         yes_btn = box.addButton("Yes, set it up", QMessageBox.AcceptRole)
         box.addButton("Not now", QMessageBox.RejectRole)

@@ -242,7 +242,7 @@ class SettingsDialog(QDialog):
             "clicking the File Strap button yourself.\n\n"
             "• Checked: Every manual run is filed as the next strap folder\n"
             "• Unchecked: Click File Strap when you're ready to file the run\n\n"
-            "Straps use one numbering sequence shared with Scan mode; set where\n"
+            "Straps use one numbering sequence shared with Monitor mode; set where\n"
             "they're filed under Straps Folder on the Folders tab."
         )
         output_layout.addRow(auto_archive_container)
@@ -251,7 +251,7 @@ class SettingsDialog(QDialog):
             "Keep originals when filing a strap",
             "Copy the bill images into the strap instead of moving them.\n\n"
             "• Checked: Your source images stay put; copies go into the strap\n"
-            "• Unchecked: Source images are moved into the strap (like Scan mode)\n\n"
+            "• Unchecked: Source images are moved into the strap (like Monitor mode)\n\n"
             "Handy when your input folder is a library you don't want emptied."
         )
         output_layout.addRow(copy_mode_container)

@@ -52,8 +52,8 @@ class ProcessingPanel(QWidget):
         self.mode_group.setExclusive(True)
         self.manual_mode_btn = QPushButton("Manual")
         self.manual_mode_btn.setToolTip("Manual processing: pick an input folder and Process it")
-        self.scan_mode_btn = QPushButton("Scan")
-        self.scan_mode_btn.setToolTip("Scan straps: watch the Scanner Output Folder and file straps")
+        self.scan_mode_btn = QPushButton("Monitor")
+        self.scan_mode_btn.setToolTip("Monitor straps: watch the Scanner Output Folder and file straps as they land")
         for _b in (self.manual_mode_btn, self.scan_mode_btn):
             _b.setCheckable(True)
             _b.setStyleSheet(_seg_style)
@@ -269,7 +269,7 @@ class ProcessingPanel(QWidget):
         self.archive_btn.setMinimumWidth(60)
         self.archive_btn.setEnabled(False)
         self.archive_btn.setToolTip(
-            "File the current run as the next strap in the sequence (like Stop in Scan mode)")
+            "File the current run as the next strap in the sequence (like Stop in Monitor mode)")
         self.archive_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
@@ -625,7 +625,7 @@ class ProcessingPanel(QWidget):
         else:
             self.archive_btn.setEnabled(available)
             self.archive_btn.setToolTip(
-                "File the current run as the next strap in the sequence (like Stop in Scan mode)")
+                "File the current run as the next strap in the sequence (like Stop in Monitor mode)")
 
     def reset_archive_button(self):
         """Reset the File Strap button to disabled (e.g. after a run is filed)."""
