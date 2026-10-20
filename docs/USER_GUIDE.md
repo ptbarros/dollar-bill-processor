@@ -151,7 +151,7 @@ sent you a folder, etc.).
 Use this to let the app **watch your scanner's output folder** and file each
 strap for you, without pointing it at a folder by hand.
 
-1. Click **Start Scanning**. The toolbar shows a **Watching:** indicator with the
+1. Click **Monitor Folder**. The toolbar shows a **Watching:** indicator with the
    folder it's watching and the next strap number.
 2. Feed the strap on your scanner (in as many passes as you like — a pause never
    ends the strap).
@@ -187,7 +187,7 @@ lets the batch dropdown list and reopen it later.
 | | **Manual mode** | **Scan mode** |
 |---|---|---|
 | Bills come from | A folder you already have | Your scanner's output folder, watched live |
-| You click | **Process**, then optionally **File Strap** | **Start Scanning** → **Stop & File Batch** |
+| You click | **Process**, then optionally **File Strap** | **Monitor Folder** → **Stop & File Batch** |
 | Filing is | Optional (only if you want to keep the run as a strap) | The normal end of a scan |
 | Result | The next strap in the sequence | The next strap in the sequence |
 | Best for | Re-checking existing scans, folders sent to you | Working straps live at the scanner |
@@ -204,7 +204,7 @@ files the run as the next strap (see [The two modes](#the-two-modes-manual-vs-sc
 
 Instead of scanning to a folder and then pointing the app at it, you can let the
 app **watch your scanner's output folder** and file each strap for you. Switch to
-**Scan** mode, click **Start Scanning**, feed the strap (in as many passes as you
+**Scan** mode, click **Monitor Folder**, feed the strap (in as many passes as you
 like), then click **Stop & File Batch** — everything that arrived is moved into a
 new strap under your **Straps** folder and processed. Past straps stay in the
 batch dropdown so you can reopen them.

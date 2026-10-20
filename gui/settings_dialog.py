@@ -388,7 +388,7 @@ class SettingsDialog(QDialog):
         dirs_layout = QFormLayout(dirs_group)
 
         # Scanner output folder: the visible per-user folder the scanner dumps into
-        # and Start Scanning watches; finished straps are filed into its "Straps"
+        # and Monitor Folder watches; finished straps are filed into its "Straps"
         # subfolder. Default ~/DollarDetective. Manual processing is unaffected.
         self.data_folder_edit = QLineEdit()
         self.data_folder_edit.setPlaceholderText("~/DollarDetective (default)")
@@ -405,7 +405,7 @@ class SettingsDialog(QDialog):
         dirs_layout.addRow("Scanner Output Folder:", data_layout)
 
         self.data_folder_hint = QLabel(
-            "Your scanner saves here and the Start Scanning button watches it; "
+            "Your scanner saves here and the Monitor Folder button watches it; "
             "finished straps are filed into a 'Straps' subfolder. "
             "Blank = a 'DollarDetective' folder in your home folder.")
         self.data_folder_hint.setStyleSheet("color: gray; font-size: 11px;")
@@ -916,7 +916,7 @@ class SettingsDialog(QDialog):
             self.data_folder_hint.setStyleSheet("color: #c07a2b; font-size: 11px;")
         else:
             self.data_folder_hint.setText(
-                "Your scanner saves here and the Start Scanning button watches it; "
+                "Your scanner saves here and the Monitor Folder button watches it; "
                 "finished straps are filed into a 'Straps' subfolder. "
                 "Blank = a 'DollarDetective' folder in your home folder.")
             self.data_folder_hint.setStyleSheet("color: gray; font-size: 11px;")

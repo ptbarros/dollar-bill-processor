@@ -210,7 +210,7 @@ class _SummaryPage(QWizardPage):
             f"<b>Strap Folder Names:</b> {fmt_label}<br>"
             f"<b>Next strap number:</b> {num}<br>"
             f"<b>Process live:</b> {'On' if w.live_page.live_on() else 'Off'}<br><br>"
-            "Click <b>Finish</b> to save, then <b>Start Scanning</b> and feed a strap. "
+            "Click <b>Finish</b> to save, then <b>Monitor Folder</b> and feed a strap. "
             "You can change any of this later under Settings → Folders, or re-run this "
             "wizard from Help → Setup Wizard."
         )

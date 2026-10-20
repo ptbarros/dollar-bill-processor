@@ -147,7 +147,7 @@ class ProcessingPanel(QWidget):
         # Separator (the divider). Everything BEFORE it is the mode-specific left
         # group; those frames now carry the stretch (Input/Output in Manual, the
         # Watching indicator in Scan), so they expand to fill the slack up to the
-        # divider and thereby push everything AFTER it (Process/Start Scanning,
+        # divider and thereby push everything AFTER it (Process/Monitor Folder,
         # Profile, Stop, Archive, progress) to the right edge in BOTH modes. A small
         # fixed buffer after the divider keeps a clear gap between the two sides
         # instead of the fields butting right up against the controls.
@@ -180,7 +180,7 @@ class ProcessingPanel(QWidget):
 
         # Watch Folder (Monitor mode): when on, scans dropped into the selected
         # folder are auto-filed into a Straps batch and processed as they settle.
-        self.watch_btn = QPushButton("Start Scanning")
+        self.watch_btn = QPushButton("Monitor Folder")
         self.watch_btn.setCheckable(True)
         # Size to the WIDEST label ("Stop && File Batch", shown while scanning and
         # drawn BOLD) so neither state clips. '&&' renders as a single '&'. The
@@ -192,13 +192,15 @@ class ProcessingPanel(QWidget):
         _bold = QFont(self.watch_btn.font())
         _bold.setBold(True)
         _fmb = QFontMetrics(_bold)
-        _watch_w = max(_fm.horizontalAdvance("Start Scanning"),
+        _watch_w = max(_fm.horizontalAdvance("Monitor Folder"),
                        _fmb.horizontalAdvance("Stop & File Batch"))
         self.watch_btn.setMinimumWidth(_watch_w + 48)
         self.watch_btn.setToolTip(
-            "Start collecting scans as they come off the scanner (feed your whole "
-            "strap in as many passes as you like). Click Stop when the strap is "
-            "done to file everything into one batch under Straps and process it.")
+            "Watch your scan folder and collect scans as they land in it (this "
+            "does NOT run the scanner -- keep scanning with your scanner software; "
+            "feed your whole strap in as many passes as you like). Click Stop when "
+            "the strap is done to file everything into one batch under Straps and "
+            "process it.")
         # Only style the "on" (checked) state blue. The idle state deliberately has
         # NO base QPushButton rule so it inherits the app's themed button look
         # (background + border) -- a partial base rule strips the native chrome and
@@ -219,7 +221,7 @@ class ProcessingPanel(QWidget):
         self.live_check.setToolTip(
             "EXPERIMENTAL: process scans in small batches as they come in, "
             "instead of all at once when you click Stop. Set this before you "
-            "click Start Scanning.")
+            "click Monitor Folder.")
         try:
             self.live_check.setChecked(bool(get_settings().processing.live_processing))
         except Exception:
@@ -445,7 +447,7 @@ class ProcessingPanel(QWidget):
     def _on_watch_toggled(self, checked: bool):
         """Start/stop watching the Data Folder for new scans. (The button text
         reflects what a click will do; MainWindow owns the watch folder.)"""
-        self.watch_btn.setText("Stop && File Batch" if checked else "Start Scanning")
+        self.watch_btn.setText("Stop && File Batch" if checked else "Monitor Folder")
         self._watching = checked
         # Live mode can't be flipped mid-scan (it changes how a run is wired).
         self.live_check.setEnabled(not checked)
@@ -457,7 +459,7 @@ class ProcessingPanel(QWidget):
         MainWindow declines to start, e.g. a missing folder)."""
         self.watch_btn.blockSignals(True)
         self.watch_btn.setChecked(on)
-        self.watch_btn.setText("Stop && File Batch" if on else "Start Scanning")
+        self.watch_btn.setText("Stop && File Batch" if on else "Monitor Folder")
         self.watch_btn.blockSignals(False)
         self._watching = on
         self.live_check.setEnabled(not on)

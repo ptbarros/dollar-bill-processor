@@ -2830,7 +2830,7 @@ class MainWindow(QMainWindow):
         from pathlib import Path
         wd = Path(watch_dir).expanduser()
         if not wd.is_dir():
-            QMessageBox.warning(self, "Start Scanning",
+            QMessageBox.warning(self, "Monitor Folder",
                                 f"Folder does not exist:\n{wd}")
             return False
         self._stop_monitor()  # clean any prior watcher
@@ -2943,7 +2943,7 @@ class MainWindow(QMainWindow):
             batch = Path(make_batch_dir(
                 straps_dir(), self.settings.processing.batch_name_format, self.settings))
         except Exception as e:
-            QMessageBox.warning(self, "Start Scanning",
+            QMessageBox.warning(self, "Monitor Folder",
                                 f"Couldn't start the live batch:\n{e}")
             return False
         self._live_batch_dir = batch
@@ -3141,7 +3141,7 @@ class MainWindow(QMainWindow):
         the normal pipeline on it. Returns True if a batch was filed."""
         if self.is_processing:
             QMessageBox.information(
-                self, "Start Scanning",
+                self, "Monitor Folder",
                 "A batch is still processing. Give it a moment, then Stop again.")
             return False
         files = [p for p in self._monitor_new_files if p.exists()]
@@ -3160,7 +3160,7 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
         except Exception as e:
-            QMessageBox.warning(self, "Start Scanning", f"Couldn't file the batch:\n{e}")
+            QMessageBox.warning(self, "Monitor Folder", f"Couldn't file the batch:\n{e}")
             return False
         # Process the just-filed batch with the normal pipeline (output stays
         # self-contained under the batch folder).
