@@ -148,6 +148,31 @@ class CorpusBuildThread(QThread):
             print(f"[corpus] build failed: {e}")
 
 
+class OddsEstimateThread(QThread):
+    """Samples a pattern's match() off the GUI thread for a live odds estimate.
+
+    Builds its OWN Lua runtime (via rarity_estimate.estimate), so it never races
+    the dialog's engine. Emits (generation, result_dict); the dialog ignores a
+    result whose generation is stale (a newer estimate has since been queued)."""
+    done = Signal(int, object)
+
+    def __init__(self, gen: int, script: str, helpers_path, sample_size: int = 150_000, parent=None):
+        super().__init__(parent)
+        self._gen = gen
+        self._script = script
+        self._helpers = helpers_path
+        self._n = sample_size
+
+    def run(self):
+        try:
+            from dollar_detective import rarity_estimate
+            result = rarity_estimate.estimate(
+                self._script, sample_size=self._n, helpers_path=self._helpers)
+        except Exception as e:
+            result = {"estimable": True, "error": str(e)}
+        self.done.emit(self._gen, result)
+
+
 class PatternDialog(QDialog):
     """Dialog for managing patterns and testing serials."""
 
@@ -3155,6 +3180,18 @@ class CustomPatternDialog(QDialog):
         self._wizard_examples: list = []
         self.param_widgets: dict = {}  # Will be populated by _create_wizard_tab
 
+        # Live odds estimate (wizard tab): a debounced background sample of the
+        # generated Lua, so the estimate updates as parameters change without
+        # blocking the UI. _odds_gen guards against a stale thread's result
+        # overwriting a newer one.
+        self._odds_gen: int = 0
+        self._odds_pending_script: str = ""
+        self._odds_threads: list = []
+        self._odds_timer = QTimer(self)
+        self._odds_timer.setSingleShot(True)
+        self._odds_timer.setInterval(450)
+        self._odds_timer.timeout.connect(self._start_odds_estimate)
+
         self._setup_ui()
         if name:
             self._load_existing()
@@ -3358,6 +3395,13 @@ class CustomPatternDialog(QDialog):
         self.wizard_preview_message.setWordWrap(True)
         self.wizard_preview_message.setStyleSheet("color: #666; font-style: italic;")
         preview_layout.addWidget(self.wizard_preview_message)
+
+        # Live odds estimate (sampled; the exact figure is baked on save/with
+        # the compute_rarity tool). Updates as parameters change.
+        self.wizard_odds_label = QLabel("")
+        self.wizard_odds_label.setWordWrap(True)
+        self.wizard_odds_label.setStyleSheet("color: #666; font-style: italic;")
+        preview_layout.addWidget(self.wizard_odds_label)
 
         layout.addWidget(preview_group)
 
@@ -3600,33 +3644,106 @@ class CustomPatternDialog(QDialog):
                 # Update code preview
                 self.wizard_code_preview.setPlainText(lua_code)
 
+                # Queue a live odds estimate for the generated Lua (debounced,
+                # runs off-thread). Show a transient note until it lands.
+                self._odds_pending_script = lua_code
+                if hasattr(self, "wizard_odds_label"):
+                    self.wizard_odds_label.setText("Estimating odds…")
+                    self.wizard_odds_label.setStyleSheet("color: #666; font-style: italic;")
+                    self._odds_timer.start()
+
                 # Test the pattern
                 if self.engine:
                     try:
                         result = self.engine.test_script(lua_code, f"A{test_serial}B")
+                        # DigitPreviewWidget takes serial / highlights / group
+                        # boxes as SEPARATE calls (set_serial is serial-only);
+                        # the old 4-arg set_serial raised and the preview showed
+                        # "Error: ..." instead of the match.
+                        self.wizard_preview.set_serial(test_serial)
                         if result and result.matched:
-                            self.wizard_preview.set_serial(
-                                test_serial,
-                                result.highlights or [],
-                                result.connectors or [],
-                                result.group_boxes or []
-                            )
+                            self.wizard_preview.set_highlights(
+                                result.highlights or [], result.connectors or [])
+                            self.wizard_preview.set_group_boxes(result.group_boxes or [])
                             self.wizard_preview_message.setText(result.message or 'Pattern matched')
                             self.wizard_preview_message.setStyleSheet("color: #2e7d32; font-weight: bold;")
                         else:
-                            self.wizard_preview.set_serial(test_serial, [], [], [])
+                            self.wizard_preview.set_highlights([], [])
+                            self.wizard_preview.set_group_boxes([])
                             self.wizard_preview_message.setText("Pattern did not match (check parameters)")
                             self.wizard_preview_message.setStyleSheet("color: #d32f2f;")
                     except Exception as e:
-                        self.wizard_preview.set_serial(test_serial, [], [], [])
+                        self.wizard_preview.set_serial(test_serial)
+                        self.wizard_preview.set_highlights([], [])
+                        self.wizard_preview.set_group_boxes([])
                         self.wizard_preview_message.setText(f"Error: {str(e)[:50]}")
                         self.wizard_preview_message.setStyleSheet("color: #d32f2f;")
             else:
                 self.wizard_examples_label.setText("No examples could be generated")
                 self.wizard_preview_message.setText("")
+                self._clear_odds_estimate()
         except Exception as e:
             self.wizard_examples_label.setText(f"Error: {str(e)[:50]}")
             self.wizard_preview_message.setText("")
+            self._clear_odds_estimate()
+
+    def _clear_odds_estimate(self):
+        """Blank the live odds estimate and cancel any pending/in-flight run."""
+        self._odds_pending_script = ""
+        self._odds_gen += 1  # invalidate any running thread's result
+        self._odds_timer.stop()
+        if hasattr(self, "wizard_odds_label"):
+            self.wizard_odds_label.setText("")
+
+    def _start_odds_estimate(self):
+        """Kick off a background odds sample for the latest generated Lua."""
+        script = getattr(self, "_odds_pending_script", "")
+        if not script:
+            return
+        self._odds_gen += 1
+        gen = self._odds_gen
+        helpers = None
+        try:
+            if self.engine is not None:
+                helpers = self.engine.patterns_dir / "lib" / "helpers.lua"
+        except Exception:
+            helpers = None
+        thread = OddsEstimateThread(gen, script, helpers, parent=self)
+        thread.done.connect(self._on_odds_estimated)
+        # Keep a reference until it finishes (else a running QThread can be GC'd);
+        # prune finished threads as we go.
+        self._odds_threads = [t for t in self._odds_threads if t.isRunning()]
+        self._odds_threads.append(thread)
+        thread.finished.connect(lambda t=thread: self._odds_threads.remove(t)
+                                if t in self._odds_threads else None)
+        thread.start()
+
+    def _on_odds_estimated(self, gen: int, result: object):
+        """Apply a finished estimate, unless a newer one has superseded it."""
+        if gen != self._odds_gen or not hasattr(self, "wizard_odds_label"):
+            return
+        from dollar_detective import rarity_estimate
+        self.wizard_odds_label.setText(rarity_estimate.format_estimate(result))
+        if not result.get("estimable", False) or result.get("error"):
+            color = "#666"          # not auto-computable / failed
+        elif result.get("hits", 0) == 0 or not result.get("reliable", True):
+            color = "#c07a2b"       # too rare to sample reliably
+        else:
+            color = "#2e7d32"       # good estimate
+        self.wizard_odds_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+
+    def done(self, r):
+        """Finish any in-flight odds sample before teardown so a background
+        QThread never outlives the dialog (which would warn/crash)."""
+        try:
+            self._odds_timer.stop()
+            self._odds_gen += 1
+            for t in list(self._odds_threads):
+                if t.isRunning():
+                    t.wait(2000)
+        except Exception:
+            pass
+        super().done(r)
 
     def _create_ai_tab(self) -> QWidget:
         """Create the AI Generate tab for AI-assisted pattern creation."""
