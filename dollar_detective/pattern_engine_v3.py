@@ -792,6 +792,25 @@ class PatternEngineV3:
         filename = name.lower().replace(' ', '_') + '.lua'
         file_path = target_dir / filename
 
+        # Catalog SKU: preserve an already-assigned one (SKUs are stable, so an
+        # edit must not renumber), else assign the next free U-### for this
+        # non-core pattern. Core patterns are numbered C-### out-of-band.
+        import re as _re
+        catalog = ""
+        if file_path.exists():
+            try:
+                m = _re.search(r'^\s*Catalog:\s*(.+)$',
+                               file_path.read_text(encoding='utf-8'), _re.MULTILINE)
+                if m:
+                    catalog = m.group(1).strip()
+            except Exception:
+                catalog = ""
+        if not catalog:
+            try:
+                catalog = self.next_catalog_sku("U")
+            except Exception:
+                catalog = ""
+
         # Build header
         header_lines = [
             '--[[',
@@ -799,6 +818,8 @@ class PatternEngineV3:
         ]
         if display_name:
             header_lines.append(f'DisplayName: {display_name}')
+        if catalog:
+            header_lines.append(f'Catalog: {catalog}')
         header_lines.extend([
             f'Description: {description}',
             f'Tier: {tier}',
@@ -949,6 +970,30 @@ class PatternEngineV3:
                 result['data_loaded'] = info.data is not None
             return result
         return None
+
+    def next_catalog_sku(self, prefix: str = "C") -> str:
+        """The next free catalog SKU in a prefix series, e.g. "C-161" / "U-003".
+
+        Catalog numbers are STABLE identifiers assigned append-only: a new
+        pattern takes max(existing) + 1, never slots into a gap (see the catalog
+        scheme). Scans every loaded pattern's header SKU plus any per-user
+        override so a number is never reused. Zero-padded to 3 digits."""
+        import re as _re
+        rx = _re.compile(rf"^{_re.escape(prefix)}-(\d+)$")
+        max_n = 0
+        for info in self.lua_patterns.values():
+            m = rx.match((getattr(info, "catalog", "") or "").strip())
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        if self.settings:
+            try:
+                for v in self.settings.pattern_catalogs.values():
+                    m = rx.match(str(v).strip())
+                    if m:
+                        max_n = max(max_n, int(m.group(1)))
+            except Exception:
+                pass
+        return f"{prefix}-{max_n + 1:03d}"
 
     def resolve_pattern_catalog(self, name: str) -> str:
         """Catalog SKU for a pattern: the per-user override wins, else the
