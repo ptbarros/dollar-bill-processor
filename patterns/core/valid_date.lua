@@ -1,6 +1,7 @@
 --[[
 Pattern: VALID_DATE
 DisplayName: Valid Date
+Catalog: C-124
 Description: Reads as a calendar date — either month/day/year or year/month/day — with the year between 1500 and 2050 (e.g. 12251985, 19850704).
 Tier: 8
 Odds: 1 in 239 (402,498 per 96M)

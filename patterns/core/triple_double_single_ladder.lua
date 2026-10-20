@@ -1,5 +1,6 @@
 --[[
 Pattern: TRIPLE_DOUBLE_SINGLE_LADDER
+Catalog: C-007
 Description: Triple + double + single ladder consecutive
 Tier: 1
 Examples: ["11122345", "22233456"]

@@ -1,5 +1,6 @@
 --[[
 Pattern: CONSEC_SEQ_TRIPLES
+Catalog: C-070
 Description: Two consecutive sequential triples, at the front (AAABBBXX) or the back (XXAAABBB), the two digits one apart (e.g. 111·222·xx, xx·888·999).
 Tier: 5
 Examples: ["11122234", "22233345", "34111222", "98999888"]

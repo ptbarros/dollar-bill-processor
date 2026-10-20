@@ -41,10 +41,10 @@ def _hint(text: str) -> QLabel:
 class _IntroPage(QWizardPage):
     def __init__(self):
         super().__init__()
-        self.setTitle("Welcome to Scan mode")
+        self.setTitle("Welcome to Monitor mode")
         layout = QVBoxLayout(self)
         body = QLabel(
-            "Scan mode lets Dollar Detective <b>watch your scanner's output folder</b> "
+            "Monitor mode lets Dollar Detective <b>watch your scanner's output folder</b> "
             "and file each strap for you.\n\n"
             "You feed a strap on the scanner (in as many passes as you like), then click "
             "<b>Stop &amp; File Batch</b> — everything that arrived is filed as the next "
@@ -159,7 +159,7 @@ class _LivePage(QWizardPage):
         self.setTitle("Process live (optional)")
         layout = QVBoxLayout(self)
         body = QLabel(
-            "Normally Scan mode processes the strap when you click "
+            "Normally Monitor mode processes the strap when you click "
             "<b>Stop &amp; File Batch</b>. With <b>Process live</b> on, it starts "
             "classifying bills <b>as they arrive</b> instead.<br><br>"
             "Even if your scanner saves all its images at once (many do), this means "
@@ -178,7 +178,7 @@ class _LivePage(QWizardPage):
 
         layout.addWidget(_hint(
             "Experimental. You can toggle this any time with the Process live box in "
-            "Scan mode."))
+            "Monitor mode."))
         layout.addStretch()
 
     def live_on(self) -> bool:
@@ -204,13 +204,13 @@ class _SummaryPage(QWizardPage):
         fmt_label = _FMT_LABELS[_FMT_VALUES.index(w.naming_page.fmt_value())]
         num = w.naming_page.start_number()
         self.body.setText(
-            "Here's how Scan mode is set up:<br><br>"
+            "Here's how Monitor mode is set up:<br><br>"
             f"<b>Scanner Output Folder:</b> {scanner}<br>"
             f"<b>Straps Folder:</b> {straps}<br>"
             f"<b>Strap Folder Names:</b> {fmt_label}<br>"
             f"<b>Next strap number:</b> {num}<br>"
             f"<b>Process live:</b> {'On' if w.live_page.live_on() else 'Off'}<br><br>"
-            "Click <b>Finish</b> to save, then <b>Start Scanning</b> and feed a strap. "
+            "Click <b>Finish</b> to save, then <b>Monitor Folder</b> and feed a strap. "
             "You can change any of this later under Settings → Folders, or re-run this "
             "wizard from Help → Setup Wizard."
         )
@@ -223,7 +223,7 @@ class ScanSetupWizard(QWizard):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
         self.settings = settings
-        self.setWindowTitle("Scan Mode Setup")
+        self.setWindowTitle("Monitor Mode Setup")
         self.setWizardStyle(QWizard.ModernStyle)
         self.setOption(QWizard.NoBackButtonOnStartPage, True)
         # Open tall enough that the longest page (the summary) isn't clipped.
@@ -246,7 +246,7 @@ class ScanSetupWizard(QWizard):
         self.scanner_page = _FolderPage(
             "Scanner Output Folder",
             "This is the folder <b>where your scanner saves its scanned images</b> — the "
-            "one Dollar Detective watches (in Scan mode) while you feed a strap.<br><br>"
+            "one Dollar Detective watches (in Monitor mode) while you feed a strap.<br><br>"
             "Set your scanner software to save here, then pick that same folder below.",
             f"Leave blank to use the default: {default_scanner}",
             initial=getattr(p, "data_folder", "") or "",

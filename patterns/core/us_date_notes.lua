@@ -1,6 +1,7 @@
 --[[
 Pattern: US_DATE_NOTES
 DisplayName: Date Note M/D/Y
+Catalog: C-157
 Description: Reads as a real month-day-year birthday in the month-first style, from within the last hundred years (e.g. 11·22·1975).
 Tier: 7
 Odds: Depends on the date

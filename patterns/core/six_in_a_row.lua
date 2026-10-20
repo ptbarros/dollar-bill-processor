@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_SIX_IN_A_ROW
 DisplayName: 6 in a Row
+Catalog: C-065
 Description: 6 consecutive identical digits
 Tier: 4
 Odds: 1 in 39,056 (2,458 per 96M)

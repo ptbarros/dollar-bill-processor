@@ -150,8 +150,10 @@ The web spinoff (`~/projects/dollardetective-web`, live at dollardetective.tarso
 desktop engine server-side:
 
 - `pattern_engine_v3.py`, `pattern_sandbox.py`, `resource_path.py`
-- `patterns/{lib,core}/*.lua`
-- `patterns/user/1959.lua` (Paul's own user pattern)
+- `patterns/{lib,core}/*.lua` — every shipped pattern now lives in `core/`, including
+  Paul's own 1959 (`patterns/core/1959.lua`), which the web app picks up via this glob.
+  `patterns/user/` is gitignored personal scratch and is NOT vendored (the web
+  `sync-engine.sh` stopped copying `user/1959.lua` by name in the 2026-09-21 flatten).
 
 **Deleting or renaming any of these breaks the web app's next sync**, and an unguarded
 read of a vanished file can stop it at startup (this happened when the `Essentials`

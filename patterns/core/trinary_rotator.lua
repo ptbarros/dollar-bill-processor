@@ -1,6 +1,7 @@
 --[[
 Pattern: TRINARY_ROTATOR
 DisplayName: Trinary Rotator
+Catalog: C-046
 Description: Turn the note upside-down and it reads the same, built from three different digits that survive the flip (e.g. 0690·0690).
 Tier: 3
 Flippable: true

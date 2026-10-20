@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_BINARY
 DisplayName: Binary
+Catalog: C-089
 Description: Only two different digits appear in the whole serial, in any order
 Tier: 5
 Odds: 1 in 8,996 (10,671 per 96M)

@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QSplitter, QHeaderView, QCheckBox, QListWidget,
     QListWidgetItem, QFormLayout, QComboBox, QMessageBox, QColorDialog,
     QTabWidget, QWidget, QSpinBox, QFrame, QApplication, QPlainTextEdit,
-    QInputDialog, QMenu, QSizePolicy
+    QInputDialog, QMenu, QSizePolicy, QScrollArea
 )
 from PySide6.QtCore import Qt, QTimer, Signal, QThread
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QFontMetrics
@@ -148,6 +148,78 @@ class CorpusBuildThread(QThread):
             print(f"[corpus] build failed: {e}")
 
 
+class OddsExactThread(QThread):
+    """Computes a pattern's EXACT odds over all 96M serials off the GUI thread
+    (~5 min, one core) and writes the precise Odds: header into its .lua file.
+
+    The file rewrite is the durable deliverable and happens inside run(), so it
+    completes even if the dialog has since closed. Emits progress(name, done,
+    total) and done(name, result)."""
+    progress = Signal(str, int, int)
+    done = Signal(str, object)
+
+    def __init__(self, name: str, script: str, file_path, helpers_path, parent=None):
+        super().__init__(parent)
+        self._name = name
+        self._script = script
+        self._file_path = file_path
+        self._helpers = helpers_path
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
+
+    def run(self):
+        from dollar_detective import rarity_estimate
+        try:
+            result = rarity_estimate.sweep_exact(
+                self._script, helpers_path=self._helpers,
+                cancel=lambda: self._cancel,
+                progress=lambda d, t: self.progress.emit(self._name, d, t))
+        except Exception as e:
+            result = {"estimable": True, "error": str(e)}
+        # Bake the header for a clean, non-cancelled exact count.
+        if (result.get("exact") and not result.get("cancelled")
+                and result.get("count") and self._file_path):
+            try:
+                rarity_estimate.write_odds_header(
+                    self._file_path, result["one_in_x"], result["count"])
+                result["written"] = True
+            except Exception as e:
+                result["write_error"] = str(e)
+        self.done.emit(self._name, result)
+
+
+# Background exact-odds jobs are kept alive here so a running QThread is never
+# garbage-collected when the dialog that launched it closes mid-sweep.
+_EXACT_JOBS: list = []
+
+
+class OddsEstimateThread(QThread):
+    """Samples a pattern's match() off the GUI thread for a live odds estimate.
+
+    Builds its OWN Lua runtime (via rarity_estimate.estimate), so it never races
+    the dialog's engine. Emits (generation, result_dict); the dialog ignores a
+    result whose generation is stale (a newer estimate has since been queued)."""
+    done = Signal(int, object)
+
+    def __init__(self, gen: int, script: str, helpers_path, sample_size: int = 150_000, parent=None):
+        super().__init__(parent)
+        self._gen = gen
+        self._script = script
+        self._helpers = helpers_path
+        self._n = sample_size
+
+    def run(self):
+        try:
+            from dollar_detective import rarity_estimate
+            result = rarity_estimate.estimate(
+                self._script, sample_size=self._n, helpers_path=self._helpers)
+        except Exception as e:
+            result = {"estimable": True, "error": str(e)}
+        self.done.emit(self._gen, result)
+
+
 class PatternDialog(QDialog):
     """Dialog for managing patterns and testing serials."""
 
@@ -162,6 +234,7 @@ class PatternDialog(QDialog):
         self._corpus = None
         self._corpus_thread = None
         self._corpus_notice_shown = False  # show the "building in background" notice once per session
+        self._exact_thread = None          # background exact-odds sweep (one at a time)
 
         self.setWindowTitle("Pattern Manager")
         self.setMinimumSize(900, 600)
@@ -193,6 +266,23 @@ class PatternDialog(QDialog):
             "QWidget { background:#fff3cd; border:1px solid #ffe08a; border-radius:4px; }")
         self.collision_bar.hide()
         layout.addWidget(self.collision_bar)
+
+        # Exact-odds bake banner: shown while a background sweep computes the
+        # precise Odds: header for a just-saved digit-based pattern (~5 min).
+        self.odds_bar = QWidget()
+        _ob = QHBoxLayout(self.odds_bar)
+        _ob.setContentsMargins(8, 4, 8, 4)
+        self.odds_bar_label = QLabel("")
+        self.odds_bar_label.setWordWrap(True)
+        self.odds_bar_label.setStyleSheet("color:#15507a;")
+        _ob.addWidget(self.odds_bar_label, 1)
+        self.odds_bar_cancel = QPushButton("Cancel")
+        self.odds_bar_cancel.clicked.connect(self._cancel_exact_odds)
+        _ob.addWidget(self.odds_bar_cancel)
+        self.odds_bar.setStyleSheet(
+            "QWidget { background:#e6f0f7; border:1px solid #a9ccea; border-radius:4px; }")
+        self.odds_bar.hide()
+        layout.addWidget(self.odds_bar)
 
         # Main splitter
         splitter = QSplitter(Qt.Horizontal)
@@ -742,8 +832,9 @@ class PatternDialog(QDialog):
                     pattern_item.setText(3, "○")
                     pattern_item.setForeground(3, QColor("#888888"))
 
-                # Catalog location (double-click to edit)
-                catalog = self.settings.get_pattern_catalog(name)
+                # Catalog SKU (double-click to edit): shipped header value,
+                # overridden by a per-user setting when one exists.
+                catalog = self.engine.resolve_pattern_catalog(name)
                 pattern_item.setText(4, catalog if catalog else "-")
 
                 # Purple tint for Lua patterns
@@ -897,16 +988,20 @@ class PatternDialog(QDialog):
                 self._clear_pattern_color(item, name)
 
         elif column == 4:
-            # Catalog column - show input dialog
-            current_catalog = self.settings.get_pattern_catalog(name)
+            # Catalog SKU column - show input dialog. Start from the resolved
+            # value (shipped header SKU, or an existing override).
+            current_catalog = self.engine.resolve_pattern_catalog(name)
             catalog, ok = QInputDialog.getText(
                 self, f"Catalog for {name}",
-                "Enter catalog location (e.g., A1, B2, 12):",
+                "Catalog number (e.g., C-004). Blank clears your override and\n"
+                "restores the pattern's shipped number:",
                 text=current_catalog
             )
             if ok:
+                # Store as a per-user override; blank removes it so the shipped
+                # SKU shows again.
                 self.settings.set_pattern_catalog(name, catalog.strip())
-                item.setText(4, catalog.strip() if catalog.strip() else "-")
+                item.setText(4, self.engine.resolve_pattern_catalog(name) or "-")
 
     def _on_context_menu(self, pos):
         """Show context menu for clearing colors."""
@@ -1427,6 +1522,70 @@ class PatternDialog(QDialog):
         self.engine.reload()
         self._corpus = None
 
+    def _maybe_bake_exact_odds(self, name: str):
+        """After saving a Lua pattern, compute its exact odds in the background
+        and bake the Odds: header. Only for digit-deterministic patterns (the
+        sweep can't score image/data/date patterns); one job at a time."""
+        info = self.engine.lua_patterns.get(name)
+        if not info or not info.file_path:
+            return
+        from dollar_detective import rarity_estimate
+        ok, reason = rarity_estimate.can_estimate(info.script or "")
+        if not ok:
+            return  # odds stay hand-set / blank; nothing to compute
+        if self._exact_thread is not None and self._exact_thread.isRunning():
+            # Let the in-flight one finish rather than piling up 5-min sweeps.
+            return
+        helpers = None
+        try:
+            helpers = self.engine.patterns_dir / "lib" / "helpers.lua"
+        except Exception:
+            helpers = None
+        thread = OddsExactThread(name, info.script, info.file_path, helpers)
+        thread.progress.connect(self._on_exact_odds_progress)
+        thread.done.connect(self._on_exact_odds_done)
+        self._exact_thread = thread
+        _EXACT_JOBS.append(thread)
+        thread.finished.connect(
+            lambda t=thread: _EXACT_JOBS.remove(t) if t in _EXACT_JOBS else None)
+        self.odds_bar_label.setText(
+            f"Computing exact odds for {name} in the background "
+            f"(about 5 minutes)…")
+        self.odds_bar.show()
+        thread.start()
+
+    def _cancel_exact_odds(self):
+        if self._exact_thread is not None and self._exact_thread.isRunning():
+            self._exact_thread.cancel()
+            self.odds_bar_label.setText("Cancelling exact-odds computation…")
+
+    def _on_exact_odds_progress(self, name: str, done: int, total: int):
+        pct = int(done / total * 100) if total else 0
+        self.odds_bar_label.setText(
+            f"Computing exact odds for {name} — {pct}%…")
+
+    def _on_exact_odds_done(self, name: str, result: object):
+        if result.get("cancelled"):
+            self.odds_bar_label.setText(f"Exact odds for {name}: cancelled.")
+        elif result.get("error") or result.get("write_error"):
+            self.odds_bar_label.setText(
+                f"Exact odds for {name}: couldn't compute "
+                f"({result.get('error') or result.get('write_error')}).")
+        elif result.get("exact") and result.get("count"):
+            from dollar_detective import rarity_estimate
+            self.odds_bar_label.setText(
+                f"Exact odds for {name}: "
+                f"{rarity_estimate.odds_string(result['one_in_x'], result['count'])} "
+                f"— saved to the pattern.")
+            # Pick up the rewritten header and refresh the list.
+            self._reload_engine()
+            self._load_patterns()
+        else:
+            self.odds_bar_label.setText(f"Exact odds for {name}: no matches found.")
+        # Leave the result visible; hide the Cancel button now it's finished.
+        self.odds_bar_cancel.setVisible(bool(
+            self._exact_thread is not None and self._exact_thread.isRunning()))
+
     def _ensure_corpus(self):
         """Load the cached example corpus, or start building it in the background.
 
@@ -1939,6 +2098,9 @@ class PatternDialog(QDialog):
                     # Re-select the pattern in the tree
                     if new_pattern_name:
                         self._select_pattern_by_name(new_pattern_name)
+                        # The rule changed, so recompute exact odds in the
+                        # background (digit-based patterns only).
+                        self._maybe_bake_exact_odds(new_pattern_name)
 
                     QMessageBox.information(
                         self, "Saved",
@@ -2051,6 +2213,11 @@ class PatternDialog(QDialog):
                 # Reload patterns
                 self._reload_engine()
                 self._load_patterns()
+
+                # Recompute exact odds in the background (the rule may have
+                # changed) for digit-based patterns.
+                if defn.get('source') == 'lua' and HAS_V3_ENGINE:
+                    self._maybe_bake_exact_odds(name)
 
                 QMessageBox.information(
                     self, "Pattern Created",
@@ -2786,6 +2953,10 @@ Logs appear in batch test results and "Copy for AI Debug" output.
                 self._reload_engine()
                 self._load_patterns()
 
+                # Compute exact odds in the background for digit-based patterns.
+                if defn.get('source') == 'lua' and HAS_V3_ENGINE:
+                    self._maybe_bake_exact_odds(name)
+
 
 class LuaSyntaxHighlighter(QSyntaxHighlighter):
     """Simple Lua syntax highlighter for QPlainTextEdit."""
@@ -3155,6 +3326,18 @@ class CustomPatternDialog(QDialog):
         self._wizard_examples: list = []
         self.param_widgets: dict = {}  # Will be populated by _create_wizard_tab
 
+        # Live odds estimate (wizard tab): a debounced background sample of the
+        # generated Lua, so the estimate updates as parameters change without
+        # blocking the UI. _odds_gen guards against a stale thread's result
+        # overwriting a newer one.
+        self._odds_gen: int = 0
+        self._odds_pending_script: str = ""
+        self._odds_threads: list = []
+        self._odds_timer = QTimer(self)
+        self._odds_timer.setSingleShot(True)
+        self._odds_timer.setInterval(450)
+        self._odds_timer.timeout.connect(self._start_odds_estimate)
+
         self._setup_ui()
         if name:
             self._load_existing()
@@ -3243,6 +3426,12 @@ class CustomPatternDialog(QDialog):
             self.tab_widget.addTab(self.docs_tab, "API Docs")
 
         layout.addWidget(self.tab_widget)
+
+        # Re-check the AI tab's key state whenever it's shown, so a key added in
+        # Settings (via the tab's own button) takes effect on return.
+        if HAS_V3_ENGINE:
+            self.tab_widget.currentChanged.connect(
+                lambda _i: self._update_ai_tab_state())
 
         # Buttons
         button_layout = QHBoxLayout()
@@ -3359,6 +3548,13 @@ class CustomPatternDialog(QDialog):
         self.wizard_preview_message.setStyleSheet("color: #666; font-style: italic;")
         preview_layout.addWidget(self.wizard_preview_message)
 
+        # Live odds estimate (sampled; the exact figure is baked on save/with
+        # the compute_rarity tool). Updates as parameters change.
+        self.wizard_odds_label = QLabel("")
+        self.wizard_odds_label.setWordWrap(True)
+        self.wizard_odds_label.setStyleSheet("color: #666; font-style: italic;")
+        preview_layout.addWidget(self.wizard_odds_label)
+
         layout.addWidget(preview_group)
 
         # Generated code section (collapsible)
@@ -3384,7 +3580,17 @@ class CustomPatternDialog(QDialog):
         # Initialize with first recipe
         self._on_recipe_changed(0)
 
-        return widget
+        # The wizard has several stacked groups (recipe / params / visualization
+        # / live preview / generated code). On a short or display-scaled dialog
+        # they don't all fit, and without scrolling the tall digit preview would
+        # overflow onto the message/odds labels below it. Wrap in a scroll area
+        # so the content keeps its natural height and never overlaps.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(widget)
+        return scroll
 
     def _on_code_group_toggled(self, checked: bool):
         """Show/hide generated code content."""
@@ -3600,38 +3806,122 @@ class CustomPatternDialog(QDialog):
                 # Update code preview
                 self.wizard_code_preview.setPlainText(lua_code)
 
+                # Queue a live odds estimate for the generated Lua (debounced,
+                # runs off-thread). Show a transient note until it lands.
+                self._odds_pending_script = lua_code
+                if hasattr(self, "wizard_odds_label"):
+                    self.wizard_odds_label.setText("Estimating odds…")
+                    self.wizard_odds_label.setStyleSheet("color: #666; font-style: italic;")
+                    self._odds_timer.start()
+
                 # Test the pattern
                 if self.engine:
                     try:
                         result = self.engine.test_script(lua_code, f"A{test_serial}B")
+                        # DigitPreviewWidget takes serial / highlights / group
+                        # boxes as SEPARATE calls (set_serial is serial-only);
+                        # the old 4-arg set_serial raised and the preview showed
+                        # "Error: ..." instead of the match.
+                        self.wizard_preview.set_serial(test_serial)
                         if result and result.matched:
-                            self.wizard_preview.set_serial(
-                                test_serial,
-                                result.highlights or [],
-                                result.connectors or [],
-                                result.group_boxes or []
-                            )
+                            self.wizard_preview.set_highlights(
+                                result.highlights or [], result.connectors or [])
+                            self.wizard_preview.set_group_boxes(result.group_boxes or [])
                             self.wizard_preview_message.setText(result.message or 'Pattern matched')
                             self.wizard_preview_message.setStyleSheet("color: #2e7d32; font-weight: bold;")
                         else:
-                            self.wizard_preview.set_serial(test_serial, [], [], [])
+                            self.wizard_preview.set_highlights([], [])
+                            self.wizard_preview.set_group_boxes([])
                             self.wizard_preview_message.setText("Pattern did not match (check parameters)")
                             self.wizard_preview_message.setStyleSheet("color: #d32f2f;")
                     except Exception as e:
-                        self.wizard_preview.set_serial(test_serial, [], [], [])
+                        self.wizard_preview.set_serial(test_serial)
+                        self.wizard_preview.set_highlights([], [])
+                        self.wizard_preview.set_group_boxes([])
                         self.wizard_preview_message.setText(f"Error: {str(e)[:50]}")
                         self.wizard_preview_message.setStyleSheet("color: #d32f2f;")
             else:
                 self.wizard_examples_label.setText("No examples could be generated")
                 self.wizard_preview_message.setText("")
+                self._clear_odds_estimate()
         except Exception as e:
             self.wizard_examples_label.setText(f"Error: {str(e)[:50]}")
             self.wizard_preview_message.setText("")
+            self._clear_odds_estimate()
+
+    def _clear_odds_estimate(self):
+        """Blank the live odds estimate and cancel any pending/in-flight run."""
+        self._odds_pending_script = ""
+        self._odds_gen += 1  # invalidate any running thread's result
+        self._odds_timer.stop()
+        if hasattr(self, "wizard_odds_label"):
+            self.wizard_odds_label.setText("")
+
+    def _start_odds_estimate(self):
+        """Kick off a background odds sample for the latest generated Lua."""
+        script = getattr(self, "_odds_pending_script", "")
+        if not script:
+            return
+        self._odds_gen += 1
+        gen = self._odds_gen
+        helpers = None
+        try:
+            if self.engine is not None:
+                helpers = self.engine.patterns_dir / "lib" / "helpers.lua"
+        except Exception:
+            helpers = None
+        thread = OddsEstimateThread(gen, script, helpers, parent=self)
+        thread.done.connect(self._on_odds_estimated)
+        # Keep a reference until it finishes (else a running QThread can be GC'd);
+        # prune finished threads as we go.
+        self._odds_threads = [t for t in self._odds_threads if t.isRunning()]
+        self._odds_threads.append(thread)
+        thread.finished.connect(lambda t=thread: self._odds_threads.remove(t)
+                                if t in self._odds_threads else None)
+        thread.start()
+
+    def _on_odds_estimated(self, gen: int, result: object):
+        """Apply a finished estimate, unless a newer one has superseded it."""
+        if gen != self._odds_gen or not hasattr(self, "wizard_odds_label"):
+            return
+        from dollar_detective import rarity_estimate
+        self.wizard_odds_label.setText(rarity_estimate.format_estimate(result))
+        if not result.get("estimable", False) or result.get("error"):
+            color = "#666"          # not auto-computable / failed
+        elif result.get("hits", 0) == 0 or not result.get("reliable", True):
+            color = "#c07a2b"       # too rare to sample reliably
+        else:
+            color = "#2e7d32"       # good estimate
+        self.wizard_odds_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+
+    def done(self, r):
+        """Finish any in-flight odds sample before teardown so a background
+        QThread never outlives the dialog (which would warn/crash)."""
+        try:
+            self._odds_timer.stop()
+            self._odds_gen += 1
+            for t in list(self._odds_threads):
+                if t.isRunning():
+                    t.wait(2000)
+        except Exception:
+            pass
+        super().done(r)
 
     def _create_ai_tab(self) -> QWidget:
         """Create the AI Generate tab for AI-assisted pattern creation."""
         widget = QWidget()
-        layout = QVBoxLayout(widget)
+        outer = QVBoxLayout(widget)
+
+        # Setup notice shown when no API key is configured; the real controls
+        # stay hidden until the user adds an Anthropic or OpenAI key.
+        self.ai_setup_notice = self._build_ai_setup_notice()
+        outer.addWidget(self.ai_setup_notice)
+
+        # All AI controls live in this container so they can be hidden as a unit.
+        self.ai_content = QWidget()
+        layout = QVBoxLayout(self.ai_content)
+        layout.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(self.ai_content)
 
         # Description input
         desc_group = QGroupBox("Describe Your Pattern")
@@ -3726,7 +4016,67 @@ class CustomPatternDialog(QDialog):
         config_hint.setStyleSheet("color: gray; font-size: 10px;")
         layout.addWidget(config_hint)
 
+        # Show either the controls or the setup notice depending on keys.
+        self._update_ai_tab_state()
         return widget
+
+    def _build_ai_setup_notice(self) -> QWidget:
+        """The 'add an API key first' panel for the AI Generate tab."""
+        box = QWidget()
+        v = QVBoxLayout(box)
+        v.addStretch()
+        title = QLabel("AI pattern generation needs an API key")
+        title.setStyleSheet("font-size: 15px; font-weight: bold;")
+        title.setAlignment(Qt.AlignCenter)
+        v.addWidget(title)
+        msg = QLabel(
+            "Add an <b>Anthropic</b> or <b>OpenAI</b> API key to describe a "
+            "pattern in plain English and have the Lua written for you.")
+        msg.setWordWrap(True)
+        msg.setAlignment(Qt.AlignCenter)
+        msg.setStyleSheet("color: gray;")
+        v.addWidget(msg)
+        row = QHBoxLayout()
+        row.addStretch()
+        self.ai_open_settings_btn = QPushButton("Open AI Settings…")
+        self.ai_open_settings_btn.clicked.connect(self._open_ai_settings)
+        row.addWidget(self.ai_open_settings_btn)
+        row.addStretch()
+        v.addLayout(row)
+        v.addStretch()
+        return box
+
+    def _update_ai_tab_state(self):
+        """Show the AI controls only when at least one API key is configured;
+        otherwise show the setup notice."""
+        try:
+            from dollar_detective.settings_manager import get_settings
+            s = get_settings()
+            has_key = bool(s.ai.anthropic_api_key) or bool(s.ai.openai_api_key)
+        except Exception:
+            has_key = False
+        if hasattr(self, "ai_setup_notice"):
+            self.ai_setup_notice.setVisible(not has_key)
+        if hasattr(self, "ai_content"):
+            self.ai_content.setVisible(has_key)
+        if has_key and hasattr(self, "ai_provider_combo"):
+            self._populate_ai_provider_combo()
+
+    def _open_ai_settings(self):
+        """Open the Settings dialog so the user can add an API key, then
+        re-evaluate the AI tab."""
+        try:
+            from dollar_detective.settings_manager import get_settings
+            from .settings_dialog import SettingsDialog
+            dlg = SettingsDialog(get_settings(), self, initial_tab="AI")
+            if dlg.exec():
+                get_settings().save()
+        except Exception:
+            QMessageBox.information(
+                self, "AI Settings",
+                "Open Settings → AI and add your Anthropic or OpenAI API key, "
+                "then return to this tab.")
+        self._update_ai_tab_state()
 
     def _populate_ai_provider_combo(self):
         """Populate the AI provider combo with configured providers."""
@@ -4974,19 +5324,80 @@ log("checking condition:", some_value)
         self.hint_label.setText(hints.get(rule, ""))
 
     def _validate_script(self):
-        """Validate the Lua script syntax."""
+        """Validate the Lua for whatever tab is in front, and ALWAYS show a
+        visible result.
+
+        The Validate button lives at the bottom of the dialog, shared by every
+        tab, but historically it only ever checked the Lua Script tab's editor
+        and wrote the outcome to that tab's inline status label. From the
+        Pattern Wizard (or AI / Simple Rule) tab that looked like it did nothing
+        -- the wrong script was checked and the result landed on a hidden tab.
+        So pick the script that matches the active tab and report with a dialog
+        the user can't miss."""
         if not self.engine:
             return
 
-        script = self.script_edit.toPlainText()
+        tab_name = self.tab_widget.tabText(self.tab_widget.currentIndex())
+
+        if tab_name == "Pattern Wizard":
+            recipe = self._get_current_recipe()
+            if not recipe:
+                QMessageBox.information(
+                    self, "Validate Script",
+                    "Pick a recipe type in the Pattern Wizard first.")
+                return
+            try:
+                params = self._get_wizard_params()
+                color = self.wizard_color_combo.currentText()
+                name = self.name_edit.text().strip().upper().replace(' ', '_') or "WIZARD_PATTERN"
+                description = self.desc_edit.text().strip() or recipe.description
+                tier = self.tier_spin.value()
+                script = recipe.generate_lua(params, name, description, tier, color)
+            except Exception as e:
+                QMessageBox.warning(
+                    self, "Validate Script",
+                    f"Couldn't build Lua from the wizard settings:\n\n{e}")
+                return
+            # Refresh the wizard's own live preview so its match feedback is
+            # current alongside the validation result.
+            self._update_wizard_preview()
+        elif tab_name == "AI Generate":
+            script = getattr(self, "_ai_generated_code", "") or ""
+            if not script.strip():
+                QMessageBox.information(
+                    self, "Validate Script",
+                    "Generate a pattern with AI first, then validate it.")
+                return
+        elif tab_name == "Simple Rule":
+            QMessageBox.information(
+                self, "Validate Script",
+                "The Simple Rule tab doesn't use a Lua script, so there's "
+                "nothing to validate here. The rule is checked automatically "
+                "when you click OK.")
+            return
+        else:
+            # Lua Script tab (or any other) -> validate the editor contents.
+            script = self.script_edit.toPlainText()
+
         valid, error = self.engine.validate_script(script)
 
+        # Keep the Lua Script tab's inline status label in sync when it exists,
+        # so that tab still shows its quiet green/red indicator too.
+        if hasattr(self, "script_status"):
+            if valid:
+                self.script_status.setText("Syntax OK")
+                self.script_status.setStyleSheet("color: green;")
+            else:
+                self.script_status.setText(f"Syntax Error: {error}")
+                self.script_status.setStyleSheet("color: red;")
+
+        # Always surface the outcome where the user is actually looking.
         if valid:
-            self.script_status.setText("Syntax OK")
-            self.script_status.setStyleSheet("color: green;")
+            QMessageBox.information(
+                self, "Validate Script", "Syntax OK — the Lua script is valid.")
         else:
-            self.script_status.setText(f"Syntax Error: {error}")
-            self.script_status.setStyleSheet("color: red;")
+            QMessageBox.warning(
+                self, "Validate Script", f"Syntax error:\n\n{error}")
 
     def _format_script(self):
         """Auto-format the Lua script (basic indentation)."""

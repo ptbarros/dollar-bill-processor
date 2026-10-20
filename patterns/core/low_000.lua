@@ -1,5 +1,6 @@
 --[[
 Pattern: LOW_000
+Catalog: C-110
 Description: Exactly three leading zeros — no fewer, no more (e.g. 000·12345).
 Tier: 7
 Examples: ["00012345", "00098765"]

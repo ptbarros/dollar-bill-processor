@@ -1,6 +1,7 @@
 --[[
 Pattern: TRIPLE_BOOKENDS
 DisplayName: 3 Digit Bookend
+Catalog: C-113
 Description: First three and last three digits match, middle two free (e.g. 111·xx·111).
 Tier: 7
 Examples: ["12345123", "45678456", "11100111"]

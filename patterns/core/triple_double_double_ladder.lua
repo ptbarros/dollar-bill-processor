@@ -1,5 +1,6 @@
 --[[
 Pattern: TRIPLE_DOUBLE_DOUBLE_LADDER
+Catalog: C-040
 Description: Triple + double + double ladder (AAABBCCX)
 Tier: 3
 Examples: ["11122334", "22233445"]

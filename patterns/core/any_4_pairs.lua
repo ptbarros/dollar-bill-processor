@@ -1,6 +1,7 @@
 --[[
 Pattern: ANY_4_PAIRS
 DisplayName: 4 Pairs
+Catalog: C-129
 Description: 4 pairs total (any positions, e.g., AABBCCDD or ABCABCDD)
 Tier: 8
 Odds: 1 in 147 (655,103 per 96M)

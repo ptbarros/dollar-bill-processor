@@ -1,6 +1,7 @@
 --[[
 Pattern: SIX_REPEATER_IN_PAIR
 DisplayName: Bookended Repeater
+Catalog: C-078
 Description: A three-digit run repeated back to back, with a single matching digit capping both ends (e.g. 9·301·301·9).
 Tier: 5
 Examples: ["93013019", "71231237", "45915914"]

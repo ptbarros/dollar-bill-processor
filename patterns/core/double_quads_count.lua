@@ -1,6 +1,7 @@
 --[[
 Pattern: DOUBLE_QUADS_COUNT
 DisplayName: Quad Ladder
+Catalog: C-013
 Description: Two blocks of four identical digits where the second block is one higher or lower than the first (e.g. 6666·7777).
 Tier: 1
 Odds: 1 in 5,647,059 (17 per 96M)

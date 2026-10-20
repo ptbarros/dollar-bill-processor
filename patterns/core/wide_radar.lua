@@ -1,6 +1,7 @@
 --[[
 Pattern: WIDE_RADAR
 DisplayName: Binary Triple Bookend
+Catalog: C-024
 Description: Three of one digit at each end wrapping a side-by-side pair of another digit in the middle (e.g. 333·22·333).
 Tier: 2
 Odds: 1 in 1,185,185 (81 per 96M)

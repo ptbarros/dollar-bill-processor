@@ -1,6 +1,7 @@
 --[[
 Pattern: DUPLICATE_SN
 DisplayName: Duplicate S/N
+Catalog: C-137
 Description: B* star note in specific ranges (potential duplicate serial)
 Tier: 3
 Odds: Varies — flags star notes in known duplicate-serial ranges

@@ -1,6 +1,7 @@
 --[[
 Pattern: PAIR_IN_QUINT
 DisplayName: 5 of a Kind & Pair
+Catalog: C-094
 Description: Five of one digit split around an adjacent pair of a second digit, plus one stray digit (e.g. 0·5·22·5555).
 Tier: 6
 Examples: ["05225555", "05522555", "52255550", "55225515", "52255155"]

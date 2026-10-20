@@ -1,5 +1,6 @@
 --[[
 Pattern: SUM_1
+Catalog: C-005
 Description: Sum equals 1
 Tier: 1
 Examples: ["10000000", "00001000", "00000001"]

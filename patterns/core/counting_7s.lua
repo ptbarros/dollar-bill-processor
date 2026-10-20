@@ -1,6 +1,7 @@
 --[[
 Pattern: COUNTING_7S
 DisplayName: Counting By 7s Ladder
+Catalog: C-020
 Description: Counting by 7s ladder (07142128)
 Tier: 2
 Examples: ["07142128", "14212835"]

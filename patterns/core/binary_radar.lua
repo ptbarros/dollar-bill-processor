@@ -1,5 +1,6 @@
 --[[
 Pattern: BINARY_RADAR
+Catalog: C-056
 Description: Only two different digits in the whole serial, and it reads the same backwards as forwards. Example: 66166166
 Tier: 4
 Examples: ["10011001", "66166166", "01100110"]

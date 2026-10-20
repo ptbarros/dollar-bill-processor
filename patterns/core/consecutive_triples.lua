@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_CONSECUTIVE_TRIPLES
 DisplayName: Consecutive Triples
+Catalog: C-096
 Description: Two consecutive triples (AAABBB) with no digits in between
 Tier: 6
 Odds: 1 in 4,054 (23,680 per 96M)

@@ -1,5 +1,6 @@
 --[[
 Pattern: HYBRID_NOTES
+Catalog: C-090
 Description: The first two digits repeat at the end in either order, with a repeated pair filling the middle (e.g. 32·6868·32).
 Tier: 6
 Examples: ["32686832", "32686823", "12525212", "12525221"]

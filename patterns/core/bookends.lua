@@ -1,5 +1,6 @@
 --[[
 Pattern: BOOKENDS
+Catalog: C-132
 Description: First 2 and last 2 digits match
 Tier: 8
 Examples: ["12345612", "99123499"]

@@ -1,5 +1,6 @@
 --[[
 Pattern: TRINARY
+Catalog: C-130
 Description: Contains exactly 3 unique digits
 Tier: 8
 Examples: ["12312312", "01201201", "11223311"]

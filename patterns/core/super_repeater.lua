@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_SUPER_REPEATER
 DisplayName: Super Repeater
+Catalog: C-033
 Description: 2-digit pattern repeated 4 times (XYXYXYXY)
 Tier: 2
 Odds: 1 in 1,010,526 (95 per 96M)

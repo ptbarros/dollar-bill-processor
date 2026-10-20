@@ -1,6 +1,7 @@
 --[[
 Pattern: QUAD_AND_PAIRS
 DisplayName: Quad and 2 Pair
+Catalog: C-088
 Description: A solid block of four identical digits plus two side-by-side pairs of two other digits (e.g. 11·2222·33).
 Tier: 5
 Examples: ["11222233", "44441122", "33224444"]

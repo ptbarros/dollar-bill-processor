@@ -1,5 +1,6 @@
 --[[
 Pattern: TRIPLES_BOOKEND
+Catalog: C-059
 Description: Triple on each end (111XX111)
 Tier: 4
 Examples: ["11122111", "99912999", "33345333"]

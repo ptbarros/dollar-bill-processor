@@ -1,6 +1,7 @@
 --[[
 Pattern: STAR
 DisplayName: Star Note
+Catalog: C-139
 Description: Star note (replacement bill)
 Tier: 4
 Overlay: none

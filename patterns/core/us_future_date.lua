@@ -1,6 +1,7 @@
 --[[
 Pattern: US_FUTURE_DATE
 DisplayName: Date Note Future
+Catalog: C-158
 Description: Reads as a real month-day-year date in the month-first style that falls in the future (e.g. 12·25·2040).
 Tier: 7
 Odds: Depends on the date

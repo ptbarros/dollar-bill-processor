@@ -152,7 +152,7 @@ class MainWindow(QMainWindow):
         self.processing_panel.watch_toggled.connect(self._on_watch_toggled)
         self.processing_panel.mode_about_to_change.connect(self._capture_pre_mode_geo)
         self.processing_panel.mode_changed.connect(self._on_panel_mode_changed)
-        self.processing_panel.open_folders_settings.connect(self._on_settings)
+        self.processing_panel.open_folders_settings.connect(self._on_folders_settings)
         self._update_watch_info()  # seed the Scan-mode indicator (panel emits before we connect)
         self.main_layout.addWidget(self.processing_panel)
 
@@ -394,7 +394,7 @@ class MainWindow(QMainWindow):
         help_menu.addAction(user_guide_action)
 
         setup_wizard_action = QAction("&Setup Wizard...", self)
-        setup_wizard_action.setToolTip("Walk through the Scan-mode folder and strap-naming setup")
+        setup_wizard_action.setToolTip("Walk through the Monitor-mode folder and strap-naming setup")
         # Keep this in the Help menu on macOS -- its "Setup..." text would
         # otherwise be auto-detected as the Preferences item and hijack it.
         setup_wizard_action.setMenuRole(QAction.MenuRole.NoRole)
@@ -774,6 +774,19 @@ class MainWindow(QMainWindow):
             return [single]
         return [p.strip() for p in (result.get('fancy_types', '') or '').split(',') if p.strip()]
 
+    def _resolve_catalog(self, pattern_name: str) -> str:
+        """Catalog SKU for a pattern for label output: a per-user override wins,
+        else the shipped header 'Catalog:' value. Routes through the engine's
+        resolver when it's available, falling back to the settings-only lookup
+        (so labels still work before a run has built an engine)."""
+        engine = getattr(self.results_list, 'pattern_engine', None)
+        if engine is not None:
+            try:
+                return engine.resolve_pattern_catalog(pattern_name)
+            except Exception:
+                pass
+        return self.settings.get_pattern_catalog(pattern_name, '')
+
     def _generate_labels(self, results: list, output_dir: Path):
         """Generate printable labels file for bills.
 
@@ -796,7 +809,7 @@ class MainWindow(QMainWindow):
                     selected = ['No Pattern']
                 pattern_display = ', '.join(self._pattern_display_name(p) for p in selected)
                 catalog = ', '.join(
-                    c for c in (self.settings.get_pattern_catalog(p, '') for p in selected
+                    c for c in (self._resolve_catalog(p) for p in selected
                                 if p != 'No Pattern') if c
                 )
 
@@ -851,7 +864,7 @@ class MainWindow(QMainWindow):
                 selected = ['No Pattern']
             pattern_display = ', '.join(self._pattern_display_name(p) for p in selected)
             catalog = ', '.join(
-                c for c in (self.settings.get_pattern_catalog(p, '') for p in selected
+                c for c in (self._resolve_catalog(p) for p in selected
                             if p != 'No Pattern') if c
             )
 
@@ -1180,7 +1193,7 @@ class MainWindow(QMainWindow):
                 selected = ['No Pattern']
             pattern_display = ', '.join(self._pattern_display_name(p) for p in selected)
             catalog = ', '.join(
-                c for c in (self.settings.get_pattern_catalog(p, '') for p in selected
+                c for c in (self._resolve_catalog(p) for p in selected
                             if p != 'No Pattern') if c
             )
             # Auto-derived line-3 suggestion from the pattern match (ladder digits,
@@ -1467,13 +1480,18 @@ class MainWindow(QMainWindow):
         if folder:
             self.processing_panel.set_input_dir(folder)
 
-    def _on_settings(self):
-        """Open settings dialog."""
+    def _on_settings(self, initial_tab: str = ""):
+        """Open settings dialog (optionally on a specific tab)."""
         from .settings_dialog import SettingsDialog
-        dialog = SettingsDialog(self.settings, self)
+        dialog = SettingsDialog(self.settings, self, initial_tab=initial_tab)
         if dialog.exec():
             self.settings.save()
             self._apply_settings()
+
+    def _on_folders_settings(self):
+        """Open settings straight to the Folders tab (from the Monitor-mode
+        folder button next to the Watching indicator)."""
+        self._on_settings(initial_tab="Folders")
 
     def _on_pattern_manager(self):
         """Open pattern manager dialog."""
@@ -1861,7 +1879,7 @@ class MainWindow(QMainWindow):
                     bool(self.settings.processing.live_processing))
             except Exception:
                 pass
-            self.status_label.setText("Scan mode setup saved.")
+            self.status_label.setText("Monitor mode setup saved.")
 
     def _maybe_scan_wizard(self):
         """First time a user enters Scan mode, offer the setup wizard once. Asks at
@@ -1872,11 +1890,11 @@ class MainWindow(QMainWindow):
             return
         self._scan_wizard_asked = True
         box = QMessageBox(self)
-        box.setWindowTitle("Scan Mode Setup")
+        box.setWindowTitle("Monitor Mode Setup")
         box.setIcon(QMessageBox.Question)
-        box.setText("Looks like it's your first time using Scan mode.")
+        box.setText("Looks like it's your first time using Monitor mode.")
         box.setInformativeText(
-            "Scan mode needs to know where your scanner saves images and how to name "
+            "Monitor mode needs to know where your scanner saves images and how to name "
             "straps. Would you like a quick setup wizard to walk through it?")
         yes_btn = box.addButton("Yes, set it up", QMessageBox.AcceptRole)
         box.addButton("Not now", QMessageBox.RejectRole)
@@ -2830,7 +2848,7 @@ class MainWindow(QMainWindow):
         from pathlib import Path
         wd = Path(watch_dir).expanduser()
         if not wd.is_dir():
-            QMessageBox.warning(self, "Start Scanning",
+            QMessageBox.warning(self, "Monitor Folder",
                                 f"Folder does not exist:\n{wd}")
             return False
         self._stop_monitor()  # clean any prior watcher
@@ -2943,7 +2961,7 @@ class MainWindow(QMainWindow):
             batch = Path(make_batch_dir(
                 straps_dir(), self.settings.processing.batch_name_format, self.settings))
         except Exception as e:
-            QMessageBox.warning(self, "Start Scanning",
+            QMessageBox.warning(self, "Monitor Folder",
                                 f"Couldn't start the live batch:\n{e}")
             return False
         self._live_batch_dir = batch
@@ -3141,7 +3159,7 @@ class MainWindow(QMainWindow):
         the normal pipeline on it. Returns True if a batch was filed."""
         if self.is_processing:
             QMessageBox.information(
-                self, "Start Scanning",
+                self, "Monitor Folder",
                 "A batch is still processing. Give it a moment, then Stop again.")
             return False
         files = [p for p in self._monitor_new_files if p.exists()]
@@ -3160,7 +3178,7 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
         except Exception as e:
-            QMessageBox.warning(self, "Start Scanning", f"Couldn't file the batch:\n{e}")
+            QMessageBox.warning(self, "Monitor Folder", f"Couldn't file the batch:\n{e}")
             return False
         # Process the just-filed batch with the normal pipeline (output stays
         # self-contained under the batch folder).

@@ -1,5 +1,6 @@
 --[[
 Pattern: SUM_72
+Catalog: C-143
 Description: Maximum sum (all 9s)
 Tier: 5
 Examples: ["99999999"]

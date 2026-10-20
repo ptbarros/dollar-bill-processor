@@ -1,6 +1,7 @@
 --[[
 Pattern: SEVEN_OF_KIND
 DisplayName: 7 of a Kind
+Catalog: C-054
 Description: Seven of the same digit anywhere in the serial
 Tier: 3
 Examples: ["77777077", "88880888", "99909999"]

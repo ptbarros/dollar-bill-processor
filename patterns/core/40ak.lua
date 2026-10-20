@@ -1,6 +1,7 @@
 --[[
 Pattern: 40AK
 DisplayName: 4 of a Kind
+Catalog: C-133
 Description: The same digit appears exactly four times, anywhere in the serial, grouped or scattered (e.g. 44·4·x·4·xx).
 Tier: 9
 Odds: 1 in 22 (4,363,755 per 96M)

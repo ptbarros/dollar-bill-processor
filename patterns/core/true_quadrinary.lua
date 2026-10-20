@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_TRUE_QUADRINARY
 DisplayName: True Quadrinary
+Catalog: C-100
 Description: Only digits 0, 1, 2, 3 used, all four present
 Tier: 6
 Odds: 1 in 2,352 (40,824 per 96M)

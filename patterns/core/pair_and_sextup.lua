@@ -1,6 +1,7 @@
 --[[
 Pattern: PAIR_AND_SEXTUP
 DisplayName: 6 in a Row & Pair
+Catalog: C-042
 Description: Six identical digits in a row with a matching pair of another digit tacked onto one end (e.g. 22·666666).
 Tier: 3
 Examples: ["22666666", "66666622", "33555555", "55555533"]

@@ -1,5 +1,6 @@
 --[[
 Pattern: GAS_PUMP
+Catalog: C-140
 Description: Digit vertically shifted (misaligned like old gas pump display)
 Tier: 5
 Examples: []

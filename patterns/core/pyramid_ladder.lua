@@ -1,6 +1,7 @@
 --[[
 Pattern: PYRAMID_LADDER
 DisplayName: Pyramid Ladder
+Catalog: C-008
 Description: All 8 digits climb by 1 to a single peak near the middle, then fall by 1 to the end, with the peak on the fourth or fifth digit (e.g. 34565432, 23454321).
 Tier: 1
 Examples: ["34565432", "23454321"]

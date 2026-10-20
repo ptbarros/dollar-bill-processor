@@ -1,5 +1,6 @@
 --[[
 Pattern: CHUNKY_TRINARY
+Catalog: C-086
 Description: Three different digits, each in one unbroken block, with at least one appearing only once (e.g. 0·55555·22). If every block is two or more, it's a Super Trinary instead.
 Tier: 5
 Examples: ["05555522", "13333355", "88800001", "44999992"]

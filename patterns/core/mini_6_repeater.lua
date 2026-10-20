@@ -1,6 +1,7 @@
 --[[
 Pattern: MINI_6_REPEATER
 DisplayName: 6 Digit Repeater
+Catalog: C-117
 Description: A three-digit run repeated back to back sits somewhere in the serial (e.g. 301·301·xx).
 Tier: 7
 Examples: ["30130100", "03013010", "00301301"]

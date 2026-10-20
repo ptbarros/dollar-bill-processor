@@ -1,6 +1,7 @@
 --[[
 Pattern: BINARY_ROTATOR
 DisplayName: Binary Rotator
+Catalog: C-014
 Description: Turn the note upside-down and it reads the same, using only two different digits that still read upside-down — but not the plain 0-and-1 pairing (e.g. 0888·8880).
 Tier: 2
 Flippable: true

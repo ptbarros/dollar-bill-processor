@@ -1,6 +1,7 @@
 --[[
 Pattern: TRUE_FLIPPER
 DisplayName: True Flipper
+Catalog: C-075
 Description: Only the perfectly-symmetric flip digits 0, 6 and 9. Always also a Flipper, but 1 and 8 are excluded because they don't truly look the same upside down. Reads as a valid number when flipped (it just need not be the SAME number -- that's a Rotator).
 Tier: 5
 Flippable: true

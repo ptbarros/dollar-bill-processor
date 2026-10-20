@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_MILLIONAIRE
 DisplayName: Millionaire
+Catalog: C-035
 Description: Round millions with any leading digits (XX000000)
 Tier: 2
 Odds: 1 in 1,000,000 (96 per 96M)

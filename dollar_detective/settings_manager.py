@@ -42,7 +42,7 @@ class ProcessingSettings:
     # "number_date" (001 - 2026-09-25), or "date_number" (2026-09-25 - 001).
     batch_name_format: str = "number"
     batch_counter: int = 0  # Last used sequential batch number (monotonic)
-    # EXPERIMENTAL: when scanning (Start Scanning), process settled scans in
+    # EXPERIMENTAL: when scanning (Monitor Folder), process settled scans in
     # small even-cut chunks as they arrive instead of waiting for Stop. Reuses
     # the tested ProcessingThread on a shared processor; off by default.
     live_processing: bool = False

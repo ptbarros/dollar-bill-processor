@@ -1,5 +1,6 @@
 --[[
 Pattern: SERIAL_UNDER_10
+Catalog: C-006
 Description: Serial number 00000001-00000009
 Tier: 1
 Examples: ["00000001", "00000003", "00000009"]

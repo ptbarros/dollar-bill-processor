@@ -1,5 +1,6 @@
 --[[
 Pattern: LUCKY_777
+Catalog: C-126
 Description: Contains 777
 Tier: 8
 Examples: ["12377712", "77712345"]

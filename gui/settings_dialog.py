@@ -33,7 +33,7 @@ from dollar_detective.settings_manager import SettingsManager
 class SettingsDialog(QDialog):
     """Dialog for configuring application settings."""
 
-    def __init__(self, settings: SettingsManager, parent=None):
+    def __init__(self, settings: SettingsManager, parent=None, initial_tab: str = ""):
         super().__init__(parent)
         self.settings = settings
         self._fancy_color = settings.ui.default_fancy_color or "#2e7d32"
@@ -42,6 +42,18 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(660)
         self._setup_ui()
         self._load_settings()
+        if initial_tab:
+            self.select_tab(initial_tab)
+
+    def select_tab(self, name: str):
+        """Make the tab whose label matches `name` (case-insensitive) current."""
+        tabs = getattr(self, "tabs", None)
+        if tabs is None:
+            return
+        for i in range(tabs.count()):
+            if tabs.tabText(i).lower() == name.lower():
+                tabs.setCurrentIndex(i)
+                return
 
     def _create_checkbox_with_info(self, label: str, tooltip: str) -> tuple[QCheckBox, QWidget]:
         """Create a checkbox with an info icon that shows a tooltip.
@@ -85,8 +97,9 @@ class SettingsDialog(QDialog):
         """Setup the dialog UI."""
         layout = QVBoxLayout(self)
 
-        # Tab widget
+        # Tab widget (kept on self so callers can jump to a tab, e.g. "AI")
         tabs = QTabWidget()
+        self.tabs = tabs
 
         # Processing tab
         processing_tab = QWidget()
@@ -242,7 +255,7 @@ class SettingsDialog(QDialog):
             "clicking the File Strap button yourself.\n\n"
             "• Checked: Every manual run is filed as the next strap folder\n"
             "• Unchecked: Click File Strap when you're ready to file the run\n\n"
-            "Straps use one numbering sequence shared with Scan mode; set where\n"
+            "Straps use one numbering sequence shared with Monitor mode; set where\n"
             "they're filed under Straps Folder on the Folders tab."
         )
         output_layout.addRow(auto_archive_container)
@@ -251,7 +264,7 @@ class SettingsDialog(QDialog):
             "Keep originals when filing a strap",
             "Copy the bill images into the strap instead of moving them.\n\n"
             "• Checked: Your source images stay put; copies go into the strap\n"
-            "• Unchecked: Source images are moved into the strap (like Scan mode)\n\n"
+            "• Unchecked: Source images are moved into the strap (like Monitor mode)\n\n"
             "Handy when your input folder is a library you don't want emptied."
         )
         output_layout.addRow(copy_mode_container)
@@ -388,7 +401,7 @@ class SettingsDialog(QDialog):
         dirs_layout = QFormLayout(dirs_group)
 
         # Scanner output folder: the visible per-user folder the scanner dumps into
-        # and Start Scanning watches; finished straps are filed into its "Straps"
+        # and Monitor Folder watches; finished straps are filed into its "Straps"
         # subfolder. Default ~/DollarDetective. Manual processing is unaffected.
         self.data_folder_edit = QLineEdit()
         self.data_folder_edit.setPlaceholderText("~/DollarDetective (default)")
@@ -405,7 +418,7 @@ class SettingsDialog(QDialog):
         dirs_layout.addRow("Scanner Output Folder:", data_layout)
 
         self.data_folder_hint = QLabel(
-            "Your scanner saves here and the Start Scanning button watches it; "
+            "Your scanner saves here and the Monitor Folder button watches it; "
             "finished straps are filed into a 'Straps' subfolder. "
             "Blank = a 'DollarDetective' folder in your home folder.")
         self.data_folder_hint.setStyleSheet("color: gray; font-size: 11px;")
@@ -916,7 +929,7 @@ class SettingsDialog(QDialog):
             self.data_folder_hint.setStyleSheet("color: #c07a2b; font-size: 11px;")
         else:
             self.data_folder_hint.setText(
-                "Your scanner saves here and the Start Scanning button watches it; "
+                "Your scanner saves here and the Monitor Folder button watches it; "
                 "finished straps are filed into a 'Straps' subfolder. "
                 "Blank = a 'DollarDetective' folder in your home folder.")
             self.data_folder_hint.setStyleSheet("color: gray; font-size: 11px;")

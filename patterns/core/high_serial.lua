@@ -1,6 +1,7 @@
 --[[
 Pattern: HIGH_SERIAL
 DisplayName: High Serial
+Catalog: C-138
 Description: Serial number above 96,000,000 — the circulating maximum for $1 ($20 and below) since the change made partway through Series 1988. Above 99,200,000 is rarer still: that was the ceiling from the early 1980s until then, so those come from a 1970s-or-older series or an uncut collector sheet. Either way, worth checking the note's series.
 Tier: 3
 Examples: ["96000001", "98765432", "99999999"]

@@ -1,6 +1,7 @@
 --[[
 Pattern: RANDOM_DOUBLE_QUAD_BINARY
 DisplayName: Binary Quads
+Catalog: C-068
 Description: Only two digits, each used four times and mixed together rather than split into two clean blocks (e.g. 4111·4414).
 Tier: 5
 Examples: ["41114414", "11441144", "41414141"]

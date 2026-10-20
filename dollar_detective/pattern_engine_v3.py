@@ -53,6 +53,9 @@ class LuaPatternInfo:
     data_file: str = ""           # Relative path to external data file (CSV/JSON)
     data: Any = None              # Loaded data (list of dicts for CSV, any for JSON)
     data_by_key: dict = None      # Dict keyed by first column (CSV only)
+    catalog: str = ""             # Shipped catalog SKU (e.g. "C-004"), set from the
+                                  # header "Catalog:" line. Stable identifier; the
+                                  # rarity RANK is derived separately, not this.
     book_ref: str = ""            # legacy reference field (unused; kept for compat)
     flippable: bool = False       # True => the overlay is meaningful drawn 180-flipped
                                   # (flippers/rotators). Serial Lookup then also shows
@@ -363,6 +366,7 @@ class PatternEngineV3:
                 examples=metadata.get('examples', []),
                 odds=metadata.get('odds', ''),
                 price=metadata.get('price', ''),
+                catalog=metadata.get('catalog', ''),
                 book_ref=metadata.get('bookref', ''),
                 flippable=bool(metadata.get('flippable', False)),
                 # "Overlay: none/off/false/no" hides the pattern from the serial
@@ -788,6 +792,25 @@ class PatternEngineV3:
         filename = name.lower().replace(' ', '_') + '.lua'
         file_path = target_dir / filename
 
+        # Catalog SKU: preserve an already-assigned one (SKUs are stable, so an
+        # edit must not renumber), else assign the next free U-### for this
+        # non-core pattern. Core patterns are numbered C-### out-of-band.
+        import re as _re
+        catalog = ""
+        if file_path.exists():
+            try:
+                m = _re.search(r'^\s*Catalog:\s*(.+)$',
+                               file_path.read_text(encoding='utf-8'), _re.MULTILINE)
+                if m:
+                    catalog = m.group(1).strip()
+            except Exception:
+                catalog = ""
+        if not catalog:
+            try:
+                catalog = self.next_catalog_sku("U")
+            except Exception:
+                catalog = ""
+
         # Build header
         header_lines = [
             '--[[',
@@ -795,6 +818,8 @@ class PatternEngineV3:
         ]
         if display_name:
             header_lines.append(f'DisplayName: {display_name}')
+        if catalog:
+            header_lines.append(f'Catalog: {catalog}')
         header_lines.extend([
             f'Description: {description}',
             f'Tier: {tier}',
@@ -936,6 +961,7 @@ class PatternEngineV3:
                 'odds': info.odds,
                 'price': info.price,
                 'price_range': info.price,  # Alias for backward compatibility
+                'catalog': info.catalog,    # Shipped catalog SKU (e.g. "C-004")
                 'script': info.script
             }
             # Include data file info if present
@@ -944,6 +970,47 @@ class PatternEngineV3:
                 result['data_loaded'] = info.data is not None
             return result
         return None
+
+    def next_catalog_sku(self, prefix: str = "C") -> str:
+        """The next free catalog SKU in a prefix series, e.g. "C-161" / "U-003".
+
+        Catalog numbers are STABLE identifiers assigned append-only: a new
+        pattern takes max(existing) + 1, never slots into a gap (see the catalog
+        scheme). Scans every loaded pattern's header SKU plus any per-user
+        override so a number is never reused. Zero-padded to 3 digits."""
+        import re as _re
+        rx = _re.compile(rf"^{_re.escape(prefix)}-(\d+)$")
+        max_n = 0
+        for info in self.lua_patterns.values():
+            m = rx.match((getattr(info, "catalog", "") or "").strip())
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        if self.settings:
+            try:
+                for v in self.settings.pattern_catalogs.values():
+                    m = rx.match(str(v).strip())
+                    if m:
+                        max_n = max(max_n, int(m.group(1)))
+            except Exception:
+                pass
+        return f"{prefix}-{max_n + 1:03d}"
+
+    def resolve_pattern_catalog(self, name: str) -> str:
+        """Catalog SKU for a pattern: the per-user override wins, else the
+        shipped header 'Catalog:' value (e.g. "C-004"). Empty if neither.
+
+        This is the single resolution point for labels etc. -- the header SKU
+        ships with the pattern and travels in bundles / to dd-web, while a user
+        can still override one through settings.pattern_catalogs."""
+        if self.settings:
+            try:
+                override = self.settings.get_pattern_catalog(name, "")
+            except Exception:
+                override = ""
+            if override:
+                return override
+        info = self.lua_patterns.get(name)
+        return info.catalog if info else ""
 
     def get_all_patterns(self) -> dict:
         """Get all patterns."""

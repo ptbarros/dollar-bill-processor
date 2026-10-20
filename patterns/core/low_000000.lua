@@ -1,5 +1,6 @@
 --[[
 Pattern: LOW_000000
+Catalog: C-029
 Description: Exactly six leading zeros, so the serial is under 100 (e.g. 000000·12).
 Tier: 2
 Examples: ["00000012", "00000099"]

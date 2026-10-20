@@ -1,6 +1,7 @@
 --[[
 Pattern: TRINARY_FLIPPER
 DisplayName: Trinary Flipper
+Catalog: C-105
 Description: Built from three different digits, all of them ones that still look like digits upside-down — 0, 1, 6, 8 and 9 (e.g. 0181·0081).
 Tier: 6
 Flippable: true

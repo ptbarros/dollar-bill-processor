@@ -1,6 +1,7 @@
 --[[
 Pattern: EU_LEAP_YEAR_HISTORY
 DisplayName: History Note Leap Year
+Catalog: C-145
 Description: Reads as a leap-day date — the 29th of February in the day-first style — from more than a hundred years ago (e.g. 29·02·1904).
 Tier: 6
 Odds: Depends on the date

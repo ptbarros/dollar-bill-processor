@@ -1,6 +1,7 @@
 --[[
 Pattern: BRIDGED_BOOKEND
 DisplayName: Bridged Bookend
+Catalog: C-079
 Description: First and last digit match (bookend) wrapping a middle bridge that is either 2 triples (AAABBB) or 3 pairs (AABBCC). Uses all 8 digits.
 Tier: 5
 Odds: 1 in 11,111 (8,640 per 96M)

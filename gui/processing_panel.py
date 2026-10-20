@@ -52,8 +52,8 @@ class ProcessingPanel(QWidget):
         self.mode_group.setExclusive(True)
         self.manual_mode_btn = QPushButton("Manual")
         self.manual_mode_btn.setToolTip("Manual processing: pick an input folder and Process it")
-        self.scan_mode_btn = QPushButton("Scan")
-        self.scan_mode_btn.setToolTip("Scan straps: watch the Scanner Output Folder and file straps")
+        self.scan_mode_btn = QPushButton("Monitor")
+        self.scan_mode_btn.setToolTip("Monitor straps: watch the Scanner Output Folder and file straps as they land")
         for _b in (self.manual_mode_btn, self.scan_mode_btn):
             _b.setCheckable(True)
             _b.setStyleSheet(_seg_style)
@@ -87,8 +87,11 @@ class ProcessingPanel(QWidget):
         self.watching_label.installEventFilter(self)   # re-elide on resize
         self._watching_full = ""
         _wi.addWidget(self.watching_label, 1)
-        self.watch_settings_btn = QPushButton("⚙")
-        self.watch_settings_btn.setMaximumWidth(28)
+        # A plain text label: the old "⚙" glyph rendered as a tofu box on Linux,
+        # and a folder icon read as "browse for a folder" (like the Browse
+        # button) rather than "open settings". "Folder Settings…" says plainly
+        # that it opens the settings for folders.
+        self.watch_settings_btn = QPushButton("Folder Settings…")
         self.watch_settings_btn.setToolTip(
             "Change the Scanner Output Folder and strap naming in Settings → Folders")
         self.watch_settings_btn.clicked.connect(self.open_folders_settings.emit)
@@ -147,7 +150,7 @@ class ProcessingPanel(QWidget):
         # Separator (the divider). Everything BEFORE it is the mode-specific left
         # group; those frames now carry the stretch (Input/Output in Manual, the
         # Watching indicator in Scan), so they expand to fill the slack up to the
-        # divider and thereby push everything AFTER it (Process/Start Scanning,
+        # divider and thereby push everything AFTER it (Process/Monitor Folder,
         # Profile, Stop, Archive, progress) to the right edge in BOTH modes. A small
         # fixed buffer after the divider keeps a clear gap between the two sides
         # instead of the fields butting right up against the controls.
@@ -178,9 +181,26 @@ class ProcessingPanel(QWidget):
         self.process_btn.clicked.connect(self._on_process)
         layout.addWidget(self.process_btn)
 
+        # EXPERIMENTAL: process scans live (in small chunks) while scanning,
+        # instead of waiting for Stop. Can't be changed mid-scan. Placed BEFORE
+        # Monitor Folder: you choose it before starting a watch, and keeping it
+        # off the Profile picker stops the two reading as one "Process live
+        # Profile" clump.
+        self.live_check = QCheckBox("Process live")
+        self.live_check.setToolTip(
+            "EXPERIMENTAL: process scans in small batches as they come in, "
+            "instead of all at once when you click Stop. Set this before you "
+            "click Monitor Folder.")
+        try:
+            self.live_check.setChecked(bool(get_settings().processing.live_processing))
+        except Exception:
+            pass
+        self.live_check.toggled.connect(self._on_live_toggled)
+        layout.addWidget(self.live_check)
+
         # Watch Folder (Monitor mode): when on, scans dropped into the selected
         # folder are auto-filed into a Straps batch and processed as they settle.
-        self.watch_btn = QPushButton("Start Scanning")
+        self.watch_btn = QPushButton("Monitor Folder")
         self.watch_btn.setCheckable(True)
         # Size to the WIDEST label ("Stop && File Batch", shown while scanning and
         # drawn BOLD) so neither state clips. '&&' renders as a single '&'. The
@@ -192,13 +212,18 @@ class ProcessingPanel(QWidget):
         _bold = QFont(self.watch_btn.font())
         _bold.setBold(True)
         _fmb = QFontMetrics(_bold)
-        _watch_w = max(_fm.horizontalAdvance("Start Scanning"),
+        _watch_w = max(_fm.horizontalAdvance("Monitor Folder"),
                        _fmb.horizontalAdvance("Stop & File Batch"))
         self.watch_btn.setMinimumWidth(_watch_w + 48)
+        # Rich text (<qt>) so Qt word-wraps the tooltip instead of drawing one
+        # very long line -- a line wider than the screen flickered / repositioned
+        # on a smaller display.
         self.watch_btn.setToolTip(
-            "Start collecting scans as they come off the scanner (feed your whole "
-            "strap in as many passes as you like). Click Stop when the strap is "
-            "done to file everything into one batch under Straps and process it.")
+            "<qt>Watch your scan folder and collect scans as they land in it. "
+            "This does <b>not</b> run the scanner &mdash; keep scanning with your "
+            "scanner software; feed your whole strap in as many passes as you like. "
+            "Click Stop when the strap is done to file everything into one batch "
+            "under Straps and process it.</qt>")
         # Only style the "on" (checked) state blue. The idle state deliberately has
         # NO base QPushButton rule so it inherits the app's themed button look
         # (background + border) -- a partial base rule strips the native chrome and
@@ -212,20 +237,6 @@ class ProcessingPanel(QWidget):
         """)
         self.watch_btn.toggled.connect(self._on_watch_toggled)
         layout.addWidget(self.watch_btn)
-
-        # EXPERIMENTAL: process scans live (in small chunks) while scanning,
-        # instead of waiting for Stop. Can't be changed mid-scan.
-        self.live_check = QCheckBox("Process live")
-        self.live_check.setToolTip(
-            "EXPERIMENTAL: process scans in small batches as they come in, "
-            "instead of all at once when you click Stop. Set this before you "
-            "click Start Scanning.")
-        try:
-            self.live_check.setChecked(bool(get_settings().processing.live_processing))
-        except Exception:
-            pass
-        self.live_check.toggled.connect(self._on_live_toggled)
-        layout.addWidget(self.live_check)
 
         # Active crop-profile picker (replaces the old Organize button; Organize
         # moved to Edit -> Organize Folder). Switching here changes the profile
@@ -267,7 +278,7 @@ class ProcessingPanel(QWidget):
         self.archive_btn.setMinimumWidth(60)
         self.archive_btn.setEnabled(False)
         self.archive_btn.setToolTip(
-            "File the current run as the next strap in the sequence (like Stop in Scan mode)")
+            "File the current run as the next strap in the sequence (like Stop in Monitor mode)")
         self.archive_btn.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
@@ -445,7 +456,7 @@ class ProcessingPanel(QWidget):
     def _on_watch_toggled(self, checked: bool):
         """Start/stop watching the Data Folder for new scans. (The button text
         reflects what a click will do; MainWindow owns the watch folder.)"""
-        self.watch_btn.setText("Stop && File Batch" if checked else "Start Scanning")
+        self.watch_btn.setText("Stop && File Batch" if checked else "Monitor Folder")
         self._watching = checked
         # Live mode can't be flipped mid-scan (it changes how a run is wired).
         self.live_check.setEnabled(not checked)
@@ -457,7 +468,7 @@ class ProcessingPanel(QWidget):
         MainWindow declines to start, e.g. a missing folder)."""
         self.watch_btn.blockSignals(True)
         self.watch_btn.setChecked(on)
-        self.watch_btn.setText("Stop && File Batch" if on else "Start Scanning")
+        self.watch_btn.setText("Stop && File Batch" if on else "Monitor Folder")
         self.watch_btn.blockSignals(False)
         self._watching = on
         self.live_check.setEnabled(not on)
@@ -623,7 +634,7 @@ class ProcessingPanel(QWidget):
         else:
             self.archive_btn.setEnabled(available)
             self.archive_btn.setToolTip(
-                "File the current run as the next strap in the sequence (like Stop in Scan mode)")
+                "File the current run as the next strap in the sequence (like Stop in Monitor mode)")
 
     def reset_archive_button(self):
         """Reset the File Strap button to disabled (e.g. after a run is filed)."""

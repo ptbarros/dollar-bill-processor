@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_SEVEN_IN_A_ROW
 DisplayName: 7 in a Row
+Catalog: C-044
 Description: 7 consecutive identical digits
 Tier: 3
 Odds: 1 in 571,429 (168 per 96M)

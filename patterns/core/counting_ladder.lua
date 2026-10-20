@@ -1,6 +1,7 @@
 --[[
 Pattern: NICKS_COUNTING_LADDER
 DisplayName: Alternator Ladder
+Catalog: C-043
 Description: Four 2-digit numbers counting up or down by 1 (e.g. 12 13 14 15, or 18 19 20 21). Each value 10-96.
 Tier: 3
 Odds: 1 in 574,850 (167 per 96M)
