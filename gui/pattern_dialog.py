@@ -3427,6 +3427,12 @@ class CustomPatternDialog(QDialog):
 
         layout.addWidget(self.tab_widget)
 
+        # Re-check the AI tab's key state whenever it's shown, so a key added in
+        # Settings (via the tab's own button) takes effect on return.
+        if HAS_V3_ENGINE:
+            self.tab_widget.currentChanged.connect(
+                lambda _i: self._update_ai_tab_state())
+
         # Buttons
         button_layout = QHBoxLayout()
 
@@ -3904,7 +3910,18 @@ class CustomPatternDialog(QDialog):
     def _create_ai_tab(self) -> QWidget:
         """Create the AI Generate tab for AI-assisted pattern creation."""
         widget = QWidget()
-        layout = QVBoxLayout(widget)
+        outer = QVBoxLayout(widget)
+
+        # Setup notice shown when no API key is configured; the real controls
+        # stay hidden until the user adds an Anthropic or OpenAI key.
+        self.ai_setup_notice = self._build_ai_setup_notice()
+        outer.addWidget(self.ai_setup_notice)
+
+        # All AI controls live in this container so they can be hidden as a unit.
+        self.ai_content = QWidget()
+        layout = QVBoxLayout(self.ai_content)
+        layout.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(self.ai_content)
 
         # Description input
         desc_group = QGroupBox("Describe Your Pattern")
@@ -3999,7 +4016,67 @@ class CustomPatternDialog(QDialog):
         config_hint.setStyleSheet("color: gray; font-size: 10px;")
         layout.addWidget(config_hint)
 
+        # Show either the controls or the setup notice depending on keys.
+        self._update_ai_tab_state()
         return widget
+
+    def _build_ai_setup_notice(self) -> QWidget:
+        """The 'add an API key first' panel for the AI Generate tab."""
+        box = QWidget()
+        v = QVBoxLayout(box)
+        v.addStretch()
+        title = QLabel("AI pattern generation needs an API key")
+        title.setStyleSheet("font-size: 15px; font-weight: bold;")
+        title.setAlignment(Qt.AlignCenter)
+        v.addWidget(title)
+        msg = QLabel(
+            "Add an <b>Anthropic</b> or <b>OpenAI</b> API key to describe a "
+            "pattern in plain English and have the Lua written for you.")
+        msg.setWordWrap(True)
+        msg.setAlignment(Qt.AlignCenter)
+        msg.setStyleSheet("color: gray;")
+        v.addWidget(msg)
+        row = QHBoxLayout()
+        row.addStretch()
+        self.ai_open_settings_btn = QPushButton("Open AI Settings…")
+        self.ai_open_settings_btn.clicked.connect(self._open_ai_settings)
+        row.addWidget(self.ai_open_settings_btn)
+        row.addStretch()
+        v.addLayout(row)
+        v.addStretch()
+        return box
+
+    def _update_ai_tab_state(self):
+        """Show the AI controls only when at least one API key is configured;
+        otherwise show the setup notice."""
+        try:
+            from dollar_detective.settings_manager import get_settings
+            s = get_settings()
+            has_key = bool(s.ai.anthropic_api_key) or bool(s.ai.openai_api_key)
+        except Exception:
+            has_key = False
+        if hasattr(self, "ai_setup_notice"):
+            self.ai_setup_notice.setVisible(not has_key)
+        if hasattr(self, "ai_content"):
+            self.ai_content.setVisible(has_key)
+        if has_key and hasattr(self, "ai_provider_combo"):
+            self._populate_ai_provider_combo()
+
+    def _open_ai_settings(self):
+        """Open the Settings dialog so the user can add an API key, then
+        re-evaluate the AI tab."""
+        try:
+            from dollar_detective.settings_manager import get_settings
+            from .settings_dialog import SettingsDialog
+            dlg = SettingsDialog(get_settings(), self)
+            if dlg.exec():
+                get_settings().save()
+        except Exception:
+            QMessageBox.information(
+                self, "AI Settings",
+                "Open Settings → AI and add your Anthropic or OpenAI API key, "
+                "then return to this tab.")
+        self._update_ai_tab_state()
 
     def _populate_ai_provider_combo(self):
         """Populate the AI provider combo with configured providers."""
