@@ -381,6 +381,30 @@ class MainWindow(QMainWindow):
         strap_action.triggered.connect(self._on_strap_check)
         tools_menu.addAction(strap_action)
 
+        # Pattern Prices: a group-editable CSV (keyed by catalog SKU) that
+        # overrides the shipped Lua Price: headers.
+        prices_menu = tools_menu.addMenu("Pattern &Prices")
+        open_prices_action = QAction("&Open Prices File…", self)
+        open_prices_action.setToolTip("Open the editable prices CSV (keyed by catalog number) in your spreadsheet app")
+        open_prices_action.triggered.connect(self._open_prices_file)
+        prices_menu.addAction(open_prices_action)
+
+        reload_prices_action = QAction("&Reload Prices", self)
+        reload_prices_action.setToolTip("Re-read the prices file after editing it, so new prices show")
+        reload_prices_action.triggered.connect(self._reload_prices)
+        prices_menu.addAction(reload_prices_action)
+
+        prices_menu.addSeparator()
+        import_prices_action = QAction("&Import Prices (CSV)…", self)
+        import_prices_action.setToolTip("Load a prices CSV shared by the group")
+        import_prices_action.triggered.connect(self._import_prices)
+        prices_menu.addAction(import_prices_action)
+
+        export_prices_action = QAction("&Export Prices (CSV)…", self)
+        export_prices_action.setToolTip("Save the current prices to a CSV to share with the group")
+        export_prices_action.triggered.connect(self._export_prices)
+        prices_menu.addAction(export_prices_action)
+
         # Help menu
         help_menu = menubar.addMenu("&Help")
 
@@ -1492,6 +1516,106 @@ class MainWindow(QMainWindow):
         """Open settings straight to the Folders tab (from the Monitor-mode
         folder button next to the Watching indicator)."""
         self._on_settings(initial_tab="Folders")
+
+    # ---- Pattern Prices (group-editable CSV, keyed by catalog SKU) ----------
+    def _existing_proc_engine(self):
+        """The processor's engine IF a processor already exists — never creates
+        one (creating a processor loads the YOLO model, which prices don't need)."""
+        proc = self.processor
+        if not proc and getattr(self, "processing_thread", None):
+            proc = self.processing_thread.processor
+        return getattr(proc, "pattern_engine", None) if proc else None
+
+    def _price_engine(self):
+        """An engine to seed/export prices from. Uses the always-present
+        results-view engine; never spins up a processor (and its YOLO model)
+        just to read prices."""
+        return (getattr(self.results_list, "pattern_engine", None)
+                or getattr(self.preview_panel, "pattern_engine", None)
+                or self._existing_proc_engine())
+
+    def _reload_price_overrides_all(self):
+        """Re-read the prices CSV into every live engine so overrides apply.
+        Only touches engines that already exist (no YOLO load)."""
+        engines = []
+        for e in (getattr(self.results_list, "pattern_engine", None),
+                  getattr(self.preview_panel, "pattern_engine", None),
+                  self._existing_proc_engine()):
+            if e is not None and e not in engines and hasattr(e, "reload_price_overrides"):
+                engines.append(e)
+        for e in engines:
+            try:
+                e.reload_price_overrides()
+            except Exception:
+                pass
+
+    def _open_prices_file(self):
+        """Create the prices CSV (seeded from current prices) if needed and open
+        it in the user's spreadsheet app for editing."""
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        from dollar_detective import pattern_prices
+        eng = self._price_engine()
+        if eng is None:
+            QMessageBox.information(
+                self, "Pattern Prices",
+                "Prices aren't available yet — load or process a batch first.")
+            return
+        try:
+            path = pattern_prices.ensure_seeded(eng)
+        except Exception as e:
+            QMessageBox.warning(self, "Pattern Prices",
+                                f"Couldn't create the prices file:\n{e}")
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        self.status_label.setText(
+            f"Prices file opened — edit it, then Tools → Pattern Prices → Reload Prices")
+
+    def _reload_prices(self):
+        """Re-read the prices file after an external edit."""
+        self._reload_price_overrides_all()
+        QMessageBox.information(
+            self, "Pattern Prices",
+            "Prices reloaded. New prices show as you view bills and patterns.")
+
+    def _import_prices(self):
+        """Load a prices CSV shared by the group and make it active."""
+        from dollar_detective import pattern_prices
+        src, _ = QFileDialog.getOpenFileName(
+            self, "Import Prices CSV", "", "CSV files (*.csv);;All files (*)")
+        if not src:
+            return
+        try:
+            n = pattern_prices.import_from(Path(src))
+        except Exception as e:
+            QMessageBox.warning(self, "Import Prices",
+                                f"Couldn't import that file:\n{e}")
+            return
+        self._reload_price_overrides_all()
+        QMessageBox.information(
+            self, "Import Prices",
+            f"Imported {n} price(s). New prices show as you view bills and patterns.")
+
+    def _export_prices(self):
+        """Save the current (override-applied) prices to a CSV to share."""
+        from dollar_detective import pattern_prices
+        eng = self._price_engine()
+        if eng is None:
+            QMessageBox.information(
+                self, "Pattern Prices",
+                "Prices aren't available yet — load or process a batch first.")
+            return
+        dest, _ = QFileDialog.getSaveFileName(
+            self, "Export Prices CSV", "pattern_prices.csv",
+            "CSV files (*.csv);;All files (*)")
+        if not dest:
+            return
+        try:
+            pattern_prices.export_to(eng, Path(dest))
+        except Exception as e:
+            QMessageBox.warning(self, "Export Prices", f"Couldn't export:\n{e}")
+            return
+        QMessageBox.information(self, "Export Prices", f"Saved to:\n{dest}")
 
     def _on_pattern_manager(self):
         """Open pattern manager dialog."""

@@ -18,12 +18,13 @@ reading results, and managing patterns.
 7. [How odds & rarity work](#how-odds--rarity-work)
 8. [Pattern Manager](#pattern-manager) _(to be expanded)_
 9. [AI pattern generation (API keys)](#ai-pattern-generation-api-keys)
-10. [Serial Lookup & Strap Check](#serial-lookup--strap-check) _(to be expanded)_
-11. [Physical-print detections](#physical-print-detections-gas-pump-seal-shift-plates) _(to be expanded)_
-12. [Cropping for listings](#cropping-for-listings) _(to be expanded)_
-13. [Labels](#labels) _(to be expanded)_
-14. [Insights report](#insights-report) _(to be expanded)_
-15. [Backup & Restore](#backup--restore) _(to be expanded)_
+10. [Pattern prices](#pattern-prices)
+11. [Serial Lookup & Strap Check](#serial-lookup--strap-check) _(to be expanded)_
+12. [Physical-print detections](#physical-print-detections-gas-pump-seal-shift-plates) _(to be expanded)_
+13. [Cropping for listings](#cropping-for-listings) _(to be expanded)_
+14. [Labels](#labels) _(to be expanded)_
+15. [Insights report](#insights-report) _(to be expanded)_
+16. [Backup & Restore](#backup--restore) _(to be expanded)_
 
 ---
 
@@ -332,6 +333,39 @@ are stored locally on your machine in `user_settings.yaml` and are never shared.
 Once a key is saved, the AI Generate tab shows its controls; until then it shows
 a short "needs an API key" notice. The same links are shown right under the key
 fields in **Settings → AI**.
+
+## Pattern prices
+
+Each pattern has an estimated price range (shown in the preview panel's **Est.
+Price**, result tooltips, and Serial Lookup). These start from a built-in value,
+but the group can keep them current with a shared, editable **prices file** —
+no need to edit patterns or wait for an app update.
+
+The prices file is a plain CSV keyed by each pattern's **catalog number**
+(`C-001`, `C-002`, …), so a price travels with the catalog number even if a
+pattern's name changes. Columns: `catalog, pattern, display_name, price`. Only
+`catalog` and `price` are read back; `pattern` and `display_name` are there so
+the file is easy to read while editing.
+
+Everything is under **Tools → Pattern Prices**:
+
+- **Open Prices File…** — creates the file (the first time, filled in with the
+  current prices for every pattern so you start from a full list) and opens it
+  in your spreadsheet app. Edit the **price** column, save, and close.
+- **Reload Prices** — re-reads the file after you've edited it, so the new
+  prices show as you view bills and patterns.
+- **Import Prices (CSV)…** — adopt a prices file someone in the group sent you.
+- **Export Prices (CSV)…** — save the current prices to a CSV to share with the
+  group.
+
+> A pattern with no row in the file (or a blank price) simply keeps its built-in
+> price, so you only need rows for the ones you want to change. The file lives in
+> your user-data folder (`pattern_prices.csv`) and is never shared automatically
+> — the group passes it around with Import/Export.
+
+**Typical group workflow:** one person maintains the prices, edits them with
+**Open Prices File…**, then **Export**s the CSV and shares it; everyone else
+**Import**s it. Prices update in the app without a new release.
 
 ## Serial Lookup & Strap Check
 _(to be expanded)_ — Type a serial to see which patterns it matches (Serial
