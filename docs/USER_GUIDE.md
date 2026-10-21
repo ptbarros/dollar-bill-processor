@@ -17,12 +17,13 @@ reading results, and managing patterns.
 6. [Reading the results & overlays](#reading-the-results--overlays) _(to be expanded)_
 7. [How odds & rarity work](#how-odds--rarity-work)
 8. [Pattern Manager](#pattern-manager) _(to be expanded)_
-9. [Serial Lookup & Strap Check](#serial-lookup--strap-check) _(to be expanded)_
-10. [Physical-print detections](#physical-print-detections-gas-pump-seal-shift-plates) _(to be expanded)_
-11. [Cropping for listings](#cropping-for-listings) _(to be expanded)_
-12. [Labels](#labels) _(to be expanded)_
-13. [Insights report](#insights-report) _(to be expanded)_
-14. [Backup & Restore](#backup--restore) _(to be expanded)_
+9. [AI pattern generation (API keys)](#ai-pattern-generation-api-keys)
+10. [Serial Lookup & Strap Check](#serial-lookup--strap-check) _(to be expanded)_
+11. [Physical-print detections](#physical-print-detections-gas-pump-seal-shift-plates) _(to be expanded)_
+12. [Cropping for listings](#cropping-for-listings) _(to be expanded)_
+13. [Labels](#labels) _(to be expanded)_
+14. [Insights report](#insights-report) _(to be expanded)_
+15. [Backup & Restore](#backup--restore) _(to be expanded)_
 
 ---
 
@@ -305,6 +306,32 @@ Manager if a distinction matters to you.
 _(to be expanded)_ — Browse patterns by library, enable/disable them, edit or
 create your own (Wizard and AI Generate), test a serial, move a user pattern
 between libraries, and resolve name collisions with a built-in.
+
+## AI pattern generation (API keys)
+
+The **AI Generate** tab (when adding or editing a pattern in the Pattern
+Manager) lets you describe a pattern in plain English and have the Lua written
+for you. It needs an API key from one of two AI providers — **Anthropic
+(Claude)** or **OpenAI (GPT)**. You only need **one**. Each provider charges a
+small per-use amount; getting a key takes a few minutes.
+
+**Where to enter the key:** **Settings → AI**, in the **API Keys** box. Paste
+the key into the Anthropic or OpenAI field and click OK. (The AI Generate tab
+also has an **Open AI Settings…** button that takes you straight there.) Keys
+are stored locally on your machine in `user_settings.yaml` and are never shared.
+
+**How to get a key — step-by-step videos:**
+
+- **Anthropic (Claude):** <https://www.youtube.com/watch?v=vgncj7MJbVU>
+- **OpenAI (GPT):** <https://www.youtube.com/watch?v=OB99E7Y1cMA>
+
+> Anthropic keys start with `sk-ant-…`; OpenAI keys start with `sk-…`. You add
+> a little credit to your provider account, create the key, copy it once (the
+> provider won't show it again), and paste it into Dollar Detective.
+
+Once a key is saved, the AI Generate tab shows its controls; until then it shows
+a short "needs an API key" notice. The same links are shown right under the key
+fields in **Settings → AI**.
 
 ## Serial Lookup & Strap Check
 _(to be expanded)_ — Type a serial to see which patterns it matches (Serial
