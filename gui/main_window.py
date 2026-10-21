@@ -1518,17 +1518,29 @@ class MainWindow(QMainWindow):
         self._on_settings(initial_tab="Folders")
 
     # ---- Pattern Prices (group-editable CSV, keyed by catalog SKU) ----------
+    def _existing_proc_engine(self):
+        """The processor's engine IF a processor already exists — never creates
+        one (creating a processor loads the YOLO model, which prices don't need)."""
+        proc = self.processor
+        if not proc and getattr(self, "processing_thread", None):
+            proc = self.processing_thread.processor
+        return getattr(proc, "pattern_engine", None) if proc else None
+
     def _price_engine(self):
-        """An engine to seed/export prices from (prefers the results view's)."""
+        """An engine to seed/export prices from. Uses the always-present
+        results-view engine; never spins up a processor (and its YOLO model)
+        just to read prices."""
         return (getattr(self.results_list, "pattern_engine", None)
-                or self._get_pattern_engine())
+                or getattr(self.preview_panel, "pattern_engine", None)
+                or self._existing_proc_engine())
 
     def _reload_price_overrides_all(self):
-        """Re-read the prices CSV into every live engine so overrides apply."""
+        """Re-read the prices CSV into every live engine so overrides apply.
+        Only touches engines that already exist (no YOLO load)."""
         engines = []
         for e in (getattr(self.results_list, "pattern_engine", None),
                   getattr(self.preview_panel, "pattern_engine", None),
-                  self._get_pattern_engine()):
+                  self._existing_proc_engine()):
             if e is not None and e not in engines and hasattr(e, "reload_price_overrides"):
                 engines.append(e)
         for e in engines:
