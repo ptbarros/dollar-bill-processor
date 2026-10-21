@@ -127,6 +127,11 @@ class PatternEngineV3:
         self.shadowed_patterns: List[LuaPatternInfo] = []
         self._load_lua_patterns()
 
+        # Optional per-user price overrides keyed by catalog SKU (see
+        # pattern_prices). Empty when no prices CSV exists -> header prices used.
+        self.price_overrides: Dict[str, str] = {}
+        self.reload_price_overrides()
+
     @property
     def settings(self) -> Optional['SettingsManager']:
         """Lazy-load settings manager."""
@@ -543,6 +548,7 @@ class PatternEngineV3:
     def reload(self):
         """Reload all Lua patterns."""
         self._load_lua_patterns()
+        self.reload_price_overrides()
 
     def classify(self, serial: str, metadata: dict = None) -> List[PatternMatchV3]:
         """
@@ -959,8 +965,8 @@ class PatternEngineV3:
                 'source': 'lua',
                 'examples': info.examples,
                 'odds': info.odds,
-                'price': info.price,
-                'price_range': info.price,  # Alias for backward compatibility
+                'price': self.resolve_price(name),        # CSV override -> header
+                'price_range': self.resolve_price(name),  # alias (back-compat)
                 'catalog': info.catalog,    # Shipped catalog SKU (e.g. "C-004")
                 'script': info.script
             }
@@ -970,6 +976,27 @@ class PatternEngineV3:
                 result['data_loaded'] = info.data is not None
             return result
         return None
+
+    def reload_price_overrides(self):
+        """(Re)load the group-editable price overrides CSV into memory. Guarded:
+        a missing file or a missing pattern_prices module (e.g. an older vendored
+        copy) just leaves prices at their shipped header values."""
+        try:
+            from dollar_detective import pattern_prices
+            self.price_overrides = pattern_prices.load_overrides()
+        except Exception:
+            self.price_overrides = {}
+
+    def resolve_price(self, name: str) -> str:
+        """Price for a pattern: the CSV override for its catalog SKU wins, else
+        the shipped Lua `Price:` header value. Empty string if neither."""
+        info = self.lua_patterns.get(name)
+        if info is None:
+            return ""
+        sku = (getattr(info, "catalog", "") or "").strip()
+        if sku and sku in self.price_overrides:
+            return self.price_overrides[sku]
+        return info.price or ""
 
     def next_catalog_sku(self, prefix: str = "C") -> str:
         """The next free catalog SKU in a prefix series, e.g. "C-161" / "U-003".
@@ -1025,7 +1052,7 @@ class PatternEngineV3:
                 'source': 'lua',
                 'examples': info.examples,
                 'odds': info.odds,
-                'price': info.price,
+                'price': self.resolve_price(name),
             }
 
         return patterns
