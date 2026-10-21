@@ -577,6 +577,17 @@ class SettingsDialog(QDialog):
         key_hint.setStyleSheet("color: gray; font-size: 11px;")
         keys_layout.addRow("", key_hint)
 
+        # Short how-to videos for getting a key from each provider.
+        key_help = QLabel(
+            'Need a key? How to get one: '
+            '<a href="https://www.youtube.com/watch?v=vgncj7MJbVU">Anthropic (Claude)</a>'
+            ' &nbsp;·&nbsp; '
+            '<a href="https://www.youtube.com/watch?v=OB99E7Y1cMA">OpenAI (GPT)</a>')
+        key_help.setOpenExternalLinks(True)
+        key_help.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        key_help.setStyleSheet("font-size: 11px;")
+        keys_layout.addRow("", key_help)
+
         layout.addWidget(keys_group)
 
         # Model settings
