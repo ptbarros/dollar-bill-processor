@@ -358,6 +358,25 @@ class PatternEngineV3:
         except Exception as e:
             return False, f"Move failed: {e}"
 
+        # Re-stamp the catalog SKU to the destination library's prefix so the SKU
+        # reflects where the pattern now lives (unless it already matches). The
+        # moved .lua is at `dest`; the engine hasn't reloaded yet, so the old SKU
+        # under the old prefix is still what's "loaded" -- fine for numbering.
+        try:
+            dest_prefix = self._library_prefix(target_library)
+            cur = (getattr(info, "catalog", "") or "").strip()
+            if self._sku_prefix(cur) != dest_prefix:
+                new_sku = self._next_sku(dest_prefix)
+                dest.write_text(
+                    self.restamp_catalog_text(dest.read_text(encoding="utf-8"), new_sku),
+                    encoding="utf-8")
+                # Keep any per-user override in sync so the new SKU is what shows.
+                if self.settings and self.settings.get_pattern_catalog(name, ""):
+                    self.settings.set_pattern_catalog(name, new_sku)
+                    self.settings.save()
+        except Exception:
+            pass
+
         self.reload()
         return True, f"Moved '{name}' to '{target_library}'."
 
@@ -852,8 +871,9 @@ class PatternEngineV3:
         file_path = target_dir / filename
 
         # Catalog SKU: preserve an already-assigned one (SKUs are stable, so an
-        # edit must not renumber), else assign the next free U-### for this
-        # non-core pattern. Core patterns are numbered C-### out-of-band.
+        # edit must not renumber), else assign the next free SKU under this
+        # library's prefix (flat 'user' -> U, each named library its own letter).
+        # Core patterns are numbered C-### out-of-band.
         import re as _re
         catalog = ""
         if file_path.exists():
@@ -866,7 +886,7 @@ class PatternEngineV3:
                 catalog = ""
         if not catalog:
             try:
-                catalog = self.next_catalog_sku("U")
+                catalog = self.next_catalog_sku(self._library_prefix(library))
             except Exception:
                 catalog = ""
 
@@ -1081,6 +1101,92 @@ class PatternEngineV3:
             if circ is None:
                 circ = parse_price_number(info.price or "")
         return (circ, unc)
+
+    def _existing_catalog_skus(self) -> set:
+        """Every catalog SKU currently in use: loaded patterns' header SKUs plus
+        any per-user overrides."""
+        skus = set()
+        for info in self.lua_patterns.values():
+            s = (getattr(info, "catalog", "") or "").strip()
+            if s:
+                skus.add(s)
+        if self.settings:
+            try:
+                for v in self.settings.pattern_catalogs.values():
+                    v = str(v).strip()
+                    if v:
+                        skus.add(v)
+            except Exception:
+                pass
+        return skus
+
+    @staticmethod
+    def _sku_prefix(sku: str) -> str:
+        """The letter part of a '<PREFIX>-NNN' SKU, uppercased ('' if not that form)."""
+        m = re.match(r"^([A-Za-z]+)-\d+$", (sku or "").strip())
+        return m.group(1).upper() if m else ""
+
+    def _library_prefix(self, library: str) -> str:
+        """The catalog SKU prefix letter for a library. 'core' (and shipped
+        libraries) -> 'C', the flat 'user' library -> 'U'; every other named
+        add-on library gets its own letter, assigned once and persisted -- its
+        own initial when free, else the next free A-Z -- so each library's SKUs
+        are namespaced and can't collide across libraries."""
+        if library == "core" or library in self.SHIPPED_LIBRARIES:
+            return "C"
+        if not library or library == "user":
+            return "U"
+        if self.settings:
+            existing = self.settings.get_library_prefix(library, "")
+            if existing:
+                return existing
+        reserved = {"C", "U"}
+        if self.settings:
+            try:
+                reserved |= {str(p).upper() for p in self.settings.library_prefixes.values() if p}
+            except Exception:
+                pass
+        reserved |= {p for p in (self._sku_prefix(s) for s in self._existing_catalog_skus()) if p}
+        init = next((c for c in library.upper() if c.isalpha()), "")
+        candidates = ([init] if init else []) + [chr(c) for c in range(ord("A"), ord("Z") + 1)]
+        prefix = next((c for c in candidates if c not in reserved), "")
+        if not prefix:  # 26+ libraries already: fall back to a 2-char code.
+            base, i = (init or "X"), 1
+            while f"{base}{i}" in reserved:
+                i += 1
+            prefix = f"{base}{i}"
+        if self.settings:
+            try:
+                self.settings.set_library_prefix(library, prefix)
+                self.settings.save()
+            except Exception:
+                pass
+        return prefix
+
+    def _next_sku(self, prefix: str, used: set = None) -> str:
+        """Next free '<prefix>-NNN' not in `used` nor among loaded/override SKUs."""
+        rx = re.compile(rf"^{re.escape(prefix)}-(\d+)$")
+        taken = set(used or set()) | self._existing_catalog_skus()
+        max_n = 0
+        for s in taken:
+            m = rx.match(str(s).strip())
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        return f"{prefix}-{max_n + 1:03d}"
+
+    @staticmethod
+    def restamp_catalog_text(script: str, new_sku: str) -> str:
+        """Return `script` with its Catalog: header set to new_sku -- replacing an
+        existing Catalog line, else inserting one right after the Pattern: line."""
+        if re.search(r"(?im)^\s*Catalog:\s*.*$", script):
+            return re.sub(r"(?im)^(\s*)Catalog:\s*.*$",
+                                  lambda m: f"{m.group(1)}Catalog: {new_sku}",
+                                  script, count=1)
+        if re.search(r"(?im)^\s*Pattern:\s*.*$", script):
+            return re.sub(r"(?im)^(\s*Pattern:\s*.*)$",
+                                  lambda m: f"{m.group(1)}\nCatalog: {new_sku}",
+                                  script, count=1)
+        return script
 
     def next_catalog_sku(self, prefix: str = "C") -> str:
         """The next free catalog SKU in a prefix series, e.g. "C-161" / "U-003".
