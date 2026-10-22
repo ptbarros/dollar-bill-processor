@@ -102,6 +102,20 @@ class _FieldRow(QFrame):
         self.space_chk.toggled.connect(self._space_changed)
         bot.addWidget(self.space_chk)
 
+        bot.addSpacing(16)
+        bot.addWidget(QLabel("show on:"))
+        self.audience_combo = QComboBox()
+        self.audience_combo.setToolTip(
+            "Which printed copy this field appears on: Both, the Customer copy "
+            "(sent to the buyer), or the Internal copy only (e.g. catalog SKU, "
+            "or price on Internal but odds on Both).")
+        for lbl, val in (("Both", "both"), ("Customer", "customer"), ("Internal", "internal")):
+            self.audience_combo.addItem(lbl, val)
+        self.audience_combo.setCurrentIndex(
+            {"both": 0, "customer": 1, "internal": 2}.get(field.audience or "both", 0))
+        self.audience_combo.currentIndexChanged.connect(self._audience_changed)
+        bot.addWidget(self.audience_combo)
+
         bot.addStretch(1)
         # Reorder buttons drawn with the style's arrow icons (font glyphs like
         # ↑/↓ render as blank squares on some Linux setups).
@@ -131,6 +145,10 @@ class _FieldRow(QFrame):
 
     def _align_changed(self, idx):
         self.field.align = ("left", "center", "right")[idx]
+        self._on_change()
+
+    def _audience_changed(self, idx):
+        self.field.audience = self.audience_combo.itemData(idx) or "both"
         self._on_change()
 
     def _space_changed(self, v):
