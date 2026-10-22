@@ -18,6 +18,43 @@ if TYPE_CHECKING:
     from dollar_detective.settings_manager import SettingsManager
 
 
+_PER_96M_RE = re.compile(r"([\d,]+)\s*per\s*96M", re.IGNORECASE)
+
+
+def parse_per_96m(odds: str) -> Optional[int]:
+    """Extract the integer 'N per 96M' count from an Odds: header string like
+    '1 in 10,000 (9,600 per 96M)'. Returns None when no count is present (the
+    pattern has no computed odds yet). This is the numeric rarity used to order
+    matched patterns within a tier -- smaller = rarer. Kept in sync with
+    rarity_estimate.odds_string, which writes the '(N per 96M)' suffix."""
+    if not odds:
+        return None
+    m = _PER_96M_RE.search(odds)
+    if not m:
+        return None
+    try:
+        return int(m.group(1).replace(",", ""))
+    except ValueError:
+        return None
+
+
+_PRICE_LOW_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _parse_price_low(s) -> Optional[float]:
+    """Fallback low-end price parser, used only if a vendored pattern_prices is
+    too old to provide parse_price_number. "$20-$100" -> 20.0, "$50" -> 50.0."""
+    if not s:
+        return None
+    m = _PRICE_LOW_RE.search(str(s))
+    if not m:
+        return None
+    try:
+        return float(m.group(0).replace(",", ""))
+    except ValueError:
+        return None
+
+
 @dataclass
 class PatternMatch:
     """Result of a pattern match."""
@@ -34,6 +71,9 @@ class PatternMatchV3(PatternMatch):
     group_boxes: list = field(default_factory=list)  # Boxes spanning multiple digits
     message: str = ""
     source: str = "lua"
+    per_96m: Optional[int] = None  # Numeric rarity (count per 96M) from the Odds:
+                                   # header, for tier->odds->name sorting. None
+                                   # when the pattern has no computed odds yet.
 
 
 @dataclass
@@ -49,6 +89,8 @@ class LuaPatternInfo:
     display_name: str = ""        # User-friendly name for GUI (falls back to name if empty)
     examples: list = field(default_factory=list)
     odds: str = ""
+    per_96m: Optional[int] = None  # Numeric rarity parsed from `odds` (count per
+                                   # 96M); None if no computed odds. Sort key.
     price: str = ""
     data_file: str = ""           # Relative path to external data file (CSV/JSON)
     data: Any = None              # Loaded data (list of dicts for CSV, any for JSON)
@@ -129,7 +171,8 @@ class PatternEngineV3:
 
         # Optional per-user price overrides keyed by catalog SKU (see
         # pattern_prices). Empty when no prices CSV exists -> header prices used.
-        self.price_overrides: Dict[str, str] = {}
+        # {sku: {"display": str, "circ": float|None, "unc": float|None}}
+        self.price_overrides: Dict[str, dict] = {}
         self.reload_price_overrides()
 
     @property
@@ -370,6 +413,7 @@ class PatternEngineV3:
                 display_name=metadata.get('displayname', ''),
                 examples=metadata.get('examples', []),
                 odds=metadata.get('odds', ''),
+                per_96m=parse_per_96m(metadata.get('odds', '')),
                 price=metadata.get('price', ''),
                 catalog=metadata.get('catalog', ''),
                 book_ref=metadata.get('bookref', ''),
@@ -559,7 +603,8 @@ class PatternEngineV3:
             metadata: Optional metadata dict for pattern matching
 
         Returns:
-            List of PatternMatchV3 sorted by tier
+            List of PatternMatchV3 sorted by tier, then rarity (per 96M,
+            rarest first), then name.
         """
         matches = []
 
@@ -592,14 +637,22 @@ class PatternEngineV3:
                         connectors=result.connectors,
                         group_boxes=result.group_boxes,
                         message=result.message,
-                        source="lua"
+                        source="lua",
+                        per_96m=info.per_96m,
                     ))
             except Exception as e:
                 # Log but don't fail on individual pattern errors
                 pass
 
-        # Sort by tier
-        matches.sort(key=lambda m: (m.tier, m.name))
+        # Sort by tier, then by rarity (fewer per 96M = rarer, listed first),
+        # then by name. Patterns with no computed odds sort last within their
+        # tier (None -> +inf) so a known-rare pattern never loses its spot to
+        # one whose odds simply haven't been computed yet.
+        matches.sort(key=lambda m: (
+            m.tier,
+            m.per_96m if m.per_96m is not None else float('inf'),
+            m.name,
+        ))
         return matches
 
     def classify_simple(self, serial: str, metadata: dict = None) -> List[str]:
@@ -988,15 +1041,46 @@ class PatternEngineV3:
             self.price_overrides = {}
 
     def resolve_price(self, name: str) -> str:
-        """Price for a pattern: the CSV override for its catalog SKU wins, else
-        the shipped Lua `Price:` header value. Empty string if neither."""
+        """Display price string for a pattern: the CSV override's free-text
+        `price` for its catalog SKU wins, else the shipped Lua `Price:` header
+        value. Empty string if neither."""
         info = self.lua_patterns.get(name)
         if info is None:
             return ""
         sku = (getattr(info, "catalog", "") or "").strip()
         if sku and sku in self.price_overrides:
-            return self.price_overrides[sku]
+            display = (self.price_overrides[sku].get("display") or "").strip()
+            if display:
+                return display
         return info.price or ""
+
+    def resolve_price_number(self, name: str):
+        """Numeric price for a pattern as ``(circ, unc)`` floats (either may be
+        None). ``circ`` is the primary/circulated value used for the price column
+        and sorting; ``unc`` is the optional uncirculated value. Resolution:
+        the CSV override's numeric columns win; a missing ``circ`` is derived from
+        the low end of the override's display string, then from the shipped
+        header price."""
+        info = self.lua_patterns.get(name)
+        if info is None:
+            return (None, None)
+        circ = unc = None
+        display = ""
+        sku = (getattr(info, "catalog", "") or "").strip()
+        rec = self.price_overrides.get(sku) if sku else None
+        if rec:
+            circ = rec.get("circ")
+            unc = rec.get("unc")
+            display = rec.get("display") or ""
+        if circ is None:
+            try:
+                from dollar_detective.pattern_prices import parse_price_number
+            except Exception:
+                parse_price_number = _parse_price_low
+            circ = parse_price_number(display)
+            if circ is None:
+                circ = parse_price_number(info.price or "")
+        return (circ, unc)
 
     def next_catalog_sku(self, prefix: str = "C") -> str:
         """The next free catalog SKU in a prefix series, e.g. "C-161" / "U-003".

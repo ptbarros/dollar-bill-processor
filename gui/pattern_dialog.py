@@ -307,7 +307,7 @@ class PatternDialog(QDialog):
 
         # Pattern tree - grouped by library, sortable by tier
         self.pattern_tree = QTreeWidget()
-        self.pattern_tree.setHeaderLabels(["Pattern", "Tier", "Enabled", "Color", "Catalog"])
+        self.pattern_tree.setHeaderLabels(["Pattern", "Tier", "Enabled", "Color", "Catalog", "Price"])
         self.pattern_tree.setRootIsDecorated(True)
         self.pattern_tree.itemChanged.connect(self._on_item_changed)
         self.pattern_tree.itemSelectionChanged.connect(self._on_selection_changed)
@@ -318,14 +318,16 @@ class PatternDialog(QDialog):
 
         header = self.pattern_tree.header()
         header.setSectionsMovable(True)  # Allow reordering columns by dragging
-        header.setStretchLastSection(True)  # Last column fills remaining space
+        header.setStretchLastSection(False)  # Pattern (col 0) absorbs slack instead
         header.setSortIndicatorShown(True)
-        # All columns interactive (draggable) except last which stretches
-        header.setSectionResizeMode(0, QHeaderView.Interactive)  # Pattern
+        # Pattern name column stretches to fill; the metadata columns are fixed
+        # width so Price stays narrow rather than ballooning as the last column.
+        header.setSectionResizeMode(0, QHeaderView.Stretch)      # Pattern
         header.setSectionResizeMode(1, QHeaderView.Interactive)  # Tier
         header.setSectionResizeMode(2, QHeaderView.Interactive)  # Enabled
         header.setSectionResizeMode(3, QHeaderView.Interactive)  # Color
-        header.setSectionResizeMode(4, QHeaderView.Stretch)      # Catalog
+        header.setSectionResizeMode(4, QHeaderView.Interactive)  # Catalog
+        header.setSectionResizeMode(5, QHeaderView.Interactive)  # Price
 
         # Restore saved column widths/order or use defaults
         self._restore_column_widths()
@@ -641,7 +643,7 @@ class PatternDialog(QDialog):
 
         # Restore column order
         order = self.settings.get_custom_value('pattern_manager_column_order', None)
-        if order and len(order) == 5:
+        if order and len(order) == 6:
             for visual_idx, logical_idx in enumerate(order):
                 current_visual = header.visualIndex(logical_idx)
                 if current_visual != visual_idx:
@@ -650,17 +652,19 @@ class PatternDialog(QDialog):
         # Restore column widths
         widths = self.settings.get_custom_value('pattern_manager_columns_v3', None)
         if widths and len(widths) >= 4:
-            self.pattern_tree.setColumnWidth(0, widths[0])  # Pattern
             self.pattern_tree.setColumnWidth(1, widths[1])  # Tier
             self.pattern_tree.setColumnWidth(2, widths[2])  # Enabled
             self.pattern_tree.setColumnWidth(3, widths[3])  # Color
-            # Column 4 (Catalog) stretches to fill
+            # Column 0 (Pattern) stretches to fill; Catalog/Price use defaults
+            self.pattern_tree.setColumnWidth(4, 80)   # Catalog
+            self.pattern_tree.setColumnWidth(5, 75)   # Price
         else:
-            # Default widths
-            self.pattern_tree.setColumnWidth(0, 200)  # Pattern
+            # Default widths (col 0 Pattern stretches, so no explicit width)
             self.pattern_tree.setColumnWidth(1, 40)   # Tier
             self.pattern_tree.setColumnWidth(2, 55)   # Enabled
             self.pattern_tree.setColumnWidth(3, 45)   # Color
+            self.pattern_tree.setColumnWidth(4, 80)   # Catalog
+            self.pattern_tree.setColumnWidth(5, 75)   # Price
 
     def _save_column_widths(self):
         """Save column widths and order to settings."""
@@ -693,6 +697,31 @@ class PatternDialog(QDialog):
         """Save window size and position to settings."""
         geo = self.geometry()
         self.settings.set_custom_value('pattern_manager_geometry', [geo.x(), geo.y(), geo.width(), geo.height()])
+
+    def _price_cell(self, name: str):
+        """(cell_text, tooltip) for the Pattern tree Price column. The cell shows
+        the circulated value as $N (dash if unknown); the tooltip carries the
+        full free-text price range and any uncirculated value. CSV overrides
+        apply via the engine, matching the results table."""
+        try:
+            circ, unc = self.engine.resolve_price_number(name)
+        except Exception:
+            circ, unc = (None, None)
+        try:
+            display = self.engine.resolve_price(name)
+        except Exception:
+            display = ""
+        if circ is None:
+            text = "-"
+        else:
+            text = f"${int(circ)}" if float(circ).is_integer() else f"${circ}"
+        tip = []
+        if display:
+            tip.append(f"Price: {display}")
+        if unc is not None:
+            u = int(unc) if float(unc).is_integer() else unc
+            tip.append(f"Uncirculated: ${u}")
+        return text, "\n".join(tip)
 
     def _make_friendly_name(self, name: str) -> str:
         """Convert pattern name to friendly display name.
@@ -836,6 +865,13 @@ class PatternDialog(QDialog):
                 # overridden by a per-user setting when one exists.
                 catalog = self.engine.resolve_pattern_catalog(name)
                 pattern_item.setText(4, catalog if catalog else "-")
+
+                # Price column: circulated value ($N); full range + uncirculated
+                # in the tooltip. Override-aware (same source as the results table).
+                price_text, price_tip = self._price_cell(name)
+                pattern_item.setText(5, price_text)
+                if price_tip:
+                    pattern_item.setToolTip(5, price_tip)
 
                 # Purple tint for Lua patterns
                 if has_lua:
@@ -1133,11 +1169,22 @@ class PatternDialog(QDialog):
         else:
             self.pattern_odds_label.setText("Odds: (not calculated)")
 
-        # Use Lua price if available
-        price = defn.get('price_range', '')
-        if lua_info and lua_info.price:
-            price = lua_info.price
-        if price:
+        # Price: override-aware (CSV wins over the Lua header), matching the
+        # results table and the tree Price column. Falls back to the header.
+        try:
+            price = self.engine.resolve_price(name)
+        except Exception:
+            price = ""
+        if not price:
+            price = (lua_info.price if lua_info else "") or defn.get('price_range', '')
+        try:
+            _circ, unc = self.engine.resolve_price_number(name)
+        except Exception:
+            unc = None
+        if price and unc is not None:
+            u = int(unc) if float(unc).is_integer() else unc
+            self.pattern_price_label.setText(f"Price: {price}  (unc. ${u})")
+        elif price:
             self.pattern_price_label.setText(f"Price: {price}")
         else:
             self.pattern_price_label.setText("Price: -")
