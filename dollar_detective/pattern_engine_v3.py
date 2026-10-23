@@ -982,6 +982,72 @@ class PatternEngineV3:
             values.append(s)
         return values, duplicates, skipped
 
+    # Serial layout for a calendar date -> 8 digits. Keys match the date family's
+    # DisplayName styles (M/D/Y = US MMDDYYYY, D/M/Y = EU DDMMYYYY, Y/M/D = YYYYMMDD).
+    DATE_FORMATS = ("MDY", "DMY", "YMD")
+
+    @staticmethod
+    def dates_to_serials(text, formats, input_order: str = "MDY") -> Tuple[List[str], int, int]:
+        """Turn a list of typed calendar dates into 8-digit serial strings.
+
+        text: one date per line (separators /-. or spaces), e.g. "11/22/1975".
+        input_order: how to read the TYPED dates ("MDY"/"DMY"/"YMD").
+        formats: which serial layouts to emit per date (subset of DATE_FORMATS).
+
+        Each valid date is rendered in every requested layout; invalid/malformed
+        dates are skipped. Years must be 1-9999 (4-digit in the serial). Leap-day
+        and per-month day limits are enforced via datetime. Dedupes, order kept.
+
+        Returns (serials, valid_dates, skipped).
+        """
+        import datetime
+        want = [f for f in (formats or ()) if f in PatternEngineV3.DATE_FORMATS]
+        if not want:
+            want = ["MDY"]
+        serials: List[str] = []
+        seen = set()
+        valid = 0
+        skipped = 0
+        for line in re.split(r"[\n;]+", text or ""):
+            line = line.strip()
+            if not line:
+                continue
+            parts = [p for p in re.split(r"\D+", line) if p]
+            if len(parts) != 3:
+                skipped += 1
+                continue
+            try:
+                a, b, c = int(parts[0]), int(parts[1]), int(parts[2])
+            except ValueError:
+                skipped += 1
+                continue
+            if input_order == "DMY":
+                d, m, y = a, b, c
+            elif input_order == "YMD":
+                y, m, d = a, b, c
+            else:  # MDY
+                m, d, y = a, b, c
+            if not (1 <= y <= 9999):
+                skipped += 1
+                continue
+            try:
+                datetime.date(y, m, d)  # validates month/day incl. leap years
+            except ValueError:
+                skipped += 1
+                continue
+            valid += 1
+            for fmt in want:
+                if fmt == "DMY":
+                    s = f"{d:02d}{m:02d}{y:04d}"
+                elif fmt == "YMD":
+                    s = f"{y:04d}{m:02d}{d:02d}"
+                else:
+                    s = f"{m:02d}{d:02d}{y:04d}"
+                if len(s) == 8 and s not in seen:
+                    seen.add(s)
+                    serials.append(s)
+        return serials, valid, skipped
+
     def save_list_pattern(self, name: str, numbers, *, mode: str = "exact",
                           display_name: str = "", description: str = "",
                           tier: int = 5, price: str = "",

@@ -3568,6 +3568,8 @@ class CustomPatternDialog(QDialog):
             self.tab_widget.addTab(self.docs_tab, "API Docs")
             self.list_tab = self._create_list_tab()               # 6
             self.tab_widget.addTab(self.list_tab, "From a List")
+            self.dates_tab = self._create_dates_tab()             # 7
+            self.tab_widget.addTab(self.dates_tab, "From Dates")
         self.tab_widget.tabBar().hide()
 
         # Re-check the AI tab's key state whenever it's shown, so a key added in
@@ -3635,6 +3637,7 @@ class CustomPatternDialog(QDialog):
         'ai':     (2, "Describe It (AI)", True),
         'lua':    (3, "Write Lua", True),
         'list':   (6, "From a List of Numbers", True),
+        'dates':  (7, "From Dates", False),
     }
 
     def _create_chooser_page(self) -> QWidget:
@@ -3652,7 +3655,9 @@ class CustomPatternDialog(QDialog):
             ('wizard', "From a recipe",
              "Pick a shape (ladder, repeater, radar…) and tweak it. No coding."),
             ('list', "From a list of numbers",
-             "Paste serials or dates; match the whole serial, or 'contains'."),
+             "Paste serials; match the whole serial, or 'contains'."),
+            ('dates', "From a list of dates",
+             "Paste dates (birthdays, etc.); match the serials that spell them."),
             ('copy', "Start from an existing pattern",
              "Duplicate one you already have and change it."),
             ('ai', "Describe it in plain English",
@@ -3931,6 +3936,100 @@ class CustomPatternDialog(QDialog):
         self.list_numbers_edit.setReadOnly(False)
         self.list_numbers_edit.clear()  # fires _list_text_changed -> recount
         self.list_numbers_edit.setFocus()
+
+    # ---- Dates editor ("From a list of dates" card) -------------------------
+
+    def _create_dates_tab(self) -> QWidget:
+        widget = QWidget()
+        v = QVBoxLayout(widget)
+
+        form = QFormLayout()
+        self.dates_input_combo = QComboBox()
+        self.dates_input_combo.addItem("Month / Day / Year (US)", "MDY")
+        self.dates_input_combo.addItem("Day / Month / Year", "DMY")
+        self.dates_input_combo.addItem("Year / Month / Day", "YMD")
+        self.dates_input_combo.currentIndexChanged.connect(self._dates_changed)
+        form.addRow("I'm typing dates as:", self.dates_input_combo)
+        self.dates_price_edit = QLineEdit()
+        self.dates_price_edit.setPlaceholderText("optional, e.g. $20-$60")
+        form.addRow("Price:", self.dates_price_edit)
+        v.addLayout(form)
+
+        fmt_box = QGroupBox("Match the serials that spell each date, in these formats")
+        fl = QHBoxLayout(fmt_box)
+        self.date_fmt_checks = {}
+        for key, label in (("MDY", "M/D/Y  (MMDDYYYY)"),
+                           ("DMY", "D/M/Y  (DDMMYYYY)"),
+                           ("YMD", "Y/M/D  (YYYYMMDD)")):
+            cb = QCheckBox(label)
+            cb.setChecked(True)
+            cb.stateChanged.connect(self._dates_changed)
+            self.date_fmt_checks[key] = cb
+            fl.addWidget(cb)
+        v.addWidget(fmt_box)
+
+        v.addWidget(QLabel("Paste one date per line (e.g. 11/22/1975):"))
+        self.dates_edit = QPlainTextEdit()
+        self.dates_edit.setPlaceholderText("11/22/1975\n07/04/1976\n12/25/2000")
+        self.dates_edit.textChanged.connect(lambda: self._dates_count_timer.start())
+        v.addWidget(self.dates_edit)
+
+        self._dates_count_timer = QTimer(self)
+        self._dates_count_timer.setSingleShot(True)
+        self._dates_count_timer.setInterval(350)
+        self._dates_count_timer.timeout.connect(self._dates_update_count)
+
+        row = QHBoxLayout()
+        load_btn = QPushButton("Load from File...")
+        load_btn.clicked.connect(self._dates_load_file)
+        row.addWidget(load_btn)
+        row.addStretch()
+        self.dates_count_label = QLabel("0 dates")
+        self.dates_count_label.setStyleSheet("color: #666;")
+        row.addWidget(self.dates_count_label)
+        v.addLayout(row)
+        return widget
+
+    def _dates_input_order(self) -> str:
+        return self.dates_input_combo.currentData() or "MDY"
+
+    def _dates_formats(self) -> list:
+        return [k for k, cb in self.date_fmt_checks.items() if cb.isChecked()]
+
+    def _dates_computed_serials(self):
+        """(serials, valid_dates, skipped) from the dates box + chosen formats."""
+        return PatternEngine.dates_to_serials(
+            self.dates_edit.toPlainText(), self._dates_formats(),
+            self._dates_input_order())
+
+    def _dates_changed(self, *args):
+        self._dates_update_count()
+
+    def _dates_update_count(self):
+        try:
+            serials, valid, skipped = self._dates_computed_serials()
+        except Exception:
+            serials, valid, skipped = [], 0, 0
+        msg = (f"{valid:,} date{'s' if valid != 1 else ''} "
+               f"→ {len(serials):,} serial{'s' if len(serials) != 1 else ''}")
+        if skipped:
+            msg += f"  ({skipped} skipped)"
+        self.dates_count_label.setText(msg)
+
+    def _dates_load_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Load Dates", "", "Text/CSV (*.txt *.csv);;All Files (*)")
+        if not path:
+            return
+        try:
+            text = Path(path).read_text(encoding='utf-8', errors='replace')
+        except Exception as e:
+            QMessageBox.warning(self, "Could Not Read File", str(e))
+            return
+        existing = self.dates_edit.toPlainText()
+        if existing and not existing.endswith('\n'):
+            existing += '\n'
+        self.dates_edit.setPlainText(existing + text)
 
     def get_library(self) -> str:
         return self.library_combo.currentText()
@@ -6272,6 +6371,20 @@ end
             self.accept()
             return
 
+        # Dates editor: need at least one format and one valid date.
+        if self._method == 'dates':
+            if not self._dates_formats():
+                QMessageBox.warning(self, "No Format Selected",
+                                    "Tick at least one serial format to match.")
+                return
+            serials, valid, _ = self._dates_computed_serials()
+            if not serials:
+                QMessageBox.warning(self, "No Valid Dates",
+                                    "Enter at least one valid date (e.g. 11/22/1975).")
+                return
+            self.accept()
+            return
+
         # Determine which editor's content to save. Prefer the chosen method (the
         # Test toggle can leave the hidden tab widget on the Test page), falling
         # back to the raw tab index for edit paths that set is_lua_pattern.
@@ -6506,6 +6619,19 @@ end
                 'description': self.desc_edit.text().strip(),
                 'tier': tier,
                 'price': self.list_price_edit.text().strip(),
+            }
+
+        # Dates editor: render dates to serials, then save as an exact list.
+        if self._method == 'dates':
+            serials, _, _ = self._dates_computed_serials()
+            return name, {
+                'source': 'list',
+                'mode': 'exact',
+                'numbers': "\n".join(serials),
+                'display_name': display_name,
+                'description': self.desc_edit.text().strip(),
+                'tier': tier,
+                'price': self.dates_price_edit.text().strip(),
             }
 
         # Check for wizard-generated pattern
