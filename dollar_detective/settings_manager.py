@@ -161,6 +161,7 @@ class SettingsManager:
         self.pattern_flippable: Dict[str, bool] = {}  # Pattern name -> user override of the .lua Flippable flag (overlay can be shown rotated 180)
         self.previous_version: Optional[str] = None  # Version running just before the last in-app update, so it can be one-click reverted to
         self.pattern_catalogs: Dict[str, str] = {}  # Pattern name -> catalog location (e.g., "A1", "B2")
+        self.library_prefixes: Dict[str, str] = {}  # Library name -> catalog SKU prefix letter (e.g. {'pt': 'P'})
         self.pattern_overrides: Dict[str, Dict[str, Any]] = {}  # e.g., {'GAS_PUMP': {'baseline_variance_min': 3.6}}
         self.custom_patterns: Dict[str, Dict] = {}  # User-defined YAML patterns
         self.library_states: Dict[str, bool] = {}  # Library name -> enabled (e.g., {'core': True, 'user': True})
@@ -311,6 +312,7 @@ class SettingsManager:
 
         # Load pattern catalogs
         self.pattern_catalogs = data.get('pattern_catalogs', {})
+        self.library_prefixes = data.get('library_prefixes', {}) or {}
 
         # Load pattern overrides (rule customizations like GAS_PUMP threshold)
         self.pattern_overrides = data.get('pattern_overrides', {})
@@ -478,6 +480,7 @@ class SettingsManager:
             'pattern_flippable': self.pattern_flippable,
             'previous_version': self.previous_version,
             'pattern_catalogs': self.pattern_catalogs,
+            'library_prefixes': self.library_prefixes,
             'pattern_overrides': self.pattern_overrides,
             'custom_patterns': self.custom_patterns,
             'library_states': self.library_states,
@@ -693,6 +696,16 @@ class SettingsManager:
         elif pattern_name in self.pattern_catalogs:
             del self.pattern_catalogs[pattern_name]
 
+    def get_library_prefix(self, library: str, default: str = "") -> str:
+        """The catalog SKU prefix letter assigned to a library (e.g. 'P'), or
+        `default` if none has been assigned yet."""
+        return self.library_prefixes.get(library, default)
+
+    def set_library_prefix(self, library: str, prefix: str):
+        """Record the catalog SKU prefix letter for a library."""
+        if library and prefix:
+            self.library_prefixes[library] = prefix
+
     def get_pattern_override(self, pattern_name: str, rule_type: str, default: Any = None) -> Any:
         """Get a pattern rule override value."""
         return self.pattern_overrides.get(pattern_name, {}).get(rule_type, default)
@@ -805,6 +818,7 @@ class SettingsManager:
         self.pattern_states = {}
         self.pattern_colors = {}
         self.pattern_catalogs = {}
+        self.library_prefixes = {}
         self.pattern_overrides = {}
         self.custom_patterns = {}
         self.library_states = {}

@@ -9,13 +9,50 @@ Script patterns provide rich visualization with custom highlights and connectors
 
 import re
 from pathlib import Path
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 from dollar_detective.pattern_sandbox import PatternSandbox, create_context, LuaExecutionResult
 
 if TYPE_CHECKING:
     from dollar_detective.settings_manager import SettingsManager
+
+
+_PER_96M_RE = re.compile(r"([\d,]+)\s*per\s*96M", re.IGNORECASE)
+
+
+def parse_per_96m(odds: str) -> Optional[int]:
+    """Extract the integer 'N per 96M' count from an Odds: header string like
+    '1 in 10,000 (9,600 per 96M)'. Returns None when no count is present (the
+    pattern has no computed odds yet). This is the numeric rarity used to order
+    matched patterns within a tier -- smaller = rarer. Kept in sync with
+    rarity_estimate.odds_string, which writes the '(N per 96M)' suffix."""
+    if not odds:
+        return None
+    m = _PER_96M_RE.search(odds)
+    if not m:
+        return None
+    try:
+        return int(m.group(1).replace(",", ""))
+    except ValueError:
+        return None
+
+
+_PRICE_LOW_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _parse_price_low(s) -> Optional[float]:
+    """Fallback low-end price parser, used only if a vendored pattern_prices is
+    too old to provide parse_price_number. "$20-$100" -> 20.0, "$50" -> 50.0."""
+    if not s:
+        return None
+    m = _PRICE_LOW_RE.search(str(s))
+    if not m:
+        return None
+    try:
+        return float(m.group(0).replace(",", ""))
+    except ValueError:
+        return None
 
 
 @dataclass
@@ -34,6 +71,9 @@ class PatternMatchV3(PatternMatch):
     group_boxes: list = field(default_factory=list)  # Boxes spanning multiple digits
     message: str = ""
     source: str = "lua"
+    per_96m: Optional[int] = None  # Numeric rarity (count per 96M) from the Odds:
+                                   # header, for tier->odds->name sorting. None
+                                   # when the pattern has no computed odds yet.
 
 
 @dataclass
@@ -49,6 +89,8 @@ class LuaPatternInfo:
     display_name: str = ""        # User-friendly name for GUI (falls back to name if empty)
     examples: list = field(default_factory=list)
     odds: str = ""
+    per_96m: Optional[int] = None  # Numeric rarity parsed from `odds` (count per
+                                   # 96M); None if no computed odds. Sort key.
     price: str = ""
     data_file: str = ""           # Relative path to external data file (CSV/JSON)
     data: Any = None              # Loaded data (list of dicts for CSV, any for JSON)
@@ -129,7 +171,8 @@ class PatternEngineV3:
 
         # Optional per-user price overrides keyed by catalog SKU (see
         # pattern_prices). Empty when no prices CSV exists -> header prices used.
-        self.price_overrides: Dict[str, str] = {}
+        # {sku: {"display": str, "circ": float|None, "unc": float|None}}
+        self.price_overrides: Dict[str, dict] = {}
         self.reload_price_overrides()
 
     @property
@@ -315,6 +358,25 @@ class PatternEngineV3:
         except Exception as e:
             return False, f"Move failed: {e}"
 
+        # Re-stamp the catalog SKU to the destination library's prefix so the SKU
+        # reflects where the pattern now lives (unless it already matches). The
+        # moved .lua is at `dest`; the engine hasn't reloaded yet, so the old SKU
+        # under the old prefix is still what's "loaded" -- fine for numbering.
+        try:
+            dest_prefix = self._library_prefix(target_library)
+            cur = (getattr(info, "catalog", "") or "").strip()
+            if self._sku_prefix(cur) != dest_prefix:
+                new_sku = self._next_sku(dest_prefix)
+                dest.write_text(
+                    self.restamp_catalog_text(dest.read_text(encoding="utf-8"), new_sku),
+                    encoding="utf-8")
+                # Keep any per-user override in sync so the new SKU is what shows.
+                if self.settings and self.settings.get_pattern_catalog(name, ""):
+                    self.settings.set_pattern_catalog(name, new_sku)
+                    self.settings.save()
+        except Exception:
+            pass
+
         self.reload()
         return True, f"Moved '{name}' to '{target_library}'."
 
@@ -370,6 +432,7 @@ class PatternEngineV3:
                 display_name=metadata.get('displayname', ''),
                 examples=metadata.get('examples', []),
                 odds=metadata.get('odds', ''),
+                per_96m=parse_per_96m(metadata.get('odds', '')),
                 price=metadata.get('price', ''),
                 catalog=metadata.get('catalog', ''),
                 book_ref=metadata.get('bookref', ''),
@@ -559,7 +622,8 @@ class PatternEngineV3:
             metadata: Optional metadata dict for pattern matching
 
         Returns:
-            List of PatternMatchV3 sorted by tier
+            List of PatternMatchV3 sorted by tier, then rarity (per 96M,
+            rarest first), then name.
         """
         matches = []
 
@@ -592,14 +656,22 @@ class PatternEngineV3:
                         connectors=result.connectors,
                         group_boxes=result.group_boxes,
                         message=result.message,
-                        source="lua"
+                        source="lua",
+                        per_96m=info.per_96m,
                     ))
             except Exception as e:
                 # Log but don't fail on individual pattern errors
                 pass
 
-        # Sort by tier
-        matches.sort(key=lambda m: (m.tier, m.name))
+        # Sort by tier, then by rarity (fewer per 96M = rarer, listed first),
+        # then by name. Patterns with no computed odds sort last within their
+        # tier (None -> +inf) so a known-rare pattern never loses its spot to
+        # one whose odds simply haven't been computed yet.
+        matches.sort(key=lambda m: (
+            m.tier,
+            m.per_96m if m.per_96m is not None else float('inf'),
+            m.name,
+        ))
         return matches
 
     def classify_simple(self, serial: str, metadata: dict = None) -> List[str]:
@@ -799,8 +871,9 @@ class PatternEngineV3:
         file_path = target_dir / filename
 
         # Catalog SKU: preserve an already-assigned one (SKUs are stable, so an
-        # edit must not renumber), else assign the next free U-### for this
-        # non-core pattern. Core patterns are numbered C-### out-of-band.
+        # edit must not renumber), else assign the next free SKU under this
+        # library's prefix (flat 'user' -> U, each named library its own letter).
+        # Core patterns are numbered C-### out-of-band.
         import re as _re
         catalog = ""
         if file_path.exists():
@@ -813,7 +886,7 @@ class PatternEngineV3:
                 catalog = ""
         if not catalog:
             try:
-                catalog = self.next_catalog_sku("U")
+                catalog = self.next_catalog_sku(self._library_prefix(library))
             except Exception:
                 catalog = ""
 
@@ -862,6 +935,205 @@ class PatternEngineV3:
         except Exception as e:
             print(f"Error saving pattern: {e}")
             return False
+
+    @staticmethod
+    def normalize_serial_list(numbers, pad: bool = True) -> Tuple[List[str], int, int]:
+        """Normalize a user-supplied list of numbers for a list pattern.
+
+        Accepts either a list of strings or one blob (any mix of commas, spaces
+        and newlines). Each token is reduced to its digits; tokens with no digits
+        are ignored and tokens longer than 8 digits are skipped as invalid
+        (nothing longer than 8 digits can be a serial or appear inside one).
+        Duplicates are removed, original order preserved.
+
+        pad=True  (whole-serial / exact lists): 1-8 digit tokens are left-padded
+                  to 8 (serials are printed zero-padded), e.g. 902100 -> 00902100.
+        pad=False (contains lists, e.g. years):  tokens are kept as typed, so a
+                  4-digit year stays "1974" and matches anywhere in the serial.
+
+        Returns (values, duplicates_removed, skipped_too_long).
+        """
+        if isinstance(numbers, str):
+            tokens = re.split(r"[\s,;]+", numbers.strip())
+        else:
+            tokens = []
+            for item in numbers:
+                tokens.extend(re.split(r"[\s,;]+", str(item).strip()))
+
+        values: List[str] = []
+        seen = set()
+        duplicates = 0
+        skipped = 0
+        for tok in tokens:
+            digits = re.sub(r"\D", "", tok)
+            if not digits:
+                continue
+            if len(digits) > 8:
+                skipped += 1
+                continue
+            s = digits.zfill(8) if pad else digits
+            if s in seen:
+                duplicates += 1
+                continue
+            seen.add(s)
+            values.append(s)
+        return values, duplicates, skipped
+
+    def save_list_pattern(self, name: str, numbers, *, mode: str = "exact",
+                          display_name: str = "", description: str = "",
+                          tier: int = 5, price: str = "",
+                          library: str = "user") -> dict:
+        """Create a list pattern from a raw list of numbers, with no hand-written
+        Lua. Two match modes:
+
+          mode="exact"    — the WHOLE 8-digit serial must be on the list
+                            (e.g. Vampire / Exemplifier serials). Odds are
+                            computed exactly from the in-range list size.
+          mode="contains" — the serial CONTAINS any number from the list anywhere
+                            (e.g. a list of years 1974, 2002, …). Odds are left
+                            blank (not cheaply computable for substring matches).
+
+        Writes a sibling CSV (one value per row) as the pattern's DataFile and a
+        small lookup Lua.
+
+        Returns a summary dict:
+          {ok, error, mode, count, duplicates, skipped, odds, catalog, examples, library}
+        """
+        import json as _json
+
+        mode = "contains" if mode == "contains" else "exact"
+        values, duplicates, skipped = self.normalize_serial_list(
+            numbers, pad=(mode == "exact"))
+        result = {"ok": False, "error": "", "mode": mode, "count": len(values),
+                  "duplicates": duplicates, "skipped": skipped, "odds": "",
+                  "catalog": "", "examples": [], "library": library}
+        if not values:
+            result["error"] = "No valid numbers (1-8 digits) found in the list."
+            return result
+
+        # Target directory (mirror save_user_pattern).
+        if library == "user":
+            target_dir = self.user_patterns_dir
+        else:
+            target_dir = self.patterns_dir / library
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        base = name.lower().replace(' ', '_')
+        lua_path = target_dir / f"{base}.lua"
+        csv_path = target_dir / f"{base}.csv"
+
+        # Preserve an existing SKU (stable), else assign the next free one.
+        catalog = ""
+        if lua_path.exists():
+            try:
+                m = re.search(r'^\s*Catalog:\s*(.+)$',
+                              lua_path.read_text(encoding='utf-8'), re.MULTILINE)
+                if m:
+                    catalog = m.group(1).strip()
+            except Exception:
+                catalog = ""
+        if not catalog:
+            try:
+                catalog = self.next_catalog_sku(self._library_prefix(library))
+            except Exception:
+                catalog = ""
+
+        # Odds + examples depend on the mode.
+        odds = ""
+        if mode == "exact":
+            # Each listed serial in [1, 96M] shows up once per 96M block, so
+            # per_96m = count of in-range entries -> exact, instant odds.
+            per_96m = sum(1 for s in values if 1 <= int(s) <= 96_000_000)
+            if per_96m > 0:
+                one_in_x = round(96_000_000 / per_96m)
+                odds = f"1 in {one_in_x:,} ({per_96m:,} per 96M)"
+            examples = values[:4]
+        else:
+            # "contains": odds aren't cheaply computable (overlapping positions),
+            # so leave the header blank. Build 8-digit example serials that embed
+            # the first few list values so the preview generator has something.
+            examples = [(v + "0" * (8 - len(v)))[:8] for v in values[:4]]
+
+        header_lines = ['--[[', f'Pattern: {name}']
+        if display_name:
+            header_lines.append(f'DisplayName: {display_name}')
+        if catalog:
+            header_lines.append(f'Catalog: {catalog}')
+        header_lines.append(f'Description: {description}')
+        header_lines.append(f'Tier: {tier}')
+        header_lines.append(f'Examples: {_json.dumps(examples)}')
+        if odds:
+            header_lines.append(f'Odds: {odds}')
+        if price:
+            header_lines.append(f'Price: {price}')
+        header_lines.append(f'DataFile: {base}.csv')
+        header_lines.append('--]]')
+        header = '\n'.join(header_lines)
+
+        if mode == "exact":
+            body = (
+                "\n"
+                "-- List pattern (exact): matches when the full 8-digit serial is on\n"
+                "-- the imported list. The list lives in the sibling CSV (DataFile\n"
+                "-- above), loaded as ctx.data_by_key keyed by the serial string.\n"
+                "function match(ctx)\n"
+                "    if not ctx.data_by_key then\n"
+                "        return {matched = false}\n"
+                "    end\n"
+                "    if ctx.data_by_key[ctx.digits] then\n"
+                "        return {\n"
+                "            matched = true,\n"
+                "            group_boxes = {{from = 0, to = 7, color = \"gold\", thickness = 3}},\n"
+                "            message = \"On list\"\n"
+                "        }\n"
+                "    end\n"
+                "    return {matched = false}\n"
+                "end\n"
+            )
+        else:
+            body = (
+                "\n"
+                "-- List pattern (contains): matches when the serial contains any\n"
+                "-- number from the imported list anywhere in it (e.g. a year). The\n"
+                "-- list lives in the sibling CSV (DataFile above). We scan every\n"
+                "-- substring, longest first, so the biggest matching run is boxed.\n"
+                "function match(ctx)\n"
+                "    if not ctx.data_by_key then\n"
+                "        return {matched = false}\n"
+                "    end\n"
+                "    local d = ctx.digits\n"
+                "    for len = #d, 1, -1 do\n"
+                "        for start = 1, #d - len + 1 do\n"
+                "            local sub = d:sub(start, start + len - 1)\n"
+                "            if ctx.data_by_key[sub] then\n"
+                "                return {\n"
+                "                    matched = true,\n"
+                "                    group_boxes = {{from = start - 1, to = start + len - 2, color = \"gold\", thickness = 3}},\n"
+                "                    message = \"Contains \" .. sub\n"
+                "                }\n"
+                "            end\n"
+                "        end\n"
+                "    end\n"
+                "    return {matched = false}\n"
+                "end\n"
+            )
+
+        try:
+            import csv as _csv
+            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = _csv.writer(f)
+                writer.writerow(["serial"])
+                for s in values:
+                    writer.writerow([s])
+            with open(lua_path, 'w', encoding='utf-8') as f:
+                f.write(header + "\n" + body)
+            self._load_lua_pattern(lua_path, library=library)
+        except Exception as e:
+            result["error"] = str(e)
+            return result
+
+        result.update(ok=True, odds=odds, catalog=catalog, examples=examples)
+        return result
 
     def delete_user_pattern(self, name: str) -> bool:
         """
@@ -988,15 +1260,132 @@ class PatternEngineV3:
             self.price_overrides = {}
 
     def resolve_price(self, name: str) -> str:
-        """Price for a pattern: the CSV override for its catalog SKU wins, else
-        the shipped Lua `Price:` header value. Empty string if neither."""
+        """Display price string for a pattern: the CSV override's free-text
+        `price` for its catalog SKU wins, else the shipped Lua `Price:` header
+        value. Empty string if neither."""
         info = self.lua_patterns.get(name)
         if info is None:
             return ""
         sku = (getattr(info, "catalog", "") or "").strip()
         if sku and sku in self.price_overrides:
-            return self.price_overrides[sku]
+            display = (self.price_overrides[sku].get("display") or "").strip()
+            if display:
+                return display
         return info.price or ""
+
+    def resolve_price_number(self, name: str):
+        """Numeric price for a pattern as ``(circ, unc)`` floats (either may be
+        None). ``circ`` is the primary/circulated value used for the price column
+        and sorting; ``unc`` is the optional uncirculated value. Resolution:
+        the CSV override's numeric columns win; a missing ``circ`` is derived from
+        the low end of the override's display string, then from the shipped
+        header price."""
+        info = self.lua_patterns.get(name)
+        if info is None:
+            return (None, None)
+        circ = unc = None
+        display = ""
+        sku = (getattr(info, "catalog", "") or "").strip()
+        rec = self.price_overrides.get(sku) if sku else None
+        if rec:
+            circ = rec.get("circ")
+            unc = rec.get("unc")
+            display = rec.get("display") or ""
+        if circ is None:
+            try:
+                from dollar_detective.pattern_prices import parse_price_number
+            except Exception:
+                parse_price_number = _parse_price_low
+            circ = parse_price_number(display)
+            if circ is None:
+                circ = parse_price_number(info.price or "")
+        return (circ, unc)
+
+    def _existing_catalog_skus(self) -> set:
+        """Every catalog SKU currently in use: loaded patterns' header SKUs plus
+        any per-user overrides."""
+        skus = set()
+        for info in self.lua_patterns.values():
+            s = (getattr(info, "catalog", "") or "").strip()
+            if s:
+                skus.add(s)
+        if self.settings:
+            try:
+                for v in self.settings.pattern_catalogs.values():
+                    v = str(v).strip()
+                    if v:
+                        skus.add(v)
+            except Exception:
+                pass
+        return skus
+
+    @staticmethod
+    def _sku_prefix(sku: str) -> str:
+        """The letter part of a '<PREFIX>-NNN' SKU, uppercased ('' if not that form)."""
+        m = re.match(r"^([A-Za-z]+)-\d+$", (sku or "").strip())
+        return m.group(1).upper() if m else ""
+
+    def _library_prefix(self, library: str) -> str:
+        """The catalog SKU prefix letter for a library. 'core' (and shipped
+        libraries) -> 'C', the flat 'user' library -> 'U'; every other named
+        add-on library gets its own letter, assigned once and persisted -- its
+        own initial when free, else the next free A-Z -- so each library's SKUs
+        are namespaced and can't collide across libraries."""
+        if library == "core" or library in self.SHIPPED_LIBRARIES:
+            return "C"
+        if not library or library == "user":
+            return "U"
+        if self.settings:
+            existing = self.settings.get_library_prefix(library, "")
+            if existing:
+                return existing
+        reserved = {"C", "U"}
+        if self.settings:
+            try:
+                reserved |= {str(p).upper() for p in self.settings.library_prefixes.values() if p}
+            except Exception:
+                pass
+        reserved |= {p for p in (self._sku_prefix(s) for s in self._existing_catalog_skus()) if p}
+        init = next((c for c in library.upper() if c.isalpha()), "")
+        candidates = ([init] if init else []) + [chr(c) for c in range(ord("A"), ord("Z") + 1)]
+        prefix = next((c for c in candidates if c not in reserved), "")
+        if not prefix:  # 26+ libraries already: fall back to a 2-char code.
+            base, i = (init or "X"), 1
+            while f"{base}{i}" in reserved:
+                i += 1
+            prefix = f"{base}{i}"
+        if self.settings:
+            try:
+                self.settings.set_library_prefix(library, prefix)
+                self.settings.save()
+            except Exception:
+                pass
+        return prefix
+
+    def _next_sku(self, prefix: str, used: set = None) -> str:
+        """Next free '<prefix>-NNN' not in `used` nor among loaded/override SKUs."""
+        rx = re.compile(rf"^{re.escape(prefix)}-(\d+)$")
+        taken = set(used or set()) | self._existing_catalog_skus()
+        max_n = 0
+        for s in taken:
+            m = rx.match(str(s).strip())
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        return f"{prefix}-{max_n + 1:03d}"
+
+    @staticmethod
+    def restamp_catalog_text(script: str, new_sku: str) -> str:
+        """Return `script` with its Catalog: header set to new_sku -- replacing an
+        existing Catalog line, else inserting one right after the Pattern: line."""
+        if re.search(r"(?im)^\s*Catalog:\s*.*$", script):
+            return re.sub(r"(?im)^(\s*)Catalog:\s*.*$",
+                                  lambda m: f"{m.group(1)}Catalog: {new_sku}",
+                                  script, count=1)
+        if re.search(r"(?im)^\s*Pattern:\s*.*$", script):
+            return re.sub(r"(?im)^(\s*Pattern:\s*.*)$",
+                                  lambda m: f"{m.group(1)}\nCatalog: {new_sku}",
+                                  script, count=1)
+        return script
 
     def next_catalog_sku(self, prefix: str = "C") -> str:
         """The next free catalog SKU in a prefix series, e.g. "C-161" / "U-003".

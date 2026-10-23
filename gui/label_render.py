@@ -42,7 +42,7 @@ LINE_SPACING = 1.18   # multiple of font height between baselines
 # The bill values a label field can pull, in the default order, with the
 # human-readable name shown in the field editor.
 FIELD_VARS = ["serial", "series", "pattern", "note", "catalog", "position",
-              "denomination", "front_plate", "back_plate"]
+              "denomination", "front_plate", "back_plate", "odds", "price"]
 FIELD_LABELS = {
     "serial": "Serial",
     "series": "Series",
@@ -53,6 +53,8 @@ FIELD_LABELS = {
     "denomination": "Denomination",
     "front_plate": "Front Plate",
     "back_plate": "Back Plate",
+    "odds": "Odds",
+    "price": "Price",
 }
 
 
@@ -72,16 +74,28 @@ class LabelField:
     # blank line above it for vertical spacing.
     align: str = "left"
     space_before: bool = False
+    # Which printed version(s) this field appears on: "both" (default),
+    # "customer" (buyer copy only), or "internal" (seller copy only, e.g. the
+    # catalog SKU + position). The crop-labels .docx renders a Customer variant
+    # then an Internal variant per bill from one profile.
+    audience: str = "both"
 
     def has_font_override(self) -> bool:
         return bool(self.font_family or self.font_size or self.bold or self.italic)
+
+    def shown_for(self, variant: Optional[str]) -> bool:
+        """True if this field renders for the given variant (None = all)."""
+        if not variant:
+            return True
+        return (self.audience or "both") in ("both", variant)
 
     def to_dict(self) -> dict:
         return {"var": self.var, "caption": self.caption,
                 "enabled": self.enabled, "same_line": self.same_line,
                 "font_family": self.font_family, "font_size": self.font_size,
                 "bold": self.bold, "italic": self.italic,
-                "align": self.align, "space_before": self.space_before}
+                "align": self.align, "space_before": self.space_before,
+                "audience": self.audience}
 
 
 @dataclass
@@ -102,11 +116,14 @@ class LabelTemplate:
             LabelField("series",   "SERIES ", True,  True),
             LabelField("pattern",  "",        True,  False),
             LabelField("note",     "",        True,  False),
-            LabelField("catalog",  "Cat: ",   False, False),
-            LabelField("position", "Pos: ",   False, True),
+            # Catalog + position print on the INTERNAL (seller) copy only.
+            LabelField("catalog",  "Cat: ",   True,  False, audience="internal"),
+            LabelField("position", "Pos: ",   True,  True,  audience="internal"),
             LabelField("denomination", "",    False, False),
             LabelField("front_plate",  "FP ", False, False),
             LabelField("back_plate",   "BP ", False, True),
+            LabelField("odds",     "Odds: ",  False, False),
+            LabelField("price",    "",        False, False),
         ])
 
     @staticmethod
@@ -125,6 +142,12 @@ class LabelTemplate:
                 continue
             seen.add(var)
             dflt = defaults[var]
+            # Audience defaults to the built-in for this var (catalog/position ->
+            # internal) when a stored profile predates the field, so legacy 2x1
+            # profiles still split customer vs internal correctly.
+            audience = entry.get("audience", dflt.audience) or "both"
+            if audience not in ("both", "customer", "internal"):
+                audience = "both"
             fields.append(LabelField(
                 var=var,
                 caption=entry.get("caption", dflt.caption),
@@ -136,13 +159,15 @@ class LabelTemplate:
                 italic=bool(entry.get("italic", False)),
                 align=entry.get("align", "left") or "left",
                 space_before=bool(entry.get("space_before", False)),
+                audience=audience,
             ))
         # Append any fields missing from the stored template (disabled), so new
         # field types show up in the editor after an upgrade.
         for var in FIELD_VARS:
             if var not in seen:
                 f = defaults[var]
-                fields.append(LabelField(f.var, f.caption, False, f.same_line))
+                fields.append(LabelField(f.var, f.caption, False, f.same_line,
+                                         audience=f.audience))
         try:
             w = float(d.get("width_in", LABEL_W_IN)) or LABEL_W_IN
             h = float(d.get("height_in", LABEL_H_IN)) or LABEL_H_IN
@@ -163,18 +188,22 @@ class LabelTemplate:
                 "base_font_family": self.base_font_family,
                 "valign": self.valign, "margin_in": self.margin_in}
 
-    def render_paragraphs(self, values: Dict[str, str]):
+    def render_paragraphs(self, values: Dict[str, str], variant: Optional[str] = None):
         """Render the label as paragraphs of styled runs from a {var: value} map.
 
-        Returns a list of paragraphs; each paragraph is a list of
-        (text, LabelField|None) runs -- the field carries the per-field font, and
-        None marks a plain (base-font) separator space between same-line fields.
-        Fields with an empty value are skipped (no blank lines). same_line fields
-        continue the previous paragraph.
+        `variant` ("customer"/"internal"/None) selects the printed version: a
+        field is skipped unless its audience includes the variant (None shows
+        every enabled field). Returns a list of paragraphs; each paragraph is a
+        list of (text, LabelField|None) runs -- the field carries the per-field
+        font, and None marks a plain (base-font) separator space between
+        same-line fields. Fields with an empty value are skipped (no blank
+        lines). same_line fields continue the previous paragraph.
         """
         paras: List[List[Tuple[str, Optional["LabelField"]]]] = []
         for f in self.fields:
             if not f.enabled:
+                continue
+            if not f.shown_for(variant):
                 continue
             val = values.get(f.var, "")
             val = "" if val is None else str(val).strip()
@@ -189,10 +218,21 @@ class LabelTemplate:
                 paras.append([(piece, f)])
         return paras
 
-    def render(self, values: Dict[str, str]) -> List[str]:
+    def render(self, values: Dict[str, str], variant: Optional[str] = None) -> List[str]:
         """Plain-text lines (per paragraph), for callers that don't need fonts."""
         return ["".join(text for text, _ in para)
-                for para in self.render_paragraphs(values)]
+                for para in self.render_paragraphs(values, variant)]
+
+
+# --- Label versions (one profile, two printed copies) -----------------------
+# A single label profile drives both copies the crop-labels .docx prints per
+# bill: the buyer-facing CUSTOMER copy and the seller's INTERNAL copy (which
+# adds the fields tagged audience="internal", e.g. catalog + position). The
+# preview tool toggles between these two variants of the same profile.
+VARIANT_CUSTOMER = "customer"
+VARIANT_INTERNAL = "internal"
+VARIANTS = (VARIANT_CUSTOMER, VARIANT_INTERNAL)
+VARIANT_LABELS = {VARIANT_CUSTOMER: "Customer", VARIANT_INTERNAL: "Internal"}
 
 
 @dataclass
@@ -212,6 +252,8 @@ class LabelData:
     denomination: str = ""
     front_plate: str = ""
     back_plate: str = ""
+    odds: str = ""
+    price: str = ""
     front_file: str = ""
     suggested_note: str = ""   # auto-derived line-3 suggestion (not rendered directly)
     lines: Optional[List[str]] = None
@@ -227,11 +269,15 @@ class LabelData:
             "denomination": self.denomination,
             "front_plate": self.front_plate,
             "back_plate": self.back_plate,
+            "odds": self.odds,
+            "price": self.price,
         }
 
-    def template_lines(self, template: LabelTemplate) -> List[str]:
-        """The lines this bill produces from a template (ignores any override)."""
-        return template.render(self.values())
+    def template_lines(self, template: LabelTemplate,
+                       variant: Optional[str] = None) -> List[str]:
+        """The lines this bill produces from a template (ignores any override).
+        `variant` picks the Customer/Internal version (None = all enabled)."""
+        return template.render(self.values(), variant)
 
 
 def label_lines(data: LabelData, template: LabelTemplate,
@@ -244,12 +290,17 @@ def label_lines(data: LabelData, template: LabelTemplate,
     return lines
 
 
-def label_paragraphs(data: LabelData, template: LabelTemplate, uppercase: bool = False):
-    """Paragraphs of styled runs for a label (override -> plain base-font runs)."""
+def label_paragraphs(data: LabelData, template: LabelTemplate,
+                     uppercase: bool = False, variant: Optional[str] = None):
+    """Paragraphs of styled runs for a label (override -> plain base-font runs).
+
+    `variant` selects the Customer/Internal version (None = all enabled fields).
+    A per-bill freeform override (`data.lines`) prints verbatim on both versions.
+    """
     if data.lines is not None:
         src = [ln.upper() for ln in data.lines] if uppercase else list(data.lines)
         return [[(ln, None)] for ln in src]
-    paras = template.render_paragraphs(data.values())
+    paras = template.render_paragraphs(data.values(), variant)
     if uppercase:
         paras = [[(text.upper(), fld) for text, fld in para] for para in paras]
     return paras
@@ -331,7 +382,8 @@ def _wrap_tokens(toks: List[_Tok], avail_w: float) -> List[List[_Tok]]:
 
 
 def _layout(dpi: float, data: LabelData, template: LabelTemplate,
-            uppercase: bool, avail_w: float, margin: float):
+            uppercase: bool, avail_w: float, margin: float,
+            variant: Optional[str] = None):
     """Lay the label out into fully-positioned visual lines.
 
     Own the layout (rather than QTextDocument) so mixed font sizes on one line get
@@ -377,7 +429,7 @@ def _layout(dpi: float, data: LabelData, template: LabelTemplate,
         lines.append((placed, asc, lh))
         total_h += lh
 
-    for para in label_paragraphs(data, template, uppercase):
+    for para in label_paragraphs(data, template, uppercase, variant):
         starter = _line_starter(para)
         if starter and starter.space_before:
             emit([], base_asc, base_lh)  # blank spacer line
@@ -418,9 +470,10 @@ def _layout(dpi: float, data: LabelData, template: LabelTemplate,
 
 def draw_label(painter: QPainter, dpi: float, data: LabelData,
                template: LabelTemplate, uppercase: bool = False,
-               draw_background: bool = True) -> bool:
+               draw_background: bool = True, variant: Optional[str] = None) -> bool:
     """Draw one label into `painter` (device pixels at `dpi`), top-left at (0,0).
 
+    `variant` picks the Customer/Internal version (None = all enabled fields).
     Returns True if the text overflows the label height. Overflowing content is
     clipped, matching what the physical label would show.
     """
@@ -432,7 +485,7 @@ def draw_label(painter: QPainter, dpi: float, data: LabelData,
         painter.fillRect(0, 0, int(round(w)), int(round(h)), QColor("white"))
 
     avail_w = max(1.0, w - 2 * margin)
-    lines, total_h = _layout(dpi, data, template, uppercase, avail_w, margin)
+    lines, total_h = _layout(dpi, data, template, uppercase, avail_w, margin, variant)
 
     usable_h = h - margin
     # Vertical placement of the whole text block within the label.
@@ -460,9 +513,11 @@ def draw_label(painter: QPainter, dpi: float, data: LabelData,
 
 
 def render_image(data: LabelData, template: LabelTemplate,
-                 uppercase: bool = False, dpi: float = 200.0):
+                 uppercase: bool = False, dpi: float = 200.0,
+                 variant: Optional[str] = None):
     """Render one label to a QImage for on-screen preview.
 
+    `variant` picks the Customer/Internal version (None = all enabled fields).
     Returns (image, overflow_bool) using the same `draw_label` path as exports.
     """
     img = QImage(round(template.width_in * dpi), round(template.height_in * dpi),
@@ -470,15 +525,18 @@ def render_image(data: LabelData, template: LabelTemplate,
     img.fill(Qt.white)
     painter = QPainter(img)
     try:
-        overflow = draw_label(painter, dpi, data, template, uppercase)
+        overflow = draw_label(painter, dpi, data, template, uppercase, variant=variant)
     finally:
         painter.end()
     return img, overflow
 
 
 def export_pdf(path: str, items: List[LabelData], template: LabelTemplate,
-               uppercase: bool = False, dpi: int = 300) -> int:
-    """Write one label per item (at the template's size) to a multi-page PDF."""
+               uppercase: bool = False, dpi: int = 300,
+               variant: Optional[str] = None) -> int:
+    """Write one label per item (at the template's size) to a multi-page PDF.
+
+    `variant` picks the Customer/Internal version (None = all enabled fields)."""
     writer = QPdfWriter(path)
     writer.setResolution(dpi)
     writer.setPageSize(QPageSize(QSizeF(template.width_in, template.height_in), QPageSize.Inch))
@@ -489,110 +547,126 @@ def export_pdf(path: str, items: List[LabelData], template: LabelTemplate,
         for i, item in enumerate(items):
             if i > 0:
                 writer.newPage()
-            draw_label(painter, dpi, item, template, uppercase, draw_background=False)
+            draw_label(painter, dpi, item, template, uppercase,
+                       draw_background=False, variant=variant)
     finally:
         painter.end()
     return len(items)
 
 
-def export_docx(path: str, items: List[LabelData], template: LabelTemplate,
-                uppercase: bool = False) -> int:
-    """Write the labels to an editable .docx (2x1 inch labels, one per section).
-
-    Word wraps long lines within the cell on its own, so we emit one paragraph
-    per logical line. Raises ImportError if python-docx isn't installed.
-    """
-    from docx import Document
+def _append_label_section(doc, item: LabelData, template: LabelTemplate,
+                           uppercase: bool, first: bool,
+                           variant: Optional[str] = None):
+    """Append one label (its own 2x1-style .docx section + borderless cell) to an
+    open Document. `variant` picks the Customer/Internal version. Shared by every
+    .docx exporter so both copies render through one code path."""
     from docx.shared import Inches, Pt
     from docx.oxml.ns import qn
 
-    doc = Document()
-    first = True
-    for item in items:
-        if first:
-            section = doc.sections[0]
-            first = False
+    if first:
+        section = doc.sections[0]
+    else:
+        section = doc.add_section()
+    section.page_width = Inches(template.width_in)
+    section.page_height = Inches(template.height_in)
+    section.left_margin = Inches(0)
+    section.right_margin = Inches(0)
+    section.top_margin = Inches(0)
+    section.bottom_margin = Inches(0)
+
+    table = doc.add_table(rows=1, cols=1)
+    table.autofit = False
+    tbl_pr = table._element.find(qn('w:tblPr'))
+    borders = tbl_pr.makeelement(qn('w:tblBorders'), {})
+    for bn in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+        borders.append(borders.makeelement(qn(f'w:{bn}'), {
+            qn('w:val'): 'none', qn('w:sz'): '0',
+            qn('w:space'): '0', qn('w:color'): 'auto'}))
+    tbl_pr.append(borders)
+    grid = table._element.find(qn('w:tblGrid'))
+    if grid is not None:
+        for col in grid.findall(qn('w:gridCol')):
+            col.set(qn('w:w'), str(int(template.width_in * 1440)))
+
+    # Fixed layout, minimal cell margins, and an exact row height at the label
+    # size -- ported from the original hard-coded crop-label generator so the
+    # label prints at its true 2x1 (etc.) size rather than auto-sizing.
+    tbl_pr.append(tbl_pr.makeelement(qn('w:tblLayout'), {qn('w:type'): 'fixed'}))
+    cell_mar = tbl_pr.makeelement(qn('w:tblCellMar'), {})
+    for _side in ('left', 'right'):
+        cell_mar.append(cell_mar.makeelement(
+            qn(f'w:{_side}'), {qn('w:w'): '15', qn('w:type'): 'dxa'}))
+    tbl_pr.append(cell_mar)
+    _row = table.rows[0]
+    _tr_pr = _row._element.find(qn('w:trPr'))
+    if _tr_pr is None:
+        _tr_pr = _row._element.makeelement(qn('w:trPr'), {})
+        _row._element.insert(0, _tr_pr)
+    _tr_pr.append(_tr_pr.makeelement(qn('w:trHeight'), {
+        qn('w:val'): str(int(template.height_in * 1440)), qn('w:hRule'): 'exact'}))
+
+    # Vertical alignment of the cell contents (top/middle/bottom).
+    cell = table.cell(0, 0)
+    tc_pr = cell._element.find(qn('w:tcPr'))
+    if tc_pr is None:
+        tc_pr = cell._element.makeelement(qn('w:tcPr'), {})
+        cell._element.insert(0, tc_pr)
+    v = {"middle": "center", "bottom": "bottom"}.get(template.valign or "top", "top")
+    tc_pr.append(tc_pr.makeelement(qn('w:vAlign'), {qn('w:val'): v}))
+
+    base_pt = template.base_font_size or FONT_PT
+    base_family = template.base_font_family or ""
+    _JC = {"center": "center", "right": "right"}
+    # Word can't cleanly indent past the cell edge, so clamp its margin to >=0
+    # (the PDF/preview honor negative margins; Word is the editable fallback).
+    margin_tw = str(int(max(0.0, template.margin_in) * 1440))  # inches -> twips
+    paras = label_paragraphs(item, template, uppercase, variant) or [[("", None)]]
+
+    # Reuse the cell's initial empty paragraph first, then add more.
+    _state = {"used_first": False, "top_pad": False}
+
+    def next_para():
+        if not _state["used_first"]:
+            _state["used_first"] = True
+            p = cell.paragraphs[0]
         else:
-            section = doc.add_section()
-        section.page_width = Inches(template.width_in)
-        section.page_height = Inches(template.height_in)
-        section.left_margin = Inches(0)
-        section.right_margin = Inches(0)
-        section.top_margin = Inches(0)
-        section.bottom_margin = Inches(0)
+            p = cell.add_paragraph()
+        ppr = p._element.find(qn('w:pPr'))
+        if ppr is None:
+            ppr = p._element.makeelement(qn('w:pPr'), {})
+            p._element.insert(0, ppr)
+        # Single line spacing (line=240 auto) + no space-after so lines sit
+        # tight rather than double-spaced; only the first para gets the top pad.
+        before_tw = margin_tw if not _state["top_pad"] else '0'
+        _state["top_pad"] = True
+        ppr.append(ppr.makeelement(qn('w:spacing'), {
+            qn('w:before'): before_tw, qn('w:after'): '0',
+            qn('w:line'): '240', qn('w:lineRule'): 'auto'}))
+        ppr.append(ppr.makeelement(qn('w:ind'), {qn('w:left'): margin_tw, qn('w:right'): margin_tw}))
+        return p, ppr
 
-        table = doc.add_table(rows=1, cols=1)
-        table.autofit = False
-        tbl_pr = table._element.find(qn('w:tblPr'))
-        borders = tbl_pr.makeelement(qn('w:tblBorders'), {})
-        for bn in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
-            borders.append(borders.makeelement(qn(f'w:{bn}'), {
-                qn('w:val'): 'none', qn('w:sz'): '0',
-                qn('w:space'): '0', qn('w:color'): 'auto'}))
-        tbl_pr.append(borders)
-        grid = table._element.find(qn('w:tblGrid'))
-        if grid is not None:
-            for col in grid.findall(qn('w:gridCol')):
-                col.set(qn('w:w'), str(int(template.width_in * 1440)))
+    for para in paras:
+        starter = _line_starter(para)
+        if starter and starter.space_before:
+            next_para()  # blank spacer line
+        p, ppr = next_para()
+        jc = _JC.get(starter.align if starter else "left")
+        if jc:
+            ppr.append(ppr.makeelement(qn('w:jc'), {qn('w:val'): jc}))
+        for text, fld in para:
+            run = p.add_run(text)
+            run.font.size = Pt(fld.font_size if (fld and fld.font_size) else base_pt)
+            family = (fld.font_family if (fld and fld.font_family) else base_family)
+            if family:
+                run.font.name = family
+            if fld is not None:
+                run.font.bold = bool(fld.bold)
+                run.font.italic = bool(fld.italic)
 
-        # Vertical alignment of the cell contents (top/middle/bottom).
-        cell = table.cell(0, 0)
-        tc_pr = cell._element.find(qn('w:tcPr'))
-        if tc_pr is None:
-            tc_pr = cell._element.makeelement(qn('w:tcPr'), {})
-            cell._element.insert(0, tc_pr)
-        v = {"middle": "center", "bottom": "bottom"}.get(template.valign or "top", "top")
-        tc_pr.append(tc_pr.makeelement(qn('w:vAlign'), {qn('w:val'): v}))
 
-        base_pt = template.base_font_size or FONT_PT
-        base_family = template.base_font_family or ""
-        _JC = {"center": "center", "right": "right"}
-        # Word can't cleanly indent past the cell edge, so clamp its margin to >=0
-        # (the PDF/preview honor negative margins; Word is the editable fallback).
-        margin_tw = str(int(max(0.0, template.margin_in) * 1440))  # inches -> twips
-        paras = label_paragraphs(item, template, uppercase) or [[("", None)]]
-
-        # Reuse the cell's initial empty paragraph first, then add more.
-        _state = {"used_first": False, "top_pad": False}
-
-        def next_para():
-            if not _state["used_first"]:
-                _state["used_first"] = True
-                p = cell.paragraphs[0]
-            else:
-                p = cell.add_paragraph()
-            ppr = p._element.find(qn('w:pPr'))
-            if ppr is None:
-                ppr = p._element.makeelement(qn('w:pPr'), {})
-                p._element.insert(0, ppr)
-            # Single line spacing (line=240 auto) + no space-after so lines sit
-            # tight rather than double-spaced; only the first para gets the top pad.
-            before_tw = margin_tw if not _state["top_pad"] else '0'
-            _state["top_pad"] = True
-            ppr.append(ppr.makeelement(qn('w:spacing'), {
-                qn('w:before'): before_tw, qn('w:after'): '0',
-                qn('w:line'): '240', qn('w:lineRule'): 'auto'}))
-            ppr.append(ppr.makeelement(qn('w:ind'), {qn('w:left'): margin_tw, qn('w:right'): margin_tw}))
-            return p, ppr
-
-        for para in paras:
-            starter = _line_starter(para)
-            if starter and starter.space_before:
-                next_para()  # blank spacer line
-            p, ppr = next_para()
-            jc = _JC.get(starter.align if starter else "left")
-            if jc:
-                ppr.append(ppr.makeelement(qn('w:jc'), {qn('w:val'): jc}))
-            for text, fld in para:
-                run = p.add_run(text)
-                run.font.size = Pt(fld.font_size if (fld and fld.font_size) else base_pt)
-                family = (fld.font_family if (fld and fld.font_family) else base_family)
-                if family:
-                    run.font.name = family
-                if fld is not None:
-                    run.font.bold = bool(fld.bold)
-                    run.font.italic = bool(fld.italic)
-
+def _strip_leading_empty(doc):
+    """Remove the empty paragraph python-docx inserts before the first table."""
+    from docx.oxml.ns import qn
     body = doc.element.body
     first_p = body.find(qn('w:p'))
     first_tbl = body.find(qn('w:tbl'))
@@ -600,5 +674,34 @@ def export_docx(path: str, items: List[LabelData], template: LabelTemplate,
         if list(body).index(first_p) < list(body).index(first_tbl):
             body.remove(first_p)
 
+
+def export_docx(path: str, items: List[LabelData], template: LabelTemplate,
+                uppercase: bool = False, variant: Optional[str] = None) -> int:
+    """Write the labels to an editable .docx (one label per section, all using
+    the same template and `variant`). Raises ImportError if python-docx is
+    missing."""
+    from docx import Document
+    doc = Document()
+    for i, item in enumerate(items):
+        _append_label_section(doc, item, template, uppercase, i == 0, variant)
+    _strip_leading_empty(doc)
     doc.save(path)
     return len(items)
+
+
+def export_docx_variants(path: str, items: List[LabelData], template: LabelTemplate,
+                         uppercase: bool = False) -> int:
+    """Write the crop-labels .docx from one profile: for each bill, a Customer
+    section then an Internal section (so the file interleaves odd=Customer /
+    even=Internal, which Word's odd/even page printing then separates). Raises
+    ImportError if python-docx is missing."""
+    from docx import Document
+    doc = Document()
+    first = True
+    for item in items:
+        for variant in VARIANTS:                 # customer, then internal
+            _append_label_section(doc, item, template, uppercase, first, variant)
+            first = False
+    _strip_leading_empty(doc)
+    doc.save(path)
+    return len(items) * len(VARIANTS)

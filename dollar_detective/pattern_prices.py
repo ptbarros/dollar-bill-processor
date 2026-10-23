@@ -8,18 +8,50 @@ header -- so a missing CSV, or a pattern with no row, just shows its shipped
 price. Nothing here is required for the app to run.
 
 File: `<user_data_dir>/pattern_prices.csv`, columns:
-    catalog, pattern, display_name, price
-Only `catalog` (the key) and `price` are read back; the other two are there so
-the file is readable when edited by hand.
+    catalog, pattern, display_name, price, price_circ, price_unc
+`catalog` is the key. `price` is the free-text display label (e.g. "$20-$100").
+`price_circ` / `price_unc` are OPTIONAL numeric columns: `price_circ` is the
+primary number used for the price column and sorting (circulated value), and
+`price_unc` is an optional uncirculated value shown only where present. The
+`pattern` / `display_name` columns are there so the file reads cleanly by hand.
+
+Back-compat: an older 4-column file (catalog, pattern, display_name, price) still
+loads -- the numeric columns are simply absent, and a sort/column number is then
+derived from the low end of the free-text `price` string.
 """
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 from typing import Optional
 
 FILENAME = "pattern_prices.csv"
-HEADER = ["catalog", "pattern", "display_name", "price"]
+HEADER = ["catalog", "pattern", "display_name", "price", "price_circ", "price_unc"]
+
+_PRICE_NUM_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def parse_price_number(s: Optional[str]) -> Optional[float]:
+    """The sort/column number for a price string: the FIRST (low-end) dollar
+    amount found, so a range like "$20-$100" -> 20.0 and "$50" -> 50.0. Returns
+    None when the string holds no number (e.g. "", "N/A", "Ask")."""
+    if s is None:
+        return None
+    m = _PRICE_NUM_RE.search(str(s))
+    if not m:
+        return None
+    try:
+        return float(m.group(0).replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _fmt_num(x: Optional[float]) -> str:
+    """Format a numeric price for the CSV: "" for None, no trailing ".0"."""
+    if x is None:
+        return ""
+    return str(int(x)) if float(x).is_integer() else str(x)
 
 
 def prices_path() -> Path:
@@ -29,10 +61,14 @@ def prices_path() -> Path:
 
 
 def load_overrides(path: Optional[Path] = None) -> dict:
-    """Return {catalog_sku: price} from the prices CSV, or {} if absent/unreadable.
+    """Return {catalog_sku: {"display": str, "circ": float|None, "unc": float|None}}
+    from the prices CSV, or {} if absent/unreadable.
 
-    Only rows with a non-empty catalog key AND a non-empty price are kept, so a
-    blank price row falls through to the shipped header price."""
+    `display` is the free-text `price` column (the human label); `circ`/`unc` are
+    the optional numeric columns. A row is kept when it has a catalog key AND at
+    least one non-empty price field, so a fully blank row falls through to the
+    shipped header price. Older 4-column files load fine (circ/unc come back
+    None)."""
     p = Path(path) if path else prices_path()
     if not p.exists():
         return {}
@@ -44,22 +80,28 @@ def load_overrides(path: Optional[Path] = None) -> dict:
             fields = {(k or "").strip().lower(): k for k in (reader.fieldnames or [])}
             ckey = fields.get("catalog")
             pkey = fields.get("price")
-            if not ckey or not pkey:
+            circ_key = fields.get("price_circ")
+            unc_key = fields.get("price_unc")
+            if not ckey or not (pkey or circ_key or unc_key):
                 return {}
             for row in reader:
                 sku = (row.get(ckey) or "").strip()
-                price = (row.get(pkey) or "").strip()
-                if sku and price:
-                    out[sku] = price
+                display = (row.get(pkey) or "").strip() if pkey else ""
+                circ = parse_price_number(row.get(circ_key)) if circ_key else None
+                unc = parse_price_number(row.get(unc_key)) if unc_key else None
+                if sku and (display or circ is not None or unc is not None):
+                    out[sku] = {"display": display, "circ": circ, "unc": unc}
     except Exception:
         return {}
     return out
 
 
 def _rows_from_engine(engine) -> list:
-    """One (catalog, pattern, display_name, price) row per pattern that has a
-    catalog SKU, using each pattern's current shipped/header price. Sorted by
-    SKU so the file reads in catalog order."""
+    """One (catalog, pattern, display_name, price, price_circ, price_unc) row per
+    pattern that has a catalog SKU, using each pattern's current shipped/header
+    price. `price_circ` is seeded from the low end of the header price so the
+    numeric column starts populated; `price_unc` is left blank for the group to
+    fill. Sorted by SKU so the file reads in catalog order."""
     rows = []
     for name, info in engine.lua_patterns.items():
         sku = (getattr(info, "catalog", "") or "").strip()
@@ -70,7 +112,9 @@ def _rows_from_engine(engine) -> list:
             display = engine.get_pattern_info(name).get("display_name", name)
         except Exception:
             display = getattr(info, "display_name", "") or name
-        rows.append([sku, name, display, getattr(info, "price", "") or ""])
+        header_price = getattr(info, "price", "") or ""
+        circ = _fmt_num(parse_price_number(header_price))
+        rows.append([sku, name, display, header_price, circ, ""])
 
     def _key(r):
         # Sort C-### / U-### numerically within a prefix, unknown formats last.
@@ -107,14 +151,20 @@ def export_to(engine, dest: Path, use_current: bool = True):
     shipped header prices."""
     rows = []
     for r in _rows_from_engine(engine):
-        sku, name, display, header_price = r
+        sku, name, display, header_price, circ, unc = r
         price = header_price
         if use_current:
             try:
                 price = engine.resolve_price(name)
             except Exception:
                 price = header_price
-        rows.append([sku, name, display, price])
+            try:
+                c, u = engine.resolve_price_number(name)
+                circ = _fmt_num(c)
+                unc = _fmt_num(u)
+            except Exception:
+                pass
+        rows.append([sku, name, display, price, circ, unc])
     write_csv(rows, Path(dest))
 
 

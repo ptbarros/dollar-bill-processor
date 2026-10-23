@@ -27,7 +27,9 @@ from PySide6.QtWidgets import (
     QComboBox, QInputDialog,
 )
 
-from .label_render import LabelData, LabelTemplate, render_image
+from . import label_render
+from .label_render import (LabelData, LabelTemplate, render_image,
+                           VARIANTS, VARIANT_LABELS, VARIANT_INTERNAL)
 
 _THUMB_W = 280
 _THUMB_H = 140
@@ -41,11 +43,12 @@ class _LabelRow(QFrame):
                  on_lines_changed: Callable[[LabelData, Optional[List[str]]], None],
                  on_overflow_changed: Callable[[], None],
                  on_note_changed: Optional[Callable[[LabelData, str], None]] = None,
-                 parent=None):
+                 parent=None, variant: Optional[str] = None):
         super().__init__(parent)
         self.data = data
         self._template = template
         self._uppercase = uppercase
+        self._variant = variant
         self._on_lines_changed = on_lines_changed
         self._on_overflow_changed = on_overflow_changed
         self._on_note_changed = on_note_changed
@@ -111,7 +114,7 @@ class _LabelRow(QFrame):
     def _current_lines(self) -> List[str]:
         if self.data.lines is not None:
             return list(self.data.lines)
-        return self.data.template_lines(self._template)
+        return self.data.template_lines(self._template, self._variant)
 
     def set_uppercase(self, uppercase: bool):
         self._uppercase = uppercase
@@ -122,17 +125,26 @@ class _LabelRow(QFrame):
         self._template = template
         if self.data.lines is None:
             self.editor.blockSignals(True)
-            self.editor.setPlainText("\n".join(self.data.template_lines(template)))
+            self.editor.setPlainText("\n".join(self.data.template_lines(template, self._variant)))
             self.editor.blockSignals(False)
         self._refresh_thumb()
         self._update_suggestion_hint()
+
+    def set_variant(self, variant: Optional[str]):
+        """Switch the Customer/Internal version shown (thumbnail + editor seed)."""
+        self._variant = variant
+        if self.data.lines is None:
+            self.editor.blockSignals(True)
+            self.editor.setPlainText("\n".join(self.data.template_lines(self._template, variant)))
+            self.editor.blockSignals(False)
+        self._refresh_thumb()
 
     def apply_note_value(self, note: str):
         """Set the bill's Note value (a field value, not a freeform override)."""
         self.data.note = note
         if self.data.lines is None:
             self.editor.blockSignals(True)
-            self.editor.setPlainText("\n".join(self.data.template_lines(self._template)))
+            self.editor.setPlainText("\n".join(self.data.template_lines(self._template, self._variant)))
             self.editor.blockSignals(False)
         self._refresh_thumb()
         self._update_suggestion_hint()
@@ -157,7 +169,7 @@ class _LabelRow(QFrame):
     def _reset(self):
         self.data.lines = None
         self.editor.blockSignals(True)
-        self.editor.setPlainText("\n".join(self.data.template_lines(self._template)))
+        self.editor.setPlainText("\n".join(self.data.template_lines(self._template, self._variant)))
         self.editor.blockSignals(False)
         self.reset_btn.setEnabled(False)
         self._on_lines_changed(self.data, None)
@@ -170,7 +182,7 @@ class _LabelRow(QFrame):
         lines = raw.split("\n")
         if len(lines) > 1 and lines[-1] == "":
             lines = lines[:-1]
-        if lines == self.data.template_lines(self._template):
+        if lines == self.data.template_lines(self._template, self._variant):
             self.data.lines = None
             self.reset_btn.setEnabled(False)
             self._on_lines_changed(self.data, None)
@@ -183,7 +195,8 @@ class _LabelRow(QFrame):
         self._on_overflow_changed()
 
     def _refresh_thumb(self):
-        img, overflow = render_image(self.data, self._template, self._uppercase, dpi=_PREVIEW_DPI)
+        img, overflow = render_image(self.data, self._template, self._uppercase,
+                                     dpi=_PREVIEW_DPI, variant=self._variant)
         pix = QPixmap.fromImage(img).scaled(
             _THUMB_W, _THUMB_H, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.thumb.setPixmap(pix)
@@ -204,6 +217,9 @@ class LabelPreviewDialog(QDialog):
         self._items = items
         self._persist = on_lines_changed
         self._persist_note = on_note_changed
+        # Which printed version the preview is currently showing (Customer vs
+        # Internal copy of the one profile).
+        self._variant = label_render.VARIANT_INTERNAL
         self.profile_name = settings.get_active_label_profile()
         self.template = LabelTemplate.from_dict(settings.get_label_template(self.profile_name))
         self.setWindowTitle("Label Preview & Print")
@@ -242,6 +258,19 @@ class LabelPreviewDialog(QDialog):
             b.setToolTip(tip)
             b.clicked.connect(slot)
             prof_row.addWidget(b)
+        prof_row.addSpacing(16)
+        prof_row.addWidget(QLabel("Version:"))
+        self.variant_combo = QComboBox()
+        self.variant_combo.setToolTip(
+            "Which printed copy to preview: the Customer copy (sent to the buyer) "
+            "or the Internal copy (adds catalog + position). The crop file prints "
+            "both — odd pages Customer, even pages Internal.")
+        for v in VARIANTS:
+            self.variant_combo.addItem(VARIANT_LABELS[v], v)
+        self.variant_combo.setCurrentIndex(VARIANTS.index(self._variant)
+                                           if self._variant in VARIANTS else 0)
+        self.variant_combo.currentIndexChanged.connect(self._on_variant_changed)
+        prof_row.addWidget(self.variant_combo)
         prof_row.addStretch(1)
         layout.addLayout(prof_row)
         self._reload_profile_combo()
@@ -265,7 +294,8 @@ class LabelPreviewDialog(QDialog):
             vbox.addWidget(QLabel("No bills to label."))
         for data in self._items:
             row = _LabelRow(data, self.template, uppercase, self._on_row_lines_changed,
-                            self._update_summary, self._on_row_note_changed, container)
+                            self._update_summary, self._on_row_note_changed, container,
+                            variant=self._variant)
             self._rows.append(row)
             vbox.addWidget(row)
         vbox.addStretch(1)
@@ -345,6 +375,14 @@ class LabelPreviewDialog(QDialog):
         self._save_settings()
         self.template = LabelTemplate.from_dict(self.settings.get_label_template(name))
         self._apply_template()
+
+    def _on_variant_changed(self, idx: int):
+        """Switch every row between the Customer and Internal copy of the profile."""
+        variant = self.variant_combo.itemData(idx) or VARIANT_INTERNAL
+        self._variant = variant
+        for row in self._rows:
+            row.set_variant(variant)
+        self._update_summary()
 
     def _edit_profile(self):
         from .label_fields_dialog import LabelFieldsDialog
@@ -467,7 +505,8 @@ class LabelPreviewDialog(QDialog):
         if not path.lower().endswith(".pdf"):
             path += ".pdf"
         try:
-            n = export_pdf(path, self._items, self.template, self.upper_chk.isChecked())
+            n = export_pdf(path, self._items, self.template,
+                           self.upper_chk.isChecked(), variant=self._variant)
         except Exception as e:
             QMessageBox.critical(self, "Save PDF", f"Could not save PDF:\n{e}")
             return
@@ -482,7 +521,8 @@ class LabelPreviewDialog(QDialog):
         if not path.lower().endswith(".docx"):
             path += ".docx"
         try:
-            n = export_docx(path, self._items, self.template, self.upper_chk.isChecked())
+            n = export_docx(path, self._items, self.template,
+                            self.upper_chk.isChecked(), variant=self._variant)
         except ImportError:
             QMessageBox.warning(
                 self, "Save Word",

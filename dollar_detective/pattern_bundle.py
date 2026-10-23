@@ -193,6 +193,17 @@ def import_bundle(engine, bundle_path, overwrite=False, library_name=None) -> di
 
     imported, skipped, errors = [], [], []
     data_written: set[str] = set()
+    # Catalog collision handling: this library's recipient-local prefix, plus the
+    # SKUs already in use here so a sender's SKU is kept when free and re-stamped
+    # only on a real clash.
+    try:
+        lib_prefix = engine._library_prefix(lib)
+    except Exception:
+        lib_prefix = "U"
+    try:
+        used = engine._existing_catalog_skus()
+    except Exception:
+        used = set()
 
     with zipfile.ZipFile(bundle_path, "r") as z:
         names_in_zip = set(z.namelist())
@@ -221,6 +232,28 @@ def import_bundle(engine, bundle_path, overwrite=False, library_name=None) -> di
             if exists and not overwrite:
                 skipped.append(name)
                 continue
+
+            # Catalog SKU: keep the sender's when it's free on this machine; on a
+            # clash (or none) re-stamp under this library's prefix. Overwriting an
+            # existing pattern keeps that pattern's current recipient SKU (stable).
+            try:
+                existing_info = engine.lua_patterns.get(name)
+                cur_sku = (getattr(existing_info, "catalog", "") or "").strip() \
+                    if existing_info else ""
+                m_sku = re.search(r"(?im)^\s*Catalog:\s*(\S+)\s*$", script)
+                incoming = m_sku.group(1).strip() if m_sku else ""
+                if cur_sku:
+                    sku = cur_sku
+                elif incoming and incoming not in used:
+                    sku = incoming
+                else:
+                    sku = engine._next_sku(lib_prefix, used)
+                if sku and sku != incoming:
+                    script = engine.restamp_catalog_text(script, sku)
+                if sku:
+                    used.add(sku)
+            except Exception:
+                pass
 
             try:
                 if data_basename is not None:
