@@ -95,6 +95,8 @@ class LuaPatternInfo:
     data_file: str = ""           # Relative path to external data file (CSV/JSON)
     data: Any = None              # Loaded data (list of dicts for CSV, any for JSON)
     data_by_key: dict = None      # Dict keyed by first column (CSV only)
+    list_mode: str = ""           # "exact"/"contains" if created by save_list_pattern
+                                  # (header "ListMode:"); lets Edit reopen the list editor
     catalog: str = ""             # Shipped catalog SKU (e.g. "C-004"), set from the
                                   # header "Catalog:" line. Stable identifier; the
                                   # rarity RANK is derived separately, not this.
@@ -435,6 +437,7 @@ class PatternEngineV3:
                 per_96m=parse_per_96m(metadata.get('odds', '')),
                 price=metadata.get('price', ''),
                 catalog=metadata.get('catalog', ''),
+                list_mode=str(metadata.get('listmode', '')).strip().lower(),
                 book_ref=metadata.get('bookref', ''),
                 flippable=bool(metadata.get('flippable', False)),
                 # "Overlay: none/off/false/no" hides the pattern from the serial
@@ -1067,6 +1070,9 @@ class PatternEngineV3:
         if price:
             header_lines.append(f'Price: {price}')
         header_lines.append(f'DataFile: {base}.csv')
+        # Marker so the editor can route Edit back to the list editor and reload
+        # the numbers from the CSV (rather than dropping into raw Lua).
+        header_lines.append(f'ListMode: {mode}')
         header_lines.append('--]]')
         header = '\n'.join(header_lines)
 
