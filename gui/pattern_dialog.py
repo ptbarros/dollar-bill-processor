@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QSplitter, QHeaderView, QCheckBox, QListWidget,
     QListWidgetItem, QFormLayout, QComboBox, QMessageBox, QColorDialog,
     QTabWidget, QWidget, QSpinBox, QFrame, QApplication, QPlainTextEdit,
-    QInputDialog, QMenu, QSizePolicy, QScrollArea, QFileDialog
+    QInputDialog, QMenu, QSizePolicy, QScrollArea, QFileDialog, QStackedWidget
 )
 from PySide6.QtCore import Qt, QTimer, Signal, QThread
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QFontMetrics
@@ -597,16 +597,10 @@ class PatternDialog(QDialog):
         row1.addWidget(new_library_btn)
 
         new_pattern_btn = QPushButton("New Pattern...")
-        new_pattern_btn.setToolTip("Create a new Lua pattern script")
+        new_pattern_btn.setToolTip(
+            "Create a pattern — recipe, list of numbers, copy, AI, or Lua")
         new_pattern_btn.clicked.connect(self._add_custom_pattern)
         row1.addWidget(new_pattern_btn)
-
-        new_list_btn = QPushButton("New from List...")
-        new_list_btn.setToolTip(
-            "Create a pattern from a list of serial numbers "
-            "(matches when a serial is on your list)")
-        new_list_btn.clicked.connect(self._import_list_pattern)
-        row1.addWidget(new_list_btn)
 
         actions_layout.addLayout(row1)
 
@@ -2109,8 +2103,11 @@ class PatternDialog(QDialog):
                 'description': lua_info.description,
                 'display_name': lua_info.display_name or '',
                 'tier': lua_info.tier,
+                'price': getattr(lua_info, 'price', ''),
             },
-            script=lua_info.script
+            script=lua_info.script,
+            libraries=self._discover_libraries(),
+            library=lua_info.library,
         )
 
         # Store file path for saving
@@ -2118,6 +2115,10 @@ class PatternDialog(QDialog):
 
         if dialog.exec() == QDialog.Accepted:
             name, defn = dialog.get_pattern()
+            if name and defn.get('source') == 'list':
+                # List pattern re-saved from the list editor (same library/SKU).
+                self._save_list_pattern(name, defn, lua_info.library)
+                return
             if name and defn.get('source') == 'lua':
                 script = defn.get('script', '')
 
@@ -2226,60 +2227,33 @@ class PatternDialog(QDialog):
         QMessageBox.information(self, "Copied", "Script copied to clipboard!")
 
     def _create_pattern_copy(self, lua_info, parent_dialog=None):
-        """Create a new pattern based on an existing Lua script."""
+        """Create a new pattern based on an existing one.
+
+        Same experience as the chooser's "Start from an existing pattern" card,
+        but it skips the picker (the pattern is already selected) and jumps
+        straight to the "Modify with AI / Edit the Lua" choice — restoring the
+        old right-click/Duplicate route's access to AI-described changes.
+        """
         # Close the view dialog if we were launched from one.
         if parent_dialog is not None:
             parent_dialog.accept()
 
-        # Generate display name from original or create new one
-        original_display = lua_info.display_name if lua_info.display_name else lua_info.name.replace('_', ' ').title()
-
-        # Open CustomPatternDialog pre-filled with the script
         dialog = CustomPatternDialog(
             self,
-            name=f"{lua_info.name}_CUSTOM",
-            defn={
-                'description': f"Modified version of {lua_info.name}",
-                'display_name': f"{original_display} (Custom)",
-                'tier': lua_info.tier,
-            },
-            script=lua_info.script
+            libraries=self._discover_libraries(),
+            library='user',
         )
+        # Skip the chooser's dropdown; go straight into the modify choice.
+        if not dialog.apply_existing_pattern(lua_info):
+            return  # user cancelled the modify choice
 
-        if dialog.exec() == QDialog.Accepted:
-            name, defn = dialog.get_pattern()
-            if name:
-                if defn.get('source') == 'lua' and HAS_V3_ENGINE:
-                    self.engine.save_user_pattern(
-                        name,
-                        defn.get('script', ''),
-                        defn.get('description', ''),
-                        defn.get('tier', 5),
-                        examples=defn.get('examples'),
-                        display_name=defn.get('display_name', '')
-                    )
-                else:
-                    self.engine.add_custom_pattern(name, defn)
-
-                # Mark that patterns were modified
-                self._patterns_modified = True
-
-                # Reload patterns
-                self._reload_engine()
-                self._load_patterns()
-
-                # Recompute exact odds in the background (the rule may have
-                # changed) for digit-based patterns.
-                if defn.get('source') == 'lua' and HAS_V3_ENGINE:
-                    self._maybe_bake_exact_odds(name)
-
-                QMessageBox.information(
-                    self, "Pattern Created",
-                    f"Created new pattern '{name}'.\n\n"
-                    "You may want to disable the original pattern if you want "
-                    "only your modified version to be used."
-                )
-        self.engine.save_config()
+        if dialog.exec() == QDialog.Accepted and self._save_from_dialog(dialog):
+            QMessageBox.information(
+                self, "Pattern Created",
+                "Created a new pattern based on the original.\n\n"
+                "You may want to disable the original pattern if you want "
+                "only your modified version to be used."
+            )
 
     def _enable_all(self):
         """Enable all patterns and libraries (guarded)."""
@@ -2962,106 +2936,84 @@ Logs appear in batch test results and "Copy for AI Debug" output.
 '''
 
     def _add_custom_pattern(self):
-        """Add a new custom pattern to a library."""
-        # Get available libraries for the dropdown
+        """Add a new pattern via the guided creation dialog (chooser -> editor)."""
         libraries = self._discover_libraries()
         if 'user' not in libraries:
             libraries.append('user')
 
-        # Ask which library to add to
-        default_idx = libraries.index('user') if 'user' in libraries else 0
-        library, ok = QInputDialog.getItem(
-            self, "Select Library",
-            "Add pattern to library:",
-            libraries,
-            default_idx,
-            False  # Not editable
-        )
-
-        if not ok:
-            return
-
-        dialog = CustomPatternDialog(self)
+        dialog = CustomPatternDialog(self, libraries=libraries, library='user')
         if dialog.exec() == QDialog.Accepted:
-            name, defn = dialog.get_pattern()
-            if name:
-                if defn.get('source') == 'lua' and HAS_V3_ENGINE:
-                    # Save as Lua script pattern to specified library
-                    self.engine.save_user_pattern(
-                        name,
-                        defn.get('script', ''),
-                        defn.get('description', ''),
-                        defn.get('tier', 5),
-                        examples=defn.get('examples'),
-                        library=library,
-                        display_name=defn.get('display_name', '')
-                    )
-                else:
-                    # Save as YAML rule pattern (legacy)
-                    self.engine.add_custom_pattern(name, defn)
+            self._save_from_dialog(dialog)
 
-                # Mark that patterns were modified
-                self._patterns_modified = True
+    def _save_from_dialog(self, dialog) -> bool:
+        """Persist whatever a CustomPatternDialog produced (list / lua / legacy).
+        Shared by New Pattern and the Duplicate paths."""
+        name, defn = dialog.get_pattern()
+        if not name:
+            return False
+        library = dialog.get_library()
+        source = defn.get('source')
 
-                # Reload patterns to show the new one
-                self._reload_engine()
-                self._load_patterns()
+        if source == 'list' and HAS_V3_ENGINE:
+            self._save_list_pattern(name, defn, library)
+            return True
 
-                # Compute exact odds in the background for digit-based patterns.
-                if defn.get('source') == 'lua' and HAS_V3_ENGINE:
-                    self._maybe_bake_exact_odds(name)
+        if source == 'lua' and HAS_V3_ENGINE:
+            self.engine.save_user_pattern(
+                name,
+                defn.get('script', ''),
+                defn.get('description', ''),
+                defn.get('tier', 5),
+                examples=defn.get('examples'),
+                library=library,
+                display_name=defn.get('display_name', ''),
+            )
+        else:
+            # Legacy YAML rule pattern.
+            self.engine.add_custom_pattern(name, defn)
 
-    def _import_list_pattern(self):
-        """Create a membership pattern from a pasted/imported list of serials."""
-        if not HAS_V3_ENGINE:
-            QMessageBox.warning(self, "Not Available",
-                                "List patterns require the Lua pattern engine.")
-            return
-
-        # Pick the destination library (mirror _add_custom_pattern).
-        libraries = self._discover_libraries()
-        if 'user' not in libraries:
-            libraries.append('user')
-
-        dialog = ImportListPatternDialog(libraries, self)
-        if dialog.exec() != QDialog.Accepted:
-            return
-
-        vals = dialog.get_values()
-        internal = re.sub(r'[^0-9a-zA-Z]+', '_', vals['name']).strip('_').upper()
-        if not internal:
-            QMessageBox.warning(self, "Invalid Name",
-                                "Please enter a valid pattern name.")
-            return
-
-        res = self.engine.save_list_pattern(
-            internal,
-            vals['numbers'],
-            mode=vals['mode'],
-            display_name=vals['name'],
-            description=vals['description'],
-            tier=vals['tier'],
-            price=vals['price'],
-            library=vals['library'],
-        )
-
-        if not res.get('ok'):
-            QMessageBox.warning(self, "Could Not Create Pattern",
-                                res.get('error') or "No valid numbers found.")
-            return
-
-        # A deliberately-imported list pattern should be ON immediately (new
-        # patterns otherwise ship disabled under the curated whitelist). Persist
-        # the choice so it survives the reload below.
-        self.engine.set_pattern_enabled(internal, True)
+        # A pattern the user just authored should be ON. New patterns otherwise
+        # ship DISABLED under the curated whitelist (`_shipped_enabled`), which is
+        # meant for shipped patterns -- a freshly-made one looked like it "never
+        # saved" because it was created unchecked and never matched (Jon's bug).
+        if HAS_V3_ENGINE:
+            self.engine.set_pattern_enabled(name, True)
 
         self._patterns_modified = True
         self._reload_engine()
         self._load_patterns()
 
-        # Summarize what was created.
+        if source == 'lua' and HAS_V3_ENGINE:
+            self._maybe_bake_exact_odds(name)
+        return True
+
+    def _save_list_pattern(self, name: str, defn: dict, library: str):
+        """Create a list pattern from a 'list'-source definition and report."""
+        res = self.engine.save_list_pattern(
+            name,
+            defn.get('numbers', ''),
+            mode=defn.get('mode', 'exact'),
+            display_name=defn.get('display_name', ''),
+            description=defn.get('description', ''),
+            tier=defn.get('tier', 5),
+            price=defn.get('price', ''),
+            library=library,
+        )
+        if not res.get('ok'):
+            QMessageBox.warning(self, "Could Not Create Pattern",
+                                res.get('error') or "No valid numbers found.")
+            return
+
+        # A deliberately-created list pattern should be ON immediately (new user
+        # patterns otherwise ship disabled under the curated whitelist).
+        self.engine.set_pattern_enabled(name, True)
+        self._patterns_modified = True
+        self._reload_engine()
+        self._load_patterns()
+
+        label = defn.get('display_name') or name
         noun = "number" if res.get('mode') == "contains" else "serial"
-        lines = [f"Created \"{vals['name']}\" with {res['count']:,} "
+        lines = [f"Created \"{label}\" with {res['count']:,} "
                  f"{noun}{'s' if res['count'] != 1 else ''}."]
         if res.get('mode') == "contains":
             lines.append("Matches when a serial contains any of these numbers.")
@@ -3076,149 +3028,6 @@ Logs appear in batch test results and "Copy for AI Debug" output.
         if res.get('skipped'):
             lines.append(f"Skipped {res['skipped']:,} entr(ies) longer than 8 digits.")
         QMessageBox.information(self, "Pattern Created", "\n".join(lines))
-
-
-class ImportListPatternDialog(QDialog):
-    """Turn a pasted or imported list of serial numbers into a membership pattern.
-
-    No Lua required: the engine writes a sibling CSV as the DataFile and a tiny
-    lookup script. Numbers may be separated by spaces, commas or newlines;
-    entries shorter than 8 digits are zero-padded.
-    """
-
-    def __init__(self, libraries, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("New Pattern from List")
-        self.setMinimumWidth(460)
-
-        layout = QVBoxLayout(self)
-
-        form = QFormLayout()
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("e.g. Vampire Numbers")
-        form.addRow("Name:", self.name_edit)
-
-        self.library_combo = QComboBox()
-        self.library_combo.addItems(libraries)
-        idx = self.library_combo.findText('user')
-        if idx >= 0:
-            self.library_combo.setCurrentIndex(idx)
-        form.addRow("Library:", self.library_combo)
-
-        self.mode_combo = QComboBox()
-        # userData carries the engine mode string.
-        self.mode_combo.addItem("Whole serial is on the list", "exact")
-        self.mode_combo.addItem("Serial contains a number from the list", "contains")
-        self.mode_combo.currentIndexChanged.connect(self._mode_changed)
-        form.addRow("Match type:", self.mode_combo)
-
-        self.tier_spin = QSpinBox()
-        self.tier_spin.setRange(1, 10)
-        self.tier_spin.setValue(5)
-        form.addRow("Tier:", self.tier_spin)
-
-        self.price_edit = QLineEdit()
-        self.price_edit.setPlaceholderText("optional, e.g. $20-$60")
-        form.addRow("Price:", self.price_edit)
-
-        self.desc_edit = QLineEdit()
-        self.desc_edit.setPlaceholderText("optional")
-        form.addRow("Description:", self.desc_edit)
-        layout.addLayout(form)
-
-        self.hint_label = QLabel()
-        self.hint_label.setWordWrap(True)
-        layout.addWidget(self.hint_label)
-
-        self.numbers_edit = QPlainTextEdit()
-        self.numbers_edit.textChanged.connect(self._update_count)
-        layout.addWidget(self.numbers_edit)
-
-        load_row = QHBoxLayout()
-        load_btn = QPushButton("Load from File...")
-        load_btn.setToolTip("Append numbers from a .txt or .csv file")
-        load_btn.clicked.connect(self._load_file)
-        load_row.addWidget(load_btn)
-        load_row.addStretch()
-        self.count_label = QLabel("0 valid numbers")
-        self.count_label.setStyleSheet("color: #666;")
-        load_row.addWidget(self.count_label)
-        layout.addLayout(load_row)
-
-        button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        button_box.accepted.connect(self._on_accept)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
-
-        self._mode_changed()  # set initial hint / placeholder / count
-
-    def _current_mode(self) -> str:
-        return self.mode_combo.currentData() or "exact"
-
-    def _mode_changed(self, *args):
-        if self._current_mode() == "contains":
-            self.hint_label.setText(
-                "Paste numbers that can appear <b>anywhere</b> in the serial "
-                "(e.g. years). Separate by new lines, spaces or commas:")
-            self.numbers_edit.setPlaceholderText("1776\n1974\n2002\n...")
-        else:
-            self.hint_label.setText(
-                "Paste <b>whole 8-digit serials</b> (shorter numbers are "
-                "zero-padded). Separate by new lines, spaces or commas:")
-            self.numbers_edit.setPlaceholderText("12345678\n87654321\n...")
-        self._update_count()
-
-    def _load_file(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Load Numbers", "",
-            "Text/CSV (*.txt *.csv);;All Files (*)")
-        if not path:
-            return
-        try:
-            text = Path(path).read_text(encoding='utf-8', errors='replace')
-        except Exception as e:
-            QMessageBox.warning(self, "Could Not Read File", str(e))
-            return
-        existing = self.numbers_edit.toPlainText()
-        if existing and not existing.endswith('\n'):
-            existing += '\n'
-        self.numbers_edit.setPlainText(existing + text)
-
-    def _update_count(self):
-        try:
-            vals, _, _ = PatternEngine.normalize_serial_list(
-                self.numbers_edit.toPlainText(),
-                pad=(self._current_mode() == "exact"))
-            n = len(vals)
-        except Exception:
-            n = 0
-        self.count_label.setText(f"{n:,} valid number{'s' if n != 1 else ''}")
-
-    def _on_accept(self):
-        if not self.name_edit.text().strip():
-            QMessageBox.warning(self, "Name Required",
-                                "Please enter a name for the pattern.")
-            return
-        vals, _, _ = PatternEngine.normalize_serial_list(
-            self.numbers_edit.toPlainText(),
-            pad=(self._current_mode() == "exact"))
-        if not vals:
-            QMessageBox.warning(self, "No Numbers",
-                                "Please paste or load at least one number (1-8 digits).")
-            return
-        self.accept()
-
-    def get_values(self) -> dict:
-        return {
-            'name': self.name_edit.text().strip(),
-            'library': self.library_combo.currentText(),
-            'mode': self._current_mode(),
-            'tier': self.tier_spin.value(),
-            'price': self.price_edit.text().strip(),
-            'description': self.desc_edit.text().strip(),
-            'numbers': self.numbers_edit.toPlainText(),
-        }
 
 
 class LuaSyntaxHighlighter(QSyntaxHighlighter):
@@ -3553,10 +3362,53 @@ class DigitPreviewWidget(QWidget):
         painter.end()
 
 
+class _ChooserCard(QFrame):
+    """A clickable card for the pattern-creation chooser: a bold title with a
+    muted one-line description. Sized to its contents (unlike a QPushButton with
+    a nested layout, which clips), with a hover highlight."""
+
+    clicked = Signal(str)
+
+    def __init__(self, key, title, subtitle, enabled=True, parent=None):
+        super().__init__(parent)
+        self._key = key
+        self._card_enabled = enabled
+        self.setObjectName("chooserCard")
+        self.setCursor(Qt.PointingHandCursor if enabled else Qt.ArrowCursor)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 9, 12, 9)
+        lay.setSpacing(2)
+        t = QLabel(title)
+        tf = t.font()
+        tf.setBold(True)
+        t.setFont(tf)
+        if not enabled:
+            t.setStyleSheet("color: gray;")
+        s = QLabel(subtitle)
+        s.setWordWrap(True)
+        s.setStyleSheet("color: gray;")
+        lay.addWidget(t)
+        lay.addWidget(s)
+
+        base = ("QFrame#chooserCard { border: 1px solid palette(mid); "
+                "border-radius: 6px; }")
+        if enabled:
+            base += ("QFrame#chooserCard:hover { background: palette(midlight); }")
+        self.setStyleSheet(base)
+
+    def mouseReleaseEvent(self, event):
+        if (self._card_enabled and event.button() == Qt.LeftButton
+                and self.rect().contains(event.position().toPoint())):
+            self.clicked.emit(self._key)
+        super().mouseReleaseEvent(event)
+
+
 class CustomPatternDialog(QDialog):
     """Dialog for adding/editing a custom pattern (simple rule or Lua script)."""
 
-    def __init__(self, parent=None, name: str = "", defn: dict = None, script: str = None):
+    def __init__(self, parent=None, name: str = "", defn: dict = None, script: str = None,
+                 libraries=None, library: str = "user"):
         super().__init__(parent)
         self.setWindowTitle("Add Custom Pattern" if not name else "Edit Custom Pattern")
         # Low minimum so the dialog can shrink to fit short / scaled screens
@@ -3567,6 +3419,16 @@ class CustomPatternDialog(QDialog):
         self.defn = defn or {}
         self.original_script = script
         self.is_lua_pattern = script is not None
+        self._editing = bool(name)
+        # Library choices now live in the dialog header (no upfront modal prompt).
+        self._libraries = list(libraries) if libraries else ["user"]
+        if "user" not in self._libraries:
+            self._libraries.append("user")
+        self._initial_library = library or "user"
+        # Source selected via the creation chooser: 'simple'|'wizard'|'ai'|'lua'|'list'.
+        # None until a card is picked (or set directly in edit mode).
+        self._list_mode = ""  # 'exact'|'contains' when the list editor is active
+        self._list_file_buffer = None  # raw text from a large loaded file (not shown)
 
         # Try to get the v3 engine for Lua support
         self.engine = None
@@ -3604,14 +3466,21 @@ class CustomPatternDialog(QDialog):
         self._setup_ui()
         if name:
             self._load_existing()
-        # Delay sizing until the dialog is constructed and has a screen, then fit
-        # it within the work area so the bottom buttons (Validate / OK / Cancel)
-        # never land under the taskbar on smaller or display-scaled screens.
-        QTimer.singleShot(0, self._fit_to_screen)
+
+    def showEvent(self, event):
+        # Size and center on the first real show. Doing it here (not via a timer
+        # in __init__) keeps the window centered even when a modal runs before
+        # exec() -- e.g. the Duplicate path pops the "Modify with AI" choice
+        # first, which otherwise fired the old timer at (0,0) = upper-left.
+        super().showEvent(event)
+        if not getattr(self, '_fitted', False):
+            self._fitted = True
+            self._fit_to_screen()
 
     def _fit_to_screen(self):
-        """Size the dialog to a comfortable default but never larger than the
-        screen work area, and nudge it fully on-screen."""
+        """Size the dialog to a comfortable default (never larger than the work
+        area) and center it over the parent window, nudged fully on-screen so the
+        bottom buttons never land under the taskbar on scaled/short screens."""
         try:
             from PySide6.QtWidgets import QApplication
             scr = self.screen() or QApplication.primaryScreen()
@@ -3619,9 +3488,16 @@ class CustomPatternDialog(QDialog):
             w = max(500, min(700, ag.width() - 40))
             h = max(440, min(800, ag.height() - 40))
             self.resize(w, h)
-            g = self.frameGeometry()
-            x = min(max(g.x(), ag.x()), ag.x() + ag.width() - self.width())
-            y = min(max(g.y(), ag.y()), ag.y() + ag.height() - self.height())
+            # Center over the parent window if it's visible, else on the screen.
+            par = self.parentWidget()
+            if par is not None and par.isVisible():
+                center = par.frameGeometry().center()
+            else:
+                center = ag.center()
+            x = min(max(center.x() - self.width() // 2, ag.x()),
+                    ag.x() + ag.width() - self.width())
+            y = min(max(center.y() - self.height() // 2, ag.y()),
+                    ag.y() + ag.height() - self.height())
             self.move(x, y)
         except Exception:
             self.resize(700, 800)
@@ -3647,6 +3523,14 @@ class CustomPatternDialog(QDialog):
         self.desc_edit.setPlaceholderText("Brief description of what this pattern matches")
         header_layout.addRow("Description:", self.desc_edit)
 
+        # Optional example serials. These feed the preview's "Generate Random"
+        # and are written into the Lua header as Examples: [...]. Having the field
+        # here (not only in the AI tab) is what Jon was hunting for.
+        self.examples_edit = QLineEdit()
+        self.examples_edit.setPlaceholderText(
+            "optional — matching serials, e.g. 12345678, 87654321 (helps the preview)")
+        header_layout.addRow("Examples:", self.examples_edit)
+
         tier_layout = QHBoxLayout()
         self.tier_spin = QSpinBox()
         self.tier_spin.setRange(1, 10)
@@ -3656,39 +3540,37 @@ class CustomPatternDialog(QDialog):
         tier_layout.addStretch()
         header_layout.addRow("Tier:", tier_layout)
 
-        layout.addWidget(header_group)
+        self.library_combo = QComboBox()
+        self.library_combo.addItems(self._libraries)
+        _li = self.library_combo.findText(self._initial_library)
+        if _li >= 0:
+            self.library_combo.setCurrentIndex(_li)
+        header_layout.addRow("Library:", self.library_combo)
 
-        # Tab widget for Simple vs Script modes
+        # Tab widget holds every editor. We keep its original tab indices
+        # (0=Simple, 1=Wizard, 2=AI, 3=Lua, 4=Test, 5=API Docs, 6=List) because
+        # the save/test logic keys off them -- but we HIDE the tab bar and drive
+        # it from a creation chooser, so the user only ever sees one editor.
         self.tab_widget = QTabWidget()
 
-        # Tab 1: Simple Rules (YAML-based)
-        self.simple_tab = self._create_simple_tab()
+        self.simple_tab = self._create_simple_tab()               # 0
         self.tab_widget.addTab(self.simple_tab, "Simple Rule")
-
-        # Tab 2: Pattern Wizard
         if HAS_V3_ENGINE:
-            self.wizard_tab = self._create_wizard_tab()
+            self.wizard_tab = self._create_wizard_tab()           # 1
             self.tab_widget.addTab(self.wizard_tab, "Pattern Wizard")
-
-        # Tab 3: AI Generate
-        if HAS_V3_ENGINE:
-            self.ai_tab = self._create_ai_tab()
+            self.ai_tab = self._create_ai_tab()                   # 2
             self.tab_widget.addTab(self.ai_tab, "AI Generate")
-
-        # Tab 4: Lua Script (if v3 engine available)
-        if HAS_V3_ENGINE:
-            self.script_tab = self._create_script_tab()
+            self.script_tab = self._create_script_tab()           # 3
             self.tab_widget.addTab(self.script_tab, "Lua Script")
-
-            # Tab 5: Test/Preview
-            self.test_tab = self._create_test_tab()
+            self.test_tab = self._create_test_tab()               # 4
             self.tab_widget.addTab(self.test_tab, "Test")
-
-            # Tab 6: Documentation
-            self.docs_tab = self._create_docs_tab()
+            self.docs_tab = self._create_docs_tab()               # 5
             self.tab_widget.addTab(self.docs_tab, "API Docs")
-
-        layout.addWidget(self.tab_widget)
+            self.list_tab = self._create_list_tab()               # 6
+            self.tab_widget.addTab(self.list_tab, "From a List")
+            self.dates_tab = self._create_dates_tab()             # 7
+            self.tab_widget.addTab(self.dates_tab, "From Dates")
+        self.tab_widget.tabBar().hide()
 
         # Re-check the AI tab's key state whenever it's shown, so a key added in
         # Settings (via the tab's own button) takes effect on return.
@@ -3696,22 +3578,461 @@ class CustomPatternDialog(QDialog):
             self.tab_widget.currentChanged.connect(
                 lambda _i: self._update_ai_tab_state())
 
-        # Buttons
-        button_layout = QHBoxLayout()
+        # ---- Editor page: back bar + header + the (single visible) editor + footer.
+        editor_page = QWidget()
+        editor_layout = QVBoxLayout(editor_page)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
 
+        back_bar = QHBoxLayout()
+        self.back_btn = QPushButton("‹ Back")
+        self.back_btn.setToolTip("Choose a different way to create this pattern")
+        self.back_btn.clicked.connect(self._back_to_chooser)
+        back_bar.addWidget(self.back_btn)
+        self.method_title = QLabel("")
+        self.method_title.setStyleSheet("font-weight: bold;")
+        back_bar.addWidget(self.method_title)
+        back_bar.addStretch()
+        editor_layout.addLayout(back_bar)
+
+        editor_layout.addWidget(header_group)
+        editor_layout.addWidget(self.tab_widget)
+
+        button_layout = QHBoxLayout()
+        self.test_toggle_btn = QPushButton("Test / Preview")
+        self.test_toggle_btn.setCheckable(True)
+        self.test_toggle_btn.setToolTip("Try the pattern against a serial")
+        self.test_toggle_btn.toggled.connect(self._toggle_test)
+        button_layout.addWidget(self.test_toggle_btn)
         if HAS_V3_ENGINE:
             validate_btn = QPushButton("Validate Script")
             validate_btn.clicked.connect(self._validate_script)
             button_layout.addWidget(validate_btn)
-
+            self._validate_btn = validate_btn
         button_layout.addStretch()
-
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         button_box.accepted.connect(self._validate_and_accept)
         button_box.rejected.connect(self.reject)
         button_layout.addWidget(button_box)
+        editor_layout.addLayout(button_layout)
 
-        layout.addLayout(button_layout)
+        # ---- Chooser page (step 1): "how do you want to create this?"
+        chooser_page = self._create_chooser_page()
+
+        # ---- Outer stack: 0 = chooser, 1 = editor.
+        self.outer_stack = QStackedWidget()
+        self.outer_stack.addWidget(chooser_page)   # index 0
+        self.outer_stack.addWidget(editor_page)     # index 1
+        layout.addWidget(self.outer_stack)
+
+        self._method = None            # current editor method key
+        self._test_return_index = 3    # tab to return to when leaving Test
+        self.outer_stack.setCurrentIndex(0)
+
+    # ---- Creation chooser (step 1) ------------------------------------------
+
+    # method key -> (tab index, title shown in the editor, whether Test applies)
+    _METHOD_TABS = {
+        'simple': (0, "Simple Rule", False),
+        'wizard': (1, "From a Recipe", False),
+        'ai':     (2, "Describe It (AI)", True),
+        'lua':    (3, "Write Lua", True),
+        'list':   (6, "From a List of Numbers", True),
+        'dates':  (7, "From Dates", False),
+    }
+
+    def _create_chooser_page(self) -> QWidget:
+        page = QWidget()
+        v = QVBoxLayout(page)
+        title = QLabel("How do you want to create this pattern?")
+        title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        v.addWidget(title)
+        v.addSpacing(2)
+
+        # Flat list, simplest first. (method, title, description)
+        cards = [
+            ('simple', "Simple rule",
+             "A basic rule: starts with, contains, or ends with a value."),
+            ('wizard', "From a recipe",
+             "Pick a shape (ladder, repeater, radar…) and tweak it. No coding."),
+            ('list', "From a list of numbers",
+             "Paste serials; match the whole serial, or 'contains'."),
+            ('dates', "From a list of dates",
+             "Paste dates (birthdays, etc.); match the serials that spell them."),
+            ('copy', "Start from an existing pattern",
+             "Duplicate one you already have and change it."),
+            ('ai', "Describe it in plain English",
+             "Tell the AI what to match and it writes the pattern."),
+            ('lua', "Write it myself (Lua)",
+             "Advanced: write the Lua script directly."),
+        ]
+        for key, caption, subtitle in cards:
+            enabled = True
+            if key == 'ai':
+                try:
+                    s = get_settings()
+                    enabled = bool(s.ai.anthropic_api_key) or bool(s.ai.openai_api_key)
+                except Exception:
+                    enabled = False
+                if not enabled:
+                    subtitle = "Add an AI key in Settings to enable."
+            card = _ChooserCard(key, caption, subtitle, enabled)
+            card.clicked.connect(self._on_chooser_card)
+            v.addWidget(card)
+
+        v.addStretch()
+        foot = QHBoxLayout()
+        foot.addStretch()
+        cancel = QPushButton("Cancel")
+        cancel.clicked.connect(self.reject)
+        foot.addWidget(cancel)
+        v.addLayout(foot)
+        return page
+
+    def _on_chooser_card(self, key: str):
+        if key == 'copy':
+            self._pick_existing_pattern()
+            return
+        self._goto_method(key)
+
+    def _goto_method(self, key: str):
+        """Switch to a single editor (hides the chooser)."""
+        idx, title, can_test = self._METHOD_TABS[key]
+        self._method = key
+        if key == 'lua':
+            self.is_lua_pattern = True
+        self.tab_widget.setCurrentIndex(idx)
+        self.method_title.setText(title)
+        self.test_toggle_btn.setVisible(can_test)
+        self.test_toggle_btn.setChecked(False)
+        if hasattr(self, '_validate_btn'):
+            self._validate_btn.setVisible(key in ('lua', 'ai', 'list'))
+        self._test_return_index = idx
+        self.outer_stack.setCurrentIndex(1)
+
+    def _back_to_chooser(self):
+        self.test_toggle_btn.setChecked(False)
+        self._method = None
+        self.outer_stack.setCurrentIndex(0)
+
+    def _toggle_test(self, on: bool):
+        """Flip the hidden tab widget between the current editor and the Test page."""
+        if on:
+            # Push the current script into the Test tab's context (Lua test reads
+            # self.script_edit); for AI/list the generated script is produced on
+            # accept, so Test is most useful for Lua. Just show the Test page.
+            self.tab_widget.setCurrentIndex(4)
+            self.test_toggle_btn.setText("‹ Back to editor")
+        else:
+            self.tab_widget.setCurrentIndex(self._test_return_index)
+            self.test_toggle_btn.setText("Test / Preview")
+
+    def _pick_existing_pattern(self):
+        """'Start from an existing pattern' -> pick one, clone into the Lua editor."""
+        if not (HAS_V3_ENGINE and self.engine):
+            QMessageBox.information(self, "Not Available",
+                                    "Duplicating requires the Lua engine.")
+            return
+        infos = [i for i in self.engine.lua_patterns.values() if i.script]
+        if not infos:
+            QMessageBox.information(self, "No Patterns", "There are no patterns to copy.")
+            return
+        labels = sorted(
+            (f"{(i.display_name or i.name)}  [{i.name}]", i.name) for i in infos)
+        choice, ok = QInputDialog.getItem(
+            self, "Start From an Existing Pattern",
+            "Copy and modify which pattern?",
+            [lbl for lbl, _ in labels], 0, False)
+        if not ok or not choice:
+            return
+        src_name = dict(labels)[choice]
+        self.apply_existing_pattern(self.engine.lua_patterns.get(src_name))
+
+    def apply_existing_pattern(self, info) -> bool:
+        """Load an existing pattern into the editor as the basis for a new one,
+        then (if an AI key is set) offer "Modify with AI" vs "Edit the Lua".
+
+        Shared by the chooser's "Start from an existing pattern" card and the
+        external Duplicate button / right-click (which skip the picker and pass
+        the already-selected pattern). Returns True if an editor was opened.
+        """
+        if not info:
+            return False
+        disp = info.display_name or info.name.replace('_', ' ').title()
+        self.name_edit.setText(f"{info.name}_CUSTOM")
+        self.display_name_edit.setText(f"{disp} (Custom)")
+        self.desc_edit.setText(f"Modified version of {info.name}")
+        self.tier_spin.setValue(info.tier)
+        self.script_edit.setPlainText(info.script)
+        self.is_lua_pattern = True
+
+        # If an AI key is set, let the user modify it with AI (the AI generator
+        # picks up the loaded script as context) instead of editing Lua by hand.
+        ai_available = False
+        try:
+            s = get_settings()
+            ai_available = bool(s.ai.anthropic_api_key) or bool(s.ai.openai_api_key)
+        except Exception:
+            ai_available = False
+
+        if ai_available:
+            # Parent to the visible window: in the Duplicate path this dialog
+            # isn't shown yet, so parenting the box to it would pop it top-left.
+            box = QMessageBox(self.parentWidget() or self)
+            box.setWindowTitle("Modify Existing Pattern")
+            box.setText(f"Starting from \"{disp}\".\n\nHow do you want to change it?")
+            ai_btn = box.addButton("Modify with AI", QMessageBox.AcceptRole)
+            lua_btn = box.addButton("Edit the Lua", QMessageBox.ActionRole)
+            box.addButton(QMessageBox.Cancel)
+            box.exec()
+            clicked = box.clickedButton()
+            if clicked is ai_btn:
+                self.ai_description_edit.setPlaceholderText(
+                    "Describe what to change about this pattern "
+                    "(e.g. 'also allow the run to start at position 2').")
+                self.ai_status_label.setText(
+                    f"Modifying \"{info.name}\" — describe your changes, then Generate.")
+                self._goto_method('ai')
+                return True
+            if clicked is lua_btn:
+                self._goto_method('lua')
+                return True
+            return False  # cancelled
+
+        self._goto_method('lua')
+        return True
+
+    # ---- List editor (step 2 for the "From a list" card) --------------------
+
+    def _create_list_tab(self) -> QWidget:
+        widget = QWidget()
+        v = QVBoxLayout(widget)
+
+        form = QFormLayout()
+        self.list_mode_combo = QComboBox()
+        self.list_mode_combo.addItem("Whole serial is on the list", "exact")
+        self.list_mode_combo.addItem("Serial contains a number from the list", "contains")
+        self.list_mode_combo.currentIndexChanged.connect(self._list_mode_changed)
+        form.addRow("Match type:", self.list_mode_combo)
+        self.list_price_edit = QLineEdit()
+        self.list_price_edit.setPlaceholderText("optional, e.g. $20-$60")
+        form.addRow("Price:", self.list_price_edit)
+        v.addLayout(form)
+
+        self.list_hint = QLabel()
+        self.list_hint.setWordWrap(True)
+        v.addWidget(self.list_hint)
+
+        self.list_numbers_edit = QPlainTextEdit()
+        self.list_numbers_edit.textChanged.connect(self._list_text_changed)
+        v.addWidget(self.list_numbers_edit)
+
+        # Debounce the live count so a big paste doesn't re-parse on every
+        # keystroke (that would freeze the dialog for a large list).
+        self._list_count_timer = QTimer(self)
+        self._list_count_timer.setSingleShot(True)
+        self._list_count_timer.setInterval(350)
+        self._list_count_timer.timeout.connect(self._do_list_count)
+
+        row = QHBoxLayout()
+        load_btn = QPushButton("Load from File...")
+        load_btn.clicked.connect(self._list_load_file)
+        row.addWidget(load_btn)
+        clear_btn = QPushButton("Clear")
+        clear_btn.setToolTip("Clear the numbers (and any loaded file)")
+        clear_btn.clicked.connect(self._list_clear)
+        row.addWidget(clear_btn)
+        row.addStretch()
+        self.list_count_label = QLabel("0 valid numbers")
+        self.list_count_label.setStyleSheet("color: #666;")
+        row.addWidget(self.list_count_label)
+        v.addLayout(row)
+
+        self._list_mode_changed()
+        return widget
+
+    # Above this many parsed entries we don't dump the text into the editor
+    # widget (Qt chokes on millions of lines); we keep it in a buffer instead.
+    _LIST_SHOW_LIMIT = 20_000
+    # At/above this many entries, warn before saving (memory + first-match delay).
+    _LIST_WARN_LIMIT = 100_000
+
+    def _list_current_mode(self) -> str:
+        return self.list_mode_combo.currentData() or "exact"
+
+    def _list_source_text(self) -> str:
+        """The numbers to use: a loaded-file buffer if one is held (too big to
+        show), else whatever is typed in the editor."""
+        buf = getattr(self, '_list_file_buffer', None)
+        return buf if buf is not None else self.list_numbers_edit.toPlainText()
+
+    def _list_mode_changed(self, *args):
+        if self._list_current_mode() == "contains":
+            self.list_hint.setText(
+                "Paste numbers that can appear <b>anywhere</b> in the serial "
+                "(e.g. years). Separate by new lines, spaces or commas:")
+            self.list_numbers_edit.setPlaceholderText("1776\n1974\n2002\n...")
+        else:
+            self.list_hint.setText(
+                "Paste <b>whole 8-digit serials</b> (shorter numbers are "
+                "zero-padded). Separate by new lines, spaces or commas:")
+            self.list_numbers_edit.setPlaceholderText("12345678\n87654321\n...")
+        self._do_list_count()
+
+    def _list_text_changed(self):
+        # The user typed/pasted -> any loaded-file buffer no longer applies.
+        if not self.list_numbers_edit.isReadOnly():
+            self._list_file_buffer = None
+        self._list_count_timer.start()  # debounced
+
+    def _do_list_count(self):
+        try:
+            vals, _, _ = PatternEngine.normalize_serial_list(
+                self._list_source_text(),
+                pad=(self._list_current_mode() == "exact"))
+            n = len(vals)
+        except Exception:
+            n = 0
+        self.list_count_label.setText(f"{n:,} valid number{'s' if n != 1 else ''}")
+
+    def _list_load_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Load Numbers", "", "Text/CSV (*.txt *.csv);;All Files (*)")
+        if not path:
+            return
+        try:
+            text = Path(path).read_text(encoding='utf-8', errors='replace')
+        except Exception as e:
+            QMessageBox.warning(self, "Could Not Read File", str(e))
+            return
+
+        vals, _, _ = PatternEngine.normalize_serial_list(
+            text, pad=(self._list_current_mode() == "exact"))
+        n = len(vals)
+        if n > self._LIST_SHOW_LIMIT:
+            # Too many to render in the widget: hold the text in a buffer and
+            # show a summary instead, so the dialog stays responsive.
+            self._list_file_buffer = text
+            self.list_numbers_edit.blockSignals(True)
+            self.list_numbers_edit.setReadOnly(True)
+            self.list_numbers_edit.setPlainText(
+                f"[Loaded {n:,} numbers from {Path(path).name}]\n"
+                "Too many to display here — they'll be saved with the pattern.\n"
+                "Use Clear to discard and enter numbers manually.")
+            self.list_numbers_edit.blockSignals(False)
+            self.list_count_label.setText(f"{n:,} valid numbers")
+            return
+
+        # Small enough to edit inline.
+        self._list_file_buffer = None
+        self.list_numbers_edit.setReadOnly(False)
+        existing = self.list_numbers_edit.toPlainText()
+        if existing and not existing.endswith('\n'):
+            existing += '\n'
+        self.list_numbers_edit.setPlainText(existing + text)
+
+    def _list_clear(self):
+        """Discard numbers and any loaded-file buffer; re-enable manual entry."""
+        self._list_file_buffer = None
+        self.list_numbers_edit.setReadOnly(False)
+        self.list_numbers_edit.clear()  # fires _list_text_changed -> recount
+        self.list_numbers_edit.setFocus()
+
+    # ---- Dates editor ("From a list of dates" card) -------------------------
+
+    def _create_dates_tab(self) -> QWidget:
+        widget = QWidget()
+        v = QVBoxLayout(widget)
+
+        form = QFormLayout()
+        self.dates_input_combo = QComboBox()
+        self.dates_input_combo.addItem("Month / Day / Year (US)", "MDY")
+        self.dates_input_combo.addItem("Day / Month / Year", "DMY")
+        self.dates_input_combo.addItem("Year / Month / Day", "YMD")
+        self.dates_input_combo.currentIndexChanged.connect(self._dates_changed)
+        form.addRow("I'm typing dates as:", self.dates_input_combo)
+        self.dates_price_edit = QLineEdit()
+        self.dates_price_edit.setPlaceholderText("optional, e.g. $20-$60")
+        form.addRow("Price:", self.dates_price_edit)
+        v.addLayout(form)
+
+        fmt_box = QGroupBox("Match the serials that spell each date, in these formats")
+        fl = QHBoxLayout(fmt_box)
+        self.date_fmt_checks = {}
+        for key, label in (("MDY", "M/D/Y  (MMDDYYYY)"),
+                           ("DMY", "D/M/Y  (DDMMYYYY)"),
+                           ("YMD", "Y/M/D  (YYYYMMDD)")):
+            cb = QCheckBox(label)
+            cb.setChecked(True)
+            cb.stateChanged.connect(self._dates_changed)
+            self.date_fmt_checks[key] = cb
+            fl.addWidget(cb)
+        v.addWidget(fmt_box)
+
+        v.addWidget(QLabel("Paste one date per line (e.g. 11/22/1975):"))
+        self.dates_edit = QPlainTextEdit()
+        self.dates_edit.setPlaceholderText("11/22/1975\n07/04/1976\n12/25/2000")
+        self.dates_edit.textChanged.connect(lambda: self._dates_count_timer.start())
+        v.addWidget(self.dates_edit)
+
+        self._dates_count_timer = QTimer(self)
+        self._dates_count_timer.setSingleShot(True)
+        self._dates_count_timer.setInterval(350)
+        self._dates_count_timer.timeout.connect(self._dates_update_count)
+
+        row = QHBoxLayout()
+        load_btn = QPushButton("Load from File...")
+        load_btn.clicked.connect(self._dates_load_file)
+        row.addWidget(load_btn)
+        row.addStretch()
+        self.dates_count_label = QLabel("0 dates")
+        self.dates_count_label.setStyleSheet("color: #666;")
+        row.addWidget(self.dates_count_label)
+        v.addLayout(row)
+        return widget
+
+    def _dates_input_order(self) -> str:
+        return self.dates_input_combo.currentData() or "MDY"
+
+    def _dates_formats(self) -> list:
+        return [k for k, cb in self.date_fmt_checks.items() if cb.isChecked()]
+
+    def _dates_computed_serials(self):
+        """(serials, valid_dates, skipped) from the dates box + chosen formats."""
+        return PatternEngine.dates_to_serials(
+            self.dates_edit.toPlainText(), self._dates_formats(),
+            self._dates_input_order())
+
+    def _dates_changed(self, *args):
+        self._dates_update_count()
+
+    def _dates_update_count(self):
+        try:
+            serials, valid, skipped = self._dates_computed_serials()
+        except Exception:
+            serials, valid, skipped = [], 0, 0
+        msg = (f"{valid:,} date{'s' if valid != 1 else ''} "
+               f"→ {len(serials):,} serial{'s' if len(serials) != 1 else ''}")
+        if skipped:
+            msg += f"  ({skipped} skipped)"
+        self.dates_count_label.setText(msg)
+
+    def _dates_load_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Load Dates", "", "Text/CSV (*.txt *.csv);;All Files (*)")
+        if not path:
+            return
+        try:
+            text = Path(path).read_text(encoding='utf-8', errors='replace')
+        except Exception as e:
+            QMessageBox.warning(self, "Could Not Read File", str(e))
+            return
+        existing = self.dates_edit.toPlainText()
+        if existing and not existing.endswith('\n'):
+            existing += '\n'
+        self.dates_edit.setPlainText(existing + text)
+
+    def get_library(self) -> str:
+        return self.library_combo.currentText()
 
     def _create_simple_tab(self) -> QWidget:
         """Create the simple rules tab."""
@@ -4618,6 +4939,20 @@ class CustomPatternDialog(QDialog):
 
         toolbar.addStretch()
 
+        # External-AI route: copy a full prompt (API docs + helpers + this script)
+        # into ChatGPT/Claude, get Lua back, paste it below. Also a docs viewer.
+        copy_ai_btn = QPushButton("Copy for AI")
+        copy_ai_btn.setToolTip(
+            "Copy a complete prompt (API docs + this script) to paste into "
+            "ChatGPT/Claude, then paste its Lua back here")
+        copy_ai_btn.clicked.connect(self._copy_for_ai_prompt)
+        toolbar.addWidget(copy_ai_btn)
+
+        api_docs_btn = QPushButton("API Docs")
+        api_docs_btn.setToolTip("View the Lua pattern scripting reference")
+        api_docs_btn.clicked.connect(self._open_api_docs_popup)
+        toolbar.addWidget(api_docs_btn)
+
         layout.addLayout(toolbar)
 
         # Code editor
@@ -5189,6 +5524,22 @@ end
         clipboard.setText(prompt)
         QMessageBox.information(self, "Copied", "AI prompt copied to clipboard!\n\nPaste into ChatGPT/Claude to get help writing your pattern.")
 
+    def _open_api_docs_popup(self):
+        """Show the Lua pattern API reference in a read-only popup."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Lua Pattern API Docs")
+        dlg.resize(640, 640)
+        lay = QVBoxLayout(dlg)
+        view = QTextEdit()
+        view.setReadOnly(True)
+        view.setHtml(self._get_api_docs_html())
+        lay.addWidget(view)
+        bb = QDialogButtonBox(QDialogButtonBox.Close)
+        bb.rejected.connect(dlg.reject)
+        bb.accepted.connect(dlg.accept)
+        lay.addWidget(bb)
+        dlg.exec()
+
     def _load_helpers_reference(self) -> str:
         """Read helpers.lua and extract function signatures with docs."""
         helpers_path = Path(__file__).parent.parent / "patterns" / "lib" / "helpers.lua"
@@ -5234,6 +5585,23 @@ end
         # Get the plain text API docs
         api_docs = self._get_api_docs_plain_text()
 
+        # Pre-fill name/description from the dialog, and -- if the editor already
+        # holds a real script (e.g. after "Start from an existing pattern") --
+        # include it so the external AI can MODIFY it rather than start over.
+        name = (self.name_edit.text().strip().upper().replace(' ', '_')
+                or "[PATTERN_NAME]")
+        description = self.desc_edit.text().strip() or "[DESCRIPTION]"
+        existing = ""
+        try:
+            script = self.script_edit.toPlainText().strip()
+            if script.startswith('--[['):
+                existing = (
+                    "\n## Existing Pattern To Modify\n\n"
+                    "Base your answer on this script and change it as described "
+                    "above:\n\n```lua\n" + script + "\n```\n")
+        except Exception:
+            pass
+
         prompt = f'''You are helping write Lua patterns for dollar bill serial number classification. These patterns analyze 8-digit serial numbers and return match results with optional visual highlighting.
 
 ## API Documentation
@@ -5250,10 +5618,10 @@ The following helper functions are automatically available in all pattern script
 
 Create a Lua pattern script for the following:
 
-**Pattern Name:** [PATTERN_NAME]
+**Pattern Name:** {name}
 
-**Description:** [DESCRIPTION]
-
+**Description:** {description}
+{existing}
 **Should Match (examples):**
 [SHOULD_MATCH_EXAMPLES - one per line]
 
@@ -5912,19 +6280,65 @@ end
         self.tier_spin.setValue(self.defn.get('tier', 5))
 
         if self.original_script:
-            # Lua script pattern
+            # A list pattern (made via "From a list") reopens in the list editor
+            # with its numbers reloaded, rather than dropping into raw Lua.
+            list_mode = self._detect_list_mode(self.original_script)
+            if list_mode and HAS_V3_ENGINE:
+                self.list_mode_combo.setCurrentIndex(0 if list_mode == 'exact' else 1)
+                info = (self.engine.lua_patterns.get(self.original_name)
+                        if self.engine else None)
+                nums = list(info.data_by_key.keys()) if info and info.data_by_key else []
+                if len(nums) > self._LIST_SHOW_LIMIT:
+                    # Too many to render: hold in the buffer, show a summary.
+                    self._list_file_buffer = "\n".join(nums)
+                    self.list_numbers_edit.setReadOnly(True)
+                    self.list_numbers_edit.setPlainText(
+                        f"[{len(nums):,} numbers in this pattern]\n"
+                        "Too many to display here. Use Clear to replace them.")
+                    self.list_count_label.setText(f"{len(nums):,} valid numbers")
+                else:
+                    self.list_numbers_edit.setPlainText("\n".join(nums))
+                self.list_price_edit.setText(
+                    self.defn.get('price', '') or (info.price if info else ''))
+                self._goto_method('list')
+                return
+            # Plain Lua pattern -> the Lua editor (index 3, not the old buggy 1).
             if HAS_V3_ENGINE:
-                self.tab_widget.setCurrentIndex(1)  # Script tab
                 self.script_edit.setPlainText(self.original_script)
-        else:
-            # Simple rule pattern
-            rules = self.defn.get('rules', {})
-            for rule_type in ['contains', 'starts_with', 'ends_with', 'regex',
-                              'baseline_variance_min', 'baseline_variance_max']:
-                if rule_type in rules:
-                    self.rule_type.setCurrentText(rule_type)
-                    self.value_edit.setText(str(rules[rule_type]))
-                    break
+                ex = self.defn.get('examples') or \
+                    self._extract_examples_from_header(self.original_script)
+                if ex:
+                    self.examples_edit.setText(', '.join(ex))
+                self._goto_method('lua')
+                return
+
+        # Simple rule pattern
+        rules = self.defn.get('rules', {})
+        for rule_type in ['contains', 'starts_with', 'ends_with', 'regex',
+                          'baseline_variance_min', 'baseline_variance_max']:
+            if rule_type in rules:
+                self.rule_type.setCurrentText(rule_type)
+                self.value_edit.setText(str(rules[rule_type]))
+                break
+        self._goto_method('simple')
+
+    @staticmethod
+    def _detect_list_mode(script: str) -> str:
+        """Return 'exact'/'contains' if a script is a list pattern, else ''."""
+        m = re.search(r'(?im)^\s*ListMode:\s*(\w+)', script or "")
+        return m.group(1).strip().lower() if m else ""
+
+    def _examples_from_field(self) -> list:
+        """Parse the Examples header field into 8-digit serial strings."""
+        text = self.examples_edit.text().strip()
+        if not text:
+            return []
+        out = []
+        for tok in re.split(r'[\s,;]+', text):
+            digits = re.sub(r'\D', '', tok)
+            if len(digits) == 8:
+                out.append(digits)
+        return out
 
     def _validate_and_accept(self):
         """Validate input and accept."""
@@ -5933,15 +6347,52 @@ end
             QMessageBox.warning(self, "Validation Error", "Please enter a pattern name.")
             return
 
-        # Check which mode we're in based on:
-        # 1. If editing an existing Lua pattern (is_lua_pattern flag) → Lua mode
-        # 2. If user is on Pattern Wizard tab (index 1) → Wizard mode
-        # 3. If user is on AI Generate tab (index 2) → AI mode (use generated code)
-        # 4. If user is on Lua Script tab (index 3) → Lua mode (explicit choice)
-        # 5. If script has header block (--[[) → Lua mode (user customized script)
-        # 6. Otherwise → Simple Rule mode (default for new patterns)
+        # List editor: validate there are numbers, then let get_pattern() hand the
+        # caller a 'list' definition (it saves via engine.save_list_pattern).
+        if self._method == 'list':
+            vals, _, _ = PatternEngine.normalize_serial_list(
+                self._list_source_text(),
+                pad=(self._list_current_mode() == "exact"))
+            if not vals:
+                QMessageBox.warning(self, "No Numbers",
+                                    "Please paste or load at least one number (1-8 digits).")
+                return
+            if len(vals) >= self._LIST_WARN_LIMIT:
+                reply = QMessageBox.warning(
+                    self, "Very Large List",
+                    f"This list has {len(vals):,} entries.\n\n"
+                    "A list this large uses a lot of memory and adds a short "
+                    "pause the first time it matches each session. It will also "
+                    "match very commonly, so it won't behave like a rare/fancy "
+                    "pattern.\n\nCreate it anyway?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                if reply == QMessageBox.No:
+                    return
+            self.accept()
+            return
+
+        # Dates editor: need at least one format and one valid date.
+        if self._method == 'dates':
+            if not self._dates_formats():
+                QMessageBox.warning(self, "No Format Selected",
+                                    "Tick at least one serial format to match.")
+                return
+            serials, valid, _ = self._dates_computed_serials()
+            if not serials:
+                QMessageBox.warning(self, "No Valid Dates",
+                                    "Enter at least one valid date (e.g. 11/22/1975).")
+                return
+            self.accept()
+            return
+
+        # Determine which editor's content to save. Prefer the chosen method (the
+        # Test toggle can leave the hidden tab widget on the Test page), falling
+        # back to the raw tab index for edit paths that set is_lua_pattern.
         script = self.script_edit.toPlainText().strip() if HAS_V3_ENGINE else ""
-        current_tab = self.tab_widget.currentIndex() if HAS_V3_ENGINE else 0
+        if self._method in self._METHOD_TABS:
+            current_tab = self._METHOD_TABS[self._method][0]
+        else:
+            current_tab = self.tab_widget.currentIndex() if HAS_V3_ENGINE else 0
         has_custom_script = script.startswith('--[[')  # Default template doesn't have header
 
         # Check for wizard mode (tab index 1)
@@ -6022,14 +6473,17 @@ end
             self.is_lua_pattern = True
             self._is_wizard_pattern = False
 
-            # Check for missing Examples in header
-            if 'Examples:' not in script and 'Examples :' not in script:
+            # Check for missing Examples (header OR the Examples field above).
+            has_examples = ('Examples:' in script or 'Examples :' in script
+                            or bool(self._examples_from_field()))
+            if not has_examples:
                 reply = QMessageBox.warning(
                     self,
                     "Missing Examples",
-                    "Your pattern is missing the Examples field in the header.\n\n"
-                    "Without examples, the random serial generator won't work in the preview.\n\n"
-                    "Add a line like:\nExamples: [\"12345678\", \"87654321\"]\n\n"
+                    "This pattern has no example serials.\n\n"
+                    "Without them, the random serial generator won't work in the "
+                    "preview. Add a few matching serials in the Examples field "
+                    "above (e.g. 12345678, 87654321).\n\n"
                     "Save anyway?",
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.No
@@ -6155,6 +6609,31 @@ end
         description = self.desc_edit.text().strip() or f"Custom pattern: {name}"
         display_name = self.display_name_edit.text().strip()
 
+        # List editor: caller saves via engine.save_list_pattern.
+        if self._method == 'list':
+            return name, {
+                'source': 'list',
+                'mode': self._list_current_mode(),
+                'numbers': self._list_source_text(),
+                'display_name': display_name,
+                'description': self.desc_edit.text().strip(),
+                'tier': tier,
+                'price': self.list_price_edit.text().strip(),
+            }
+
+        # Dates editor: render dates to serials, then save as an exact list.
+        if self._method == 'dates':
+            serials, _, _ = self._dates_computed_serials()
+            return name, {
+                'source': 'list',
+                'mode': 'exact',
+                'numbers': "\n".join(serials),
+                'display_name': display_name,
+                'description': self.desc_edit.text().strip(),
+                'tier': tier,
+                'price': self.dates_price_edit.text().strip(),
+            }
+
         # Check for wizard-generated pattern
         if getattr(self, '_is_wizard_pattern', False) and hasattr(self, '_wizard_generated_script'):
             script = self._wizard_generated_script
@@ -6168,15 +6647,23 @@ end
                 'source': 'lua'
             }
         elif self.is_lua_pattern and HAS_V3_ENGINE:
-            # Return script from editor
+            # Return script from editor. Preserve examples: prefer the Examples
+            # field, else what's already in the script header -- otherwise
+            # save_user_pattern rebuilds the header and would drop them.
             script = self.script_edit.toPlainText()
-            return name, {
+            examples = self._examples_from_field()
+            if not examples:
+                examples = self._extract_examples_from_header(script)
+            defn = {
                 'description': description,
                 'display_name': display_name,
                 'tier': tier,
                 'script': script,
                 'source': 'lua'
             }
+            if examples:
+                defn['examples'] = examples
+            return name, defn
         else:
             # Convert simple rule to Lua script
             rule_type = self.rule_type.currentText()
