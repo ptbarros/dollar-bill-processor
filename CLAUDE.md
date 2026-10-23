@@ -51,6 +51,7 @@ end
 
 ### Pattern Dialog Features
 - **Pattern Wizard**: GUI-based recipe creation (Ladder, Binary, Pairs, Palindrome, etc.)
+- **New from List**: ("New from List…" button) turns a pasted/imported list of numbers into a **list pattern** with no hand-written Lua, via `engine.save_list_pattern(name, numbers, mode=…)`. Two match modes (chosen in the dialog): **exact** — the whole 8-digit serial must be on the list (Vampire/Exemplifier serials; short entries zero-padded; odds computed exactly from the in-range list size as `N per 96M`); **contains** — the serial contains any listed number anywhere (e.g. a list of years like 1974 — entries kept unpadded, matched as a substring longest-first, odds left blank). Both write a sibling CSV (`DataFile:`) + a small lookup Lua (`ctx.data_by_key`), assign a catalog SKU, and are **enabled on creation** (new user patterns otherwise ship disabled under the whitelist). `normalize_serial_list(numbers, pad=…)` dedupes and skips >8-digit tokens. Same `DataFile` mechanism as the ZIP-code pattern; shares via the .ddpat bundle (the CSV travels with it).
 - **AI Generate**: Natural language to Lua via Anthropic/OpenAI APIs
 - **Test Tab**: Quick test, batch test cases, debug logging with `log()` function
 - **Copy for AI**: Exports API docs + template for external AI tools

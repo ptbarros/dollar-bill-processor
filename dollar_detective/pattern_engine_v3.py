@@ -9,7 +9,7 @@ Script patterns provide rich visualization with custom highlights and connectors
 
 import re
 from pathlib import Path
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
 from dataclasses import dataclass, field
 
 from dollar_detective.pattern_sandbox import PatternSandbox, create_context, LuaExecutionResult
@@ -935,6 +935,205 @@ class PatternEngineV3:
         except Exception as e:
             print(f"Error saving pattern: {e}")
             return False
+
+    @staticmethod
+    def normalize_serial_list(numbers, pad: bool = True) -> Tuple[List[str], int, int]:
+        """Normalize a user-supplied list of numbers for a list pattern.
+
+        Accepts either a list of strings or one blob (any mix of commas, spaces
+        and newlines). Each token is reduced to its digits; tokens with no digits
+        are ignored and tokens longer than 8 digits are skipped as invalid
+        (nothing longer than 8 digits can be a serial or appear inside one).
+        Duplicates are removed, original order preserved.
+
+        pad=True  (whole-serial / exact lists): 1-8 digit tokens are left-padded
+                  to 8 (serials are printed zero-padded), e.g. 902100 -> 00902100.
+        pad=False (contains lists, e.g. years):  tokens are kept as typed, so a
+                  4-digit year stays "1974" and matches anywhere in the serial.
+
+        Returns (values, duplicates_removed, skipped_too_long).
+        """
+        if isinstance(numbers, str):
+            tokens = re.split(r"[\s,;]+", numbers.strip())
+        else:
+            tokens = []
+            for item in numbers:
+                tokens.extend(re.split(r"[\s,;]+", str(item).strip()))
+
+        values: List[str] = []
+        seen = set()
+        duplicates = 0
+        skipped = 0
+        for tok in tokens:
+            digits = re.sub(r"\D", "", tok)
+            if not digits:
+                continue
+            if len(digits) > 8:
+                skipped += 1
+                continue
+            s = digits.zfill(8) if pad else digits
+            if s in seen:
+                duplicates += 1
+                continue
+            seen.add(s)
+            values.append(s)
+        return values, duplicates, skipped
+
+    def save_list_pattern(self, name: str, numbers, *, mode: str = "exact",
+                          display_name: str = "", description: str = "",
+                          tier: int = 5, price: str = "",
+                          library: str = "user") -> dict:
+        """Create a list pattern from a raw list of numbers, with no hand-written
+        Lua. Two match modes:
+
+          mode="exact"    — the WHOLE 8-digit serial must be on the list
+                            (e.g. Vampire / Exemplifier serials). Odds are
+                            computed exactly from the in-range list size.
+          mode="contains" — the serial CONTAINS any number from the list anywhere
+                            (e.g. a list of years 1974, 2002, …). Odds are left
+                            blank (not cheaply computable for substring matches).
+
+        Writes a sibling CSV (one value per row) as the pattern's DataFile and a
+        small lookup Lua.
+
+        Returns a summary dict:
+          {ok, error, mode, count, duplicates, skipped, odds, catalog, examples, library}
+        """
+        import json as _json
+
+        mode = "contains" if mode == "contains" else "exact"
+        values, duplicates, skipped = self.normalize_serial_list(
+            numbers, pad=(mode == "exact"))
+        result = {"ok": False, "error": "", "mode": mode, "count": len(values),
+                  "duplicates": duplicates, "skipped": skipped, "odds": "",
+                  "catalog": "", "examples": [], "library": library}
+        if not values:
+            result["error"] = "No valid numbers (1-8 digits) found in the list."
+            return result
+
+        # Target directory (mirror save_user_pattern).
+        if library == "user":
+            target_dir = self.user_patterns_dir
+        else:
+            target_dir = self.patterns_dir / library
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        base = name.lower().replace(' ', '_')
+        lua_path = target_dir / f"{base}.lua"
+        csv_path = target_dir / f"{base}.csv"
+
+        # Preserve an existing SKU (stable), else assign the next free one.
+        catalog = ""
+        if lua_path.exists():
+            try:
+                m = re.search(r'^\s*Catalog:\s*(.+)$',
+                              lua_path.read_text(encoding='utf-8'), re.MULTILINE)
+                if m:
+                    catalog = m.group(1).strip()
+            except Exception:
+                catalog = ""
+        if not catalog:
+            try:
+                catalog = self.next_catalog_sku(self._library_prefix(library))
+            except Exception:
+                catalog = ""
+
+        # Odds + examples depend on the mode.
+        odds = ""
+        if mode == "exact":
+            # Each listed serial in [1, 96M] shows up once per 96M block, so
+            # per_96m = count of in-range entries -> exact, instant odds.
+            per_96m = sum(1 for s in values if 1 <= int(s) <= 96_000_000)
+            if per_96m > 0:
+                one_in_x = round(96_000_000 / per_96m)
+                odds = f"1 in {one_in_x:,} ({per_96m:,} per 96M)"
+            examples = values[:4]
+        else:
+            # "contains": odds aren't cheaply computable (overlapping positions),
+            # so leave the header blank. Build 8-digit example serials that embed
+            # the first few list values so the preview generator has something.
+            examples = [(v + "0" * (8 - len(v)))[:8] for v in values[:4]]
+
+        header_lines = ['--[[', f'Pattern: {name}']
+        if display_name:
+            header_lines.append(f'DisplayName: {display_name}')
+        if catalog:
+            header_lines.append(f'Catalog: {catalog}')
+        header_lines.append(f'Description: {description}')
+        header_lines.append(f'Tier: {tier}')
+        header_lines.append(f'Examples: {_json.dumps(examples)}')
+        if odds:
+            header_lines.append(f'Odds: {odds}')
+        if price:
+            header_lines.append(f'Price: {price}')
+        header_lines.append(f'DataFile: {base}.csv')
+        header_lines.append('--]]')
+        header = '\n'.join(header_lines)
+
+        if mode == "exact":
+            body = (
+                "\n"
+                "-- List pattern (exact): matches when the full 8-digit serial is on\n"
+                "-- the imported list. The list lives in the sibling CSV (DataFile\n"
+                "-- above), loaded as ctx.data_by_key keyed by the serial string.\n"
+                "function match(ctx)\n"
+                "    if not ctx.data_by_key then\n"
+                "        return {matched = false}\n"
+                "    end\n"
+                "    if ctx.data_by_key[ctx.digits] then\n"
+                "        return {\n"
+                "            matched = true,\n"
+                "            group_boxes = {{from = 0, to = 7, color = \"gold\", thickness = 3}},\n"
+                "            message = \"On list\"\n"
+                "        }\n"
+                "    end\n"
+                "    return {matched = false}\n"
+                "end\n"
+            )
+        else:
+            body = (
+                "\n"
+                "-- List pattern (contains): matches when the serial contains any\n"
+                "-- number from the imported list anywhere in it (e.g. a year). The\n"
+                "-- list lives in the sibling CSV (DataFile above). We scan every\n"
+                "-- substring, longest first, so the biggest matching run is boxed.\n"
+                "function match(ctx)\n"
+                "    if not ctx.data_by_key then\n"
+                "        return {matched = false}\n"
+                "    end\n"
+                "    local d = ctx.digits\n"
+                "    for len = #d, 1, -1 do\n"
+                "        for start = 1, #d - len + 1 do\n"
+                "            local sub = d:sub(start, start + len - 1)\n"
+                "            if ctx.data_by_key[sub] then\n"
+                "                return {\n"
+                "                    matched = true,\n"
+                "                    group_boxes = {{from = start - 1, to = start + len - 2, color = \"gold\", thickness = 3}},\n"
+                "                    message = \"Contains \" .. sub\n"
+                "                }\n"
+                "            end\n"
+                "        end\n"
+                "    end\n"
+                "    return {matched = false}\n"
+                "end\n"
+            )
+
+        try:
+            import csv as _csv
+            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                writer = _csv.writer(f)
+                writer.writerow(["serial"])
+                for s in values:
+                    writer.writerow([s])
+            with open(lua_path, 'w', encoding='utf-8') as f:
+                f.write(header + "\n" + body)
+            self._load_lua_pattern(lua_path, library=library)
+        except Exception as e:
+            result["error"] = str(e)
+            return result
+
+        result.update(ok=True, odds=odds, catalog=catalog, examples=examples)
+        return result
 
     def delete_user_pattern(self, name: str) -> bool:
         """

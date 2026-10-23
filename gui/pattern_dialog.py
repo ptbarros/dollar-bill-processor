@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QSplitter, QHeaderView, QCheckBox, QListWidget,
     QListWidgetItem, QFormLayout, QComboBox, QMessageBox, QColorDialog,
     QTabWidget, QWidget, QSpinBox, QFrame, QApplication, QPlainTextEdit,
-    QInputDialog, QMenu, QSizePolicy, QScrollArea
+    QInputDialog, QMenu, QSizePolicy, QScrollArea, QFileDialog
 )
 from PySide6.QtCore import Qt, QTimer, Signal, QThread
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QFontMetrics
@@ -600,6 +600,13 @@ class PatternDialog(QDialog):
         new_pattern_btn.setToolTip("Create a new Lua pattern script")
         new_pattern_btn.clicked.connect(self._add_custom_pattern)
         row1.addWidget(new_pattern_btn)
+
+        new_list_btn = QPushButton("New from List...")
+        new_list_btn.setToolTip(
+            "Create a pattern from a list of serial numbers "
+            "(matches when a serial is on your list)")
+        new_list_btn.clicked.connect(self._import_list_pattern)
+        row1.addWidget(new_list_btn)
 
         actions_layout.addLayout(row1)
 
@@ -3003,6 +3010,215 @@ Logs appear in batch test results and "Copy for AI Debug" output.
                 # Compute exact odds in the background for digit-based patterns.
                 if defn.get('source') == 'lua' and HAS_V3_ENGINE:
                     self._maybe_bake_exact_odds(name)
+
+    def _import_list_pattern(self):
+        """Create a membership pattern from a pasted/imported list of serials."""
+        if not HAS_V3_ENGINE:
+            QMessageBox.warning(self, "Not Available",
+                                "List patterns require the Lua pattern engine.")
+            return
+
+        # Pick the destination library (mirror _add_custom_pattern).
+        libraries = self._discover_libraries()
+        if 'user' not in libraries:
+            libraries.append('user')
+
+        dialog = ImportListPatternDialog(libraries, self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        vals = dialog.get_values()
+        internal = re.sub(r'[^0-9a-zA-Z]+', '_', vals['name']).strip('_').upper()
+        if not internal:
+            QMessageBox.warning(self, "Invalid Name",
+                                "Please enter a valid pattern name.")
+            return
+
+        res = self.engine.save_list_pattern(
+            internal,
+            vals['numbers'],
+            mode=vals['mode'],
+            display_name=vals['name'],
+            description=vals['description'],
+            tier=vals['tier'],
+            price=vals['price'],
+            library=vals['library'],
+        )
+
+        if not res.get('ok'):
+            QMessageBox.warning(self, "Could Not Create Pattern",
+                                res.get('error') or "No valid numbers found.")
+            return
+
+        # A deliberately-imported list pattern should be ON immediately (new
+        # patterns otherwise ship disabled under the curated whitelist). Persist
+        # the choice so it survives the reload below.
+        self.engine.set_pattern_enabled(internal, True)
+
+        self._patterns_modified = True
+        self._reload_engine()
+        self._load_patterns()
+
+        # Summarize what was created.
+        noun = "number" if res.get('mode') == "contains" else "serial"
+        lines = [f"Created \"{vals['name']}\" with {res['count']:,} "
+                 f"{noun}{'s' if res['count'] != 1 else ''}."]
+        if res.get('mode') == "contains":
+            lines.append("Matches when a serial contains any of these numbers.")
+        if res.get('catalog'):
+            lines.append(f"Catalog: {res['catalog']}")
+        if res.get('odds'):
+            lines.append(f"Odds: {res['odds']}")
+        elif res.get('mode') == "contains":
+            lines.append("Odds: left blank (set manually if you want a rarity).")
+        if res.get('duplicates'):
+            lines.append(f"Removed {res['duplicates']:,} duplicate(s).")
+        if res.get('skipped'):
+            lines.append(f"Skipped {res['skipped']:,} entr(ies) longer than 8 digits.")
+        QMessageBox.information(self, "Pattern Created", "\n".join(lines))
+
+
+class ImportListPatternDialog(QDialog):
+    """Turn a pasted or imported list of serial numbers into a membership pattern.
+
+    No Lua required: the engine writes a sibling CSV as the DataFile and a tiny
+    lookup script. Numbers may be separated by spaces, commas or newlines;
+    entries shorter than 8 digits are zero-padded.
+    """
+
+    def __init__(self, libraries, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("New Pattern from List")
+        self.setMinimumWidth(460)
+
+        layout = QVBoxLayout(self)
+
+        form = QFormLayout()
+        self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText("e.g. Vampire Numbers")
+        form.addRow("Name:", self.name_edit)
+
+        self.library_combo = QComboBox()
+        self.library_combo.addItems(libraries)
+        idx = self.library_combo.findText('user')
+        if idx >= 0:
+            self.library_combo.setCurrentIndex(idx)
+        form.addRow("Library:", self.library_combo)
+
+        self.mode_combo = QComboBox()
+        # userData carries the engine mode string.
+        self.mode_combo.addItem("Whole serial is on the list", "exact")
+        self.mode_combo.addItem("Serial contains a number from the list", "contains")
+        self.mode_combo.currentIndexChanged.connect(self._mode_changed)
+        form.addRow("Match type:", self.mode_combo)
+
+        self.tier_spin = QSpinBox()
+        self.tier_spin.setRange(1, 10)
+        self.tier_spin.setValue(5)
+        form.addRow("Tier:", self.tier_spin)
+
+        self.price_edit = QLineEdit()
+        self.price_edit.setPlaceholderText("optional, e.g. $20-$60")
+        form.addRow("Price:", self.price_edit)
+
+        self.desc_edit = QLineEdit()
+        self.desc_edit.setPlaceholderText("optional")
+        form.addRow("Description:", self.desc_edit)
+        layout.addLayout(form)
+
+        self.hint_label = QLabel()
+        self.hint_label.setWordWrap(True)
+        layout.addWidget(self.hint_label)
+
+        self.numbers_edit = QPlainTextEdit()
+        self.numbers_edit.textChanged.connect(self._update_count)
+        layout.addWidget(self.numbers_edit)
+
+        load_row = QHBoxLayout()
+        load_btn = QPushButton("Load from File...")
+        load_btn.setToolTip("Append numbers from a .txt or .csv file")
+        load_btn.clicked.connect(self._load_file)
+        load_row.addWidget(load_btn)
+        load_row.addStretch()
+        self.count_label = QLabel("0 valid numbers")
+        self.count_label.setStyleSheet("color: #666;")
+        load_row.addWidget(self.count_label)
+        layout.addLayout(load_row)
+
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self._on_accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+        self._mode_changed()  # set initial hint / placeholder / count
+
+    def _current_mode(self) -> str:
+        return self.mode_combo.currentData() or "exact"
+
+    def _mode_changed(self, *args):
+        if self._current_mode() == "contains":
+            self.hint_label.setText(
+                "Paste numbers that can appear <b>anywhere</b> in the serial "
+                "(e.g. years). Separate by new lines, spaces or commas:")
+            self.numbers_edit.setPlaceholderText("1776\n1974\n2002\n...")
+        else:
+            self.hint_label.setText(
+                "Paste <b>whole 8-digit serials</b> (shorter numbers are "
+                "zero-padded). Separate by new lines, spaces or commas:")
+            self.numbers_edit.setPlaceholderText("12345678\n87654321\n...")
+        self._update_count()
+
+    def _load_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Load Numbers", "",
+            "Text/CSV (*.txt *.csv);;All Files (*)")
+        if not path:
+            return
+        try:
+            text = Path(path).read_text(encoding='utf-8', errors='replace')
+        except Exception as e:
+            QMessageBox.warning(self, "Could Not Read File", str(e))
+            return
+        existing = self.numbers_edit.toPlainText()
+        if existing and not existing.endswith('\n'):
+            existing += '\n'
+        self.numbers_edit.setPlainText(existing + text)
+
+    def _update_count(self):
+        try:
+            vals, _, _ = PatternEngine.normalize_serial_list(
+                self.numbers_edit.toPlainText(),
+                pad=(self._current_mode() == "exact"))
+            n = len(vals)
+        except Exception:
+            n = 0
+        self.count_label.setText(f"{n:,} valid number{'s' if n != 1 else ''}")
+
+    def _on_accept(self):
+        if not self.name_edit.text().strip():
+            QMessageBox.warning(self, "Name Required",
+                                "Please enter a name for the pattern.")
+            return
+        vals, _, _ = PatternEngine.normalize_serial_list(
+            self.numbers_edit.toPlainText(),
+            pad=(self._current_mode() == "exact"))
+        if not vals:
+            QMessageBox.warning(self, "No Numbers",
+                                "Please paste or load at least one number (1-8 digits).")
+            return
+        self.accept()
+
+    def get_values(self) -> dict:
+        return {
+            'name': self.name_edit.text().strip(),
+            'library': self.library_combo.currentText(),
+            'mode': self._current_mode(),
+            'tier': self.tier_spin.value(),
+            'price': self.price_edit.text().strip(),
+            'description': self.desc_edit.text().strip(),
+            'numbers': self.numbers_edit.toPlainText(),
+        }
 
 
 class LuaSyntaxHighlighter(QSyntaxHighlighter):
