@@ -2972,6 +2972,13 @@ Logs appear in batch test results and "Copy for AI Debug" output.
             # Legacy YAML rule pattern.
             self.engine.add_custom_pattern(name, defn)
 
+        # A pattern the user just authored should be ON. New patterns otherwise
+        # ship DISABLED under the curated whitelist (`_shipped_enabled`), which is
+        # meant for shipped patterns -- a freshly-made one looked like it "never
+        # saved" because it was created unchecked and never matched (Jon's bug).
+        if HAS_V3_ENGINE:
+            self.engine.set_pattern_enabled(name, True)
+
         self._patterns_modified = True
         self._reload_engine()
         self._load_patterns()
@@ -3421,6 +3428,7 @@ class CustomPatternDialog(QDialog):
         # Source selected via the creation chooser: 'simple'|'wizard'|'ai'|'lua'|'list'.
         # None until a card is picked (or set directly in edit mode).
         self._list_mode = ""  # 'exact'|'contains' when the list editor is active
+        self._list_file_buffer = None  # raw text from a large loaded file (not shown)
 
         # Try to get the v3 engine for Lua support
         self.engine = None
@@ -3514,6 +3522,14 @@ class CustomPatternDialog(QDialog):
         self.desc_edit = QLineEdit()
         self.desc_edit.setPlaceholderText("Brief description of what this pattern matches")
         header_layout.addRow("Description:", self.desc_edit)
+
+        # Optional example serials. These feed the preview's "Generate Random"
+        # and are written into the Lua header as Examples: [...]. Having the field
+        # here (not only in the AI tab) is what Jon was hunting for.
+        self.examples_edit = QLineEdit()
+        self.examples_edit.setPlaceholderText(
+            "optional — matching serials, e.g. 12345678, 87654321 (helps the preview)")
+        header_layout.addRow("Examples:", self.examples_edit)
 
         tier_layout = QHBoxLayout()
         self.tier_spin = QSpinBox()
@@ -3802,13 +3818,24 @@ class CustomPatternDialog(QDialog):
         v.addWidget(self.list_hint)
 
         self.list_numbers_edit = QPlainTextEdit()
-        self.list_numbers_edit.textChanged.connect(self._list_update_count)
+        self.list_numbers_edit.textChanged.connect(self._list_text_changed)
         v.addWidget(self.list_numbers_edit)
+
+        # Debounce the live count so a big paste doesn't re-parse on every
+        # keystroke (that would freeze the dialog for a large list).
+        self._list_count_timer = QTimer(self)
+        self._list_count_timer.setSingleShot(True)
+        self._list_count_timer.setInterval(350)
+        self._list_count_timer.timeout.connect(self._do_list_count)
 
         row = QHBoxLayout()
         load_btn = QPushButton("Load from File...")
         load_btn.clicked.connect(self._list_load_file)
         row.addWidget(load_btn)
+        clear_btn = QPushButton("Clear")
+        clear_btn.setToolTip("Clear the numbers (and any loaded file)")
+        clear_btn.clicked.connect(self._list_clear)
+        row.addWidget(clear_btn)
         row.addStretch()
         self.list_count_label = QLabel("0 valid numbers")
         self.list_count_label.setStyleSheet("color: #666;")
@@ -3818,8 +3845,20 @@ class CustomPatternDialog(QDialog):
         self._list_mode_changed()
         return widget
 
+    # Above this many parsed entries we don't dump the text into the editor
+    # widget (Qt chokes on millions of lines); we keep it in a buffer instead.
+    _LIST_SHOW_LIMIT = 20_000
+    # At/above this many entries, warn before saving (memory + first-match delay).
+    _LIST_WARN_LIMIT = 100_000
+
     def _list_current_mode(self) -> str:
         return self.list_mode_combo.currentData() or "exact"
+
+    def _list_source_text(self) -> str:
+        """The numbers to use: a loaded-file buffer if one is held (too big to
+        show), else whatever is typed in the editor."""
+        buf = getattr(self, '_list_file_buffer', None)
+        return buf if buf is not None else self.list_numbers_edit.toPlainText()
 
     def _list_mode_changed(self, *args):
         if self._list_current_mode() == "contains":
@@ -3832,12 +3871,18 @@ class CustomPatternDialog(QDialog):
                 "Paste <b>whole 8-digit serials</b> (shorter numbers are "
                 "zero-padded). Separate by new lines, spaces or commas:")
             self.list_numbers_edit.setPlaceholderText("12345678\n87654321\n...")
-        self._list_update_count()
+        self._do_list_count()
 
-    def _list_update_count(self):
+    def _list_text_changed(self):
+        # The user typed/pasted -> any loaded-file buffer no longer applies.
+        if not self.list_numbers_edit.isReadOnly():
+            self._list_file_buffer = None
+        self._list_count_timer.start()  # debounced
+
+    def _do_list_count(self):
         try:
             vals, _, _ = PatternEngine.normalize_serial_list(
-                self.list_numbers_edit.toPlainText(),
+                self._list_source_text(),
                 pad=(self._list_current_mode() == "exact"))
             n = len(vals)
         except Exception:
@@ -3854,10 +3899,38 @@ class CustomPatternDialog(QDialog):
         except Exception as e:
             QMessageBox.warning(self, "Could Not Read File", str(e))
             return
+
+        vals, _, _ = PatternEngine.normalize_serial_list(
+            text, pad=(self._list_current_mode() == "exact"))
+        n = len(vals)
+        if n > self._LIST_SHOW_LIMIT:
+            # Too many to render in the widget: hold the text in a buffer and
+            # show a summary instead, so the dialog stays responsive.
+            self._list_file_buffer = text
+            self.list_numbers_edit.blockSignals(True)
+            self.list_numbers_edit.setReadOnly(True)
+            self.list_numbers_edit.setPlainText(
+                f"[Loaded {n:,} numbers from {Path(path).name}]\n"
+                "Too many to display here — they'll be saved with the pattern.\n"
+                "Use Clear to discard and enter numbers manually.")
+            self.list_numbers_edit.blockSignals(False)
+            self.list_count_label.setText(f"{n:,} valid numbers")
+            return
+
+        # Small enough to edit inline.
+        self._list_file_buffer = None
+        self.list_numbers_edit.setReadOnly(False)
         existing = self.list_numbers_edit.toPlainText()
         if existing and not existing.endswith('\n'):
             existing += '\n'
         self.list_numbers_edit.setPlainText(existing + text)
+
+    def _list_clear(self):
+        """Discard numbers and any loaded-file buffer; re-enable manual entry."""
+        self._list_file_buffer = None
+        self.list_numbers_edit.setReadOnly(False)
+        self.list_numbers_edit.clear()  # fires _list_text_changed -> recount
+        self.list_numbers_edit.setFocus()
 
     def get_library(self) -> str:
         return self.library_combo.currentText()
@@ -6116,7 +6189,16 @@ end
                 info = (self.engine.lua_patterns.get(self.original_name)
                         if self.engine else None)
                 nums = list(info.data_by_key.keys()) if info and info.data_by_key else []
-                self.list_numbers_edit.setPlainText("\n".join(nums))
+                if len(nums) > self._LIST_SHOW_LIMIT:
+                    # Too many to render: hold in the buffer, show a summary.
+                    self._list_file_buffer = "\n".join(nums)
+                    self.list_numbers_edit.setReadOnly(True)
+                    self.list_numbers_edit.setPlainText(
+                        f"[{len(nums):,} numbers in this pattern]\n"
+                        "Too many to display here. Use Clear to replace them.")
+                    self.list_count_label.setText(f"{len(nums):,} valid numbers")
+                else:
+                    self.list_numbers_edit.setPlainText("\n".join(nums))
                 self.list_price_edit.setText(
                     self.defn.get('price', '') or (info.price if info else ''))
                 self._goto_method('list')
@@ -6124,6 +6206,10 @@ end
             # Plain Lua pattern -> the Lua editor (index 3, not the old buggy 1).
             if HAS_V3_ENGINE:
                 self.script_edit.setPlainText(self.original_script)
+                ex = self.defn.get('examples') or \
+                    self._extract_examples_from_header(self.original_script)
+                if ex:
+                    self.examples_edit.setText(', '.join(ex))
                 self._goto_method('lua')
                 return
 
@@ -6143,6 +6229,18 @@ end
         m = re.search(r'(?im)^\s*ListMode:\s*(\w+)', script or "")
         return m.group(1).strip().lower() if m else ""
 
+    def _examples_from_field(self) -> list:
+        """Parse the Examples header field into 8-digit serial strings."""
+        text = self.examples_edit.text().strip()
+        if not text:
+            return []
+        out = []
+        for tok in re.split(r'[\s,;]+', text):
+            digits = re.sub(r'\D', '', tok)
+            if len(digits) == 8:
+                out.append(digits)
+        return out
+
     def _validate_and_accept(self):
         """Validate input and accept."""
         name = self.name_edit.text().strip().upper().replace(' ', '_')
@@ -6154,12 +6252,23 @@ end
         # caller a 'list' definition (it saves via engine.save_list_pattern).
         if self._method == 'list':
             vals, _, _ = PatternEngine.normalize_serial_list(
-                self.list_numbers_edit.toPlainText(),
+                self._list_source_text(),
                 pad=(self._list_current_mode() == "exact"))
             if not vals:
                 QMessageBox.warning(self, "No Numbers",
                                     "Please paste or load at least one number (1-8 digits).")
                 return
+            if len(vals) >= self._LIST_WARN_LIMIT:
+                reply = QMessageBox.warning(
+                    self, "Very Large List",
+                    f"This list has {len(vals):,} entries.\n\n"
+                    "A list this large uses a lot of memory and adds a short "
+                    "pause the first time it matches each session. It will also "
+                    "match very commonly, so it won't behave like a rare/fancy "
+                    "pattern.\n\nCreate it anyway?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                if reply == QMessageBox.No:
+                    return
             self.accept()
             return
 
@@ -6251,14 +6360,17 @@ end
             self.is_lua_pattern = True
             self._is_wizard_pattern = False
 
-            # Check for missing Examples in header
-            if 'Examples:' not in script and 'Examples :' not in script:
+            # Check for missing Examples (header OR the Examples field above).
+            has_examples = ('Examples:' in script or 'Examples :' in script
+                            or bool(self._examples_from_field()))
+            if not has_examples:
                 reply = QMessageBox.warning(
                     self,
                     "Missing Examples",
-                    "Your pattern is missing the Examples field in the header.\n\n"
-                    "Without examples, the random serial generator won't work in the preview.\n\n"
-                    "Add a line like:\nExamples: [\"12345678\", \"87654321\"]\n\n"
+                    "This pattern has no example serials.\n\n"
+                    "Without them, the random serial generator won't work in the "
+                    "preview. Add a few matching serials in the Examples field "
+                    "above (e.g. 12345678, 87654321).\n\n"
                     "Save anyway?",
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.No
@@ -6389,7 +6501,7 @@ end
             return name, {
                 'source': 'list',
                 'mode': self._list_current_mode(),
-                'numbers': self.list_numbers_edit.toPlainText(),
+                'numbers': self._list_source_text(),
                 'display_name': display_name,
                 'description': self.desc_edit.text().strip(),
                 'tier': tier,
@@ -6409,15 +6521,23 @@ end
                 'source': 'lua'
             }
         elif self.is_lua_pattern and HAS_V3_ENGINE:
-            # Return script from editor
+            # Return script from editor. Preserve examples: prefer the Examples
+            # field, else what's already in the script header -- otherwise
+            # save_user_pattern rebuilds the header and would drop them.
             script = self.script_edit.toPlainText()
-            return name, {
+            examples = self._examples_from_field()
+            if not examples:
+                examples = self._extract_examples_from_header(script)
+            defn = {
                 'description': description,
                 'display_name': display_name,
                 'tier': tier,
                 'script': script,
                 'source': 'lua'
             }
+            if examples:
+                defn['examples'] = examples
+            return name, defn
         else:
             # Convert simple rule to Lua script
             rule_type = self.rule_type.currentText()
