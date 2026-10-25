@@ -16,13 +16,13 @@ reading results, and managing patterns.
 5. [Scanning straps live (Monitor mode)](#scanning-straps-live-monitor-mode)
 6. [Reading the results & overlays](#reading-the-results--overlays) _(to be expanded)_
 7. [How odds & rarity work](#how-odds--rarity-work)
-8. [Pattern Manager](#pattern-manager) _(to be expanded)_
+8. [Pattern Manager](#pattern-manager)
 9. [AI pattern generation (API keys)](#ai-pattern-generation-api-keys)
 10. [Pattern prices](#pattern-prices)
 11. [Serial Lookup & Strap Check](#serial-lookup--strap-check) _(to be expanded)_
 12. [Physical-print detections](#physical-print-detections-gas-pump-seal-shift-plates) _(to be expanded)_
 13. [Cropping for listings](#cropping-for-listings) _(to be expanded)_
-14. [Labels](#labels) _(to be expanded)_
+14. [Labels](#labels)
 15. [Insights report](#insights-report) _(to be expanded)_
 16. [Backup & Restore](#backup--restore) _(to be expanded)_
 
@@ -304,17 +304,67 @@ Manager if a distinction matters to you.
 ---
 
 ## Pattern Manager
-_(to be expanded)_ — Browse patterns by library, enable/disable them, edit or
-create your own (Wizard and AI Generate), test a serial, move a user pattern
-between libraries, and resolve name collisions with a built-in.
+
+The Pattern Manager is where you browse, turn on/off, create, and edit the
+patterns the app looks for. Patterns are grouped into **libraries** (e.g. the
+built-in `core` library and your own `user` library).
+
+- **Enable / disable** — tick a pattern to include it in classification, or tick
+  a whole library header to toggle the group. Only enabled patterns match bills.
+- **Price column** — each pattern's price shows here (from the shared prices
+  file, falling back to its built-in value — see **Pattern prices**).
+- **Catalog number** — each pattern has a stable catalog number (`C-004`,
+  `U-002`, …) used by the prices file and when sharing.
+- **Test a serial** — type a serial to see whether a pattern matches and how it
+  highlights.
+- **Move a user pattern** between libraries, and resolve **name collisions**
+  (if two patterns share an internal name, the first wins and the other is
+  flagged).
+
+### Creating a pattern — the **New Pattern…** chooser
+
+Click **New Pattern…** and the app asks *how* you want to make it, then takes you
+to a single, focused editor for that choice (a **‹ Back** arrow returns to the
+chooser). Every editor shares the same top fields — **Name**, **Display Name**,
+**Tier**, **Library**, and an optional **Examples** field (sample serials that
+match, used by the preview's "Generate Random").
+
+The ways to create a pattern:
+
+- **Simple rule** — a basic "starts with / contains / ends with a value" rule.
+- **From a recipe** — pick a shape (ladder, repeater, radar, pairs, palindrome,
+  …) and tweak its options. No coding.
+- **From a list of numbers** — paste or load a list of serials and the app builds
+  a pattern that flags them, with no scripting. Two match types: **whole serial
+  is on the list** (short entries are zero-padded to 8 digits) or **serial
+  contains a number from the list** (handy for things like years). Very large
+  lists are supported — loading a big file shows a summary instead of filling the
+  box, and saving a very large list (100k+) warns you first.
+- **From a list of dates** — paste specific dates (birthdays, anniversaries,
+  etc.), pick how you're typing them (M/D/Y, D/M/Y, or Y/M/D) and which serial
+  layouts to match, and the app creates one pattern that catches exactly those
+  dates. Invalid dates (e.g. Feb 29 in a non-leap year) are skipped.
+- **Start from an existing pattern** — duplicate a pattern you already have (also
+  available by right-clicking a pattern, or the **Duplicate…** button). If you
+  have an AI key, you can then **Modify with AI** (describe the change) or
+  **Edit the Lua** by hand.
+- **Describe it in plain English** — have AI write the pattern for you (needs an
+  API key — see the next section). Greyed out until a key is set.
+- **Write it myself (Lua)** — the advanced option: write the Lua script directly.
+  This editor also has **Copy for AI** (copies a ready-made prompt, with your
+  current script, to paste into ChatGPT/Claude) and **API Docs**.
+
+A pattern you create is **turned on automatically**, so it starts matching right
+away. **Editing** a pattern opens straight into the right editor for it (a list
+pattern reopens the list editor, a Lua pattern the Lua editor, and so on).
 
 ## AI pattern generation (API keys)
 
-The **AI Generate** tab (when adding or editing a pattern in the Pattern
-Manager) lets you describe a pattern in plain English and have the Lua written
-for you. It needs an API key from one of two AI providers — **Anthropic
-(Claude)** or **OpenAI (GPT)**. You only need **one**. Each provider charges a
-small per-use amount; getting a key takes a few minutes.
+The **Describe it in plain English** option in **New Pattern…** (and the
+**Modify with AI** choice when duplicating) lets you describe a pattern in plain
+English and have the Lua written for you. It needs an API key from one of two AI
+providers — **Anthropic (Claude)** or **OpenAI (GPT)**. You only need **one**.
+Each provider charges a small per-use amount; getting a key takes a few minutes.
 
 **Where to enter the key:** **Settings → AI**, in the **API Keys** box. Paste
 the key into the Anthropic or OpenAI field and click OK. (The AI Generate tab
@@ -330,9 +380,9 @@ are stored locally on your machine in `user_settings.yaml` and are never shared.
 > a little credit to your provider account, create the key, copy it once (the
 > provider won't show it again), and paste it into Dollar Detective.
 
-Once a key is saved, the AI Generate tab shows its controls; until then it shows
-a short "needs an API key" notice. The same links are shown right under the key
-fields in **Settings → AI**.
+Once a key is saved, the **Describe it in plain English** card becomes available
+in New Pattern…; until then it's greyed out with a hint to add a key. The same
+links are shown right under the key fields in **Settings → AI**.
 
 ## Pattern prices
 
@@ -342,16 +392,46 @@ but the group can keep them current with a shared, editable **prices file** —
 no need to edit patterns or wait for an app update.
 
 The prices file is a plain CSV keyed by each pattern's **catalog number**
-(`C-001`, `C-002`, …), so a price travels with the catalog number even if a
-pattern's name changes. Columns: `catalog, pattern, display_name, price`. Only
-`catalog` and `price` are read back; `pattern` and `display_name` are there so
-the file is easy to read while editing.
+(`C-001`, `U-002`, …), so a price travels with the catalog number even if a
+pattern's name changes. The columns are:
+
+`catalog, pattern, display_name, price, price_circ, price_unc`
+
+- **catalog** — *the key.* The pattern's catalog number, exactly as shown in the
+  Pattern Manager. This is the only thing that links a row to a pattern.
+- **price** — the text that shows in the app (e.g. `$20–$100`, `$50`, or `Ask`).
+- **price_circ** — *optional* number: the **circulated** value. It fills the
+  Price **column** in the Pattern Manager and is what the list **sorts** by.
+  Leave it blank and the app falls back to the low end of the `price` text
+  (so `$20–$100` sorts as 20).
+- **price_unc** — *optional* number: the **uncirculated** value, shown only
+  where you fill it in.
+- **pattern / display_name** — only there so the file reads nicely while you
+  edit; they are **not** used to match (matching is by `catalog` only).
+
+A row takes effect once it has a catalog number **and** at least one price
+field filled in. For example:
+
+```
+catalog,pattern,display_name,price,price_circ,price_unc
+C-004,RADAR,Radar,$25-$60,25,80
+U-002,VAMPIRE,Vampire,$40,40,
+C-157,US_DATE_NOTES,Date Note M/D/Y,Ask,,
+```
+
+- `C-004` shows "$25-$60", sorts at **25**, and carries an uncirculated value of **80**.
+- `U-002` shows "$40" (circulated 40, no uncirculated value).
+- `C-157` shows "Ask" — no number, so it has nothing to sort by numerically.
+
+> Older prices files with just `catalog, pattern, display_name, price` still work
+> — the two numeric columns are simply treated as blank.
 
 Everything is under **Tools → Pattern Prices**:
 
 - **Open Prices File…** — creates the file (the first time, filled in with the
-  current prices for every pattern so you start from a full list) and opens it
-  in your spreadsheet app. Edit the **price** column, save, and close.
+  current prices for every pattern so you start from a full list — including a
+  starter `price_circ` taken from each price) and opens it in your spreadsheet
+  app. Edit the price columns, save, and close.
 - **Reload Prices** — re-reads the file after you've edited it, so the new
   prices show as you view bills and patterns.
 - **Import Prices (CSV)…** — adopt a prices file someone in the group sent you.
@@ -382,8 +462,27 @@ _(to be expanded)_ — Generating listing-ready crops, and the standalone Crop
 Tool for one-off rare bills.
 
 ## Labels
-_(to be expanded)_ — The Label Preview & Print tool (Tools → Label Preview,
-`Ctrl+Shift+L`) and label profiles.
+
+The **Label Preview & Print** tool (**Tools → Label Preview**, `Ctrl+Shift+L`)
+turns your processed bills into printable labels. It shows one label per bill,
+which you can tweak per bill, then save as **PDF** or **Word**.
+
+**Label profile.** A label's layout — its size, fonts, and which fields appear
+(catalog number, serial, pattern, position, odds, price, …) — comes from a
+label **profile**. Click **Edit…** to change the profile: label size, the base
+font, which fields to show, their captions, and per-field fonts.
+
+**Customer vs. Internal versions.** Each field has a **"show on"** setting —
+**Both**, **Customer**, or **Internal** — so one profile produces two versions
+of every label. For example you might show the catalog number and shelf position
+only on the *Internal* version, while the *Customer* version (the one that goes
+out with the bill) stays clean. A **Version** picker in Label Preview
+(Customer / Internal) lets you see each one.
+
+**Printing both.** The Word export writes the two versions interleaved — the
+Customer label on odd pages and the Internal label on even pages — so you can
+print each set using Word's built-in **odd/even page** printing. PDF export
+follows the version you have selected.
 
 ## Insights report
 _(to be expanded)_ — Tools → Insights Report: pattern hit-rate vs. keep-rate
