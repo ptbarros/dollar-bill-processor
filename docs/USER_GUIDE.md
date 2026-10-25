@@ -400,12 +400,21 @@ pattern's name changes. The columns are:
 - **catalog** — *the key.* The pattern's catalog number, exactly as shown in the
   Pattern Manager. This is the only thing that links a row to a pattern.
 - **price** — the text that shows in the app (e.g. `$20–$100`, `$50`, or `Ask`).
-- **price_circ** — *optional* number: the **circulated** value. It fills the
-  Price **column** in the Pattern Manager and is what the list **sorts** by.
-  Leave it blank and the app falls back to the low end of the `price` text
-  (so `$20–$100` sorts as 20).
-- **price_unc** — *optional* number: the **uncirculated** value, shown only
-  where you fill it in.
+- **price_circ** — *optional* **single** number: the **circulated** value. It's
+  the figure shown in the Pattern Manager's **Price column** (as `$N`) and is
+  what that list **sorts** by. Leave it blank and the app falls back to the low
+  end of the `price` text (so `$20–$100` sorts as 20).
+- **price_unc** — *optional* **single** number: the **uncirculated** value. It
+  appears next to the price in the Pattern Manager — in the Price cell's hover
+  **tooltip** and the pattern **details panel** (e.g. "Price: $25–$60 (unc.
+  $80)"). Shown only where you fill it in.
+
+`price_circ` and `price_unc` are **single numbers**, not ranges — if you want a
+range, put it in the `price` text. (A range typed into a numeric column just uses
+its first number.) The `price` text stays the human-facing label everywhere
+prices appear — results view, the preview's **Est. Price**, and Serial Lookup —
+while the numeric columns add the sortable circulated figure and the
+uncirculated value in the Pattern Manager.
 - **pattern / display_name** — only there so the file reads nicely while you
   edit; they are **not** used to match (matching is by `catalog` only).
 
