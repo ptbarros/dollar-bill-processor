@@ -840,9 +840,17 @@ class MainWindow(QMainWindow):
                 # Get user note if present
                 note = result.get('note', '')
 
+                # Odds / price for the label (matches the .docx labels, which
+                # also carry these fields via the template).
+                odds, price = self._label_odds_price(selected)
+
                 # Label 1: Without catalog (for reference)
                 f.write(f"Serial: {serial}\n")
                 f.write(f"Pattern: {pattern_display}\n")
+                if odds:
+                    f.write(f"Odds: {odds}\n")
+                if price:
+                    f.write(f"Price: {price}\n")
                 if note:
                     f.write(f"Note: {note}\n")
                 f.write(f"Series: {series}\n")
@@ -851,6 +859,10 @@ class MainWindow(QMainWindow):
                 # Label 2: With catalog (to store with bill)
                 f.write(f"Serial: {serial}\n")
                 f.write(f"Pattern: {pattern_display}\n")
+                if odds:
+                    f.write(f"Odds: {odds}\n")
+                if price:
+                    f.write(f"Price: {price}\n")
                 if note:
                     f.write(f"Note: {note}\n")
                 f.write(f"Series: {series}\n")

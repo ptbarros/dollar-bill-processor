@@ -602,8 +602,15 @@ def _append_label_section(doc, item: LabelData, template: LabelTemplate,
     if _tr_pr is None:
         _tr_pr = _row._element.makeelement(qn('w:trPr'), {})
         _row._element.insert(0, _tr_pr)
+    # Word (unlike LibreOffice) will NOT place a table row that is exactly as
+    # tall as the page's content area -- it bumps the row to the next page,
+    # leaving every label page blank. The page height equals the label height
+    # with zero margins, so give the row a hair of slack (~0.05") so Word can lay
+    # it out. Borders are off and content is top-aligned, so the slightly shorter
+    # content box is invisible; the page (= the printed label) keeps its true size.
+    _row_tw = max(1, int(template.height_in * 1440) - 72)
     _tr_pr.append(_tr_pr.makeelement(qn('w:trHeight'), {
-        qn('w:val'): str(int(template.height_in * 1440)), qn('w:hRule'): 'exact'}))
+        qn('w:val'): str(_row_tw), qn('w:hRule'): 'exact'}))
 
     # Vertical alignment of the cell contents (top/middle/bottom).
     cell = table.cell(0, 0)
