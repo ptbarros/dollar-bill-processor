@@ -3155,12 +3155,94 @@ class MainWindow(QMainWindow):
         if not self._live_busy:
             self._live_try_chunk()   # process the tail; finalizes when drained
 
+    def _live_flatten_parts(self):
+        """Lift every scan out of its transient part_NN chunk folder back into
+        the batch root and rewrite the result paths to match, so a finished live
+        strap is a flat folder of images (like a non-live run) with no part_*
+        nesting. The review/preview and the auto-exported CSV both resolve
+        front_file/back_file, so those are rewritten in place here, before the
+        CSV is written. serial_region_path lives under <batch>/fancy_bills/review
+        and is unaffected. Best-effort: a file that can't be moved just keeps its
+        current path, so review never breaks."""
+        import shutil
+        batch = getattr(self, "_live_batch_dir", None)
+        if not batch:
+            return
+        moved = {}   # old absolute path -> new absolute path
+
+        def lift(p: str) -> str:
+            if not p:
+                return p
+            src = Path(p)
+            try:
+                # Only touch files that live in a part_* subfolder of THIS batch.
+                if src.parent.parent != batch or not src.parent.name.startswith("part_"):
+                    return p
+            except Exception:
+                return p
+            if p in moved:
+                return moved[p]
+            dst = batch / src.name
+            try:
+                if dst.exists() and not (src.exists() and dst.samefile(src)):
+                    return p   # name clash -> leave it where it is
+                if src.exists():
+                    shutil.move(str(src), str(dst))
+                moved[p] = str(dst)
+                return str(dst)
+            except Exception:
+                return p
+
+        for r in self.current_results:
+            if r.get("front_file"):
+                r["front_file"] = lift(r["front_file"])
+            if r.get("back_file"):
+                r["back_file"] = lift(r["back_file"])
+
+        if not moved:
+            return
+
+        # The results tree stores a COPY of each result dict on its items
+        # (PySide6 copies on setData), so mutating current_results above does NOT
+        # reach what a click reads back. Push the old->new mapping through the
+        # same path updater the archive move uses, so the tree items (and the
+        # list's own results) point at the flattened files too.
+        try:
+            self.results_list.update_result_paths(moved)
+        except Exception:
+            pass
+
+        # Keep the live preview pointing at the right file if it was showing one.
+        try:
+            pp = self.preview_panel
+            if getattr(pp, "_current_front_file", "") in moved:
+                pp._current_front_file = moved[pp._current_front_file]
+            if getattr(pp, "_current_back_file", "") in moved:
+                pp._current_back_file = moved[pp._current_back_file]
+        except Exception:
+            pass
+
+        # Remove the now-empty part_* folders.
+        try:
+            for d in sorted(batch.glob("part_*")):
+                if d.is_dir():
+                    try:
+                        d.rmdir()   # only succeeds once it's empty
+                    except OSError:
+                        pass
+        except Exception:
+            pass
+
     def _live_finalize(self):
         """All live chunks done: hand off to the shared completion path (writes the
         results CSV into the batch, refreshes the batch picker, selects it)."""
         if self._live_finalized:
             return
         self._live_finalized = True
+        # Lift the scans out of their transient per-chunk part_NN folders back
+        # into the batch root (flat, like a non-live run) before the CSV is
+        # written -- nothing is in flight now, so this can't disturb review.
+        self._live_flatten_parts()
         summary = {
             'total': self._live_total,
             'fancy_count': self._live_fancy,
