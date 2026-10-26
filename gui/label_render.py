@@ -573,6 +573,13 @@ def _append_label_section(doc, item: LabelData, template: LabelTemplate,
     section.right_margin = Inches(0)
     section.top_margin = Inches(0)
     section.bottom_margin = Inches(0)
+    # python-docx defaults the header/footer distance to 0.5" each. On a 1"-tall
+    # label page that reserves the WHOLE page (720+720 = 1440 twips) for the
+    # header/footer bands, leaving zero body height -- so Word renders every
+    # label blank (LibreOffice ignores empty header/footer space, which is why it
+    # looked fine locally). Zero them so the full page is usable body area.
+    section.header_distance = Inches(0)
+    section.footer_distance = Inches(0)
 
     table = doc.add_table(rows=1, cols=1)
     table.autofit = False
