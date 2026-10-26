@@ -619,8 +619,13 @@ def _append_label_section(doc, item: LabelData, template: LabelTemplate,
     _tr_pr.append(_tr_pr.makeelement(qn('w:trHeight'), {
         qn('w:val'): str(_row_tw), qn('w:hRule'): 'exact'}))
 
-    # Vertical alignment of the cell contents (top/middle/bottom).
+    # Set the CELL width explicitly. The fixed table layout sets the column grid
+    # width, but the cell's own w:tcW defaults to 0 -- and Word honors that,
+    # rendering a zero-width cell (blank, un-clickable), while LibreOffice falls
+    # back to the grid width. The old (working) crop-label generator set the cell
+    # width, so match it. THIS is what makes the labels show in Word.
     cell = table.cell(0, 0)
+    cell.width = Inches(template.width_in)
     tc_pr = cell._element.find(qn('w:tcPr'))
     if tc_pr is None:
         tc_pr = cell._element.makeelement(qn('w:tcPr'), {})

@@ -343,6 +343,8 @@ class LabelPreviewDialog(QDialog):
             denomination=base.denomination or "$1",
             front_plate=base.front_plate or "A1",
             back_plate=base.back_plate or "B2",
+            odds=base.odds or "1 in 10,000",
+            price=base.price or "$20-$60",
         )
 
     def _save_settings(self):

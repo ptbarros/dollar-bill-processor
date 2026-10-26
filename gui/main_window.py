@@ -1113,6 +1113,9 @@ class MainWindow(QMainWindow):
                 c for c in (self._resolve_catalog(p) for p in selected
                             if p != 'No Pattern') if c
             )
+            # Odds / price so the preview matches the exported labels (both the
+            # per-bill thumbnails and, via the sample, the field editor).
+            odds, price = self._label_odds_price(selected)
             # Auto-derived line-3 suggestion from the pattern match (ladder digits,
             # grouping, etc.) — offered via "Suggest line 3", never auto-applied.
             serial = result.get('serial', '') or ''
@@ -1141,6 +1144,8 @@ class MainWindow(QMainWindow):
                 denomination=f"${denom}" if denom else '',
                 front_plate=result.get('front_plate', '') or '',
                 back_plate=result.get('back_plate', '') or '',
+                odds=odds,
+                price=price,
                 front_file=result.get('front_file', '') or '',
                 suggested_note=suggested,
                 lines=list(override) if isinstance(override, list) else None,
