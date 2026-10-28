@@ -692,8 +692,22 @@ class MainWindow(QMainWindow):
             if not processor:
                 return  # User cancelled or error occurred
 
-        # Get output directory - use last output dir or ask
-        output_dir = Path(self.settings.ui.last_output_dir) if self.settings.ui.last_output_dir else None
+        # Output directory. Prefer the batch currently selected in the results
+        # dropdown so crops stay WITH their strap. After File Strap (or when a
+        # reopened strap is selected) last_output_dir still points at the
+        # pre-filing scan folder, which left the filed strap crop-less and
+        # orphaned the crops back in the scan folder. The live current session
+        # has no selected batch -> fall back to last_output_dir as before.
+        output_dir = None
+        batch_path = self.results_list.get_current_batch_path()
+        if batch_path:
+            output_dir = Path(batch_path) / (self.settings.processing.output_subfolder or "fancy_bills")
+            try:
+                output_dir.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                output_dir = None
+        if output_dir is None and self.settings.ui.last_output_dir:
+            output_dir = Path(self.settings.ui.last_output_dir)
         if not output_dir or not output_dir.exists():
             output_dir = QFileDialog.getExistingDirectory(
                 self, "Select Output Directory for Crops",
