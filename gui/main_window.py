@@ -355,6 +355,12 @@ class MainWindow(QMainWindow):
         serial_lookup_action.triggered.connect(lambda: self._open_serial_lookup())
         tools_menu.addAction(serial_lookup_action)
 
+        find_crop_action = QAction("&Find Crop by Serial...", self)
+        find_crop_action.setShortcut("Ctrl+Shift+F")
+        find_crop_action.setToolTip("Type a serial and locate its crop file(s) in your filed straps")
+        find_crop_action.triggered.connect(lambda: self._open_find_crop())
+        tools_menu.addAction(find_crop_action)
+
         label_preview_action = QAction("&Label Preview && Print...", self)
         label_preview_action.setShortcut("Ctrl+Shift+L")
         label_preview_action.setToolTip("Preview printable labels for queued bills, flag overflow, edit line 3, save PDF")
@@ -1097,6 +1103,21 @@ class MainWindow(QMainWindow):
         self.results_list.pattern_engine.sync_enabled_from_settings()
         if initial_serial:
             dlg.serial_edit.setText(initial_serial)
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+        dlg.serial_edit.setFocus()
+
+    def _open_find_crop(self, initial_serial: str = ""):
+        """Open the non-modal Find Crop by Serial utility."""
+        from .find_crop_dialog import FindCropDialog
+        dlg = getattr(self, '_find_crop_dialog', None)
+        if dlg is None:
+            dlg = FindCropDialog(self)
+            self._find_crop_dialog = dlg
+        if initial_serial:
+            dlg.serial_edit.setText(initial_serial)
+            dlg._search()
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
