@@ -962,6 +962,20 @@ class ScannerFormatDetector:
         """
         files = ScannerFormatDetector.list_images(image_folder)
 
+        # The presence of ANY _b suffix file means the stack still carries its
+        # scanner front/back naming, so it is the 'suffix' format -- NOT a folder
+        # the bill wizard already organized. Check this FIRST: our own organized
+        # output (Dollar_NNN.jpg) never contains _b files, and DOLLAR_PATTERN is
+        # case-insensitive, so an UNorganized folder whose files are literally
+        # named dollar_0001.jpg / dollar_0001_b.jpg would otherwise be misread as
+        # 'dollar_sequential' -- pairing 0001+0002, dropping every _b file, and
+        # skipping Verify/alignment. (A folder named "dollar" is very likely for
+        # this app's users.)
+        has_suffix = any('_b.' in f.name.lower() or '_b.' in f.stem.lower()
+                         for f in files)
+        if has_suffix:
+            return 'suffix'
+
         # Check for Dollar_NNN.jpg pattern (pre-organized from bill wizard)
         dollar_files = [f for f in files if ScannerFormatDetector.DOLLAR_PATTERN.match(f.name)]
         if len(dollar_files) >= 2:
@@ -971,11 +985,6 @@ class ScannerFormatDetector:
             # Check if numbers are mostly consecutive odd-even pairs
             if numbers[0] <= 2 and len(numbers) >= 2:
                 return 'dollar_sequential'
-
-        # Check for _b suffix pattern
-        for f in files:
-            if '_b.' in f.name.lower() or '_b.' in f.stem.lower():
-                return 'suffix'
 
         return 'sequential'
 
