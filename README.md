@@ -198,8 +198,23 @@ a rough guide, not a guarantee:
 | NVIDIA RTX 5060 + Intel i5-14400F | **CUDA** (NVIDIA) | ~33 sec | ~180 bills/min |
 | Apple **M4** MacBook Pro | **macOS** (Apple Silicon, CPU) | ~53 sec | ~135 bills/min |
 | Laptop with Intel Iris Xe graphics (i7-1185G7) | **Default** (Intel-graphics accelerated) | ~65 sec | ~108 bills/min |
-| The same RTX 5060 box, on the non-CUDA build | **DirectML** (Lite) | ~2.8 min | ~37 bills/min |
+| The same RTX 5060 box, on the non-CUDA build | **DirectML** (Lite) | ~50 sec | ~120 bills/min |
 | Older desktop, Intel UHD 630 graphics (i5-9500T) | **Default** (falls back to CPU) | ~3 min | ~32 bills/min |
+
+### Same laptop, all three Windows editions (apples-to-apples)
+
+We also ran all three editions on **one** machine over the same 100-bill batch — an
+MSI GE63 laptop (Intel i7-9750H, NVIDIA RTX 2060 6 GB, Intel UHD 630 graphics):
+
+| Edition | ~100 bills | Rate | Per bill |
+|---------|-----------:|-----:|---------:|
+| **CUDA** (on the RTX 2060) | ~63 sec | ~107 bills/min | ~0.56 sec |
+| **DirectML** (also on the RTX 2060) | ~96 sec | ~74 bills/min | ~0.81 sec |
+| **Default / OpenVINO** (on the Intel UHD 630 graphics) | ~3.4 min | ~37 bills/min | ~1.62 sec |
+
+CUDA was fastest on this box, but **DirectML runs on the same NVIDIA GPU** and came
+within about a quarter-second per bill — at a fraction of the download size — so it's
+a strong choice for NVIDIA users who don't want the large CUDA install.
 
 Takeaways:
 
