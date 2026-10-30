@@ -391,26 +391,20 @@ class ProcessingPanel(QWidget):
         return getattr(self, "_mode", "manual")
 
     def _browse_input(self):
-        """Browse for input folder."""
+        """Browse for the input folder to process (pick the folder directly)."""
         settings = get_settings()
         # Priority: current field > default_working_dir > home
         start_dir = (self.input_edit.text() or
                      settings.ui.default_working_dir or
                      str(Path.home()))
-        # "Pick any scan in the folder" (Option C, Paul 2026-10-15). The native
-        # folder picker hides files on Windows/macOS, so a user can't tell a folder
-        # of scans from an empty parent -- the trip hazard behind Jon's "picked the
-        # parent -> 0 bills". A file picker uses the familiar NATIVE dialog (which
-        # always shows images), and we take the chosen file's folder, so you can't
-        # land on the wrong level. Case variants are listed because Qt name filters
-        # are case-sensitive in some dialogs; All files is the escape hatch.
-        exts = "*.jpg *.jpeg *.png *.tif *.tiff *.bmp *.JPG *.JPEG *.PNG"
-        sel, _ = QFileDialog.getOpenFileName(
-            self, "Select any scan in the folder to process", start_dir,
-            f"Bill scans ({exts});;All files (*)"
+        # Plain folder picker (reverted from the "pick any scan in the folder"
+        # workaround, Paul 2026-10-30). To still catch the "picked the parent ->
+        # 0 bills" mistake the workaround was guarding against, we check the chosen
+        # folder right here and warn immediately if it holds nothing processable.
+        folder = QFileDialog.getExistingDirectory(
+            self, "Select the folder of scans to process", start_dir
         )
-        if sel:
-            folder = str(Path(sel).parent)
+        if folder:
             old_input = self.input_edit.text()
             self.input_edit.setText(folder)
 
@@ -418,6 +412,35 @@ class ProcessingPanel(QWidget):
             current_output = self.output_edit.text()
             if not current_output or (old_input and current_output == self._default_output_for(old_input)):
                 self.output_edit.setText(self._default_output_for(folder))
+
+            # Surface an empty / wrong-level folder at selection time, not only
+            # when Process is clicked.
+            self._warn_if_no_images(folder)
+
+    def _warn_if_no_images(self, input_dir) -> bool:
+        """If `input_dir` holds no readable scans directly, show a helpful warning
+        and return True; otherwise return False. Shared by Browse (informs) and
+        Process (blocks the run). The message names any image sub-folder (the
+        "picked the parent" case) and any HEIC photos we can't read."""
+        from dollar_detective.process_production import ScannerFormatDetector
+        rep = ScannerFormatDetector.scan_report(Path(input_dir))
+        if rep['supported'] != 0:
+            return False
+        msg = ["No readable images (.jpg, .jpeg, .png, .tif, .bmp) were found "
+               "directly in this folder:", f"\n{input_dir}\n"]
+        if rep['image_subdirs']:
+            subs = ", ".join(rep['image_subdirs'][:5])
+            msg.append(f"A sub-folder here does have images: {subs}. "
+                       "Select that sub-folder instead.")
+        if rep['heic']:
+            msg.append(f"This folder has {rep['heic']} HEIC/HEIF photo(s) "
+                       "(e.g. straight from an iPhone). The app can't read HEIC "
+                       "-- convert them to JPG first.")
+        if not rep['image_subdirs'] and not rep['heic']:
+            msg.append("Double-check this is the right folder and that the "
+                       "scans are .jpg files.")
+        QMessageBox.warning(self, "No images to process", "\n".join(msg))
+        return True
 
     def _browse_output(self):
         """Browse for output folder."""
@@ -486,23 +509,7 @@ class ProcessingPanel(QWidget):
         # mistargeted folder gives a clear message instead of a progress bar that
         # finishes instantly with zero bills (reported by Jon, 2026-10-14 -- he had
         # pointed at a parent folder / non-.jpg files and it looked stuck).
-        from dollar_detective.process_production import ScannerFormatDetector
-        rep = ScannerFormatDetector.scan_report(Path(input_dir))
-        if rep['supported'] == 0:
-            msg = ["No readable images (.jpg, .jpeg, .png, .tif, .bmp) were found "
-                   "directly in this folder:", f"\n{input_dir}\n"]
-            if rep['image_subdirs']:
-                subs = ", ".join(rep['image_subdirs'][:5])
-                msg.append(f"A sub-folder here does have images: {subs}. "
-                           "Select that sub-folder instead.")
-            if rep['heic']:
-                msg.append(f"This folder has {rep['heic']} HEIC/HEIF photo(s) "
-                           "(e.g. straight from an iPhone). The app can't read HEIC "
-                           "-- convert them to JPG first.")
-            if not rep['image_subdirs'] and not rep['heic']:
-                msg.append("Double-check this is the right folder and that the "
-                           "scans are .jpg files.")
-            QMessageBox.warning(self, "No images to process", "\n".join(msg))
+        if self._warn_if_no_images(input_dir):
             return
 
         if not output_dir:
