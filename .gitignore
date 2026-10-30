@@ -133,3 +133,6 @@ review/
 review_inbox/
 test_bills/
 test_low_runs/
+# EasyOCR weights fetched at build time (CUDA edition) and bundled by the spec;
+# never committed -- they're ~94MB and CI repopulates them each build.
+easyocr_models/

@@ -98,6 +98,18 @@ jobs:
           # Reclaim the wheel cache (~GBs) before PyInstaller doubles the footprint.
           pip cache purge || true
 
+      - name: Fetch EasyOCR models (bundle them so first run never downloads)
+        shell: bash
+        # The CUDA edition uses EasyOCR, whose weights normally download on first
+        # run. That HTTPS download fails on fresh Windows machines whose cert store
+        # lacks the download host's root CA (SSL CERTIFICATE_VERIFY_FAILED). Fetch
+        # them here (CI has working certs) into easyocr_models/ so the spec bundles
+        # them and the app runs fully offline. Instantiating Reader pulls exactly
+        # the files this easyocr version expects (right names + md5).
+        run: |
+          python -c "import easyocr; easyocr.Reader(['en'], gpu=False, model_storage_directory='easyocr_models', download_enabled=True, verbose=False)"
+          ls -l easyocr_models
+
       - name: Build onedir (PyInstaller, CUDA spec)
         run: pyinstaller --noconfirm --clean DollarDetective-cuda.spec
 
