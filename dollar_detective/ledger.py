@@ -188,6 +188,43 @@ class Ledger:
         ).fetchone()
         return dict(row) if row else None
 
+    def lookup_serial(self, serial: str) -> list[dict]:
+        """Everything the ledger knows about a serial, for an in-app lookup.
+
+        Unlike seen_before() (which needs year + denomination to pin one bill),
+        this matches on the serial key alone and returns EVERY stored bill with
+        that serial — across series years and denominations (usually a single
+        $1 row). Each entry is the bill row plus its pattern set and its full
+        per-scan observation history (newest first). Bills are ordered
+        most-recently-seen first. Returns [] if the serial was never recorded.
+        """
+        key = normalize_serial(serial)
+        if not key:
+            return []
+        with self._lock:
+            c = self._conn
+            bills = c.execute(
+                "SELECT * FROM bills WHERE serial_key=? ORDER BY last_seen DESC",
+                (key,),
+            ).fetchall()
+            out = []
+            for b in bills:
+                bid = b["id"]
+                pats = [r["pattern"] for r in c.execute(
+                    "SELECT pattern FROM bill_patterns WHERE bill_id=? ORDER BY pattern",
+                    (bid,))]
+                obs = [dict(r) for r in c.execute(
+                    "SELECT o.*, s.label AS session_label, s.source_folder AS "
+                    "session_source FROM observations o "
+                    "LEFT JOIN sessions s ON s.id = o.session_id "
+                    "WHERE o.bill_id=? ORDER BY o.seen_at DESC",
+                    (bid,))]
+                entry = dict(b)
+                entry["patterns"] = pats
+                entry["observations"] = obs
+                out.append(entry)
+        return out
+
     # -- writes ------------------------------------------------------------
     def record(
         self,
@@ -588,6 +625,17 @@ def _selftest() -> None:
     assert st["unique_bills"] == 4, st         # radar, quad, plain, star
     assert st["duplicate_bills"] == 1, st      # radar re-seen
     assert st["fancy"] == 3, st
+
+    # serial-only lookup: matches without year/denom, carries patterns + history
+    look = led.lookup_serial("a12344321b")
+    print("LOOKUP:", json.dumps(look, indent=2))
+    assert len(look) == 1, look
+    hit = look[0]
+    assert hit["times_seen"] == 2 and hit["kept"] == 1, hit
+    assert set(hit["patterns"]) == {"CS_RADAR", "REPEATER"}, hit
+    assert len(hit["observations"]) == 2, hit            # two scans, newest first
+    assert hit["observations"][0]["seen_at"] >= hit["observations"][1]["seen_at"], hit
+    assert led.lookup_serial("Z00000000Z") == []         # never seen
 
     rep = led.report_data()
     print("REPORT:", json.dumps(rep, indent=2))
