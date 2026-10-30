@@ -357,7 +357,8 @@ class MainWindow(QMainWindow):
 
         find_crop_action = QAction("&Find Crop by Serial...", self)
         find_crop_action.setShortcut("Ctrl+Shift+F")
-        find_crop_action.setToolTip("Type a serial and locate its crop file(s) in your filed straps")
+        find_crop_action.setToolTip("Type a serial to see its ledger history (seen before? kept?) "
+                                    "and locate its crop file(s) in your filed straps")
         find_crop_action.triggered.connect(lambda: self._open_find_crop())
         tools_menu.addAction(find_crop_action)
 
@@ -1113,7 +1114,7 @@ class MainWindow(QMainWindow):
         from .find_crop_dialog import FindCropDialog
         dlg = getattr(self, '_find_crop_dialog', None)
         if dlg is None:
-            dlg = FindCropDialog(self)
+            dlg = FindCropDialog(self, ledger_provider=self._get_ledger)
             self._find_crop_dialog = dlg
         if initial_serial:
             dlg.serial_edit.setText(initial_serial)
