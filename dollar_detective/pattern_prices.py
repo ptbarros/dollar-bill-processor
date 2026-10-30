@@ -137,11 +137,60 @@ def write_csv(rows: list, path: Path):
 
 
 def ensure_seeded(engine, path: Optional[Path] = None) -> Path:
-    """Create the prices CSV seeded from current prices if it doesn't exist yet,
-    so the first edit starts from a full, baseline list. Returns the path."""
+    """Make sure every current pattern has a row in the prices CSV, returning the
+    path.
+
+    First time (no file yet) it writes the full baseline list. When the file
+    already exists it TOPS IT UP: a row is appended (at the shipped header price)
+    for every catalog SKU the engine has that isn't already in the file, so newly
+    created user patterns and newly shipped core patterns become editable --
+    while existing rows and the group's edits are left exactly as they are. New
+    rows are appended, aligned to the file's current columns (so an older
+    4-column file stays 4-column). An unreadable file is left untouched.
+    """
     p = Path(path) if path else prices_path()
+    engine_rows = _rows_from_engine(engine)
     if not p.exists():
-        write_csv(_rows_from_engine(engine), p)
+        write_csv(engine_rows, p)
+        return p
+
+    # Read the existing file just enough to learn its columns and which SKUs it
+    # already lists -- never rewrite the rows the user has, so edits are safe.
+    try:
+        with p.open(newline="", encoding="utf-8-sig") as f:
+            rows = list(csv.reader(f))
+    except Exception:
+        return p
+    if not rows:
+        write_csv(engine_rows, p)
+        return p
+
+    header = rows[0]
+    lower = [(c or "").strip().lower() for c in header]
+    ckey_idx = lower.index("catalog") if "catalog" in lower else 0
+    existing = set()
+    for r in rows[1:]:
+        if r and ckey_idx < len(r):
+            sku = (r[ckey_idx] or "").strip()
+            if sku:
+                existing.add(sku)
+
+    # Map a canonical engine row onto whatever columns this file actually has,
+    # so a top-up row lines up with the header (incl. legacy 4-column files).
+    canon = {"catalog": 0, "pattern": 1, "display_name": 2,
+             "price": 3, "price_circ": 4, "price_unc": 5}
+
+    def to_file_cols(r):
+        out = []
+        for col in header:
+            idx = canon.get((col or "").strip().lower())
+            out.append(r[idx] if (idx is not None and idx < len(r)) else "")
+        return out
+
+    missing = [to_file_cols(r) for r in engine_rows if r[0] not in existing]
+    if missing:
+        with p.open("a", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerows(missing)
     return p
 
 
