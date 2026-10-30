@@ -391,7 +391,8 @@ class MainWindow(QMainWindow):
         # overrides the shipped Lua Price: headers.
         prices_menu = tools_menu.addMenu("Pattern &Prices")
         open_prices_action = QAction("&Open Prices File…", self)
-        open_prices_action.setToolTip("Open the editable prices CSV (keyed by catalog number) in your spreadsheet app")
+        open_prices_action.setToolTip("Open the editable prices CSV in your spreadsheet app (and reveal it "
+                                      "in your file manager — send that file to share prices with the group)")
         open_prices_action.triggered.connect(self._open_prices_file)
         prices_menu.addAction(open_prices_action)
 
@@ -402,14 +403,9 @@ class MainWindow(QMainWindow):
 
         prices_menu.addSeparator()
         import_prices_action = QAction("&Import Prices (CSV)…", self)
-        import_prices_action.setToolTip("Load a prices CSV shared by the group")
+        import_prices_action.setToolTip("Replace your prices with a CSV shared by the group")
         import_prices_action.triggered.connect(self._import_prices)
         prices_menu.addAction(import_prices_action)
-
-        export_prices_action = QAction("&Export Prices (CSV)…", self)
-        export_prices_action.setToolTip("Save the current prices to a CSV to share with the group")
-        export_prices_action.triggered.connect(self._export_prices)
-        prices_menu.addAction(export_prices_action)
 
         # Help menu
         help_menu = menubar.addMenu("&Help")
@@ -1487,8 +1483,10 @@ class MainWindow(QMainWindow):
                 pass
 
     def _open_prices_file(self):
-        """Create the prices CSV (seeded from current prices) if needed and open
-        it in the user's spreadsheet app for editing."""
+        """Create the prices CSV (seeded from current prices) if needed, open it
+        in the user's spreadsheet app for editing, and reveal it in the file
+        manager so it's easy to find and send when sharing prices with the group
+        (this is why there's no separate Export command)."""
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
         from dollar_detective import pattern_prices
@@ -1505,8 +1503,16 @@ class MainWindow(QMainWindow):
                                 f"Couldn't create the prices file:\n{e}")
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        # Also reveal it, so the user can find the file to attach/send when
+        # sharing prices (replaces the old Export command).
+        try:
+            from .find_crop_dialog import reveal_in_file_manager
+            reveal_in_file_manager(Path(path))
+        except Exception:
+            pass
         self.status_label.setText(
-            f"Prices file opened — edit it, then Tools → Pattern Prices → Reload Prices")
+            "Prices file opened — edit it, then Tools → Pattern Prices → Reload Prices. "
+            "To share, send this file: " + str(path))
 
     def _reload_prices(self):
         """Re-read the prices file after an external edit."""
@@ -1532,27 +1538,6 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self, "Import Prices",
             f"Imported {n} price(s). New prices show as you view bills and patterns.")
-
-    def _export_prices(self):
-        """Save the current (override-applied) prices to a CSV to share."""
-        from dollar_detective import pattern_prices
-        eng = self._price_engine()
-        if eng is None:
-            QMessageBox.information(
-                self, "Pattern Prices",
-                "Prices aren't available yet — load or process a batch first.")
-            return
-        dest, _ = QFileDialog.getSaveFileName(
-            self, "Export Prices CSV", "pattern_prices.csv",
-            "CSV files (*.csv);;All files (*)")
-        if not dest:
-            return
-        try:
-            pattern_prices.export_to(eng, Path(dest))
-        except Exception as e:
-            QMessageBox.warning(self, "Export Prices", f"Couldn't export:\n{e}")
-            return
-        QMessageBox.information(self, "Export Prices", f"Saved to:\n{dest}")
 
     def _on_pattern_manager(self):
         """Open pattern manager dialog."""
