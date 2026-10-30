@@ -108,6 +108,27 @@ def load_ocr_backend(use_gpu=False):
         return EasyOCRBackend(use_gpu=use_gpu)
 
 
+# EasyOCR's English setup needs exactly these two weight files: the CRAFT text
+# detector and the english_g2 recognizer. The CUDA edition bundles them (see
+# DollarDetective-cuda.spec) so first run never has to download them — which was
+# failing on fresh Windows installs whose cert store lacks the download host's
+# root CA (SSL CERTIFICATE_VERIFY_FAILED).
+_EASYOCR_MODEL_FILES = ("craft_mlt_25k.pth", "english_g2.pth")
+
+
+def _bundled_easyocr_dir():
+    """Return the bundled EasyOCR model dir if it exists and holds the weights,
+    else None (dev / editions that don't bundle them -> normal auto-download)."""
+    try:
+        from dollar_detective.resource_path import app_base
+        d = app_base() / "easyocr_models"
+        if all((d / f).exists() for f in _EASYOCR_MODEL_FILES):
+            return d
+    except Exception:
+        pass
+    return None
+
+
 class EasyOCRBackend:
     """Thin wrapper over easyocr.Reader that ignores the whole_image hint."""
 
@@ -115,7 +136,17 @@ class EasyOCRBackend:
 
     def __init__(self, use_gpu=False):
         import easyocr
-        self.reader = easyocr.Reader(["en"], gpu=use_gpu, verbose=False)
+        # Prefer bundled weights (offline, deterministic, no first-run SSL
+        # download). Only when they're actually present do we disable downloads —
+        # otherwise fall back to EasyOCR's default (download to its user dir), so
+        # dev machines and non-bundling editions are unaffected.
+        bundled = _bundled_easyocr_dir()
+        if bundled is not None:
+            self.reader = easyocr.Reader(
+                ["en"], gpu=use_gpu, verbose=False,
+                model_storage_directory=str(bundled), download_enabled=False)
+        else:
+            self.reader = easyocr.Reader(["en"], gpu=use_gpu, verbose=False)
 
     def readtext(self, image, allowlist="", detail=1, whole_image=False, detect=False, **kw):
         # whole_image/detect are RapidOCR routing hints; EasyOCR always detects.

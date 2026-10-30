@@ -22,6 +22,15 @@ datas = [
 ]
 # NOTE: best.onnx is deliberately NOT bundled so load_detector uses the torch
 # path even if the runtime hook were bypassed.
+# EasyOCR weights (CRAFT detector + english_g2 recognizer). CI populates
+# easyocr_models/ before this runs (see .github/workflows/build.yml) so they ship
+# inside the bundle and EasyOCR never has to download them on first run -- that
+# download was failing SSL on fresh Windows installs. If the dir is absent (a
+# local build without the fetch step), nothing is bundled and ocr_backend falls
+# back to EasyOCR's normal auto-download.
+for p in Path('easyocr_models').rglob('*'):
+    if p.is_file():
+        datas.append((str(p), 'easyocr_models'))
 for p in Path('patterns').rglob('*'):
     if p.is_file() and '__pycache__' not in p.parts and 'user' not in p.parts:
         datas.append((str(p), str(p.parent)))
@@ -37,7 +46,8 @@ hiddenimports = ['yaml', 'pandas', 'openpyxl', 'docx', 'PIL', 'dollar_detective.
 # Collect packages that ship data and/or dynamically load native libs:
 #   - torch / torchvision: CUDA runtime DLLs live in torch/lib
 #   - ultralytics: YOLO model plumbing + assets
-#   - easyocr: recognition/detection modules (weights auto-download on first run)
+#   - easyocr: recognition/detection code modules (the weights themselves ship
+#     via the easyocr_models/ datas above, not through collect_all)
 #   - lupa: versioned native lua lib
 #   - anthropic / openai: AI pattern generation (lazily imported in the AI tab);
 #     collect_all pulls their compiled deps (pydantic_core, jiter) + metadata
