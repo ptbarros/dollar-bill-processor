@@ -391,8 +391,8 @@ class MainWindow(QMainWindow):
         # overrides the shipped Lua Price: headers.
         prices_menu = tools_menu.addMenu("Pattern &Prices")
         open_prices_action = QAction("&Open Prices File…", self)
-        open_prices_action.setToolTip("Open the editable prices CSV in your spreadsheet app (and reveal it "
-                                      "in your file manager — send that file to share prices with the group)")
+        open_prices_action.setToolTip("Open the editable prices CSV in your spreadsheet app "
+                                      "(its path is shown so you can send that file to share prices with the group)")
         open_prices_action.triggered.connect(self._open_prices_file)
         prices_menu.addAction(open_prices_action)
 
@@ -1483,9 +1483,9 @@ class MainWindow(QMainWindow):
                 pass
 
     def _open_prices_file(self):
-        """Create the prices CSV (seeded from current prices) if needed, open it
-        in the user's spreadsheet app for editing, and reveal it in the file
-        manager so it's easy to find and send when sharing prices with the group
+        """Create the prices CSV (seeded from current prices) if needed and open
+        it in the user's spreadsheet app for editing. The status line shows its
+        path so it's easy to find and send when sharing prices with the group
         (this is why there's no separate Export command)."""
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
@@ -1503,13 +1503,8 @@ class MainWindow(QMainWindow):
                                 f"Couldn't create the prices file:\n{e}")
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
-        # Also reveal it, so the user can find the file to attach/send when
-        # sharing prices (replaces the old Export command).
-        try:
-            from .find_crop_dialog import reveal_in_file_manager
-            reveal_in_file_manager(Path(path))
-        except Exception:
-            pass
+        # Show the path (not a second window) so the user can find the file to
+        # send when sharing prices -- this covers what the old Export did.
         self.status_label.setText(
             "Prices file opened — edit it, then Tools → Pattern Prices → Reload Prices. "
             "To share, send this file: " + str(path))
