@@ -126,6 +126,16 @@ class MainWindow(QMainWindow):
         self._refresh_profile_picker()
         self._refresh_process_denomination()
 
+        # Watch the prices file (if it already exists) so an external edit
+        # auto-reloads even before the user opens it this session.
+        try:
+            from dollar_detective import pattern_prices
+            pp = pattern_prices.prices_path()
+            if pp.exists():
+                self._watch_prices_file(pp)
+        except Exception:
+            pass
+
         # Check for recovery on startup (after UI is ready)
         QTimer.singleShot(100, self._check_for_recovery)
 
@@ -397,7 +407,8 @@ class MainWindow(QMainWindow):
         prices_menu.addAction(open_prices_action)
 
         reload_prices_action = QAction("&Reload Prices", self)
-        reload_prices_action.setToolTip("Re-read the prices file after editing it, so new prices show")
+        reload_prices_action.setToolTip("Re-read the prices file now (edits normally reload automatically on save; "
+                                        "use this as a fallback or after importing)")
         reload_prices_action.triggered.connect(self._reload_prices)
         prices_menu.addAction(reload_prices_action)
 
@@ -1503,11 +1514,53 @@ class MainWindow(QMainWindow):
                                 f"Couldn't create the prices file:\n{e}")
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        # Watch the file so saving it in the spreadsheet app reloads prices
+        # automatically -- no manual Reload needed.
+        self._watch_prices_file(path)
         # Show the path (not a second window) so the user can find the file to
         # send when sharing prices -- this covers what the old Export did.
         self.status_label.setText(
-            "Prices file opened — edit it, then Tools → Pattern Prices → Reload Prices. "
+            "Prices file opened — your edits apply automatically when you save it. "
             "To share, send this file: " + str(path))
+
+    def _watch_prices_file(self, path):
+        """Watch the prices CSV so an external save auto-reloads the overrides."""
+        from PySide6.QtCore import QFileSystemWatcher
+        if getattr(self, "_price_watcher", None) is None:
+            self._price_watcher = QFileSystemWatcher(self)
+            self._price_watcher.fileChanged.connect(self._on_prices_file_changed)
+        p = str(path)
+        try:
+            if p not in self._price_watcher.files():
+                self._price_watcher.addPath(p)
+        except Exception:
+            pass
+
+    def _on_prices_file_changed(self, path):
+        """A save landed on the prices file. Debounce (editors fire several
+        events and often save-by-replace), then reload once."""
+        from PySide6.QtCore import QTimer
+        self._pending_prices_path = path
+        if getattr(self, "_prices_reload_timer", None) is None:
+            self._prices_reload_timer = QTimer(self)
+            self._prices_reload_timer.setSingleShot(True)
+            self._prices_reload_timer.timeout.connect(self._auto_reload_prices)
+        self._prices_reload_timer.start(400)
+
+    def _auto_reload_prices(self):
+        """Re-read prices after a watched save; re-arm the watch (a save-by-replace
+        drops it) and only reload if the file is actually there."""
+        path = getattr(self, "_pending_prices_path", None)
+        try:
+            if (path and Path(path).exists() and self._price_watcher
+                    and path not in self._price_watcher.files()):
+                self._price_watcher.addPath(path)
+        except Exception:
+            pass
+        if not (path and Path(path).exists()):
+            return
+        self._reload_price_overrides_all()
+        self.status_label.setText("Prices updated from the file — new prices now showing.")
 
     def _reload_prices(self):
         """Re-read the prices file after an external edit."""
