@@ -145,9 +145,20 @@ def _pkg_version(mod):
         return None
 
 
+def _app_version():
+    """The app's own version, so each run record names the build it came from
+    (the debug log otherwise has edition but no version)."""
+    try:
+        from dollar_detective.version import __version__
+        return __version__
+    except Exception:
+        return None
+
+
 def collect():
     """Return a dict of machine facts (best-effort; missing fields omitted)."""
     info = {"edition": _edition(),
+            "app_version": _app_version(),
             "os": platform.platform(),
             "arch": platform.machine(),
             "cpu": _cpu_name(),
@@ -167,8 +178,8 @@ def log_system_info():
     try:
         from dollar_detective.debug_logger import dlog_raw
         info = collect()
-        order = ("edition", "os", "arch", "cpu", "cpu_cores", "ram_gb", "gpu",
-                 "torch_cuda_gpu", "onnx_providers", "onnxruntime", "torch", "python")
+        order = ("edition", "app_version", "os", "arch", "cpu", "cpu_cores", "ram_gb",
+                 "gpu", "torch_cuda_gpu", "onnx_providers", "onnxruntime", "torch", "python")
         lines = ["[SYSINFO] machine snapshot:"]
         for k in order:
             if k in info:
