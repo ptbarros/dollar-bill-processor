@@ -2,7 +2,7 @@
 Pattern: DUPLICATE_SN
 DisplayName: Duplicate S/N
 Catalog: C-137
-Description: Series 2013 New York (B) $1 star note in a duplicated serial range
+Description: A famous U.S. printing error. Serial numbers are supposed to be unique, but the Bureau of Engraving and Printing accidentally printed two separate batches of Series 2013 $1 New York (district "B") STAR notes using the SAME serial numbers -- so two different real notes share one serial. This flags such a note: a Series 2013 bill whose serial starts with B and ends in a star, with a number in the ranges known to have been duplicated. Collectors prize finding both notes of a matching pair.
 Tier: 3
 Odds: Varies — flags Series 2013 B* star notes in the known duplicate-serial ranges
 Examples: ["B00000001*", "B00100000*", "B03200001*", "B05000000*"]
