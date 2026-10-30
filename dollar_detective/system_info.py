@@ -121,13 +121,37 @@ def _onnx_providers():
 
 
 def _torch_cuda():
+    # Do NOT import torch just to log a device name. A cold torch+CUDA import can
+    # take 75-120s on the first launch after an install (Windows Defender scanning
+    # the freshly-written CUDA DLLs + the driver building its kernel cache), and
+    # because this runs in the startup SYSINFO thread a long Python-level import
+    # holds the GIL -- freezing the GUI the moment the user clicks (e.g. the input-
+    # folder icon). Only report when torch is ALREADY loaded (real inference used
+    # it); the GPU is reported anyway via _gpu_names() from the OS.
+    torch = sys.modules.get("torch")
+    if torch is None:
+        return None
     try:
-        import torch
         if torch.cuda.is_available():
             return torch.cuda.get_device_name(0)
     except Exception:
         pass
     return None
+
+
+def _torch_version():
+    # torch version WITHOUT importing the module (see _torch_cuda for why): read it
+    # from distribution metadata, else an already-imported torch, never a fresh import.
+    try:
+        from importlib.metadata import version, PackageNotFoundError
+        try:
+            return version("torch")
+        except PackageNotFoundError:
+            pass
+    except Exception:
+        pass
+    t = sys.modules.get("torch")
+    return getattr(t, "__version__", None) if t is not None else None
 
 
 def _edition():
@@ -157,7 +181,7 @@ def collect():
             "torch_cuda_gpu": _torch_cuda(),
             "onnx_providers": ", ".join(_onnx_providers()) or None,
             "onnxruntime": _pkg_version("onnxruntime"),
-            "torch": _pkg_version("torch"),
+            "torch": _torch_version(),
             "python": platform.python_version()}
     return {k: v for k, v in info.items() if v not in (None, "")}
 
