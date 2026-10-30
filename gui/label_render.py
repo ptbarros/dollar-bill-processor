@@ -42,7 +42,8 @@ LINE_SPACING = 1.18   # multiple of font height between baselines
 # The bill values a label field can pull, in the default order, with the
 # human-readable name shown in the field editor.
 FIELD_VARS = ["serial", "series", "pattern", "note", "catalog", "position",
-              "denomination", "front_plate", "back_plate", "odds", "price"]
+              "denomination", "front_plate", "back_plate", "odds",
+              "odds_one_in", "odds_per_96m", "price"]
 FIELD_LABELS = {
     "serial": "Serial",
     "series": "Series",
@@ -53,9 +54,37 @@ FIELD_LABELS = {
     "denomination": "Denomination",
     "front_plate": "Front Plate",
     "back_plate": "Back Plate",
-    "odds": "Odds",
+    "odds": "Odds (full)",
+    "odds_one_in": "Odds (1 in X)",
+    "odds_per_96m": "Odds (out of 96M)",
     "price": "Price",
 }
+
+# The computed Odds header reads e.g. "1 in 10,000 (9,600 per 96M)" -- both parts
+# on one label line is too long, so odds_one_in / odds_per_96m let a profile print
+# just the "1 in X" half or just the "N out of 96M" half (see split_odds).
+_ONE_IN_RE = re.compile(r"1\s*in\s*[\d,]+(?:\.\d+)?", re.IGNORECASE)
+_PER_96M_RE = re.compile(r"([\d,]+)\s*per\s*96M", re.IGNORECASE)
+
+
+def split_odds(odds: str) -> Tuple[str, str]:
+    """Split an Odds string into its ("1 in X", "N out of 96M") halves.
+
+    Returns ("", "") for an empty string. If only one half is recognizable
+    (e.g. a plain "1 in 10,000" with no count), the other comes back "". If
+    neither half parses (freeform odds like "Varies — ..."), the whole string
+    is returned as the "1 in X" half so nothing is silently lost.
+    """
+    s = (odds or "").strip()
+    if not s:
+        return "", ""
+    one = _ONE_IN_RE.search(s)
+    per = _PER_96M_RE.search(s)
+    one_in = one.group(0).strip() if one else ""
+    per_96m = f"{per.group(1)} out of 96M" if per else ""
+    if not one_in and not per_96m:
+        one_in = s
+    return one_in, per_96m
 
 
 @dataclass
@@ -123,6 +152,8 @@ class LabelTemplate:
             LabelField("front_plate",  "FP ", False, False),
             LabelField("back_plate",   "BP ", False, True),
             LabelField("odds",     "Odds: ",  False, False),
+            LabelField("odds_one_in",  "Odds: ",  False, False),
+            LabelField("odds_per_96m", "",        False, False),
             LabelField("price",    "",        False, False),
         ])
 
@@ -259,6 +290,7 @@ class LabelData:
     lines: Optional[List[str]] = None
 
     def values(self) -> Dict[str, str]:
+        one_in, per_96m = split_odds(self.odds)
         return {
             "serial": self.serial,
             "series": self.series,
@@ -270,6 +302,8 @@ class LabelData:
             "front_plate": self.front_plate,
             "back_plate": self.back_plate,
             "odds": self.odds,
+            "odds_one_in": one_in,
+            "odds_per_96m": per_96m,
             "price": self.price,
         }
 
