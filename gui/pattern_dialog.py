@@ -428,11 +428,47 @@ class PatternDialog(QDialog):
         self.label_reset_btn.setToolTip("Reset to the pattern's default label")
         self.label_reset_btn.clicked.connect(self._on_label_reset)
         label_row.addWidget(self.label_reset_btn)
+        # Alias picker: one-click choice among the pattern's AKA aliases (and its
+        # default name) as the display label. Just fills the field above and reuses
+        # the same override path -- the chosen STRING is stored, never an index, so
+        # it degrades gracefully if the alias list later changes. Hidden unless the
+        # selected pattern has aliases.
+        self.label_aka_btn = QPushButton("Aliases ▾")
+        self.label_aka_btn.setToolTip("Use one of this pattern's aliases as the display label")
+        self.label_aka_menu = QMenu(self.label_aka_btn)
+        self.label_aka_btn.setMenu(self.label_aka_menu)
+        self.label_aka_btn.setVisible(False)
+        label_row.addWidget(self.label_aka_btn)
         details_layout.addLayout(label_row)
 
         self.pattern_desc_label = QLabel("-")
         self.pattern_desc_label.setWordWrap(True)
         details_layout.addWidget(self.pattern_desc_label)
+
+        # "Also known as:" -- the pattern's effective searchable aliases (built-in
+        # AKA header + any the user added). Muted; hidden when the pattern has none.
+        self.pattern_aka_label = QLabel("")
+        self.pattern_aka_label.setWordWrap(True)
+        self.pattern_aka_label.setStyleSheet("color: gray; font-style: italic;")
+        self.pattern_aka_label.setVisible(False)
+        details_layout.addWidget(self.pattern_aka_label)
+
+        # User-added aliases: a settings-layer override (like Label/Tier) so the
+        # user can give ANY pattern -- including a read-only core one -- extra names
+        # to search by and pick as a display label, without editing its .lua. These
+        # merge with the built-in AKA header; this field edits only the user's own.
+        aka_row = QHBoxLayout()
+        aka_row.addWidget(QLabel("Add aliases:"))
+        self.aka_edit = QLineEdit()
+        self.aka_edit.setPlaceholderText("your own names, comma-separated (merged with any built-in)")
+        self.aka_edit.setToolTip("Extra names to search this pattern by (and pick as its display label). Comma-separated; merged with the pattern's built-in aliases.")
+        self.aka_edit.editingFinished.connect(self._on_aka_edited)
+        aka_row.addWidget(self.aka_edit, 1)
+        self.aka_reset_btn = QPushButton("Reset")
+        self.aka_reset_btn.setToolTip("Clear the aliases you added (built-in ones remain)")
+        self.aka_reset_btn.clicked.connect(self._on_aka_reset)
+        aka_row.addWidget(self.aka_reset_btn)
+        details_layout.addLayout(aka_row)
 
         # Editable tier -- a settings-layer override (like the label above) so a
         # user can reorder a pattern by its perceived value WITHOUT editing the
@@ -843,6 +879,10 @@ class PatternDialog(QDialog):
                 # Every pattern is Lua now, so a "[Lua]" tag conveys nothing --
                 # show the plain name.
                 pattern_item.setText(0, friendly_name)
+                # Disambiguate rows that now share a display name (a user can set
+                # one to an alias): the internal name + SKU is the stable identity.
+                sku = defn.get('catalog', '')
+                pattern_item.setToolTip(0, f"{name}  ({sku})" if sku else name)
 
                 # Tier column (for sorting)
                 pattern_item.setText(1, str(tier))
@@ -906,7 +946,11 @@ class PatternDialog(QDialog):
                 # interchangeable so a multi-word search finds "SEAL_SHIFT" -- Ed
                 # review (plain-name search missed every multi-word pattern).
                 label = pattern_item.text(0).lower()
-                haystack = " ".join((name, name.replace("_", " "), label, desc, library))
+                # Aliases (AKA header) are searchable too, so "3OAK" or "trips"
+                # finds THREE_OF_A_KIND. Presentation only -- not an identity key.
+                aka = " ".join(data['defn'].get('aka', [])).lower()
+                haystack = " ".join((name, name.replace("_", " "), label, desc,
+                                     library, aka))
                 needle = filter_text.replace("_", " ")
                 text_match = not needle or needle in haystack
 
@@ -1129,6 +1173,19 @@ class PatternDialog(QDialog):
         else:
             self.pattern_desc_label.setText(defn.get('description', 'No description'))
 
+        # Aliases: "Also known as:" shows the EFFECTIVE set (built-in + user-added),
+        # which is what get_pattern_info put in defn['aka']. The edit field below
+        # shows only the user's own additions (a settings override).
+        aka = list(defn.get('aka', []) or [])
+        self.pattern_aka_label.setText("Also known as: " + ", ".join(aka))
+        self.pattern_aka_label.setVisible(bool(aka))
+        self._populate_aka_menu(aka, default_label)
+        user_aka = self.settings.get_pattern_aka(name)
+        self.aka_edit.blockSignals(True)
+        self.aka_edit.setText(", ".join(user_aka))
+        self.aka_edit.blockSignals(False)
+        self.aka_reset_btn.setEnabled(bool(user_aka))
+
         # Tier: show the effective value (override wins), with the pattern's own
         # tier noted alongside. Editing to the default clears the override.
         default_tier = int(lua_info.tier) if lua_info is not None else int(defn.get('tier', 10) or 10)
@@ -1267,6 +1324,72 @@ class PatternDialog(QDialog):
 
         # Update pattern preview
         self._update_pattern_preview(name, lua_info)
+
+    def _populate_aka_menu(self, aka, default_label):
+        """Rebuild the alias-picker menu for the selected pattern. Hidden when the
+        pattern has no aliases."""
+        self.label_aka_menu.clear()
+        if not aka:
+            self.label_aka_btn.setVisible(False)
+            return
+        act = self.label_aka_menu.addAction(f"Default ({default_label})")
+        act.triggered.connect(self._on_label_reset)
+        self.label_aka_menu.addSeparator()
+        for alias in aka:
+            a = self.label_aka_menu.addAction(alias)
+            # default-arg binds the loop value; store the resolved string, not an index.
+            a.triggered.connect(lambda checked=False, s=alias: self._choose_aka_label(s))
+        self.label_aka_btn.setVisible(True)
+
+    def _choose_aka_label(self, text):
+        """Set the selected pattern's display label to a chosen alias, reusing the
+        existing override path (stores the string)."""
+        self.label_edit.setText(text)
+        self._on_label_edited()
+
+    def _on_aka_edited(self):
+        """Persist the user-added aliases for the selected pattern and refresh the
+        effective-alias displays (so search / dropdown / 'Also known as' update)."""
+        name = getattr(self, '_selected_pattern_name', None)
+        if not name:
+            return
+        aliases = [a.strip() for a in self.aka_edit.text().split(',') if a.strip()]
+        self.settings.set_pattern_aka(name, aliases)
+        self.settings.save()
+        self.aka_reset_btn.setEnabled(bool(self.settings.get_pattern_aka(name)))
+        self._refresh_effective_aka(name)
+
+    def _on_aka_reset(self):
+        """Clear the user-added aliases for the selected pattern (built-in remain)."""
+        name = getattr(self, '_selected_pattern_name', None)
+        if not name:
+            return
+        self.settings.set_pattern_aka(name, [])
+        self.settings.save()
+        self.aka_edit.blockSignals(True)
+        self.aka_edit.clear()
+        self.aka_edit.blockSignals(False)
+        self.aka_reset_btn.setEnabled(False)
+        self._refresh_effective_aka(name)
+
+    def _refresh_effective_aka(self, name):
+        """Recompute effective aliases for a pattern after a user edit and update
+        the 'Also known as' line, the alias dropdown, and the cached tree defn (so
+        the filter searches the new aliases immediately)."""
+        info = self.engine.get_pattern_info(name) if HAS_V3_ENGINE else None
+        aka = list((info or {}).get('aka', []) or [])
+        self.pattern_aka_label.setText("Also known as: " + ", ".join(aka))
+        self.pattern_aka_label.setVisible(bool(aka))
+        default_label = getattr(self, '_selected_pattern_default_label', '')
+        self._populate_aka_menu(aka, default_label)
+        # Keep the selected tree row's cached defn in sync so _filter_patterns
+        # (which reads data['defn']['aka']) finds the new aliases without a reload.
+        item = self.pattern_tree.currentItem() if hasattr(self, 'pattern_tree') else None
+        if item is not None:
+            data = item.data(0, Qt.UserRole)
+            if data and 'defn' in data:
+                data['defn']['aka'] = aka
+                item.setData(0, Qt.UserRole, data)
 
     def _on_label_edited(self):
         """Persist the edited display-label override for the selected pattern."""
@@ -2556,9 +2679,11 @@ class PatternDialog(QDialog):
 
         labels = {n: self.settings.get_pattern_label(n) for n in names
                   if self.settings.get_pattern_label(n)}
+        aka = {n: self.settings.get_pattern_aka(n) for n in names
+               if self.settings.get_pattern_aka(n)}
         try:
             summary = pattern_bundle.export_bundle(
-                self.engine, names, path, pattern_labels=labels)
+                self.engine, names, path, pattern_labels=labels, pattern_aka=aka)
         except Exception as e:
             QMessageBox.critical(self, "Export failed", str(e))
             return
@@ -2566,6 +2691,7 @@ class PatternDialog(QDialog):
         msg = (f"Exported {summary['count']} pattern(s)"
                + (f" and {summary['data_files']} data file(s)" if summary['data_files'] else "")
                + (f" with {summary['labels']} custom label(s)" if summary.get('labels') else "")
+               + (f" with {summary['aka']} alias set(s)" if summary.get('aka') else "")
                + f" to:\n{summary['path']}\n\nShare this file — the recipient uses "
                  "“Import Bundle…” to add these patterns.")
         if summary["missing_data"]:
@@ -2623,9 +2749,12 @@ class PatternDialog(QDialog):
 
         # Apply any display-label overrides that travelled with the bundle.
         bundled_labels = summary.get("pattern_labels", {}) or {}
-        if bundled_labels:
+        bundled_aka = summary.get("pattern_aka", {}) or {}
+        if bundled_labels or bundled_aka:
             for name, label in bundled_labels.items():
                 self.settings.set_pattern_label(name, label)
+            for name, aliases in bundled_aka.items():
+                self.settings.set_pattern_aka(name, aliases)
             self.settings.save()
 
         self._load_patterns()  # rebuild the tree to show the imported patterns
@@ -2967,6 +3096,7 @@ Logs appear in batch test results and "Copy for AI Debug" output.
                 examples=defn.get('examples'),
                 library=library,
                 display_name=defn.get('display_name', ''),
+                aka=defn.get('aka'),
             )
         else:
             # Legacy YAML rule pattern.
@@ -2998,6 +3128,7 @@ Logs appear in batch test results and "Copy for AI Debug" output.
             tier=defn.get('tier', 5),
             price=defn.get('price', ''),
             library=library,
+            aka=defn.get('aka'),
         )
         if not res.get('ok'):
             QMessageBox.warning(self, "Could Not Create Pattern",
@@ -3530,6 +3661,14 @@ class CustomPatternDialog(QDialog):
         self.examples_edit.setPlaceholderText(
             "optional — matching serials, e.g. 12345678, 87654321 (helps the preview)")
         header_layout.addRow("Examples:", self.examples_edit)
+
+        # Optional search aliases, written to the Lua header as AKA: a, b, c.
+        # Purely presentation -- makes the pattern findable by other names and
+        # offers them as one-click display labels in the Pattern Manager.
+        self.aka_edit = QLineEdit()
+        self.aka_edit.setPlaceholderText(
+            "optional — other names, e.g. 3OAK, Three of a Kind, Trips (searchable)")
+        header_layout.addRow("Aliases (AKA):", self.aka_edit)
 
         tier_layout = QHBoxLayout()
         self.tier_spin = QSpinBox()
@@ -4864,6 +5003,11 @@ class CustomPatternDialog(QDialog):
                     self.tier_spin.setValue(tier)
             except ValueError:
                 pass
+
+        # Parse AKA aliases (comma-separated)
+        aka = self._extract_aka_from_header(header)
+        if aka:
+            self.aka_edit.setText(', '.join(aka))
 
     def _extract_examples_from_header(self, code: str) -> list:
         """Extract Examples list from Lua script header."""
@@ -6279,6 +6423,11 @@ end
         self.desc_edit.setText(self.defn.get('description', ''))
         self.tier_spin.setValue(self.defn.get('tier', 5))
 
+        # Aliases: from defn, else parsed from the script header.
+        aka = self.defn.get('aka') or self._extract_aka_from_header(self.original_script or "")
+        if aka:
+            self.aka_edit.setText(', '.join(aka))
+
         if self.original_script:
             # A list pattern (made via "From a list") reopens in the list editor
             # with its numbers reloaded, rather than dropping into raw Lua.
@@ -6339,6 +6488,20 @@ end
             if len(digits) == 8:
                 out.append(digits)
         return out
+
+    def _aka_from_field(self) -> list:
+        """Parse the Aliases (AKA) field into a comma-separated list of names."""
+        text = self.aka_edit.text().strip()
+        if not text:
+            return []
+        return [a.strip() for a in text.split(',') if a.strip()]
+
+    def _extract_aka_from_header(self, code: str) -> list:
+        """Extract the AKA alias list from a Lua script header (comma-separated)."""
+        m = re.search(r'(?im)^\s*AKA:\s*(.+)$', code or "")
+        if not m:
+            return []
+        return [a.strip() for a in m.group(1).split(',') if a.strip()]
 
     def _validate_and_accept(self):
         """Validate input and accept."""
@@ -6619,6 +6782,7 @@ end
                 'description': self.desc_edit.text().strip(),
                 'tier': tier,
                 'price': self.list_price_edit.text().strip(),
+                'aka': self._aka_from_field(),
             }
 
         # Dates editor: render dates to serials, then save as an exact list.
@@ -6632,6 +6796,7 @@ end
                 'description': self.desc_edit.text().strip(),
                 'tier': tier,
                 'price': self.dates_price_edit.text().strip(),
+                'aka': self._aka_from_field(),
             }
 
         # Check for wizard-generated pattern
@@ -6644,16 +6809,20 @@ end
                 'tier': tier,
                 'script': script,
                 'examples': examples,
+                'aka': self._aka_from_field(),
                 'source': 'lua'
             }
         elif self.is_lua_pattern and HAS_V3_ENGINE:
-            # Return script from editor. Preserve examples: prefer the Examples
-            # field, else what's already in the script header -- otherwise
+            # Return script from editor. Preserve examples/aka: prefer the header
+            # fields, else what's already in the script header -- otherwise
             # save_user_pattern rebuilds the header and would drop them.
             script = self.script_edit.toPlainText()
             examples = self._examples_from_field()
             if not examples:
                 examples = self._extract_examples_from_header(script)
+            aka = self._aka_from_field()
+            if not aka:
+                aka = self._extract_aka_from_header(script)
             defn = {
                 'description': description,
                 'display_name': display_name,
@@ -6663,6 +6832,8 @@ end
             }
             if examples:
                 defn['examples'] = examples
+            if aka:
+                defn['aka'] = aka
             return name, defn
         else:
             # Convert simple rule to Lua script
@@ -6685,6 +6856,9 @@ end
             header_lines.append(f'Tier: {tier}')
             if examples:
                 header_lines.append(f'Examples: {json.dumps(examples)}')
+            aka = self._aka_from_field()
+            if aka:
+                header_lines.append('AKA: ' + ', '.join(aka))
             header_lines.append('--]]')
             header_lines.append('')
 
@@ -6696,6 +6870,7 @@ end
                 'tier': tier,
                 'script': script,
                 'examples': examples,
+                'aka': aka,
                 'source': 'lua'
             }
 

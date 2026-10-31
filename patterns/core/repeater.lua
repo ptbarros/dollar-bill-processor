@@ -4,6 +4,7 @@ DisplayName: Repeater
 Catalog: C-083
 Description: First 4 digits repeat in positions 5-8 (ABCDABCD)
 Tier: 5
+AKA: ABCDABCD, Double Repeat
 Odds: 1 in 10,001 (9,599 per 96M)
 Examples: ["12341234", "00110011", "98769876", "12001200"]
 --]]
