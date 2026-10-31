@@ -4,6 +4,7 @@ DisplayName: History Note Leap Year
 Catalog: C-145
 Description: Reads as a leap-day date — the 29th of February in the day-first style — from more than a hundred years ago (e.g. 29·02·1904).
 Tier: 6
+AKA: Leap Day Historical Date, Leap Day Date, Feb 29 Date
 Odds: Depends on the date
 Examples: ["29021904", "29021808"]
 --]]

@@ -4,6 +4,7 @@ DisplayName: Counting By 8s Ladder
 Catalog: C-019
 Description: Counting by 8s ladder (08162432)
 Tier: 2
+AKA: Count by 8, Skip Count by 8, Multiples of 8
 Examples: ["08162432", "16243240"]
 Odds: 1 in 1,263,158 (76 per 96M)
 Price: $100-$1,000+

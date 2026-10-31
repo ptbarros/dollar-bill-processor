@@ -4,6 +4,7 @@ DisplayName: Star Note
 Catalog: C-139
 Description: Star note (replacement bill)
 Tier: 4
+AKA: Replacement Note, Star Serial, Asterisk Note
 Overlay: none
 Examples: ["A12345678*"]
 Odds: ~3% of print run

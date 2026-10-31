@@ -4,6 +4,7 @@ DisplayName: 3 Consecutive Pairs
 Catalog: C-116
 Description: 3 consecutive pairs within the serial
 Tier: 7
+AKA: Three Consecutive Pairs, Three Pairs in a Row
 Odds: 1 in 433 (221,859 per 96M)
 Examples: ["11223312", "12233445", "00112234", "99887700"]
 --]]

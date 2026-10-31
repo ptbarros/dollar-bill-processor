@@ -4,6 +4,7 @@ DisplayName: Counting By 2s Ladder
 Catalog: C-032
 Description: Counting by 2s ladder (02040608)
 Tier: 2
+AKA: Count by 2, Skip Count by 2, Multiples of 2
 Examples: ["02040608", "12141618"]
 Odds: 1 in 1,021,277 (94 per 96M)
 Price: $100-$1,000+

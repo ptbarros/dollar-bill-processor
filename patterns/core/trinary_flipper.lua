@@ -4,6 +4,7 @@ DisplayName: Trinary Flipper
 Catalog: C-105
 Description: Built from three different digits, all of them ones that still look like digits upside-down — 0, 1, 6, 8 and 9 (e.g. 0181·0081).
 Tier: 6
+AKA: Flippable Trinary
 Flippable: true
 Examples: ["01810081", "61160016", "61916191"]
 Odds: 1 in 1,906 (50,359 per 96M)

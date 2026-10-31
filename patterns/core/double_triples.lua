@@ -4,6 +4,7 @@ DisplayName: Two Triple Runs
 Catalog: C-102
 Description: Two or more separate runs of exactly three identical digits, with no run of four or more anywhere (e.g. 444·6·7·000, where 444 and 000 both qualify).
 Tier: 6
+AKA: 2 Triple Runs, Separate Triples
 Odds: 1 in 2,232 (43,011 per 96M)
 Examples: ["44467000", "00011100", "11100222", "00033355"]
 Price: $10-$30

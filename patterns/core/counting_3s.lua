@@ -4,6 +4,7 @@ DisplayName: Counting By 3s Ladder
 Catalog: C-031
 Description: Counting by 3s ladder (06091215)
 Tier: 2
+AKA: Count by 3, Skip Count by 3, Multiples of 3
 Examples: ["03060912", "06091215"]
 Odds: 1 in 1,054,945 (91 per 96M)
 Price: $100-$1,000+

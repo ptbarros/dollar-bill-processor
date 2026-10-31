@@ -4,6 +4,7 @@ DisplayName: Quad Ladder
 Catalog: C-013
 Description: Two blocks of four identical digits where the second block is one higher or lower than the first (e.g. 6666·7777).
 Tier: 1
+AKA: Counting Quads, Stepped Quads
 Odds: 1 in 5,647,059 (17 per 96M)
 Examples: ["66667777", "44443333", "11112222"]
 Price: $50-$300

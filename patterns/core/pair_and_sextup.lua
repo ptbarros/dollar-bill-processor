@@ -4,6 +4,7 @@ DisplayName: 6 in a Row & Pair
 Catalog: C-042
 Description: Six identical digits in a row with a matching pair of another digit tacked onto one end (e.g. 22·666666).
 Tier: 3
+AKA: Six in a Row and Pair, Sextuple and Pair
 Examples: ["22666666", "66666622", "33555555", "55555533"]
 Odds: 1 in 592,593 (162 per 96M)
 Price: $25-$500

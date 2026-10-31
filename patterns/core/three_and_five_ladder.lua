@@ -4,6 +4,7 @@ DisplayName: Three And Five Ladder
 Catalog: C-050
 Description: A 3-digit ladder and a 5-digit ladder side by side, filling all 8 digits (e.g. 123 76543).
 Tier: 3
+AKA: 3 and 5 Ladder, Split Ladder 3-5
 Examples: ["12376543", "32187654", "12345987"]
 Odds: 1 in 277,457 (346 per 96M)
 Price: $10-$100+

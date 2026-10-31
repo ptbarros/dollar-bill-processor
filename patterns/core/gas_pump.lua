@@ -3,6 +3,7 @@ Pattern: GAS_PUMP
 Catalog: C-140
 Description: Digit vertically shifted (misaligned like old gas pump display)
 Tier: 5
+AKA: Stuck Digit, Odometer, Rotated Digit, Shifted Digit, Misaligned Digit, Jumped Digit, Gas Pump Error
 Examples: []
 Odds: Rare - printing error
 Price: $10-$100+

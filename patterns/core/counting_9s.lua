@@ -4,6 +4,7 @@ DisplayName: Counting By 9s Ladder
 Catalog: C-018
 Description: Counting by 9s ladder (09182736)
 Tier: 2
+AKA: Count by 9, Skip Count by 9, Multiples of 9
 Examples: ["09182736", "18273645"]
 Odds: 1 in 1,315,068 (73 per 96M)
 Price: $100-$1,000+

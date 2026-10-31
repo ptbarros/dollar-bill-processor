@@ -4,6 +4,7 @@ DisplayName: Date Note Future
 Catalog: C-158
 Description: Reads as a real month-day-year date in the month-first style that falls in the future (e.g. 12·25·2040).
 Tier: 7
+AKA: Future Date, Future Date M/D/Y
 Odds: Depends on the date
 Examples: ["12252040", "01012030", "07042050"]
 --]]

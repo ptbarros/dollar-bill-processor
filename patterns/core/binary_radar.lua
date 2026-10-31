@@ -3,6 +3,7 @@ Pattern: BINARY_RADAR
 Catalog: C-056
 Description: Only two different digits in the whole serial, and it reads the same backwards as forwards. Example: 66166166
 Tier: 4
+AKA: Binary Palindrome
 Examples: ["10011001", "66166166", "01100110"]
 Odds: 1 in 162,437 (591 per 96M)
 Price: $80-$4,500

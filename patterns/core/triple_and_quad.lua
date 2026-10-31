@@ -3,6 +3,7 @@ Pattern: TRIPLE_AND_QUAD
 Catalog: C-073
 Description: Triple + Quad combination
 Tier: 5
+AKA: Trips and Quad
 Examples: ["11122223", "33334445", "00011112"]
 Odds: 1 in 21,419 (4,482 per 96M)
 Price: $20-$100+

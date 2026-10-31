@@ -3,6 +3,7 @@ Pattern: DOUBLES_BOOKEND
 Catalog: C-109
 Description: Double digits on each end match (11XXXX11)
 Tier: 7
+AKA: Double Bookend, Pair Bookend
 Examples: ["11234511", "99123499", "22567822"]
 Odds: 1 in 1,067 (89,999 per 96M)
 Price: $3-$15

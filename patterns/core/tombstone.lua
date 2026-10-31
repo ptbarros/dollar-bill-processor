@@ -4,6 +4,7 @@ DisplayName: Tombstone
 Catalog: C-111
 Description: Two 4-digit years, second > first, difference <= 120 years (birth-death)
 Tier: 7
+AKA: Birth-Death, Lifespan, Birth and Death
 Odds: 1 in 1,012 (94,860 per 96M)
 Examples: ["19001990", "19202020", "18501970", "19502050"]
 --]]

@@ -4,6 +4,7 @@ DisplayName: 3 in a Row
 Catalog: C-134
 Description: 3 consecutive identical digits (triple)
 Tier: 9
+AKA: Three in a Row, Triple, Trips, 3 Consecutive, 3 IAR
 Odds: 1 in 20 (4,746,789 per 96M)
 Examples: ["88812345", "12225678", "45678999"]
 --]]

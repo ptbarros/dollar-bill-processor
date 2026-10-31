@@ -3,6 +3,7 @@ Pattern: SOLID
 Catalog: C-004
 Description: All 8 digits are identical (e.g., 88888888)
 Tier: 1
+AKA: All Same, Solid Serial, Eight of a Kind, 8 of a Kind, 88888888
 Examples: ["88888888", "11111111", "00000000"]
 Odds: 1 in 12,000,000 (8 per 96M)
 Price: $1,000-$10,000+

@@ -4,6 +4,7 @@ DisplayName: 8 Digit Scattered Ladder
 Catalog: C-114
 Description: All 8 unique digits that form consecutive sequence when sorted
 Tier: 7
+AKA: Scattered Ladder, Jumbled Ladder, Unsorted Ladder
 Odds: 1 in 808 (118,795 per 96M)
 Examples: ["12436587", "87654312", "01325476"]
 --]]

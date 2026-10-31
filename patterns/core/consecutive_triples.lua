@@ -4,6 +4,7 @@ DisplayName: Consecutive Triples
 Catalog: C-096
 Description: Two consecutive triples (AAABBB) with no digits in between
 Tier: 6
+AKA: Double Triple, Two Triples, AAABBB, Triple Triple
 Odds: 1 in 4,054 (23,680 per 96M)
 Examples: ["12333444", "11133344", "22255578"]
 --]]

@@ -4,6 +4,7 @@ DisplayName: Triple Triple Double
 Catalog: C-064
 Description: Two solid blocks of three identical digits alongside a side-by-side pair (e.g. 111·222·33).
 Tier: 4
+AKA: Triple Triple DBL, Two Triples and Pair, AAABBBCC
 Examples: ["00033300", "11122200", "11100022"]
 Odds: 1 in 43,896 (2,187 per 96M)
 Price: $20-$60

@@ -3,6 +3,7 @@ Pattern: LOW_0000
 Catalog: C-082
 Description: Exactly four leading zeros — no fewer, no more (e.g. 0000·1234).
 Tier: 5
+AKA: Four Leading Zeros, Low Serial
 Examples: ["00001234", "00009999"]
 Odds: 1 in 10,667 (9,000 per 96M)
 Price: $10-$30

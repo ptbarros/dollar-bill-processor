@@ -3,6 +3,7 @@ Pattern: TRIPLE_DOUBLE_DOUBLE_LADDER
 Catalog: C-040
 Description: Triple + double + double ladder (AAABBCCX)
 Tier: 3
+AKA: Triple DBL DBL Ladder
 Examples: ["11122334", "22233445"]
 Odds: 1 in 640,000 (150 per 96M)
 Price: $40-$200+

@@ -4,6 +4,7 @@ DisplayName: Birthday Note Y/M/D
 Catalog: C-154
 Description: Reads as a real year-month-day birthday in the year-first style, from within the last hundred years (e.g. 1975·11·22).
 Tier: 7
+AKA: Dob, Date of Birth, Iso Birthday, Year-First Birthday
 Odds: Depends on the date
 Examples: ["19751122", "19500704", "20000101"]
 --]]

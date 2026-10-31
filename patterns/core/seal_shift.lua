@@ -5,6 +5,7 @@ Catalog: C-142
 Description: Overprint elements shifted from normal position
 Overlay: none
 Tier: 5
+AKA: Overprint Shift, Misaligned Seal, Offset Seal
 Examples: []
 Odds: Rare - printing variance
 Price: $5-$50+

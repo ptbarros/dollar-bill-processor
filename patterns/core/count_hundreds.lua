@@ -4,6 +4,7 @@ DisplayName: Count by 100
 Catalog: C-062
 Description: The serial breaks into groups whose leading digit steps up or down by one while the rest of each group stays the same (e.g. 411·511·61).
 Tier: 4
+AKA: Counting by 100S, Hundreds Ladder
 Odds: 1 in 61,538 (1,560 per 96M)
 Examples: ["12322332", "32322312", "41151161"]
 Price: $0

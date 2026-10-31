@@ -3,6 +3,7 @@ Pattern: TRUE_BINARY
 Catalog: C-048
 Description: Binary using only 0 and 1
 Tier: 3
+AKA: Binary 0-1, Zeros and Ones, Perfect Binary
 Examples: ["01101001", "10010110", "10100100"]
 Odds: 1 in 376,471 (255 per 96M)
 Price: $50-$4,500

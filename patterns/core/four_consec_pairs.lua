@@ -4,6 +4,7 @@ DisplayName: 4 Consec Pairs
 Catalog: C-081
 Description: Four consecutive pairs (AABBCCDD)
 Tier: 5
+AKA: Four Consecutive Pairs, AABBCCDD, Four Pairs in a Row
 Examples: ["11223344", "55667788", "44227733"]
 Odds: 1 in 10,668 (8,999 per 96M)
 Price: $20-$100

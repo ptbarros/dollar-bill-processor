@@ -4,6 +4,7 @@ DisplayName: 6 in a Row
 Catalog: C-065
 Description: 6 consecutive identical digits
 Tier: 4
+AKA: Six in a Row, 6 Consecutive, Sextuple Run, 6 IAR
 Odds: 1 in 39,056 (2,458 per 96M)
 Examples: ["00000012", "12000000", "11111123"]
 --]]

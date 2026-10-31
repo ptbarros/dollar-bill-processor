@@ -4,6 +4,7 @@ DisplayName: Binary
 Catalog: C-089
 Description: Only two different digits appear in the whole serial, in any order
 Tier: 5
+AKA: Two Digits, 2 Digit, Two Unique Digits
 Odds: 1 in 8,996 (10,671 per 96M)
 Examples: ["12121212", "00110011", "99889988", "55665566"]
 --]]

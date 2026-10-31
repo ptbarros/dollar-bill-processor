@@ -4,6 +4,7 @@ DisplayName: Doubles Ladder
 Catalog: C-010
 Description: AABBCCDD -- four doubled digits stepping by one (BB=AA+1, CC=BB+1, DD=CC+1), ascending or descending.
 Tier: 1
+AKA: Stepping Doubles, Counting Doubles
 Odds: 1 in 7,384,615 (13 per 96M)
 Examples: ["11223344", "00112233", "99887766", "44332211"]
 --]]

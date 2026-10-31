@@ -4,6 +4,7 @@ DisplayName: 7 in a Row
 Catalog: C-044
 Description: 7 consecutive identical digits
 Tier: 3
+AKA: Seven in a Row, 7 Consecutive, Septuple Run, 7 IAR
 Odds: 1 in 571,429 (168 per 96M)
 Examples: ["00000001", "10000000", "11111112", "21111111", "99999990"]
 --]]
