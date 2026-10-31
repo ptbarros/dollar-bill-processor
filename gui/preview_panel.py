@@ -1621,26 +1621,40 @@ class PreviewPanel(QWidget):
             pass
         self.view_stack.setCurrentIndex(idx)
 
-    def show_processing_overlay(self):
+    def show_processing_overlay(self, first_run_init: bool = False):
         """Reuse the overlay page during a manual Process run: images aren't ready
         until the batch finishes, so take over the preview with a big live count
-        instead of leaving a stale bill on screen."""
+        instead of leaving a stale bill on screen.
+
+        ``first_run_init`` (first Process after an install/update) replaces the
+        heading/message with a one-time notice that the GPU engine is initializing,
+        so the ~90s cold model-load reads as expected setup rather than a hang. The
+        first real progress update (set_processing_progress) overwrites it."""
         cur = self.view_stack.currentIndex()
         if cur != self._watch_page_index:
             self._pre_watch_index = cur
         try:
             from dollar_detective.debug_logger import dlog
             dlog("view.overlay_show", which="processing", captured_pre_watch_index=self._pre_watch_index,
-                 current_view_mode=getattr(self, "_current_view_mode", "?"), cur=cur)
+                 current_view_mode=getattr(self, "_current_view_mode", "?"), cur=cur,
+                 first_run_init=first_run_init)
         except Exception:
             pass
-        self._watch_head.setText("Processing")
-        self.watch_count_label.setText("0")
-        self.watch_sub_label.setText("bills processed")
+        if first_run_init:
+            self._watch_head.setText("Initializing GPU engine")
+            self.watch_count_label.setText("…")
+            self.watch_sub_label.setText("first run after update")
+            self._watch_msg.setText(
+                "Preparing the GPU engine on the first run after an install or update.\n"
+                "This one-time step can take up to a minute or so — later runs are fast.")
+        else:
+            self._watch_head.setText("Processing")
+            self.watch_count_label.setText("0")
+            self.watch_sub_label.setText("bills processed")
+            self._watch_msg.setText(
+                "Reading serials and matching patterns…\n"
+                "Bill images appear here when the batch finishes.")
         self.watch_scan_label.setText("")
-        self._watch_msg.setText(
-            "Reading serials and matching patterns…\n"
-            "Bill images appear here when the batch finishes.")
         # Fancy tally stands out: bigger + fancy-green (vs the small gray scan line).
         self.watch_scan_label.setStyleSheet(
             "font-size: 22px; font-weight: bold; color: #4caf50;")

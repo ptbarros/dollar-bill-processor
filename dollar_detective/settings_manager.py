@@ -160,6 +160,7 @@ class SettingsManager:
         self.pattern_tiers: Dict[str, int] = {}  # Pattern name -> custom tier override (1-10; overrides the .lua Tier)
         self.pattern_flippable: Dict[str, bool] = {}  # Pattern name -> user override of the .lua Flippable flag (overlay can be shown rotated 180)
         self.previous_version: Optional[str] = None  # Version running just before the last in-app update, so it can be one-click reverted to
+        self.last_run_version: Optional[str] = None  # Version the app last FINISHED launching as; differs from __version__ on the first run after an install/update (used to show a one-time "initializing" notice)
         self.pattern_catalogs: Dict[str, str] = {}  # Pattern name -> catalog location (e.g., "A1", "B2")
         self.library_prefixes: Dict[str, str] = {}  # Library name -> catalog SKU prefix letter (e.g. {'pt': 'P'})
         self.pattern_overrides: Dict[str, Dict[str, Any]] = {}  # e.g., {'GAS_PUMP': {'baseline_variance_min': 3.6}}
@@ -309,6 +310,9 @@ class SettingsManager:
         # Version we were on before the last in-app update (for one-click revert)
         pv = data.get('previous_version')
         self.previous_version = str(pv) if pv else None
+        # Version the app last finished launching as (first-run-after-install notice)
+        lrv = data.get('last_run_version')
+        self.last_run_version = str(lrv) if lrv else None
 
         # Load pattern catalogs
         self.pattern_catalogs = data.get('pattern_catalogs', {})
@@ -479,6 +483,7 @@ class SettingsManager:
             'pattern_tiers': self.pattern_tiers,
             'pattern_flippable': self.pattern_flippable,
             'previous_version': self.previous_version,
+            'last_run_version': self.last_run_version,
             'pattern_catalogs': self.pattern_catalogs,
             'library_prefixes': self.library_prefixes,
             'pattern_overrides': self.pattern_overrides,
@@ -611,6 +616,19 @@ class SettingsManager:
             self.pattern_flippable.pop(pattern_name, None)
         else:
             self.pattern_flippable[pattern_name] = bool(value)
+
+    def get_last_run_version(self) -> Optional[str]:
+        """The version the app last finished launching as, or None (never run)."""
+        return self.last_run_version
+
+    def set_last_run_version(self, value: Optional[str]):
+        """Record the version we're launching as. Auto-saves so a crash before the
+        next save doesn't keep re-triggering the first-run notice."""
+        self.last_run_version = str(value) if value else None
+        try:
+            self.save()
+        except Exception:
+            pass
 
     def get_previous_version(self) -> Optional[str]:
         """The version running just before the last in-app update, or None.
