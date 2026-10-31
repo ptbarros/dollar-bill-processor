@@ -410,40 +410,37 @@ class PatternDialog(QDialog):
         details_layout = QVBoxLayout(details_group)
 
         self.pattern_name_label = QLabel("-")
-        self.pattern_name_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.pattern_name_label.setStyleSheet("font-weight: bold; font-size: 15px;")
         details_layout.addWidget(self.pattern_name_label)
 
-        # Editable display label -- a settings-layer override so you can relabel
-        # even a read-only core pattern (e.g. STAR -> "Star Note") WITHOUT editing
-        # its .lua. It's the one cosmetic field safe to change; it applies
-        # everywhere a display name is shown (results column, printable labels,
-        # Set-Pattern dialog). Reset restores the pattern's default label.
-        label_row = QHBoxLayout()
-        label_row.addWidget(QLabel("Label:"))
-        self.label_edit = QLineEdit()
-        self.label_edit.setToolTip("Custom display label for this pattern (applies to the results column, printable labels, and dialogs)")
-        self.label_edit.editingFinished.connect(self._on_label_edited)
-        label_row.addWidget(self.label_edit, 1)
-        self.label_reset_btn = QPushButton("Reset")
-        self.label_reset_btn.setToolTip("Reset to the pattern's default label")
-        self.label_reset_btn.clicked.connect(self._on_label_reset)
-        label_row.addWidget(self.label_reset_btn)
-        # Alias picker: one-click choice among the pattern's AKA aliases (and its
-        # default name) as the display label. Just fills the field above and reuses
-        # the same override path -- the chosen STRING is stored, never an index, so
-        # it degrades gracefully if the alias list later changes. Hidden unless the
-        # selected pattern has aliases.
-        self.label_aka_btn = QPushButton("Aliases ▾")
-        self.label_aka_btn.setToolTip("Use one of this pattern's aliases as the display label")
-        self.label_aka_menu = QMenu(self.label_aka_btn)
-        self.label_aka_btn.setMenu(self.label_aka_menu)
-        self.label_aka_btn.setVisible(False)
-        label_row.addWidget(self.label_aka_btn)
-        details_layout.addLayout(label_row)
+        # ---- Info block (read-only): the DESCRIPTION is the headline, with Odds +
+        # Price and Examples kept right beside it, grouped in a subtle accented card
+        # so it reads as one thing instead of getting lost between the editable
+        # override fields (which now live under "Customize" below). Card colors
+        # adapt to the active theme.
+        try:
+            from .theme_manager import is_dark_theme
+            _dark = is_dark_theme(self.settings.ui.theme)
+        except Exception:
+            _dark = True
+        _card_bg, _card_bd = ("#262a30", "#363b42") if _dark else ("#eef1f5", "#c9d0d8")
 
         self.pattern_desc_label = QLabel("-")
         self.pattern_desc_label.setWordWrap(True)
-        details_layout.addWidget(self.pattern_desc_label)
+        self.pattern_desc_label.setStyleSheet("font-size: 12px;")
+
+        self.pattern_odds_label = QLabel("Odds: -")
+        self.pattern_odds_label.setStyleSheet("color: #1976D2; font-weight: bold;")
+        self.pattern_price_label = QLabel("Price: -")
+        self.pattern_price_label.setStyleSheet("color: #2e7d32; font-weight: bold;")
+        odds_price_row = QHBoxLayout()
+        odds_price_row.addWidget(self.pattern_odds_label)
+        odds_price_row.addSpacing(18)
+        odds_price_row.addWidget(self.pattern_price_label)
+        odds_price_row.addStretch(1)
+
+        self.pattern_examples_label = QLabel("Examples: -")
+        self.pattern_examples_label.setWordWrap(True)
 
         # "Also known as:" -- the pattern's effective searchable aliases (built-in
         # AKA header + any the user added). Muted; hidden when the pattern has none.
@@ -451,14 +448,60 @@ class PatternDialog(QDialog):
         self.pattern_aka_label.setWordWrap(True)
         self.pattern_aka_label.setStyleSheet("color: gray; font-style: italic;")
         self.pattern_aka_label.setVisible(False)
-        details_layout.addWidget(self.pattern_aka_label)
 
-        # User-added aliases: a settings-layer override (like Label/Tier) so the
-        # user can give ANY pattern -- including a read-only core one -- extra names
-        # to search by and pick as a display label, without editing its .lua. These
-        # merge with the built-in AKA header; this field edits only the user's own.
+        info_card = QFrame()
+        info_card.setObjectName("patternInfoCard")
+        info_card.setStyleSheet(
+            "QFrame#patternInfoCard{background:%s; border:1px solid %s;"
+            " border-left:3px solid #1976D2; border-radius:6px;}"
+            "QFrame#patternInfoCard QLabel{background:transparent;}" % (_card_bg, _card_bd))
+        info_layout = QVBoxLayout(info_card)
+        info_layout.setContentsMargins(12, 10, 12, 10)
+        info_layout.setSpacing(6)
+        info_layout.addWidget(self.pattern_desc_label)
+        info_layout.addLayout(odds_price_row)
+        info_layout.addWidget(self.pattern_examples_label)
+        info_layout.addWidget(self.pattern_aka_label)
+        details_layout.addWidget(info_card)
+
+        # ---- Customize: the editable settings-layer overrides, demoted below the
+        # info block under a quiet header (they're touched far less often than the
+        # description is read).
+        customize_hdr = QLabel("CUSTOMIZE")
+        customize_hdr.setStyleSheet(
+            "color: #8a9199; font-size: 10px; font-weight: bold; margin-top: 4px;")
+        details_layout.addWidget(customize_hdr)
+
+        # Display name -- a settings-layer override of what the pattern is SHOWN as
+        # (results column, dialogs, printed labels), distinct from the printed Avery
+        # "labels". An editable combo: its drop-down lists the pattern's default name
+        # plus every alias (built-in + your own), so you can PICK a shorter/alternate
+        # name to display, or type a custom one. Reset restores the default. Picking
+        # or typing stores the chosen STRING as the override (never an index), so it
+        # degrades gracefully if the alias list later changes.
+        name_row = QHBoxLayout()
+        name_row.addWidget(QLabel("Display name:"))
+        self.label_edit = QComboBox()
+        self.label_edit.setEditable(True)
+        self.label_edit.setInsertPolicy(QComboBox.NoInsert)
+        self.label_edit.setToolTip(
+            "What this pattern is shown as (results column, dialogs, printed labels). "
+            "Pick the default or any alias from the list, or type your own.")
+        self.label_edit.activated.connect(lambda _i: self._on_label_edited())
+        self.label_edit.lineEdit().editingFinished.connect(self._on_label_edited)
+        name_row.addWidget(self.label_edit, 1)
+        self.label_reset_btn = QPushButton("Reset")
+        self.label_reset_btn.setToolTip("Reset to the pattern's default display name")
+        self.label_reset_btn.clicked.connect(self._on_label_reset)
+        name_row.addWidget(self.label_reset_btn)
+        details_layout.addLayout(name_row)
+
+        # Aliases -- extra names this pattern is findable by (search), and the source
+        # of the Display-name drop-down's choices. A settings-layer override (like
+        # tier) so you can give ANY pattern -- including a read-only core one -- extra
+        # names without editing its .lua; merged with the built-in AKA header.
         aka_row = QHBoxLayout()
-        aka_row.addWidget(QLabel("Add aliases:"))
+        aka_row.addWidget(QLabel("Aliases:"))
         self.aka_edit = QLineEdit()
         self.aka_edit.setPlaceholderText("your own names, comma-separated (merged with any built-in)")
         self.aka_edit.setToolTip("Extra names to search this pattern by (and pick as its display label). Comma-separated; merged with the pattern's built-in aliases.")
@@ -502,18 +545,6 @@ class PatternDialog(QDialog):
             "(useful for flippers/rotators). Overrides the pattern's own setting.")
         self.flippable_check.toggled.connect(self._on_flippable_toggled)
         details_layout.addWidget(self.flippable_check)
-
-        self.pattern_examples_label = QLabel("Examples: -")
-        self.pattern_examples_label.setWordWrap(True)
-        details_layout.addWidget(self.pattern_examples_label)
-
-        self.pattern_odds_label = QLabel("Odds: -")
-        self.pattern_odds_label.setStyleSheet("color: #1976D2; font-weight: bold;")
-        details_layout.addWidget(self.pattern_odds_label)
-
-        self.pattern_price_label = QLabel("Price: -")
-        self.pattern_price_label.setStyleSheet("color: #2e7d32; font-weight: bold;")
-        details_layout.addWidget(self.pattern_price_label)
 
         # Threshold editor for height_ratio patterns (like GAS_PUMP)
         self.threshold_layout = QHBoxLayout()
@@ -808,13 +839,18 @@ class PatternDialog(QDialog):
                     if patterns_idx + 1 < len(path_parts):
                         library = path_parts[patterns_idx + 1]
 
-            # Build defn from Lua info
+            # Build defn from Lua info. 'aka' = the EFFECTIVE alias set (built-in
+            # header + user-added), so the filter search, "Also known as:" line and
+            # the Display-name drop-down all see aliases without a reload.
             defn = {
                 'description': lua_info.description,
                 'tier': lua_info.tier,
                 'examples': lua_info.examples,
                 'odds': lua_info.odds,
                 'price_range': lua_info.price,
+                'aka': (self.engine._effective_aka(name, lua_info)
+                        if hasattr(self.engine, '_effective_aka')
+                        else list(getattr(lua_info, 'aka', []))),
             }
 
             if library not in libraries:
@@ -1162,9 +1198,6 @@ class PatternDialog(QDialog):
         self._selected_pattern_default_label = default_label
         self._selected_has_lua = has_lua
         self.pattern_name_label.setText(effective_label)
-        self.label_edit.blockSignals(True)
-        self.label_edit.setText(effective_label)
-        self.label_edit.blockSignals(False)
         self.label_reset_btn.setEnabled(bool(override))
 
         # Use Lua description if available and better
@@ -1179,7 +1212,7 @@ class PatternDialog(QDialog):
         aka = list(defn.get('aka', []) or [])
         self.pattern_aka_label.setText("Also known as: " + ", ".join(aka))
         self.pattern_aka_label.setVisible(bool(aka))
-        self._populate_aka_menu(aka, default_label)
+        self._populate_name_combo(aka, default_label, effective_label)
         user_aka = self.settings.get_pattern_aka(name)
         self.aka_edit.blockSignals(True)
         self.aka_edit.setText(", ".join(user_aka))
@@ -1325,27 +1358,23 @@ class PatternDialog(QDialog):
         # Update pattern preview
         self._update_pattern_preview(name, lua_info)
 
-    def _populate_aka_menu(self, aka, default_label):
-        """Rebuild the alias-picker menu for the selected pattern. Hidden when the
-        pattern has no aliases."""
-        self.label_aka_menu.clear()
-        if not aka:
-            self.label_aka_btn.setVisible(False)
-            return
-        act = self.label_aka_menu.addAction(f"Default ({default_label})")
-        act.triggered.connect(self._on_label_reset)
-        self.label_aka_menu.addSeparator()
-        for alias in aka:
-            a = self.label_aka_menu.addAction(alias)
-            # default-arg binds the loop value; store the resolved string, not an index.
-            a.triggered.connect(lambda checked=False, s=alias: self._choose_aka_label(s))
-        self.label_aka_btn.setVisible(True)
-
-    def _choose_aka_label(self, text):
-        """Set the selected pattern's display label to a chosen alias, reusing the
-        existing override path (stores the string)."""
-        self.label_edit.setText(text)
-        self._on_label_edited()
+    def _populate_name_combo(self, aka, default_label, effective_label):
+        """Fill the Display-name combo's drop-down with the pattern's default name
+        plus every alias (built-in + user-added), de-duped, and show the current
+        effective name. Picking from the list or typing is handled by
+        _on_label_edited, which stores the chosen STRING as the override."""
+        combo = self.label_edit
+        combo.blockSignals(True)
+        combo.clear()
+        seen, items = set(), []
+        for it in [default_label] + list(aka or []):
+            key = (it or "").strip().lower()
+            if it and key not in seen:
+                seen.add(key)
+                items.append(it)
+        combo.addItems(items)
+        combo.setCurrentText(effective_label or default_label)
+        combo.blockSignals(False)
 
     def _on_aka_edited(self):
         """Persist the user-added aliases for the selected pattern and refresh the
@@ -1381,7 +1410,8 @@ class PatternDialog(QDialog):
         self.pattern_aka_label.setText("Also known as: " + ", ".join(aka))
         self.pattern_aka_label.setVisible(bool(aka))
         default_label = getattr(self, '_selected_pattern_default_label', '')
-        self._populate_aka_menu(aka, default_label)
+        override = self.settings.get_pattern_label(name)
+        self._populate_name_combo(aka, default_label, override or default_label)
         # Keep the selected tree row's cached defn in sync so _filter_patterns
         # (which reads data['defn']['aka']) finds the new aliases without a reload.
         item = self.pattern_tree.currentItem() if hasattr(self, 'pattern_tree') else None
@@ -1397,7 +1427,7 @@ class PatternDialog(QDialog):
         if not name:
             return
         default_label = getattr(self, '_selected_pattern_default_label', '')
-        text = self.label_edit.text().strip()
+        text = self.label_edit.currentText().strip()
         # Store an override only when it differs from the default; else clear it.
         self.settings.set_pattern_label(name, text if (text and text != default_label) else "")
         self.settings.save()
@@ -1415,7 +1445,7 @@ class PatternDialog(QDialog):
         self.settings.save()
         default_label = getattr(self, '_selected_pattern_default_label', '')
         self.label_edit.blockSignals(True)
-        self.label_edit.setText(default_label)
+        self.label_edit.setCurrentText(default_label)
         self.label_edit.blockSignals(False)
         self.pattern_name_label.setText(default_label)
         self.label_reset_btn.setEnabled(False)
