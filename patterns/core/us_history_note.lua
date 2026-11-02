@@ -2,7 +2,7 @@
 Pattern: US_HISTORY_NOTE
 DisplayName: History Note U.S. M/D/Y
 Catalog: C-159
-Description: Reads as a real month-day-year date in the month-first style from more than a hundred years ago (e.g. 07·04·1776).
+Description: Reads as a real month-day-year date (month first) from 1700 up to more than a hundred years ago, not counting Feb 29 (e.g. 07·04·1776).
 Tier: 7
 Odds: Depends on the date
 Examples: ["07041776", "12251900", "01011800"]

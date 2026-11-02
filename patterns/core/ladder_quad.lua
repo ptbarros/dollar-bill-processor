@@ -2,7 +2,7 @@
 Pattern: LADDER_QUAD
 DisplayName: Ladder & Quad
 Catalog: C-047
-Description: 4 consecutive identical digits with remaining 4 forming a ladder
+Description: A block of four identical digits at the very start or very end, with the other four digits forming a straight ladder going up or down by one (e.g. 1111·2345, 4321·5555).
 Tier: 3
 Odds: 1 in 395,062 (243 per 96M)
 Examples: ["11112345", "12345555", "43215555", "55554321"]

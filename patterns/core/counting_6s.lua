@@ -2,7 +2,7 @@
 Pattern: COUNTING_6S
 DisplayName: Counting By 6s Ladder
 Catalog: C-025
-Description: Counting by 6s ladder (06121824)
+Description: Reads as four two-digit numbers that each go up by exactly 6, starting from any number (e.g. 06·12·18·24, 33·39·45·51).
 Tier: 2
 Examples: ["06121824", "12182430"]
 Odds: 1 in 1,170,732 (82 per 96M)

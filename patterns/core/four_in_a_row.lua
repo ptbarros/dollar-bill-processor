@@ -2,7 +2,7 @@
 Pattern: FOUR_IN_A_ROW
 DisplayName: 4 in a Row
 Catalog: C-123
-Description: 4 consecutive identical digits (quad)
+Description: Exactly four of the same digit in a row — a run of five or more doesn't count (e.g. 0000·1234 or 1234·0000).
 Tier: 8
 Odds: 1 in 239 (401,139 per 96M)
 Examples: ["00001234", "12340000", "11112345"]

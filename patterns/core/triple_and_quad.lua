@@ -1,7 +1,7 @@
 --[[
 Pattern: TRIPLE_AND_QUAD
 Catalog: C-073
-Description: Triple + Quad combination
+Description: Exactly three of one digit in a row and exactly four of another in a row, in either order, with the one leftover digit anywhere (e.g. 111·2222·3, 000·5·1111).
 Tier: 5
 Examples: ["11122223", "33334445", "00011112"]
 Odds: 1 in 21,419 (4,482 per 96M)

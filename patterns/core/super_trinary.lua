@@ -2,7 +2,7 @@
 Pattern: NICKS_SUPER_TRINARY
 DisplayName: Super Trinary
 Catalog: C-071
-Description: Two triples and one double, or one quad and two doubles
+Description: Exactly three different digits, each in one solid block: two triples and a pair, or a quad and two pairs, in any order (e.g. 111·222·33, 1111·22·33).
 Tier: 5
 Odds: 1 in 24,691 (3,888 per 96M)
 Examples: ["11122233", "00011122", "99988877", "11112233"]

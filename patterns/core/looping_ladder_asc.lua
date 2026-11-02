@@ -2,7 +2,7 @@
 Pattern: LOOPING_LADDER_ASC
 DisplayName: Looping Ladder
 Catalog: C-037
-Description: Eight digits climbing or dropping by one that wrap around — the straight run rolls off one end and picks back up at the other (e.g. 7812·3456).
+Description: Eight different digits counting up or down by one — with 9 and 0 treated as neighbors — but started partway through, so the run rolls off the end and picks back up at the front (e.g. 78·123456 or 0·3456789).
 Tier: 3
 Examples: ["78123456", "45678923", "32987654", "18765432"]
 Odds: 1 in 721,805 (133 per 96M)

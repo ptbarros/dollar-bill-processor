@@ -2,7 +2,7 @@
 Pattern: NICKS_FULL_HOUSE
 DisplayName: Full House
 Catalog: C-128
-Description: Three of a kind followed by a pair (AAABB) or pair followed by three (AABBB)
+Description: Three of a kind right next to a pair of a different digit, in either order, anywhere in the serial (e.g. 111·22·345, 00·999·876). Longer runs still count, so 00000·33 qualifies.
 Tier: 8
 Odds: 1 in 150 (638,496 per 96M)
 Examples: ["11122345", "00011234", "99988765"]

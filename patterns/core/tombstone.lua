@@ -2,7 +2,7 @@
 Pattern: TOMBSTONE
 DisplayName: Tombstone
 Catalog: C-111
-Description: Two 4-digit years, second > first, difference <= 120 years (birth-death)
+Description: Two four-digit years, both between 1200 and 2050, with the second later than the first by no more than 120 years, like birth and death years (e.g. 1900·1990, 1200·1203).
 Tier: 7
 Odds: 1 in 1,012 (94,860 per 96M)
 Examples: ["19001990", "19202020", "18501970", "19502050"]

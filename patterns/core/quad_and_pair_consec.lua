@@ -1,7 +1,7 @@
 --[[
 Pattern: QUAD_AND_PAIR_CONSEC
 Catalog: C-103
-Description: 4 in a row plus consecutive pair
+Description: Four or more of one digit in a row, with a pair of a different digit right next to it on either side (e.g. 1111·22·34, 00·22222·5).
 Tier: 6
 Examples: ["11112234", "22223345"]
 Odds: 1 in 2,056 (46,683 per 96M)

@@ -2,7 +2,7 @@
 Pattern: NICKS_BROKEN_LADDER_8
 DisplayName: 8 Digit Scattered Ladder
 Catalog: C-114
-Description: All 8 unique digits that form consecutive sequence when sorted
+Description: All eight digits are different and, sorted, form an unbroken run (0–7, 1–8 or 2–9), but they're scrambled. A straight ladder up or down doesn't count (e.g. 1243·6587).
 Tier: 7
 Odds: 1 in 808 (118,795 per 96M)
 Examples: ["12436587", "87654312", "01325476"]

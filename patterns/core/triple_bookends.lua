@@ -2,7 +2,7 @@
 Pattern: TRIPLE_BOOKENDS
 DisplayName: 3 Digit Bookend
 Catalog: C-113
-Description: First three and last three digits match, middle two free (e.g. 111·xx·111).
+Description: The last three digits repeat the first three in the same order, with any two digits between (e.g. 123·45·123, 111·00·111).
 Tier: 7
 Examples: ["12345123", "45678456", "11100111"]
 Odds: 1 in 1,000 (95,999 per 96M)

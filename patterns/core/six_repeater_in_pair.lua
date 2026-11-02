@@ -2,7 +2,7 @@
 Pattern: SIX_REPEATER_IN_PAIR
 DisplayName: Bookended Repeater
 Catalog: C-078
-Description: A three-digit run repeated back to back, with a single matching digit capping both ends (e.g. 9·301·301·9).
+Description: The same digit at both ends with a three-digit group repeated back to back between them; the end digit can't appear inside the group, and the group can't be one digit three times (e.g. 9·301·301·9).
 Tier: 5
 Examples: ["93013019", "71231237", "45915914"]
 Odds: 1 in 13,793 (6,960 per 96M)

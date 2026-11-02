@@ -2,7 +2,7 @@
 Pattern: TRI_RADAR_BOOKEND
 DisplayName: 3 Digit Radar Bookend
 Catalog: C-112
-Description: The first three digits show up flipped at the tail end, mirrored across the serial (e.g. 123·xx·321).
+Description: The first three digits come back reversed at the end, with any two digits in the middle; the three can't all be the same digit (e.g. 123·xx·321).
 Tier: 7
 Examples: ["12300321", "45600654", "12312321"]
 Odds: 1 in 1,009 (95,100 per 96M)

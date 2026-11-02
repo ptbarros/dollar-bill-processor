@@ -2,7 +2,7 @@
 Pattern: CONSECUTIVE_PAIRS_3
 DisplayName: 3 Consecutive Pairs
 Catalog: C-116
-Description: 3 consecutive pairs within the serial
+Description: Three side-by-side pairs in a row, each pair a different digit from the pair next to it. Whatever sits around them doesn't matter, even another pair or a longer run (e.g. 11·22·33·45, 00·00·11·33).
 Tier: 7
 Odds: 1 in 433 (221,859 per 96M)
 Examples: ["11223312", "12233445", "00112234", "99887700"]

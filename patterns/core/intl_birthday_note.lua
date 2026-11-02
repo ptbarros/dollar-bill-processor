@@ -2,7 +2,7 @@
 Pattern: INTL_BIRTHDAY_NOTE
 DisplayName: Birthday Note Y/M/D
 Catalog: C-154
-Description: Reads as a real year-month-day birthday in the year-first style, from within the last hundred years (e.g. 1975·11·22).
+Description: Reads as a real year-month-day date (year first) from 100 years ago up through this year, not counting Feb 29 (e.g. 1975·11·22).
 Tier: 7
 Odds: Depends on the date
 Examples: ["19751122", "19500704", "20000101"]

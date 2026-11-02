@@ -1,7 +1,7 @@
 --[[
 Pattern: THREE_AND_FOUR_LADDER
 Catalog: C-092
-Description: A 3-digit ladder and a 4-digit ladder, in either order, sitting in the serial (e.g. 123·8765·0).
+Description: Separate ladders of exactly three and exactly four digits (each up or down by one, with 9 and 0 counting as neighbors), in either order (e.g. 123·8765·0 or 8901·1·123).
 Tier: 6
 Examples: ["12387650", "32145670", "56781230"]
 Odds: 1 in 5,378 (17,852 per 96M)

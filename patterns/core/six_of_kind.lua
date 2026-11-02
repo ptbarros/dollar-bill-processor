@@ -2,7 +2,7 @@
 Pattern: SIX_OF_KIND
 DisplayName: 6 of a Kind
 Catalog: C-095
-Description: 6 of the same digit (anywhere)
+Description: Exactly six of the same digit, not all side by side (six in a row is its own pattern) (e.g. 77777·0·7·0, 66666·1·0·6).
 Tier: 6
 Examples: ["77777070", "66666106", "99999090"]
 Odds: 1 in 5,101 (18,819 per 96M)

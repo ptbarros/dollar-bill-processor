@@ -2,7 +2,7 @@
 Pattern: COUNT_HUNDREDS
 DisplayName: Count by 100
 Catalog: C-062
-Description: The serial breaks into groups whose leading digit steps up or down by one while the rest of each group stays the same (e.g. 411·511·61).
+Description: Three groups of three, three and two digits. Each group's lead digit is one higher (or one lower) than the last, and the digits after it repeat, with the final group cut short (e.g. 411·511·61, 323·223·12).
 Tier: 4
 Odds: 1 in 61,538 (1,560 per 96M)
 Examples: ["12322332", "32322312", "41151161"]
