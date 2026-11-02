@@ -2,7 +2,7 @@
 Pattern: FIVE_IN_ROW_AND_PAIR
 DisplayName: 5 in a Row & Pair
 Catalog: C-072
-Description: Exactly five of a kind in a row plus a single separate pair whose two digits TOUCH (e.g. 11111·22·3). A split pair like 11111·2·3·2 does not count.
+Description: A run of exactly five of one digit in a row, plus a touching pair of another digit; the last digit or first digit can be anything — even the run's digit again, as long as it doesn't join the run (e.g. 11111·22·3 or 33333·99·3). A split pair like 11111·2·3·2 does not count.
 Tier: 5
 AKA: Five in a Row and Pair
 Examples: ["11111223", "55555667", "99999100"]

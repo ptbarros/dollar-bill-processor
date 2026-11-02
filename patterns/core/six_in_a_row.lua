@@ -2,7 +2,7 @@
 Pattern: NICKS_SIX_IN_A_ROW
 DisplayName: 6 in a Row
 Catalog: C-065
-Description: 6 consecutive identical digits
+Description: Exactly six of the same digit in a row; seven or eight in a row is a separate pattern (e.g. 000000·12, 12·000000).
 Tier: 4
 AKA: Six in a Row, 6 Consecutive, Sextuple Run, 6 IAR
 Odds: 1 in 39,056 (2,458 per 96M)

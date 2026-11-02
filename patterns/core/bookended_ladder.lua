@@ -1,7 +1,7 @@
 --[[
 Pattern: BOOKENDED_LADDER
 Catalog: C-036
-Description: Ladder bookended by matching digits
+Description: A doubled digit at both ends with a 4-digit ladder (up or down by one) filling the middle four spots (e.g. 77·2345·77).
 Tier: 3
 Examples: ["77234577", "11234511"]
 Odds: 1 in 761,905 (126 per 96M)

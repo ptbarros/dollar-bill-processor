@@ -1,7 +1,7 @@
 --[[
 Pattern: HYBRID_NOTES
 Catalog: C-090
-Description: The first two digits repeat at the end in either order, with a repeated pair filling the middle (e.g. 32·6868·32).
+Description: Two different digits at the start come back at the end in the same or reversed order, and the middle four are a pair of two different digits said twice (e.g. 32·68·68·32, 12·52·52·21).
 Tier: 6
 AKA: Hybrid
 Examples: ["32686832", "32686823", "12525212", "12525221"]

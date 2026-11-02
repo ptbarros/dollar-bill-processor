@@ -2,7 +2,7 @@
 Pattern: INTL_HISTORY_NOTE
 DisplayName: History Note Y/M/D
 Catalog: C-156
-Description: Reads as a real year-month-day date in the year-first style from more than a hundred years ago (e.g. 1776·07·04).
+Description: Reads as a real year-month-day date in the year-first style, with a year from 1700 up to more than a hundred years ago (before 1926 in 2026). 29 February belongs to the leap-year history pattern instead (e.g. 1776·07·04).
 Tier: 7
 AKA: Historical Date, Iso History
 Odds: Depends on the date

@@ -2,7 +2,7 @@
 Pattern: EU_LEAP_YEAR_HISTORY
 DisplayName: History Note Leap Year
 Catalog: C-145
-Description: Reads as a leap-day date — the 29th of February in the day-first style — from more than a hundred years ago (e.g. 29·02·1904).
+Description: Reads as 29 February in the day-first style, in a real leap year from 1700 up to more than a hundred years ago (e.g. 29·02·1904).
 Tier: 6
 AKA: Leap Day Historical Date, Leap Day Date, Feb 29 Date
 Odds: Depends on the date

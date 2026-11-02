@@ -2,7 +2,7 @@
 Pattern: FIVE_OF_KIND
 DisplayName: 5 of a Kind
 Catalog: C-120
-Description: 5 of the same digit (anywhere)
+Description: Exactly five of the same digit, not all side by side; at least one is split off from the others (e.g. 5050·5055, 4944·6144). Five in one solid row is a separate pattern.
 Tier: 8
 AKA: Five of a Kind, 5OAK, Quint
 Examples: ["50505055", "49446144", "50550505"]

@@ -1,7 +1,7 @@
 --[[
 Pattern: TRIPLE_DOUBLE_SINGLE_LADDER
 Catalog: C-007
-Description: Triple + double + single ladder consecutive
+Description: Starts with three of a kind, then a pair, then three single digits, and those five different digits count straight up or down by one (e.g. 111·22·345, 666·55·432).
 Tier: 1
 AKA: Triple DBL Ladder
 Examples: ["11122345", "22233456"]

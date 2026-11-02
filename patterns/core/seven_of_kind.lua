@@ -2,7 +2,7 @@
 Pattern: SEVEN_OF_KIND
 DisplayName: 7 of a Kind
 Catalog: C-054
-Description: Seven of the same digit anywhere in the serial
+Description: Seven of the same digit with the odd digit somewhere in the middle, so the seven aren't all in a row (e.g. 77777·0·77).
 Tier: 3
 AKA: Seven of a Kind, 7OAK, Septuple
 Examples: ["77777077", "88880888", "99909999"]

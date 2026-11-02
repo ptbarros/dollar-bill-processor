@@ -1,7 +1,7 @@
 --[[
 Pattern: TRIPLE_DOUBLE_DOUBLE_LADDER
 Catalog: C-040
-Description: Triple + double + double ladder (AAABBCCX)
+Description: Opens with a triple, then two pairs, the three digits going up or down by one; the last digit can be anything (e.g. 111·22·33·4 or 222·11·00·0).
 Tier: 3
 AKA: Triple DBL DBL Ladder
 Examples: ["11122334", "22233445"]

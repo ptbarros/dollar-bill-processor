@@ -2,7 +2,7 @@
 Pattern: QUAD_AND_PAIRS
 DisplayName: Quad and 2 Pair
 Catalog: C-088
-Description: A solid block of four identical digits plus two side-by-side pairs of two other digits (e.g. 11·2222·33).
+Description: A solid block of four identical digits, and the other four digits are two different digits used twice each. The pairs can sit together or be split up (e.g. 11·2222·33, 0·1·3333·1·0).
 Tier: 5
 AKA: Quad and Two Pairs
 Examples: ["11222233", "44441122", "33224444"]

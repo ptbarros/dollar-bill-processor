@@ -2,7 +2,7 @@
 Pattern: US_DATE_NOTES
 DisplayName: Date Note M/D/Y
 Catalog: C-157
-Description: Reads as a real month-day-year birthday in the month-first style, from within the last hundred years (e.g. 11·22·1975).
+Description: Reads as a real month-day-year date in the month-first style, with a year from 100 years ago through this year (e.g. 11·22·1975). February 29th dates belong to the leap-year birthday pattern instead.
 Tier: 7
 AKA: Date Note, Calendar Date, American Date, Birthday M/D/Y
 Odds: Depends on the date

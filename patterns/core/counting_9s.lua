@@ -2,7 +2,7 @@
 Pattern: COUNTING_9S
 DisplayName: Counting By 9s Ladder
 Catalog: C-018
-Description: Counting by 9s ladder (09182736)
+Description: Four 2-digit numbers in a row, each 9 more than the one before, starting from any number (e.g. 09·18·27·36, 47·56·65·74). Counting down by 9 doesn't count.
 Tier: 2
 AKA: Count by 9, Skip Count by 9, Multiples of 9
 Examples: ["09182736", "18273645"]

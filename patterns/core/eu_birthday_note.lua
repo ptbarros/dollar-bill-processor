@@ -2,7 +2,7 @@
 Pattern: EU_BIRTHDAY_NOTE
 DisplayName: Birthday Note D/M/Y
 Catalog: C-151
-Description: Reads as a real day-month-year birthday in the day-first style, from within the last hundred years (e.g. 22·11·1975).
+Description: Reads as a real day-month-year date in the day-first style, with a year from exactly 100 years ago up to this year (1926–2026 in 2026), even if the date is later this year. 29 February belongs to the leap-year birthday pattern instead (e.g. 22·11·1975).
 Tier: 7
 AKA: Dob, Date of Birth, Birthdate, Day-First Birthday
 Odds: Depends on the date

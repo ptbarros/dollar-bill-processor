@@ -1,7 +1,7 @@
 --[[
 Pattern: TRUE_BINARY
 Catalog: C-048
-Description: Binary using only 0 and 1
+Description: Made only of 0s and 1s, including all-zeros and all-ones (e.g. 0110·1001).
 Tier: 3
 AKA: Binary 0-1, Zeros and Ones, Perfect Binary
 Examples: ["01101001", "10010110", "10100100"]

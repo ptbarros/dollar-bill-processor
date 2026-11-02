@@ -2,7 +2,7 @@
 Pattern: COUNTING_8S
 DisplayName: Counting By 8s Ladder
 Catalog: C-019
-Description: Counting by 8s ladder (08162432)
+Description: Reads as four 2-digit numbers, each 8 more than the last, starting from any number (e.g. 08·16·24·32 or 04·12·20·28). Counting down doesn't count.
 Tier: 2
 AKA: Count by 8, Skip Count by 8, Multiples of 8
 Examples: ["08162432", "16243240"]
