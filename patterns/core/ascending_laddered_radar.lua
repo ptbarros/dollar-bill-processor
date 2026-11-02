@@ -4,6 +4,7 @@ DisplayName: Radar Ladder
 Catalog: C-009
 Description: Reads the same forwards and backwards, and the first four digits step straight up or straight down (e.g. 4567·7654).
 Tier: 1
+AKA: Ladder Radar
 Odds: 1 in 7,384,615 (13 per 96M)
 Examples: ["45677654", "76544567", "12344321", "43211234"]
 Price: $5-$100

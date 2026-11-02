@@ -4,6 +4,7 @@ DisplayName: Year Note & 4 of a Kind
 Catalog: C-091
 Description: A four-digit block reading as a year from 1700 to 2099 occupies four of the eight spots, and the remaining four are all the same non-zero digit — the year block can sit anywhere, so the repeated digits may be split around it (e.g. 1975·3333, 3331·9753, 33·1975·33).
 Tier: 6
+AKA: Year and Quad, Year Note Quad
 Odds: 1 in 5,714 (16,800 per 96M)
 Examples: ["19753333", "33319753", "33197533"]
 --]]

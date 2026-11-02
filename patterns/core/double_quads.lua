@@ -3,6 +3,7 @@ Pattern: DOUBLE_QUADS
 Catalog: C-022
 Description: Two groups of 4 identical digits (AAAABBBB)
 Tier: 2
+AKA: AAAABBBB, Two Solid Quads
 Examples: ["11112222", "99990000", "22226666"]
 Odds: 1 in 1,185,185 (81 per 96M)
 Price: $80-$1,500

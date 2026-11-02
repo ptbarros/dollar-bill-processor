@@ -4,6 +4,7 @@ DisplayName: 3 Digit Chunky Ladder
 Catalog: C-049
 Description: Three consecutive digits (like 3-4-5), each in its own chunk, the whole serial sorted up or down (e.g. 000·11·222).
 Tier: 3
+AKA: Grouped Ladder, Block Ladder, 3 Chunk Ladder
 Odds: 1 in 304,762 (315 per 96M)
 Examples: ["00011222", "01112222", "33222111", "77788899"]
 --]]

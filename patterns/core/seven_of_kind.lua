@@ -4,6 +4,7 @@ DisplayName: 7 of a Kind
 Catalog: C-054
 Description: Seven of the same digit anywhere in the serial
 Tier: 3
+AKA: Seven of a Kind, 7OAK, Septuple
 Examples: ["77777077", "88880888", "99909999"]
 Odds: 1 in 195,122 (492 per 96M)
 Price: $100-$500

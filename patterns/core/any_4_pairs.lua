@@ -4,6 +4,7 @@ DisplayName: 4 Pairs
 Catalog: C-129
 Description: 4 pairs total (any positions, e.g., AABBCCDD or ABCABCDD)
 Tier: 8
+AKA: Four Pairs, 4 Pair, Four Pair
 Odds: 1 in 147 (655,103 per 96M)
 Examples: ["11223344", "12123434", "11112222", "00001111"]
 --]]

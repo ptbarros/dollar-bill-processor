@@ -4,6 +4,7 @@ DisplayName: 5 in a Row
 Catalog: C-098
 Description: 5 consecutive identical digits
 Tier: 6
+AKA: Five in a Row, 5 Consecutive, Quintuple Run
 Odds: 1 in 2,968 (32,346 per 96M)
 Examples: ["00000123", "12300000", "11111234"]
 --]]

@@ -4,6 +4,7 @@ DisplayName: 7 Digit Ladder
 Catalog: C-039
 Description: Exactly 7 consecutive digits in strictly ascending or descending order
 Tier: 3
+AKA: Seven Digit Ladder, Run of 7, Sequential 7, 7 Rung Ladder
 Odds: 1 in 705,882 (136 per 96M)
 Examples: ["12345670", "02345678", "98765430"]
 --]]

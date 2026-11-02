@@ -4,6 +4,7 @@ DisplayName: Binary Flipper
 Catalog: C-063
 Description: Uses only two different digits, both from the upside-down-friendly set 0, 1, 6, 8 and 9 — any arrangement (e.g. 1881·1181, 0099·0099); the digits flip, the serial doesn't have to.
 Tier: 4
+AKA: Flippable Binary
 Flippable: true
 Examples: ["18811181", "16611661", "00990099"]
 Odds: 1 in 44,444 (2,160 per 96M)

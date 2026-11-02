@@ -4,6 +4,7 @@ DisplayName: Count By 10s Ladder
 Catalog: C-038
 Description: Reads as four two-digit numbers climbing (or dropping) by ten each time (e.g. 10·20·30·40 or 40·30·20·10).
 Tier: 3
+AKA: Count by 10S, Tens Ladder
 Odds: 1 in 705,882 (136 per 96M)
 Examples: ["10203040", "40302010", "21314151", "51413121"]
 Price: $100-$1,000+

@@ -4,6 +4,7 @@ DisplayName: Millionaire
 Catalog: C-035
 Description: Round millions with any leading digits (XX000000)
 Tier: 2
+AKA: Millions Note, Round Million, Even Million, Million Serial
 Odds: 1 in 1,000,000 (96 per 96M)
 Examples: ["01000000", "12000000", "99000000", "55000000"]
 --]]

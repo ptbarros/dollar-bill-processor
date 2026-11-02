@@ -3,6 +3,7 @@ Pattern: TRIPLE_DOUBLE_SINGLE_LADDER
 Catalog: C-007
 Description: Triple + double + single ladder consecutive
 Tier: 1
+AKA: Triple DBL Ladder
 Examples: ["11122345", "22233456"]
 Odds: 1 in 8,727,273 (11 per 96M)
 Price: $5-$40

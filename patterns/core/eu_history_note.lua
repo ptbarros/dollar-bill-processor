@@ -4,6 +4,7 @@ DisplayName: History Note D/M/Y
 Catalog: C-153
 Description: Reads as a real day-month-year date in the day-first style from more than a hundred years ago (e.g. 04·07·1776).
 Tier: 7
+AKA: Historical Date, History Note
 Odds: Depends on the date
 Examples: ["04071776", "25121900", "01011800"]
 --]]

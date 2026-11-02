@@ -4,6 +4,7 @@ DisplayName: Looping Ladder
 Catalog: C-037
 Description: Eight digits climbing or dropping by one that wrap around — the straight run rolls off one end and picks back up at the other (e.g. 7812·3456).
 Tier: 3
+AKA: Wraparound Ladder, Rolling Ladder, Loop Ladder
 Examples: ["78123456", "45678923", "32987654", "18765432"]
 Odds: 1 in 721,805 (133 per 96M)
 Price: $250-$1,000

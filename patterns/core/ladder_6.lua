@@ -4,6 +4,7 @@ DisplayName: 6 Digit Ladder
 Catalog: C-066
 Description: Exactly 6 consecutive digits in strictly ascending or descending order
 Tier: 4
+AKA: Six Digit Ladder, Run of 6, Sequential 6, 6 Rung Ladder
 Odds: 1 in 37,900 (2,533 per 96M)
 Examples: ["12345600", "01234500", "00654321"]
 --]]

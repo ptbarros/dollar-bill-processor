@@ -3,6 +3,7 @@ Pattern: ALL_ODDS
 Catalog: C-121
 Description: All digits odd (1,3,5,7,9)
 Tier: 8
+AKA: Odd Digits, All Odd, Odds Only
 Examples: ["13579135", "97531975", "13579997"]
 Odds: 1 in 267 (359,375 per 96M)
 Price: $3-$10

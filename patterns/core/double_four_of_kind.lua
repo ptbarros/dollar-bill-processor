@@ -4,6 +4,7 @@ DisplayName: Double Four of a Kind
 Catalog: C-069
 Description: Two groups of 4 of a kind (33343444)
 Tier: 5
+AKA: Two Quads, Double 4 of a Kind
 Examples: ["33343444", "11121222", "55556666"]
 Odds: 1 in 32,487 (2,955 per 96M)
 Price: $20-$120

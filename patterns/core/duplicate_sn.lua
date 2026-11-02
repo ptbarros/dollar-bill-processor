@@ -4,6 +4,7 @@ DisplayName: Duplicate S/N
 Catalog: C-137
 Description: Series 2013 New York (B) $1 star note in a duplicated serial range
 Tier: 3
+AKA: 2013B Duplicate Star Note, Duplicate Serial, Duplicate Serial Number
 Odds: Varies — flags Series 2013 B* star notes in the known duplicate-serial ranges
 Examples: ["B00000001*", "B00100000*", "B03200001*", "B05000000*"]
 --]]

@@ -3,6 +3,7 @@ Pattern: FLIPPER
 Catalog: C-118
 Description: Only flippable digits (0,1,6,8,9)
 Tier: 8
+AKA: Sudo-Flipper, Upside Down Note, Invertible, Flippable
 Flippable: true
 Examples: ["01689018", "96801896", "18906890"]
 Odds: 1 in 279 (343,750 per 96M)

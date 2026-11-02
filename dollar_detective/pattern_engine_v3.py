@@ -87,6 +87,10 @@ class LuaPatternInfo:
     library: str = "user"         # Library name (directory under patterns/)
     enabled: bool = True
     display_name: str = ""        # User-friendly name for GUI (falls back to name if empty)
+    aka: list = field(default_factory=list)  # Searchable aliases (header "AKA: a, b, c").
+                                  # Presentation only -- never an identity key; `name`
+                                  # stays the stable id. Entries that merely restate the
+                                  # name/display_name are dropped at parse (see _dedup_aka).
     examples: list = field(default_factory=list)
     odds: str = ""
     per_96m: Optional[int] = None  # Numeric rarity parsed from `odds` (count per
@@ -432,6 +436,8 @@ class PatternEngineV3:
                 library=library,
                 enabled=enabled,
                 display_name=metadata.get('displayname', ''),
+                aka=self._dedup_aka(metadata.get('aka', []), name,
+                                    metadata.get('displayname', '')),
                 examples=metadata.get('examples', []),
                 odds=metadata.get('odds', ''),
                 per_96m=parse_per_96m(metadata.get('odds', '')),
@@ -527,6 +533,9 @@ class PatternEngineV3:
                 return json.loads(value)
             except:
                 return [value]
+        elif key == 'aka':
+            # Comma-separated aliases (hand-typed), e.g. "AKA: 3OAK, Three of a Kind".
+            return [a.strip() for a in value.split(',') if a.strip()]
         elif key in ('enabled', 'flippable'):
             return value.lower() in ('true', 'yes', '1')
         elif key == 'datafile':
@@ -844,7 +853,8 @@ class PatternEngineV3:
 
     def save_user_pattern(self, name: str, script: str, description: str = "",
                           tier: int = 5, examples: list = None,
-                          library: str = "user", display_name: str = "") -> bool:
+                          library: str = "user", display_name: str = "",
+                          aka: list = None) -> bool:
         """
         Save a user pattern to a library directory.
 
@@ -856,6 +866,7 @@ class PatternEngineV3:
             examples: Example serial numbers
             library: Library directory name (default: "user")
             display_name: User-friendly name for GUI display
+            aka: Search aliases (written as "AKA: a, b, c")
 
         Returns:
             True if saved successfully
@@ -906,6 +917,8 @@ class PatternEngineV3:
             f'Description: {description}',
             f'Tier: {tier}',
         ])
+        if aka:
+            header_lines.append('AKA: ' + ', '.join(str(a).strip() for a in aka if str(a).strip()))
         if examples:
             import json
             header_lines.append(f'Examples: {json.dumps(examples)}')
@@ -1051,7 +1064,7 @@ class PatternEngineV3:
     def save_list_pattern(self, name: str, numbers, *, mode: str = "exact",
                           display_name: str = "", description: str = "",
                           tier: int = 5, price: str = "",
-                          library: str = "user") -> dict:
+                          library: str = "user", aka: list = None) -> dict:
         """Create a list pattern from a raw list of numbers, with no hand-written
         Lua. Two match modes:
 
@@ -1131,6 +1144,8 @@ class PatternEngineV3:
         header_lines.append(f'Description: {description}')
         header_lines.append(f'Tier: {tier}')
         header_lines.append(f'Examples: {_json.dumps(examples)}')
+        if aka:
+            header_lines.append('AKA: ' + ', '.join(str(a).strip() for a in aka if str(a).strip()))
         if odds:
             header_lines.append(f'Odds: {odds}')
         if price:
@@ -1253,6 +1268,38 @@ class PatternEngineV3:
     # acronym" rule below keeps them uppercase, giving "Sum 61 OR 11").
     _JOINER_WORDS = {'OF', 'IN', 'OR', 'AND', 'FOR', 'THE', 'A', 'TO', 'ON', 'AT', 'BY'}
 
+    def _dedup_aka(self, aka: list, name: str, display_name: str) -> list:
+        """Keep alias entries that add something, dropping any that merely restate
+        the pattern's name, DisplayName, or auto-friendly name (case/underscore-
+        insensitive). Also de-dupes the list against itself, preserving order."""
+        def norm(s: str) -> str:
+            return (s or "").strip().lower().replace("_", " ")
+        skip = {norm(name), norm(display_name), norm(self._make_friendly_name(name))}
+        skip.discard("")
+        out, seen = [], set()
+        for a in (aka or []):
+            n = norm(a)
+            if not n or n in skip or n in seen:
+                continue
+            seen.add(n)
+            out.append(a.strip())
+        return out
+
+    def _effective_aka(self, name: str, info) -> list:
+        """Effective aliases = the pattern's shipped AKA header plus any the user
+        added (settings layer), merged and de-duped. The user layer is what lets a
+        read-only core pattern gain aliases without editing its .lua."""
+        # getattr guard: a vendored/downstream engine (dd-web) may carry an older
+        # settings object without get_pattern_aka -- fall back to no user aliases
+        # rather than crash.
+        user = []
+        display = ""
+        if self.settings:
+            user = getattr(self.settings, 'get_pattern_aka', lambda _n: [])(name) or []
+            display = self.settings.get_pattern_label(name) or ""
+        display = display or getattr(info, 'display_name', '') or ""
+        return self._dedup_aka(list(info.aka) + list(user), name, display)
+
     def _make_friendly_name(self, name: str) -> str:
         """Convert PATTERN_NAME to 'Pattern Name' for display."""
         # Split on underscores and capitalize each word
@@ -1308,6 +1355,7 @@ class PatternEngineV3:
                 'enabled': info.enabled,
                 'source': 'lua',
                 'examples': info.examples,
+                'aka': self._effective_aka(name, info),
                 'odds': info.odds,
                 'price': self.resolve_price(name),        # CSV override -> header
                 'price_range': self.resolve_price(name),  # alias (back-compat)
@@ -1512,6 +1560,7 @@ class PatternEngineV3:
                 'enabled': info.enabled,
                 'source': 'lua',
                 'examples': info.examples,
+                'aka': self._effective_aka(name, info),
                 'odds': info.odds,
                 'price': self.resolve_price(name),
             }

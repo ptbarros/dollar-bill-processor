@@ -4,6 +4,7 @@ DisplayName: Quad and 2 Pair
 Catalog: C-088
 Description: A solid block of four identical digits plus two side-by-side pairs of two other digits (e.g. 11·2222·33).
 Tier: 5
+AKA: Quad and Two Pairs
 Examples: ["11222233", "44441122", "33224444"]
 Odds: 1 in 9,456 (10,152 per 96M)
 Price: $0

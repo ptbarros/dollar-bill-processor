@@ -4,6 +4,7 @@ DisplayName: 4 Digit Ladder
 Catalog: C-127
 Description: Exactly 4 consecutive digits in strictly ascending or descending order
 Tier: 8
+AKA: Four Digit Ladder, Run of 4, Sequential 4, 4 Rung Ladder
 Odds: 1 in 166 (579,344 per 96M)
 Examples: ["12340000", "00004321", "00987600"]
 --]]

@@ -3,6 +3,7 @@ Pattern: SUM_72
 Catalog: C-143
 Description: Maximum sum (all 9s)
 Tier: 5
+AKA: All Nines, Max Sum, 99999999, Highest Sum
 Examples: ["99999999"]
 Odds: Only 99999999 — standard production until the 1970s, and since Series 1988 only on uncut collector sheets
 Price: $500+

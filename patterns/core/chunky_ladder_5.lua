@@ -4,6 +4,7 @@ DisplayName: 5 Digit Chunky Ladder
 Catalog: C-051
 Description: 5 consecutive digits (a 5-rung ladder) in sorted order, each appearing one or more times (e.g. 01122334).
 Tier: 3
+AKA: Grouped Ladder, Block Ladder, 5 Chunk Ladder
 Odds: 1 in 249,351 (385 per 96M)
 Examples: ["01122334", "44332210", "00112234", "43322110"]
 --]]

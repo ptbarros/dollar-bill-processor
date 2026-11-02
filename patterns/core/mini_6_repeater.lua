@@ -4,6 +4,7 @@ DisplayName: 6 Digit Repeater
 Catalog: C-117
 Description: A three-digit run repeated back to back sits somewhere in the serial (e.g. 301·301·xx).
 Tier: 7
+AKA: Six Digit Repeater, Mini Repeater, ABCABC
 Examples: ["30130100", "03013010", "00301301"]
 Odds: 1 in 361 (266,166 per 96M)
 Price: $0

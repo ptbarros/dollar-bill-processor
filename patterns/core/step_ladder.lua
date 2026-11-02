@@ -4,6 +4,7 @@ DisplayName: Step Ladder
 Catalog: C-108
 Description: The serial splits into two 4-digit halves that are identical except one digit, which steps up or down by 1 (e.g. 5191|5091). "Step Down" when the back half is lower, "Step Up" when higher.
 Tier: 7
+AKA: Step Up, Step Down, Stepped Serial
 Examples: ["51915091", "77367636", "44784578", "52114211"]
 Odds: 1 in 1,382 (69,460 per 96M)
 Price: $5-$30

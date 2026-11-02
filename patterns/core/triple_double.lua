@@ -4,6 +4,7 @@ DisplayName: Triple Double Double
 Catalog: C-101
 Description: A triple and two pairs back to back, in any order, starting at the first or second digit, with one odd digit at the front or the end (e.g. 1·333·44·55).
 Tier: 6
+AKA: Trip and Two Pair
 Examples: ["13334455", "33344551", "44433551", "55443331"]
 Odds: 1 in 2,352 (40,824 per 96M)
 Price: $25-$75

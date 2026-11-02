@@ -3,6 +3,7 @@ Pattern: LUCKY_777
 Catalog: C-126
 Description: Contains 777
 Tier: 8
+AKA: 777, Jackpot, Lucky Sevens, Triple Seven
 Examples: ["12377712", "77712345"]
 Odds: 1 in 183 (525,948 per 96M)
 Price: $2-$5

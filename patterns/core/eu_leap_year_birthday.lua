@@ -4,6 +4,7 @@ DisplayName: Birthday Note Leap Year
 Catalog: C-144
 Description: Reads as a leap-day birthday — the 29th of February in the day-first style — from within the last hundred years (e.g. 29·02·2000).
 Tier: 6
+AKA: Leap Day Birthday, Feb 29 Birthday
 Odds: Depends on the date
 Examples: ["29022000", "29021984", "29022024"]
 --]]

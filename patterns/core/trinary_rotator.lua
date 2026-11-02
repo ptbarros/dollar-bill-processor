@@ -4,6 +4,7 @@ DisplayName: Trinary Rotator
 Catalog: C-046
 Description: Turn the note upside-down and it reads the same, built from three different digits that survive the flip (e.g. 0690·0690).
 Tier: 3
+AKA: Trinary Upside Down
 Flippable: true
 Odds: 1 in 507,937 (189 per 96M)
 Examples: ["06900690", "16911691", "10800801"]

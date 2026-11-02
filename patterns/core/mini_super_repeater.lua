@@ -3,6 +3,7 @@ Pattern: MINI_SUPER_REPEATER
 Catalog: C-080
 Description: Alternating start pattern (12121234)
 Tier: 5
+AKA: Partial Super Repeater
 Examples: ["12121234", "89898912", "80808093"]
 Odds: 1 in 11,034 (8,700 per 96M)
 Price: $4-$20

@@ -4,6 +4,7 @@ DisplayName: 5 Digit Ladder
 Catalog: C-099
 Description: Exactly 5 consecutive digits in strictly ascending or descending order
 Tier: 6
+AKA: Five Digit Ladder, Run of 5, Sequential 5, 5 Rung Ladder
 Odds: 1 in 2,391 (40,146 per 96M)
 Examples: ["12345000", "00054321", "00987650"]
 --]]

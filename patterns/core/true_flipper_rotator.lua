@@ -4,6 +4,7 @@ DisplayName: True Flipper/Rotator
 Catalog: C-017
 Description: Reads the SAME number upside down, using only 0, 6 and 9. A stricter cousin of the True Flipper: not just symmetric digits, but rotationally identical end-to-end.
 Tier: 2
+AKA: 069 Rotator, Symmetric Rotator
 Flippable: true
 Examples: ["69069069", "66669999", "66696999"]
 Odds: 1 in 1,548,387 (62 per 96M)

@@ -3,6 +3,7 @@ Pattern: SERIAL_UNDER_10
 Catalog: C-006
 Description: Serial number 00000001-00000009
 Tier: 1
+AKA: Single Digit Serial, Low Serial, Under Ten, Low 0000000, 7 Leading Zeros
 Examples: ["00000001", "00000003", "00000009"]
 Odds: 1 in 10,666,667 (9 per 96M)
 Price: $300-$25,000

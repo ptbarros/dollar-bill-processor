@@ -3,6 +3,7 @@ Pattern: BROKEN_RADAR
 Catalog: C-119
 Description: One digit away from radar
 Tier: 8
+AKA: Near Radar, Almost Radar, Almost Palindrome
 Examples: ["12344322", "22344321", "12344320"]
 Odds: 1 in 278 (345,600 per 96M)
 Price: $3-$20

@@ -4,6 +4,7 @@ DisplayName: 4 in a Row
 Catalog: C-123
 Description: 4 consecutive identical digits (quad)
 Tier: 8
+AKA: Four in a Row, Quad, 4 Consecutive, Quad Run
 Odds: 1 in 239 (401,139 per 96M)
 Examples: ["00001234", "12340000", "11112345"]
 --]]

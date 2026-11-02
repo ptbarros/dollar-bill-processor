@@ -51,12 +51,16 @@ def _resolve_data_file(engine, info) -> Path | None:
 
 
 def export_bundle(engine, pattern_names, out_path, pattern_labels=None,
-                  library_name=None) -> dict:
+                  library_name=None, pattern_aka=None) -> dict:
     """Write the named patterns (and their data files) to a ``.ddpat`` bundle.
 
     ``pattern_labels`` (optional) is a ``{name: custom_label}`` map of the user's
     display-label overrides; entries for the exported patterns are stored in the
     manifest so relabeling travels with the patterns.
+
+    ``pattern_aka`` (optional) is a ``{name: [aliases]}`` map of the user's added
+    search aliases (the settings-layer override, distinct from a pattern's built-in
+    AKA header); entries for the exported patterns travel in the manifest too.
 
     ``library_name`` (optional) records the add-on library this bundle should
     import as (so it lands in its own named group, not the flat "user" folder);
@@ -112,11 +116,17 @@ def export_bundle(engine, pattern_names, out_path, pattern_labels=None,
             })
 
         # Carry display-label overrides for the exported patterns only.
+        exported_names = {e["name"] for e in entries}
         labels = {}
         if pattern_labels:
-            exported_names = {e["name"] for e in entries}
             labels = {n: lbl for n, lbl in pattern_labels.items()
                       if n in exported_names and lbl}
+
+        # Carry user-added aliases for the exported patterns only.
+        aka = {}
+        if pattern_aka:
+            aka = {n: list(v) for n, v in pattern_aka.items()
+                   if n in exported_names and v}
 
         manifest = {
             "format": BUNDLE_FORMAT,
@@ -125,6 +135,7 @@ def export_bundle(engine, pattern_names, out_path, pattern_labels=None,
             "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "patterns": entries,
             "pattern_labels": labels,
+            "pattern_aka": aka,
         }
         if library_name:
             manifest["library"] = library_name
@@ -135,6 +146,7 @@ def export_bundle(engine, pattern_names, out_path, pattern_labels=None,
         "data_files": len(used_data_names),
         "missing_data": missing_data,
         "labels": len(labels),
+        "aka": len(aka),
         "path": str(out_path),
     }
 
@@ -182,7 +194,7 @@ def import_bundle(engine, bundle_path, overwrite=False, library_name=None) -> di
     manifest's ``library`` field, or the bundle filename stem. Existing patterns
     (by name or target filename) are skipped unless ``overwrite`` is True. Calls
     ``engine.reload()`` at the end. Returns a summary dict: imported, skipped,
-    errors, data_files, library (the folder used), pattern_labels."""
+    errors, data_files, library (the folder used), pattern_labels, pattern_aka."""
     manifest = read_manifest(bundle_path)
 
     lib = _sanitize_library_name(
@@ -269,11 +281,16 @@ def import_bundle(engine, bundle_path, overwrite=False, library_name=None) -> di
     manifest_labels = manifest.get("pattern_labels", {}) or {}
     imported_labels = {n: manifest_labels[n] for n in imported
                        if n in manifest_labels and manifest_labels[n]}
+    # User-added aliases from the manifest, likewise only for imported patterns.
+    manifest_aka = manifest.get("pattern_aka", {}) or {}
+    imported_aka = {n: list(manifest_aka[n]) for n in imported
+                    if n in manifest_aka and manifest_aka[n]}
     return {
         "imported": imported,
         "skipped": skipped,
         "errors": errors,
         "data_files": len(data_written),
         "pattern_labels": imported_labels,
+        "pattern_aka": imported_aka,
         "library": lib,
     }

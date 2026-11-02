@@ -4,6 +4,7 @@ DisplayName: True Quadrinary
 Catalog: C-100
 Description: Only digits 0, 1, 2, 3 used, all four present
 Tier: 6
+AKA: Quadrinary, 0123 Only, Four Digit Set
 Odds: 1 in 2,352 (40,824 per 96M)
 Examples: ["01230123", "00112233", "32103210", "12301230"]
 --]]

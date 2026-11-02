@@ -4,6 +4,7 @@ DisplayName: 7 Digit Chunky Ladder
 Catalog: C-016
 Description: Seven consecutive digits, each in its own chunk, the whole serial sorted up or down (e.g. 00·1·2·3·4·5·6).
 Tier: 2
+AKA: Grouped Ladder, Block Ladder, 7 Chunk Ladder
 Odds: 1 in 1,959,184 (49 per 96M)
 Examples: ["00123456", "01234566", "66543210", "99876543"]
 --]]

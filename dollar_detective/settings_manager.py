@@ -157,6 +157,7 @@ class SettingsManager:
         self.label_profiles: Dict[str, Dict] = {}  # name -> label template dict (size + fields)
         self.active_label_profile: str = ""  # currently selected profile name
         self.pattern_labels: Dict[str, str] = {}  # Pattern name -> custom display label override
+        self.pattern_aka: Dict[str, list] = {}  # Pattern name -> user-added search aliases (merged with the .lua AKA header; lets a read-only core pattern gain aliases)
         self.pattern_tiers: Dict[str, int] = {}  # Pattern name -> custom tier override (1-10; overrides the .lua Tier)
         self.pattern_flippable: Dict[str, bool] = {}  # Pattern name -> user override of the .lua Flippable flag (overlay can be shown rotated 180)
         self.previous_version: Optional[str] = None  # Version running just before the last in-app update, so it can be one-click reverted to
@@ -300,6 +301,8 @@ class SettingsManager:
         if self.active_label_profile not in self.label_profiles:
             self.active_label_profile = next(iter(self.label_profiles), '2x1')
         self.pattern_labels = data.get('pattern_labels', {})
+        # User-added aliases (list values keyed by internal pattern name).
+        self.pattern_aka = {k: list(v) for k, v in (data.get('pattern_aka', {}) or {}).items()}
         # Custom tier overrides (int values keyed by internal pattern name)
         self.pattern_tiers = {k: int(v) for k, v in (data.get('pattern_tiers', {}) or {}).items()}
 
@@ -476,6 +479,7 @@ class SettingsManager:
             'label_profiles': self.label_profiles,
             'active_label_profile': self.active_label_profile,
             'pattern_labels': self.pattern_labels,
+            'pattern_aka': self.pattern_aka,
             'pattern_tiers': self.pattern_tiers,
             'pattern_flippable': self.pattern_flippable,
             'previous_version': self.previous_version,
@@ -581,6 +585,22 @@ class SettingsManager:
             self.pattern_labels[pattern_name] = label
         elif pattern_name in self.pattern_labels:
             del self.pattern_labels[pattern_name]
+
+    def get_pattern_aka(self, pattern_name: str) -> list:
+        """User-added search aliases for a pattern (empty list if none).
+
+        Merged with the pattern's built-in AKA header by
+        PatternEngine.get_pattern_info, so a user can give even a read-only core
+        pattern extra names to search by / display as -- without editing its .lua."""
+        return list(self.pattern_aka.get(pattern_name, []))
+
+    def set_pattern_aka(self, pattern_name: str, aliases: list):
+        """Set/clear a pattern's user-added aliases (empty list clears the override)."""
+        aliases = [str(a).strip() for a in (aliases or []) if str(a).strip()]
+        if aliases:
+            self.pattern_aka[pattern_name] = aliases
+        elif pattern_name in self.pattern_aka:
+            del self.pattern_aka[pattern_name]
 
     def get_pattern_tier(self, pattern_name: str, default=None):
         """User's custom tier override for a pattern, or `default` if none.

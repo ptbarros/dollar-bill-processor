@@ -4,6 +4,7 @@ DisplayName: 6 of a Kind
 Catalog: C-095
 Description: 6 of the same digit (anywhere)
 Tier: 6
+AKA: Six of a Kind, 6OAK, Sextuple
 Examples: ["77777070", "66666106", "99999090"]
 Odds: 1 in 5,101 (18,819 per 96M)
 Price: $20-$100

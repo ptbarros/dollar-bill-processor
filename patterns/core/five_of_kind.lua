@@ -4,6 +4,7 @@ DisplayName: 5 of a Kind
 Catalog: C-120
 Description: 5 of the same digit (anywhere)
 Tier: 8
+AKA: Five of a Kind, 5OAK, Quint
 Examples: ["50505055", "49446144", "50550505"]
 Odds: 1 in 269 (356,994 per 96M)
 Price: $3-$25

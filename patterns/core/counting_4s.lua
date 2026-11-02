@@ -4,6 +4,7 @@ DisplayName: Counting By 4s Ladder
 Catalog: C-028
 Description: Counting by 4s ladder (04081216)
 Tier: 2
+AKA: Count by 4, Skip Count by 4, Multiples of 4
 Examples: ["04081216", "08121620"]
 Odds: 1 in 1,090,909 (88 per 96M)
 Price: $100-$1,000+
