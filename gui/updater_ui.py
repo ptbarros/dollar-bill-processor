@@ -49,6 +49,12 @@ def prompt_and_apply(parent, info):
     asset = info.asset_for_current_edition()
     can_autoinstall = (sys.platform == "win32" and asset
                        and asset["name"].endswith(".exe"))
+    # Cross-edition migration: the running edition no longer has its own installer
+    # in this release (e.g. CUDA retired) so asset_for_current_edition fell back to
+    # a different edition. Tell the user plainly so the switch isn't a surprise.
+    running_edition = updater.detect_edition()
+    target_edition = updater.asset_edition(asset["name"]) if asset else ""
+    migrating = bool(asset and target_edition and target_edition != running_edition)
 
     from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                                    QTextBrowser, QPushButton)
@@ -62,6 +68,19 @@ def prompt_and_apply(parent, info):
                     f"(you have {info.current_version}).")
     header.setWordWrap(True)
     v.addWidget(header)
+
+    if migrating:
+        _ED = {"directml": "DirectML (GPU)", "openvino": "Standard (OpenVINO)",
+               "cuda": "NVIDIA (CUDA)"}
+        notice = QLabel(
+            f"<b>Note:</b> the {_ED.get(running_edition, running_edition)} edition "
+            f"is being retired. Installing this update will switch you to the "
+            f"{_ED.get(target_edition, target_edition)} edition, which also runs on "
+            f"your graphics card. Your settings and data are kept. You can uninstall "
+            f"the old copy afterward.")
+        notice.setWordWrap(True)
+        notice.setStyleSheet("background:#5a4a1a; color:#ffe9a8; padding:8px; border-radius:4px;")
+        v.addWidget(notice)
 
     # "What's new" -- the release's notes (GitHub auto-generated "What's Changed").
     if info.notes:
