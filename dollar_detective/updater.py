@@ -85,7 +85,13 @@ def _asset_for_edition(assets: List[dict], edition: str) -> Optional[dict]:
         return None
 
     if edition == "cuda":
-        return find(lambda n: n.endswith("-cuda-setup.exe"))
+        # The CUDA edition is being retired. Prefer a CUDA installer when one is
+        # still published; once CUDA builds stop, fall back to the DirectML
+        # installer so a CUDA user auto-migrates onto DirectML (also GPU-
+        # accelerated, runs on the same NVIDIA cards). updater_ui shows a notice
+        # when the download crosses editions like this.
+        return (find(lambda n: n.endswith("-cuda-setup.exe"))
+                or find(lambda n: n.endswith("-directml-setup.exe")))
     if edition == "directml":
         return find(lambda n: n.endswith("-directml-setup.exe"))
     if edition == "openvino":
@@ -97,6 +103,25 @@ def _asset_for_edition(assets: List[dict], edition: str) -> Optional[dict]:
     if edition == "macos":
         return find(lambda n: n.endswith(".dmg"))
     return None
+
+
+def asset_edition(asset_name: str) -> str:
+    """The edition an installer asset belongs to, inferred from its filename
+    ('cuda' | 'directml' | 'openvino' | 'appimage' | 'macos' | ''). Lets the UI
+    notice when an update crosses editions (e.g. a CUDA user being migrated onto
+    the DirectML installer because CUDA builds have stopped)."""
+    n = asset_name.lower()
+    if n.endswith("-cuda-setup.exe"):
+        return "cuda"
+    if n.endswith("-directml-setup.exe"):
+        return "directml"
+    if n.endswith(".appimage"):
+        return "appimage"
+    if n.endswith(".dmg"):
+        return "macos"
+    if n.endswith("-setup.exe"):
+        return "openvino"
+    return ""
 
 
 def check_for_update(timeout: int = 6) -> Optional[UpdateInfo]:
