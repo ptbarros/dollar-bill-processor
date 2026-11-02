@@ -56,6 +56,21 @@ class MainWindow(QMainWindow):
             serial_overlay.set_overlay_overrides(self.settings.get_overlay_colors())
         except Exception:
             pass
+        # First run after an install/update: if the version we last launched as
+        # differs from the current one, the FIRST Process pays a one-time cold cost
+        # (the GPU engine's torch/CUDA DLLs get scanned by AV + the driver builds its
+        # kernel cache), which can take up to ~90s. Flag it so that first run shows a
+        # clear "initializing" notice in the big processing overlay instead of a
+        # silent long wait. Stamp the new version now so the notice shows only once.
+        self._first_run_after_update = False
+        try:
+            from dollar_detective.version import __version__ as _cur_ver
+            if self.settings.get_last_run_version() != _cur_ver:
+                self._first_run_after_update = True
+                self.settings.set_last_run_version(_cur_ver)
+        except Exception:
+            pass
+
         self.correction_manager = CorrectionManager()
         self.recovery_manager = get_recovery_manager()
 
@@ -1317,7 +1332,12 @@ class MainWindow(QMainWindow):
         # PRIOR run's data doesn't linger until this run finishes.
         try:
             self.preview_panel.clear()
-            self.preview_panel.show_processing_overlay()
+            # On the first run after an install/update, the big overlay explains the
+            # one-time GPU-engine init so the ~90s cold model-load isn't a mystery.
+            # Consume the flag so it shows only on this first Process.
+            first_run = getattr(self, "_first_run_after_update", False)
+            self._first_run_after_update = False
+            self.preview_panel.show_processing_overlay(first_run_init=first_run)
         except Exception:
             pass
         self._current_input_dir = input_dir
