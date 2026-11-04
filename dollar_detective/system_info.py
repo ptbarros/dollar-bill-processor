@@ -65,9 +65,15 @@ def _total_ram_gb():
 
 
 def _cpu_name():
-    name = (platform.processor() or "").strip()
+    # Do NOT call platform.processor() on Windows: on current Python it queries
+    # WMI *in-process*, and this runs on a background thread, where a WMI/COM call
+    # raises RPC_E_CANTCALLOUT_ININPUTSYNCCALL (0x8001010d) and has raced the Qt
+    # main thread into a startup access violation (see crash.log). The wmic /
+    # PowerShell probes below reach WMI in a SEPARATE process (its own COM
+    # apartment), which is safe. platform.processor() is fine off-Windows.
+    name = "" if sys.platform == "win32" else (platform.processor() or "").strip()
     try:
-        if sys.platform == "win32" and (not name or "Family" in name):
+        if sys.platform == "win32":
             # wmic first (older Windows), PowerShell CIM as the fallback (11 24H2+).
             for line in _run(["wmic", "cpu", "get", "name"]).splitlines():
                 line = line.strip()
@@ -77,6 +83,10 @@ def _cpu_name():
                        "(Get-CimInstance Win32_Processor).Name"]).strip()
             if ps:
                 return ps.splitlines()[0].strip()
+            # WMI-free last resort: the environment's processor identifier.
+            env_name = os.environ.get("PROCESSOR_IDENTIFIER", "").strip()
+            if env_name:
+                return env_name
         elif sys.platform.startswith("linux"):
             for line in open("/proc/cpuinfo", encoding="utf-8", errors="ignore"):
                 if line.lower().startswith("model name"):
@@ -84,6 +94,26 @@ def _cpu_name():
     except Exception:
         pass
     return name or "unknown"
+
+
+def _os_string():
+    """OS description WITHOUT the in-process WMI call that platform.platform()
+    makes on Windows (platform.platform -> win32_ver -> _wmi_query), which runs on
+    this background thread and races the GUI thread into an access violation. On
+    other platforms platform.platform() touches no WMI, so use it unchanged."""
+    if sys.platform != "win32":
+        try:
+            return platform.platform()
+        except Exception:
+            return sys.platform
+    try:
+        v = sys.getwindowsversion()  # pure Win32 call, no WMI
+        build = getattr(v, "build", 0)
+        # Windows 11 ships as major 10 with build >= 22000.
+        rel = "11" if (v.major == 10 and build >= 22000) else str(v.major)
+        return f"Windows-{rel}-10.0.{build}"
+    except Exception:
+        return "Windows"
 
 
 def _gpu_names():
@@ -183,7 +213,7 @@ def collect():
     """Return a dict of machine facts (best-effort; missing fields omitted)."""
     info = {"edition": _edition(),
             "app_version": _app_version(),
-            "os": platform.platform(),
+            "os": _os_string(),
             "arch": platform.machine(),
             "cpu": _cpu_name(),
             "cpu_cores": os.cpu_count(),

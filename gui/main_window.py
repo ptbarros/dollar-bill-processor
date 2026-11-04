@@ -131,6 +131,17 @@ class MainWindow(QMainWindow):
         # Log a one-off machine snapshot (CPU/GPU/RAM/OS + ONNX providers) to the
         # debug log for support/diagnostics. Off-thread: some probes shell out.
         try:
+            # Import onnxruntime HERE, on the main thread, first. The SYSINFO thread
+            # imports it too (edition + provider list); doing that FIRST import on a
+            # background thread trips PySide6's feature-import hook (inspect.getsource
+            # over the frozen module), which has raced the GUI thread into a startup
+            # access violation (see crash.log). Once imported here it is a cached
+            # no-op on the thread. Harmless if onnxruntime isn't bundled (CUDA uses
+            # torch); the probe just reports nothing.
+            try:
+                import onnxruntime  # noqa: F401
+            except Exception:
+                pass
             import threading
             from dollar_detective import system_info
             threading.Thread(target=system_info.log_system_info, daemon=True).start()
