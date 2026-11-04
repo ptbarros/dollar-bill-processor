@@ -182,6 +182,12 @@ class ResultsList(QWidget):
         self.pattern_engine = PatternEngine()
         self.settings = get_settings()
         self._current_batch_path: Optional[Path] = None  # None = current session
+        # The strap dir the LIVE session was just filed into (Monitor/scan/manual
+        # archive). While a filed batch equals this, its dropdown entry is a live
+        # view of current_results -- selecting it must NOT reload the (stale, taken
+        # at processing time) CSV and drop edits the user made afterward. None once
+        # a new session supersedes it, after which that batch is a true archive.
+        self._live_batch_dir: Optional[Path] = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -480,11 +486,19 @@ class ResultsList(QWidget):
             if key in (Qt.Key_Left, Qt.Key_Right) and event.modifiers() == Qt.NoModifier:
                 self.overlay_cycle_requested.emit(1 if key == Qt.Key_Right else -1)
                 return True
-        if obj is self.batch_combo and event.type() == QEvent.FocusIn:
-            try:
-                dlog("batch_combo.focus_in", reason=int(event.reason()))
-            except Exception:
-                pass
+        if obj is self.batch_combo:
+            # Swallow wheel events: a QComboBox changes its selection on any wheel
+            # notch while the pointer is over it, even unfocused. A user scrolling
+            # through bills whose cursor drifts over the picker would silently load
+            # a different (older) batch -- the "it jumped to the previous batch on
+            # its own" report. The dropdown is still changeable by click/keyboard.
+            if event.type() == QEvent.Wheel:
+                return True
+            if event.type() == QEvent.FocusIn:
+                try:
+                    dlog("batch_combo.focus_in", reason=int(event.reason()))
+                except Exception:
+                    pass
         return super().eventFilter(obj, event)
 
     def _get_display_name(self, pattern_name: str) -> str:
@@ -539,6 +553,8 @@ class ResultsList(QWidget):
         # A fresh run is the live current session, not a loaded batch -- reset the
         # picker so a later Monitor run can point it at the strap it just filed.
         self._current_batch_path = None
+        # No filed strap belongs to this (not-yet-filed) session.
+        self._live_batch_dir = None
         try:
             self.batch_combo.blockSignals(True)
             self.batch_combo.setCurrentIndex(0)  # "Current Session"
@@ -1617,11 +1633,37 @@ class ResultsList(QWidget):
         self.batch_combo.blockSignals(False)
         self._update_open_crops_btn()
 
+    def set_live_batch_dir(self, batch_dir):
+        """Tell the list which filed strap is the live session's own batch, so its
+        dropdown entry stays bound to current_results instead of reloading a stale
+        CSV. Pass None to clear (e.g. when a new run supersedes it)."""
+        self._live_batch_dir = Path(batch_dir) if batch_dir else None
+
+    def _is_live_batch(self, batch_path) -> bool:
+        """True if batch_path is the live session's own filed strap."""
+        if not batch_path or not self._live_batch_dir:
+            return False
+        try:
+            return Path(batch_path) == self._live_batch_dir
+        except Exception:
+            return False
+
     def _on_batch_changed(self, index: int):
         """Handle batch selection change."""
         batch_path = self.batch_combo.currentData()
         dlog("batch_combo.changed", index=index, batch_path=batch_path or "(current session)")
         self._update_open_crops_btn()
+
+        if batch_path and self._is_live_batch(batch_path):
+            # This filed strap IS the live session. Do NOT load its CSV (written at
+            # processing time, before the user's checks/labels); instead let
+            # MainWindow re-install current_results via batch_changed, so the live
+            # edits are shown rather than silently dropped.
+            dlog("batch.load.LIVE", batch=str(batch_path))
+            self._current_batch_path = Path(batch_path)
+            self.save_csv_btn.setEnabled(True)
+            self.batch_changed.emit(str(batch_path))
+            return
 
         if not batch_path:
             # Current session selected. NOTE: this does NOT restore the live

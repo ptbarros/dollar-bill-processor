@@ -1326,6 +1326,9 @@ class MainWindow(QMainWindow):
 
         # Clear previous results when starting a new batch
         self.current_results = []
+        # A fresh run has no filed strap yet, so any previously filed batch reverts
+        # to a plain archive (its dropdown entry loads its CSV, not this new session).
+        self._live_batch_dir = None
         self.results_list.clear()
         # Fully clear the preview (bill image, the Serials crops + overlay, and the
         # Bill Details labels) and take it over with a "Processing…" overlay so the
@@ -2912,8 +2915,11 @@ class MainWindow(QMainWindow):
             try:
                 self.results_list.refresh_batch_list()
                 # Show the just-filed strap as the selected batch (the results on
-                # screen already ARE it, so no reload needed).
+                # screen already ARE it, so no reload needed). Mark it the live
+                # batch so re-selecting it keeps showing the live edits, not the CSV.
                 if getattr(self, "_monitor_last_batch", None):
+                    self._live_batch_dir = Path(self._monitor_last_batch)
+                    self.results_list.set_live_batch_dir(self._monitor_last_batch)
                     self.results_list.select_batch(self._monitor_last_batch)
             except Exception:
                 pass
@@ -3761,7 +3767,23 @@ class MainWindow(QMainWindow):
     def _on_batch_changed(self, batch_path: str):
         """Handle batch selection change in results list."""
         if batch_path:
-            # Viewing a filed strap - set input directory to allow reprocessing
+            is_live = (self._live_batch_dir is not None
+                       and Path(batch_path) == Path(self._live_batch_dir))
+            if is_live:
+                # This filed strap is the live session's own batch. Re-install the
+                # authoritative live dicts so the user's post-processing checks and
+                # labels show, instead of the strap's stale processing-time CSV.
+                self.preview_panel.clear()
+                self.results_list.set_results(self.current_results)
+                self.status_label.setText(f"Viewing strap: {Path(batch_path).name}")
+                self.processing_panel.set_input_dir(batch_path)
+                dlog("session.restored_to_list", state=fingerprint(self.current_results),
+                     via="live_batch")
+                return
+            # Viewing a truly archived strap. Flush any live edits to recovery first
+            # so leaving the session can never strand them, then set the input
+            # directory to allow reprocessing.
+            self._trigger_autosave()
             self.preview_panel.clear()
             self.status_label.setText(f"Viewing strap: {Path(batch_path).name}")
             self.processing_panel.set_input_dir(batch_path)
@@ -3872,8 +3894,10 @@ class MainWindow(QMainWindow):
         # Refresh + select the just-filed strap (no reload -- the on-screen results
         # already ARE it), and advance the "next strap: N" indicator.
         self._monitor_last_batch = str(strap_dir)
+        self._live_batch_dir = Path(strap_dir)
         try:
             self.results_list.refresh_batch_list()
+            self.results_list.set_live_batch_dir(strap_dir)
             self.results_list.select_batch(str(strap_dir))
         except Exception:
             pass
