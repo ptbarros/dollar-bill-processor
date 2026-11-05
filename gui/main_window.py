@@ -399,9 +399,14 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(overlay_colors_action)
 
         insights_action = QAction("&Insights Report...", self)
-        insights_action.setToolTip("Pattern hit-rate vs keep-rate across your full scan history")
-        insights_action.triggered.connect(self._open_insights)
+        insights_action.setToolTip("Pattern hit-rate, keep-rate and kept value across your scan history")
+        insights_action.triggered.connect(lambda: self._open_insights())
         tools_menu.addAction(insights_action)
+
+        insights_custom_action = QAction("Insights (Custom Range)...", self)
+        insights_custom_action.setToolTip("Insights for a specific start/end scan-date range")
+        insights_custom_action.triggered.connect(lambda: self._open_insights_custom())
+        tools_menu.addAction(insights_custom_action)
 
         coverage_action = QAction("&Coverage Check...", self)
         coverage_action.setToolTip("Compare your enabled patterns against the full library on the current batch — see which bills the full library catches that your enabled set misses")
@@ -2374,33 +2379,26 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"Ledger record failed: {e}")
 
-    def _open_insights(self):
-        """Render the Insights report from the ledger and open it in a browser."""
+    def _open_insights(self, custom=None):
+        """Render the Insights report from the ledger and open it in a browser.
+
+        `custom` is an optional (start_iso, end_iso, label) extra time window made
+        the active one (from Tools -> Insights (Custom Range)); the preset windows
+        are always included and switchable in the report itself."""
         import json
         import webbrowser
         from datetime import datetime
+        from dollar_detective import insights
         led = self._get_ledger()
         if not led:
             QMessageBox.warning(self, "Insights",
                                 "The bill ledger isn't available on this system.")
             return
-        try:
-            payload = {
-                "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "stats": led.stats(),
-                "report": led.report_data(),
-                "keep_coverage": led.keep_coverage(self._current_enabled_pattern_names()),
-            }
-        except Exception as e:
-            QMessageBox.warning(self, "Insights", f"Could not read the ledger:\n{e}")
-            return
 
-        # Hide report rows for patterns that no longer exist in the engine (e.g.
-        # the pulled Green Guide) so test users don't see stale/Green-Guide
-        # references. This is data-driven, so those rows come back automatically
-        # if/when the full guide is re-added. Prefer an already-loaded engine;
-        # otherwise build a lightweight Lua-only engine (no YOLO/OCR) just to
-        # enumerate the current pattern names.
+        # Prefer an already-loaded engine (has settings -> label overrides +
+        # loaded price CSV); otherwise a lightweight Lua-only engine (no YOLO/OCR)
+        # just to enumerate names, resolve display names and resolve prices. `valid`
+        # hides rows for patterns no longer present (e.g. the pulled Green Guide).
         try:
             proc = self.processor or (
                 self.processing_thread.processor
@@ -2409,21 +2407,23 @@ class MainWindow(QMainWindow):
             if eng is None:
                 from dollar_detective.pattern_engine_v3 import PatternEngineV3
                 eng = PatternEngineV3()
+            # Make sure the user's edited prices (CSV overrides) are reflected.
+            try:
+                eng.reload_price_overrides()
+            except Exception:
+                pass
             valid = set(getattr(eng, "lua_patterns", {}).keys()) or None
         except Exception:
-            valid = None
-        if valid:
-            kept_rows = []
-            for row in payload["report"].get("patterns", []):
-                aliases = [a for a in (row.get("aliases") or [row.get("name")])
-                           if a in valid]
-                if not aliases:
-                    continue  # every alias is a removed (e.g. Green Guide) pattern
-                row = dict(row)
-                row["aliases"] = aliases
-                row["name"] = min(aliases, key=len)
-                kept_rows.append(row)
-            payload["report"]["patterns"] = kept_rows
+            eng, valid = None, None
+
+        try:
+            payload = insights.build_payload(
+                led, eng, self._current_enabled_pattern_names(),
+                datetime.now().strftime("%Y-%m-%d %H:%M"),
+                valid_names=valid, custom=custom)
+        except Exception as e:
+            QMessageBox.warning(self, "Insights", f"Could not read the ledger:\n{e}")
+            return
 
         try:
             from dollar_detective.resource_path import user_data_dir
@@ -2435,6 +2435,30 @@ class MainWindow(QMainWindow):
             webbrowser.open(out.as_uri())
         except Exception as e:
             QMessageBox.warning(self, "Insights", f"Could not build the report:\n{e}")
+
+    def _open_insights_custom(self):
+        """Prompt for a start/end date, then render Insights with that custom
+        window active (scan date). Presets stay available in the report."""
+        from PySide6.QtWidgets import (QDialog, QDateEdit, QDialogButtonBox,
+                                       QFormLayout)
+        from PySide6.QtCore import QDate
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Insights — Custom Range")
+        form = QFormLayout(dlg)
+        start = QDateEdit(QDate.currentDate().addMonths(-1)); start.setCalendarPopup(True)
+        end = QDateEdit(QDate.currentDate()); end.setCalendarPopup(True)
+        form.addRow("From (scanned on/after):", start)
+        form.addRow("To (scanned before):", end)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept); bb.rejected.connect(dlg.reject)
+        form.addRow(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        s = start.date().toString("yyyy-MM-dd")
+        # End is inclusive to the user; the window is half-open, so bump a day.
+        e = end.date().addDays(1).toString("yyyy-MM-dd")
+        label = f"{s} → {end.date().toString('yyyy-MM-dd')}"
+        self._open_insights(custom=(s, e, label))
 
     def _get_pattern_engine(self):
         """The live pattern engine (from the processor), creating a processor if
