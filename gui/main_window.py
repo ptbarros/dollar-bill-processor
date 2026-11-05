@@ -124,6 +124,7 @@ class MainWindow(QMainWindow):
         self._setup_statusbar()
         self._restore_geometry()
         self._setup_autosave_timer()
+        self._setup_preview_debounce()
         self._apply_settings()  # Apply font size and other settings
 
         self.setWindowTitle("Dollar Detective")
@@ -1285,6 +1286,11 @@ class MainWindow(QMainWindow):
         if hasattr(self, '_autosave_timer') and self._autosave_timer:
             self._autosave_timer.stop()
 
+        # Stop the preview-render debounce so it can't fire into a torn-down
+        # preview panel during shutdown.
+        if hasattr(self, '_preview_debounce') and self._preview_debounce:
+            self._preview_debounce.stop()
+
         # Wait for processing thread to finish
         if hasattr(self, 'processing_thread') and self.processing_thread:
             if self.processing_thread.isRunning():
@@ -1432,12 +1438,47 @@ class MainWindow(QMainWindow):
             pass
         self.preview_panel.set_batch_processing_active(False)
 
+    def _setup_preview_debounce(self):
+        """Coalesce rapid selection changes so holding/▲▼-tapping through the
+        results list doesn't render every bill it flies past. show_bill() decodes
+        the full scan + composites the overlay synchronously on the GUI thread
+        (~100-300ms on a big scan); under key auto-repeat those renders queue, the
+        event loop stalls, then Qt flushes the backlog -- selection appears to lag
+        then jump 6-7 rows at once. We instead defer the render by a short idle and
+        restart it on each new selection, so only the bill the user lands on paints.
+        """
+        self._pending_preview_result = None
+        self._preview_debounce = QTimer(self)
+        self._preview_debounce.setSingleShot(True)
+        self._preview_debounce.setInterval(70)  # ms; below the ~100ms notice floor
+        self._preview_debounce.timeout.connect(self._render_pending_preview)
+
+    def _render_pending_preview(self):
+        """Render the most-recently-selected bill (debounce fired). Times the
+        render and logs only slow ones, so a laggy nav session is measurable in
+        the debug log without spamming it on every step."""
+        result = self._pending_preview_result
+        if result is None:
+            return
+        import time
+        t0 = time.perf_counter()
+        self.preview_panel.show_bill(result)
+        dt_ms = (time.perf_counter() - t0) * 1000.0
+        if dt_ms >= 50:
+            dlog("preview.show_bill.slow", ms=round(dt_ms, 1),
+                 front_file=result.get('front_file'), position=result.get('position'))
+
     @Slot(dict)
     def _on_result_selected(self, result: dict):
-        """Handle selection of a result item."""
-        self.preview_panel.show_bill(result)
+        """Handle selection of a result item. The heavy preview render is debounced
+        (see _setup_preview_debounce) so rapid arrow-key nav stays responsive; the
+        tree's own selection highlight still updates immediately."""
+        self._pending_preview_result = result
         # Mark dirty so autosave captures viewed status
         self._mark_session_dirty()
+        # Restart the idle timer: a burst of selection changes collapses to one
+        # render of the final bill.
+        self._preview_debounce.start()
 
     @Slot(str, str, str)
     def _on_correction_applied(self, filename: str, original: str, corrected: str):
