@@ -49,3 +49,12 @@ QScintilla>=2.14
 
 # Direct USB scanner control (Linux feed-scanner integration, e.g. Epson FF-640)
 pyusb>=1.2.0
+
+# Windows feed-scanner control (WinRT ImageScanner / WIA 2.0). Windows-only.
+winrt-runtime>=2.0; sys_platform == "win32"
+winrt-Windows.Devices.Scanners>=2.0; sys_platform == "win32"
+winrt-Windows.Devices.Enumeration>=2.0; sys_platform == "win32"
+winrt-Windows.Storage>=2.0; sys_platform == "win32"
+winrt-Windows.Foundation>=2.0; sys_platform == "win32"
+winrt-Windows.Foundation.Collections>=2.0; sys_platform == "win32"
+winrt-Windows.Graphics.Printing>=2.0; sys_platform == "win32"

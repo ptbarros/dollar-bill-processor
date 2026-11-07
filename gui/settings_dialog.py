@@ -572,9 +572,11 @@ class SettingsDialog(QDialog):
         layout.addWidget(opt_group)
 
         info = QLabel(
-            "Supported: Epson FastFoto FF-640 (Linux, direct USB). More scanners "
-            "and Windows support are planned. If your scanner isn't supported, keep "
-            "using its own software with Monitor mode.")
+            "Supported: on Windows, feed scanners with a WIA driver (e.g. Epson "
+            "FastFoto FF-640, Canon imageFORMULA R40) -- close the scanner's own "
+            "software first. On Linux, the Epson FastFoto FF-640 (direct USB). If "
+            "your scanner isn't supported, keep using its own software with "
+            "Monitor mode.")
         info.setWordWrap(True)
         info.setStyleSheet("color:#888; font-size:11px;")
         layout.addWidget(info)
@@ -587,9 +589,11 @@ class SettingsDialog(QDialog):
         self.scanner_device_combo.clear()
         self.scanner_device_combo.addItem("Auto-detect", "auto")
         found = []
+        can_detect_paper = False
         try:
             from dollar_detective.scanner import available_backends
             for backend in available_backends():
+                can_detect_paper |= bool(getattr(backend, "can_detect_paper", False))
                 try:
                     for d in backend.list_devices():
                         self.scanner_device_combo.addItem(f"{d.name}", d.id)
@@ -598,6 +602,12 @@ class SettingsDialog(QDialog):
                     pass
         except Exception:
             pass
+        # Auto-start needs a "paper in feeder" sensor read the backend may lack
+        # (WinRT/WIA on Windows has none) -- say so rather than silently ignore it.
+        self.scanner_autostart_check.setEnabled(can_detect_paper)
+        self.scanner_autostart_check.setToolTip(
+            "" if can_detect_paper else
+            "Not available for this scanner on this system -- click Scan to start.")
         # Restore the saved selection.
         ix = self.scanner_device_combo.findData(self.settings.scanner.device)
         if ix >= 0:

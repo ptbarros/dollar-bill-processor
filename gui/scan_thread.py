@@ -107,10 +107,10 @@ class ScanThread(QThread):
             self.final_number = number - 1   # highest number actually assigned
             self.finished_ok.emit(written)
         except Exception as e:
-            # The FF-640 reports a "jam" (PJ) with no pages when the feeder is
-            # simply empty -- that's not an error, just nothing to scan.
+            # An empty feeder isn't an error, just nothing to scan: the FF-640's
+            # direct driver reports it as a "jam" (PJ), WIA as paper-empty (PE).
             cause = getattr(e, "cause", "")
-            if cause == "PJ" and written == 0:
+            if cause in ("PJ", "PE") and written == 0:
                 self.status.emit("No bills in the feeder — load a strap and click Scan.")
                 self.finished_ok.emit(0)
             else:

@@ -8,6 +8,7 @@ forces DBP_FORCE_TORCH=1 + DBP_OCR=easy. Large bundle (CUDA libs come with torch
 Windows-only (that's where the CUDA wheels + the RTX box are).
 """
 import os
+import sys
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 
@@ -51,7 +52,11 @@ hiddenimports = ['yaml', 'pandas', 'openpyxl', 'docx', 'PIL', 'dollar_detective.
 #   - lupa: versioned native lua lib
 #   - anthropic / openai: AI pattern generation (lazily imported in the AI tab);
 #     collect_all pulls their compiled deps (pydantic_core, jiter) + metadata
-for pkg in ('torch', 'torchvision', 'ultralytics', 'easyocr', 'lupa', 'anthropic', 'openai', 'cv2'):
+# winrt: Windows feed-scanner control (WinRT ImageScanner), imported lazily.
+_cuda_pkgs = ['torch', 'torchvision', 'ultralytics', 'easyocr', 'lupa', 'anthropic', 'openai', 'cv2']
+if sys.platform == 'win32':
+    _cuda_pkgs.append('winrt')
+for pkg in _cuda_pkgs:
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b

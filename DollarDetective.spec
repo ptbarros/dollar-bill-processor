@@ -61,6 +61,11 @@ _collect_pkgs = ['rapidocr_onnxruntime', 'onnxruntime', 'lupa', 'anthropic', 'op
 if sys.platform != 'darwin':
     _collect_pkgs.append('cv2')
 
+# Windows feed-scanner control (WinRT ImageScanner): the winrt projection is a
+# namespace package of per-API native modules, imported lazily -> force it in.
+if sys.platform == 'win32':
+    _collect_pkgs.append('winrt')
+
 for pkg in _collect_pkgs:
     d, b, h = collect_all(pkg)
     datas += d

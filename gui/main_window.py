@@ -3048,6 +3048,7 @@ class MainWindow(QMainWindow):
         sc = getattr(self.settings, "scanner", None)
         want = bool(sc and sc.enabled and sc.auto_start
                     and self._scanner_backend is not None
+                    and getattr(self._scanner_backend, "can_detect_paper", False)
                     and getattr(self, "_monitor_active", False)
                     and self._scan_thread is None)
         if want and not self._feeder_timer.isActive():

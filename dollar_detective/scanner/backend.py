@@ -11,10 +11,9 @@ direct vendor-protocol driver). So each platform gets its own ScannerBackend;
 ``get_scanner_backend()`` returns the one that can drive a connected scanner on
 this machine, or None.
 
-Phase 1 ships the Linux Epson ESC/I-2 backend for the FastFoto FF-640 (Paul's
-own `esci2.py` driver, vendored). The interface is deliberately the same shape a
-WiaBackend / SaneBackend would implement, so later platforms slot in without the
-GUI changing.
+Linux: the Epson ESC/I-2 backend for the FastFoto FF-640 (Paul's own `esci2.py`
+driver, vendored). Windows: any WIA scanner through the WinRT ImageScanner API
+(winrt_backend.py). Both implement the same interface, so the GUI doesn't care.
 """
 
 from __future__ import annotations
@@ -48,6 +47,9 @@ class ScannerBackend(ABC):
 
     #: Short name shown in the UI, e.g. "Epson FastFoto (direct)".
     label: str = "Scanner"
+
+    #: Whether feeder_has_paper() really works (drives the auto-start option).
+    can_detect_paper: bool = False
 
     @abstractmethod
     def list_devices(self) -> List[ScannerDevice]:
@@ -86,6 +88,7 @@ class EpsonEsciBackend(ScannerBackend):
     FastFoto Scan app does. Pages stream off the feeder one side at a time."""
 
     label = "Epson FastFoto (direct)"
+    can_detect_paper = True
 
     def __init__(self):
         # Import lazily so a machine without pyusb / without the scanner still
@@ -150,7 +153,13 @@ def available_backends() -> List[ScannerBackend]:
             out.append(EpsonEsciBackend())
         except Exception:
             pass
-    # Future: WiaBackend/TwainBackend on win32, ImageCaptureBackend on darwin.
+    elif sys.platform == "win32":
+        try:
+            from .winrt_backend import WinRtScannerBackend
+            out.append(WinRtScannerBackend())
+        except Exception:
+            pass
+    # Future: ImageCaptureBackend on darwin.
     return out
 
 
