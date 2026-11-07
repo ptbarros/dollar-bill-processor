@@ -3124,13 +3124,15 @@ class MainWindow(QMainWindow):
         self._scan_thread = ScanThread(self._scanner_backend, out_dir,
                                        dpi=int(sc.dpi), duplex=bool(sc.duplex),
                                        color=True, device_id=(None if sc.device == "auto" else sc.device),
-                                       start_number=self._scan_counter, parent=self)
+                                       start_number=self._scan_counter,
+                                       options={"driver": getattr(sc, "driver", "auto")},
+                                       parent=self)
         self._scan_thread.status.connect(self.status_label.setText)
         self._scan_thread.finished_ok.connect(self._on_scan_finished)
         self._scan_thread.failed.connect(self._on_scan_failed)
         dlog("scan.start", backend=getattr(self._scanner_backend, "label", "?"),
              out_dir=out_dir, start_number=self._scan_counter, dpi=sc.dpi,
-             duplex=sc.duplex, device=sc.device)
+             duplex=sc.duplex, device=sc.device, driver=getattr(sc, "driver", "auto"))
         self.processing_panel.set_scanning(True)
         self._feeder_timer.stop()   # don't poll the USB device while scanning
         self._scan_thread.start()

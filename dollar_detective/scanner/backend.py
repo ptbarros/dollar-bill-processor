@@ -200,9 +200,10 @@ def available_backends() -> List[ScannerBackend]:
         except Exception:
             pass
     elif sys.platform == "win32":
+        # TWAIN (via helper) or WIA/WinRT, picked per Settings -> Scanner.
         try:
-            from .winrt_backend import WinRtScannerBackend
-            out.append(WinRtScannerBackend())
+            from .twain_backend import WindowsScannerBackend
+            out.append(WindowsScannerBackend())
         except Exception:
             pass
     # Future: ImageCaptureBackend on darwin.

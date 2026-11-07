@@ -30,7 +30,7 @@ class ScanThread(QThread):
 
     def __init__(self, backend, out_dir, *, dpi=300, duplex=True, color=True,
                  device_id=None, start_number=None, keep_armed=True,
-                 parent=None):
+                 options=None, parent=None):
         super().__init__(parent)
         self.backend = backend
         self.out_dir = Path(out_dir)
@@ -46,6 +46,8 @@ class ScanThread(QThread):
         self.final_number = (start_number - 1) if start_number else 0
         # Stay armed between feeder loads (False = one pass, then finish).
         self.keep_armed = keep_armed
+        # Backend-specific choices, e.g. {"driver": "auto"|"twain"|"wia"}.
+        self.options = dict(options or {})
         self._stop = threading.Event()
         self._bills = 0
         self._sides = 0
@@ -91,7 +93,7 @@ class ScanThread(QThread):
             # still hands over every page it already scanned.
             for page in self.backend.scan_pages(
                     self.device_id, dpi=self.dpi, duplex=self.duplex,
-                    color=self.color, stop=self._stop):
+                    color=self.color, stop=self._stop, **self.options):
                 (backs if page.side == "B" else fronts).append(page.image)
                 while fronts and backs:
                     self._write(f"FastFoto_{number:05d}.jpg", fronts.pop(0))

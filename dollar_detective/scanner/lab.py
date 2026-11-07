@@ -184,7 +184,7 @@ def measured_window(results: Dict[str, StepResult]) -> Optional[float]:
 
 
 def run_step(step: Step, backend, device_id, results: Dict[str, StepResult], *,
-             bills: int = 0, dpi: int = 300, stop=None,
+             bills: int = 0, dpi: int = 300, stop=None, driver: Optional[str] = None,
              progress: Callable[[str], None] = lambda s: None) -> StepResult:
     res = StepResult(key=step.key, bills_loaded=bills)
     t0 = time.monotonic()
@@ -203,6 +203,8 @@ def run_step(step: Step, backend, device_id, results: Dict[str, StepResult], *,
     opts["scan_length_in"] = resolve_scan_length(opts.get("scan_length_in"), results)
     if opts.get("transfer_format") == "recommended":
         opts["transfer_format"] = recommend(results).get("transfer_format", "jpeg")
+    if driver:
+        opts["driver"] = driver
     res.options = dict(opts, dpi=dpi)
     progress("Scanning…")
     fronts = backs = 0

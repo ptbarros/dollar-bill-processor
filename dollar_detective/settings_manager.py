@@ -134,6 +134,7 @@ class ScannerSettings:
     dpi: int = 300              # 300 or 600
     duplex: bool = True         # scan both sides in one pass
     auto_start: bool = True     # start scanning when paper is placed in the feeder
+    driver: str = "auto"        # Windows: "auto" (TWAIN if available, else WIA), "twain", "wia"
 
 
 class SettingsManager:
@@ -297,6 +298,7 @@ class SettingsManager:
             self.scanner.dpi = int(sc.get('dpi', 300))
             self.scanner.duplex = bool(sc.get('duplex', True))
             self.scanner.auto_start = bool(sc.get('auto_start', True))
+            self.scanner.driver = sc.get('driver', 'auto') if sc.get('driver') in ('auto', 'twain', 'wia') else 'auto'
             self.ai.openai_model = ai.get('openai_model', 'gpt-5')
             # Migrate retired model IDs saved by older versions to a current default
             # (the combos are editable, so anything current is left untouched).
@@ -500,6 +502,7 @@ class SettingsManager:
                 'dpi': self.scanner.dpi,
                 'duplex': self.scanner.duplex,
                 'auto_start': self.scanner.auto_start,
+                'driver': self.scanner.driver,
             },
             'pattern_states': self.pattern_states,
             'selection_presets': self.selection_presets,

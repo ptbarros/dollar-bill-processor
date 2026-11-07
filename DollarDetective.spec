@@ -38,6 +38,11 @@ for p in Path('assets/samples').rglob('*'):
     if p.is_file():
         datas.append((str(p), str(p.parent)))
 
+# TWAIN helper (Windows): built by CI from tools/twain_helper/TwainHelper.cs
+# into scanner_helpers/ just before PyInstaller runs.
+if Path('scanner_helpers/dd_twain_helper.exe').is_file():
+    datas.append(('scanner_helpers/dd_twain_helper.exe', 'scanner_helpers'))
+
 binaries = []
 hiddenimports = ['yaml', 'pandas', 'openpyxl', 'docx', 'PIL', 'dollar_detective.updater', 'gui.updater_ui']
 

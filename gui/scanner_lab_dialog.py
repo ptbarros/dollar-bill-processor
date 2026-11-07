@@ -202,11 +202,13 @@ class ScannerLabDialog(QDialog):
         bills = self.bills_spin.value() if step.default_bills else 0
         self._stop.clear()
         backend, dev, results = self.backend, self.device_id, self.results
-        dpi = int(getattr(getattr(self.settings, "scanner", None), "dpi", 300) or 300)
+        sc = getattr(self.settings, "scanner", None)
+        dpi = int(getattr(sc, "dpi", 300) or 300)
+        driver = getattr(sc, "driver", None)
 
         def work(progress):
             return lab.run_step(step, backend, dev, results, bills=bills, dpi=dpi,
-                                stop=self._stop, progress=progress)
+                                stop=self._stop, driver=driver, progress=progress)
 
         self._runner = _Runner(work, self)
         self._runner.progress.connect(self.status.setText)

@@ -566,6 +566,17 @@ class SettingsDialog(QDialog):
         self.scanner_dpi_combo.setCurrentIndex(ix if ix >= 0 else 0)
         og.addRow("Resolution:", self.scanner_dpi_combo)
 
+        self.scanner_driver_combo = QComboBox()
+        self.scanner_driver_combo.addItem("Automatic (TWAIN if available, else WIA)", "auto")
+        self.scanner_driver_combo.addItem("TWAIN (scanner maker's driver: own crop + straighten)", "twain")
+        self.scanner_driver_combo.addItem("WIA (Windows' built-in scanning)", "wia")
+        ix = self.scanner_driver_combo.findData(getattr(self.settings.scanner, "driver", "auto"))
+        self.scanner_driver_combo.setCurrentIndex(ix if ix >= 0 else 0)
+        if sys.platform == "win32":
+            og.addRow("Windows driver:", self.scanner_driver_combo)
+        else:
+            self.scanner_driver_combo.setVisible(False)
+
         self.scanner_duplex_check = QCheckBox("Scan both sides in one pass")
         self.scanner_duplex_check.setChecked(self.settings.scanner.duplex)
         og.addRow("Duplex:", self.scanner_duplex_check)
@@ -972,6 +983,7 @@ class SettingsDialog(QDialog):
         # Scanner settings
         self.settings.scanner.enabled = self.scanner_enabled_check.isChecked()
         self.settings.scanner.device = self.scanner_device_combo.currentData() or "auto"
+        self.settings.scanner.driver = self.scanner_driver_combo.currentData() or "auto"
         self.settings.scanner.dpi = int(self.scanner_dpi_combo.currentData() or 300)
         self.settings.scanner.duplex = self.scanner_duplex_check.isChecked()
         self.settings.scanner.auto_start = self.scanner_autostart_check.isChecked()
