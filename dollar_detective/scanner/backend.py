@@ -61,6 +61,12 @@ class ScannerBackend(ABC):
         finished side as it arrives (so the caller can process live). `stop` is
         an optional threading.Event to cancel mid-feed. Raises ScanError."""
 
+    def feeder_has_paper(self, device_id: Optional[str] = None) -> bool:
+        """Quick read of whether paper is loaded in the feeder (for auto-start).
+        Best-effort: False on any error or when unsupported. Must not be called
+        while a scan is in progress (it opens its own device session)."""
+        return False
+
 
 class ScanError(Exception):
     """A scan failed (device busy, jam, offline, ...). `cause` carries the raw
@@ -97,6 +103,13 @@ class EpsonEsciBackend(ScannerBackend):
         if dev is None:
             return []
         return [ScannerDevice(id="ff640", name="Epson FastFoto FF-640")]
+
+    def feeder_has_paper(self, device_id: Optional[str] = None) -> bool:
+        try:
+            with self._esci2.FF640() as scanner:
+                return bool(scanner.paper_loaded())
+        except Exception:
+            return False
 
     # Bills feed long-edge-first, so only ~66mm travels; 120mm is a generous
     # window (matches the standalone FastFoto app) and far faster than the 14"

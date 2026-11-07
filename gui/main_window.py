@@ -192,19 +192,16 @@ class MainWindow(QMainWindow):
         self.processing_panel.open_folders_settings.connect(self._on_folders_settings)
         self.processing_panel.scan_requested.connect(self._on_scan_requested)
 
-        # Detect a directly-controllable feed scanner (Linux Epson FF-640 for now);
-        # if one is connected, reveal the in-Monitor "Scan" button. Cheap + guarded.
+        # Direct feed-scanner control: when the user has enabled it in Settings →
+        # Scanner AND a supported scanner is connected, reveal the Monitor "Scan"
+        # button. A timer polls the feeder so scanning can auto-start on paper.
         self._scanner_backend = None
         self._scan_thread = None
         self._scan_counter = None   # monotonic FastFoto number across scans this session
-        try:
-            from dollar_detective.scanner import get_scanner_backend
-            backend, devices = get_scanner_backend()
-            if backend and devices:
-                self._scanner_backend = backend
-                self.processing_panel.set_scanner_available(True)
-        except Exception:
-            pass
+        self._feeder_timer = QTimer(self)
+        self._feeder_timer.setInterval(2000)
+        self._feeder_timer.timeout.connect(self._poll_feeder)
+        self._refresh_scanner_availability()
         self._update_watch_info()  # seed the Scan-mode indicator (panel emits before we connect)
         self.main_layout.addWidget(self.processing_panel)
 
@@ -3023,6 +3020,51 @@ class MainWindow(QMainWindow):
 
     # ---- Monitor mode (Option A: watch -> file batch -> normal processing) ----
 
+    def _refresh_scanner_availability(self):
+        """Show/hide the Scan button to match the Scanner setting + a connected
+        device, and start/stop the feeder auto-start poller. Safe to call on
+        startup and whenever settings change."""
+        avail = False
+        self._scanner_backend = None
+        sc = getattr(self.settings, "scanner", None)
+        if sc and sc.enabled:
+            try:
+                from dollar_detective.scanner import get_scanner_backend
+                backend, devices = get_scanner_backend()
+                if backend and devices:
+                    self._scanner_backend = backend
+                    avail = True
+            except Exception:
+                pass
+        try:
+            self.processing_panel.set_scanner_available(avail)
+        except Exception:
+            pass
+        self._update_feeder_poller()
+
+    def _update_feeder_poller(self):
+        """Run the feeder poll only when it could usefully auto-start a scan:
+        scanner enabled + auto-start on + a device + Monitor active + idle."""
+        sc = getattr(self.settings, "scanner", None)
+        want = bool(sc and sc.enabled and sc.auto_start
+                    and self._scanner_backend is not None
+                    and getattr(self, "_monitor_active", False)
+                    and self._scan_thread is None)
+        if want and not self._feeder_timer.isActive():
+            self._feeder_timer.start()
+        elif not want and self._feeder_timer.isActive():
+            self._feeder_timer.stop()
+
+    def _poll_feeder(self):
+        """Timer tick: if paper is in the feeder and we're idle, start a scan."""
+        if self._scan_thread is not None or self._scanner_backend is None:
+            return
+        try:
+            if self._scanner_backend.feeder_has_paper():
+                self._on_scan_requested()
+        except Exception:
+            pass
+
     def _on_scan_requested(self):
         """Direct-scan toggle: drive the connected feed scanner, dropping each
         bill into the watched folder so the Monitor/live pipeline processes it as
@@ -3044,13 +3086,16 @@ class MainWindow(QMainWindow):
         # and (if live processing is on) classified as they land.
         if not self._monitor_active:
             self.processing_panel.watch_btn.setChecked(True)
+        sc = self.settings.scanner
         self._scan_thread = ScanThread(self._scanner_backend, out_dir,
-                                       dpi=300, duplex=True, color=True,
+                                       dpi=int(sc.dpi), duplex=bool(sc.duplex),
+                                       color=True, device_id=(None if sc.device == "auto" else sc.device),
                                        start_number=self._scan_counter, parent=self)
         self._scan_thread.status.connect(self.status_label.setText)
         self._scan_thread.finished_ok.connect(self._on_scan_finished)
         self._scan_thread.failed.connect(self._on_scan_failed)
         self.processing_panel.set_scanning(True)
+        self._feeder_timer.stop()   # don't poll the USB device while scanning
         self._scan_thread.start()
 
     def _on_scan_finished(self, total: int):
@@ -3064,6 +3109,7 @@ class MainWindow(QMainWindow):
             if getattr(t, "final_number", 0):
                 self._scan_counter = t.final_number + 1
             self._park_thread(t)
+        self._update_feeder_poller()   # resume auto-start if more paper is loaded
         if total <= 0:
             self.status_label.setText(
                 "No bills scanned — load a strap in the feeder and click Scan.")
@@ -3080,6 +3126,7 @@ class MainWindow(QMainWindow):
         self.processing_panel.set_scanning(False)
         if t is not None:
             self._park_thread(t)
+        self._update_feeder_poller()
         QMessageBox.warning(self, "Scanner", f"Scanning stopped:\n{msg}")
 
     def _on_watch_toggled(self, on: bool):
@@ -3130,6 +3177,7 @@ class MainWindow(QMainWindow):
         self._monitor_watcher.new_file_detected.connect(self._on_monitor_file)
         self._monitor_watcher.start()
         self._monitor_active = True
+        self._update_feeder_poller()   # Monitor on -> feeder auto-start can run
         try:
             self.preview_panel.show_watch_overlay()
         except Exception:
@@ -3190,6 +3238,8 @@ class MainWindow(QMainWindow):
                 self._park_thread(w)
         self._monitor_active = False
         self._monitor_new_files = set()
+        if hasattr(self, "_feeder_timer"):
+            self._feeder_timer.stop()   # Monitor off -> no auto-start polling
 
     def _on_monitor_file(self, path):
         """A new scan settled in the watch folder: collect it and show a running
@@ -3485,6 +3535,23 @@ class MainWindow(QMainWindow):
         if self._live_finalized:
             return
         self._live_finalized = True
+        # Nothing was scanned (e.g. the user started a live session then stopped,
+        # or cancelled an empty feed): don't file an empty strap -- it would
+        # consume a strap number and leave a gap. Remove the empty batch dir.
+        batch = getattr(self, "_live_batch_dir", None)
+        if not self._live_total and batch:
+            try:
+                import shutil
+                if not any(Path(batch).rglob("*.jpg")):
+                    shutil.rmtree(batch, ignore_errors=True)
+                    self.status_label.setText("Stopped — nothing scanned (no strap filed).")
+                    try:
+                        self._update_watch_info()   # reclaim the strap number
+                    except Exception:
+                        pass
+                    return
+            except Exception:
+                pass
         # Lift the scans out of their transient per-chunk part_NN folders back
         # into the batch root (flat, like a non-live run) before the CSV is
         # written -- nothing is in flight now, so this can't disturb review.
@@ -3567,6 +3634,9 @@ class MainWindow(QMainWindow):
 
         # Scanner Output Folder / strap naming may have changed -> refresh indicator
         self._update_watch_info()
+
+        # Scanner setting may have been toggled -> show/hide the Scan button + poller
+        self._refresh_scanner_availability()
 
         # Update archive button state based on new settings
         self.processing_panel.set_archive_available(
