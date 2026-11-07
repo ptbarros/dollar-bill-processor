@@ -21,7 +21,7 @@ def page(long_edge_first=True, cut=False, pad_rows=40):
     x0 = (W - bw) // 2
     img[20:20 + bh, x0:x0 + bw] = BILL
     if cut:
-        img = img[: 20 + bh - 5]          # scan ended before the paper did
+        img = img[: 20 + bh - 25]         # scan ended before the paper did
     return np.vstack([img, np.full((pad_rows, W, 3), 255, np.uint8)])
 
 
@@ -34,6 +34,16 @@ def test_analyze_orientation_and_cut():
     assert b["orientation"] == "short_edge_first"
     c = lab.analyze_page(page(True, cut=True), DPI)
     assert c["trailing_touch"] > 0.9
+    assert not lab.bill_whole(c)                 # 5 px short = cut off
+    assert lab.bill_whole(a)
+
+
+def test_bill_ending_at_paper_end_is_whole():
+    """Drivers that stop at the paper's end: touches the last row, full length."""
+    img = page(True, pad_rows=0)
+    img = img[: 20 + 261]                        # page ends exactly at the bill's end
+    a = lab.analyze_page(img, DPI)
+    assert a["trailing_touch"] > 0.9 and lab.bill_whole(a)
 
 
 class Fake:

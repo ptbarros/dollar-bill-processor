@@ -24,6 +24,7 @@ import numpy as np
 
 from . import billcrop
 from .backend import ScanError
+from .padding import trim_padding
 
 BILL_LONG_IN = 6.14      # US note, 156 mm
 BILL_SHORT_IN = 2.61     # 66.3 mm
@@ -93,7 +94,7 @@ def analyze_page(raw: np.ndarray, dpi: int) -> dict:
     h0, w0 = raw.shape[:2]
     out = {"w": int(w0), "h": int(h0)}
     try:
-        trimmed = billcrop._trim_white_padding(raw)
+        trimmed = billcrop._trim_white_padding(trim_padding(raw))
         out["white_pad_rows"] = int(h0 - trimmed.shape[0])
         bg = billcrop._background_colour(trimmed)
         out["background_rgb"] = [int(bg[2]), int(bg[1]), int(bg[0])]
@@ -151,6 +152,17 @@ def _jpeg(img, max_w=SAMPLE_MAX_W) -> bytes:
         img = cv2.resize(img, (max_w, int(h * max_w / w)), interpolation=cv2.INTER_AREA)
     ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
     return buf.tobytes() if ok else b""
+
+
+def bill_whole(a: dict, tol_in: float = 0.1) -> bool:
+    """Did the whole bill make it into the scan? Judged by its length along the
+    feed (2.61" long-edge-first, 6.14" short-edge-first), NOT by whether it
+    touches the end of the page: many drivers stop exactly at the paper's end,
+    so a complete bill always touches the last row."""
+    if not a.get("found"):
+        return False
+    expected = BILL_SHORT_IN if a.get("orientation") == "long_edge_first" else BILL_LONG_IN
+    return a["bill_in"][1] >= expected - tol_in
 
 
 def resolve_scan_length(option, results: Dict[str, StepResult]) -> Optional[float]:
@@ -287,14 +299,20 @@ def checks(results: Dict[str, StepResult]) -> List[dict]:
         bad = sum(1 for a in found if not a.get("found"))
         add(f"{label}: bill found on background", "pass" if not bad else "warn",
             "all pages" if not bad else f"{bad} of {len(found)} pages -- background may be too close to the bill's colour")
-        cut = [a["trailing_touch"] for a in found if a.get("found")]
-        if cut:
-            worst = max(cut)
-            add(f"{label}: bill ends before the scan does",
-                "pass" if worst < 0.1 else ("warn" if worst < 0.6 else "fail"),
-                "trailing edge clear" if worst < 0.1 else
-                f"trailing edge touches the end of the scan on up to {worst:.0%} of its width "
-                "(the scanner stops at the paper's end -- a crooked bill can lose a corner sliver)")
+        seen = [a for a in found if a.get("found")]
+        if seen:
+            short = [a for a in seen if not bill_whole(a)]
+            touch = max(a["trailing_touch"] for a in seen)
+            if short:
+                worst = min(a["bill_in"][1] for a in short)
+                add(f"{label}: whole bill scanned", "fail",
+                    f"{len(short)} of {len(seen)} bills came out short ({worst:.2f} in "
+                    "along the feed) -- the scan window is cutting them off")
+            else:
+                add(f"{label}: whole bill scanned", "pass",
+                    "full length" + ("; the scanner stops right at the paper's end, so a "
+                                     "crooked bill can lose a corner sliver (normal for "
+                                     "this driver)" if touch >= 0.6 else ""))
         s = _streams(r)
         if s is not None:
             add(f"{label}: pages arrive as they feed", "pass" if s else "warn",
@@ -306,8 +324,7 @@ def checks(results: Dict[str, StepResult]) -> List[dict]:
     sh = results.get("short")
     du = results.get("duplex")
     if sh and not sh.skipped and sh.ok and du and du.ok:
-        whole = all(a.get("found") and a.get("trailing_touch", 0) < 0.6
-                    for a in (p["analysis"] for p in sh.pages))
+        whole = all(bill_whole(p["analysis"]) for p in sh.pages)
         r_full, r_short = _rate(du), _rate(sh)
         gain = (f"{r_full:.2f} → {r_short:.2f} s/bill" if (r_full and r_short) else "")
         add("Shorter window keeps bills whole", "pass" if whole else "fail",
@@ -353,9 +370,7 @@ def recommend(results: Dict[str, StepResult]) -> dict:
                          and du.bills_loaded > 0)
     rec["scan_length_in"] = None
     sh = results.get("short")
-    if sh and sh.ok and sh.pages and all(
-            p["analysis"].get("found") and p["analysis"].get("trailing_touch", 0) < 0.6
-            for p in sh.pages):
+    if sh and sh.ok and sh.pages and all(bill_whole(p["analysis"]) for p in sh.pages):
         rec["scan_length_in"] = sh.options.get("scan_length_in")
     rec["feed"] = orientation(results)
     rec["transfer_format"] = "jpeg"

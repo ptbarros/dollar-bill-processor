@@ -38,6 +38,7 @@ import cv2
 import numpy as np
 
 from .backend import ScanError, ScannerBackend, ScanPage, ScannerDevice
+from .padding import trim_padding
 
 try:
     from dollar_detective.debug_logger import dlog
@@ -156,7 +157,7 @@ class WinRtScannerBackend(ScannerBackend):
     # (matches the Linux backend). Other scanners get their FULL length until
     # the Scanner Test has measured them -- a bill fed short-edge-first is
     # 6.14" long and a short window would cut every one off.
-    SCAN_LENGTH_IN = 4.72
+    SCAN_LENGTH_IN = 3.5      # FF-640: bills measured 2.57-2.69in (Scanner Test); 0.8in skew room
     KNOWN_SHORT_FEED = ("VID_04B8&PID_015F",)    # Epson FastFoto FF-640
     MARGIN_PX = 6
 
@@ -396,7 +397,8 @@ class WinRtScannerBackend(ScannerBackend):
                     dlog("scan.winrt.page", n=handed, side=side, file=path.name,
                          t=round(time.monotonic() - t0, 2))
                     try:
-                        cropped, _found = billcrop.crop_item(img, margin_px=self.MARGIN_PX)
+                        cropped, _found = billcrop.crop_item(trim_padding(img),
+                                                             margin_px=self.MARGIN_PX)
                     except Exception:
                         cropped = img   # never drop a page over a crop hiccup
                     yield ScanPage(side=side, image=cropped, raw=img,
