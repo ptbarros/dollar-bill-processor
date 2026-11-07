@@ -854,7 +854,7 @@ class PatternEngineV3:
     def save_user_pattern(self, name: str, script: str, description: str = "",
                           tier: int = 5, examples: list = None,
                           library: str = "user", display_name: str = "",
-                          aka: list = None) -> bool:
+                          aka: list = None, catalog: str = "") -> bool:
         """
         Save a user pattern to a library directory.
 
@@ -889,8 +889,11 @@ class PatternEngineV3:
         # library's prefix (flat 'user' -> U, each named library its own letter).
         # Core patterns are numbered C-### out-of-band.
         import re as _re
-        catalog = ""
-        if file_path.exists():
+        # A caller-supplied catalog wins (lets an edit renumber the pattern); else
+        # preserve an already-assigned SKU (stable id, an edit must not renumber),
+        # else assign the next free one under this library's prefix.
+        catalog = (catalog or "").strip()
+        if not catalog and file_path.exists():
             try:
                 m = _re.search(r'^\s*Catalog:\s*(.+)$',
                                file_path.read_text(encoding='utf-8'), _re.MULTILINE)
@@ -1386,7 +1389,9 @@ class PatternEngineV3:
         info = self.lua_patterns.get(name)
         if info is None:
             return ""
-        sku = (getattr(info, "catalog", "") or "").strip()
+        # Key the price on the EFFECTIVE SKU (per-user override, else header), so a
+        # catalog edit/override lines the pattern up with its prices-CSV row.
+        sku = (self.resolve_pattern_catalog(name) or "").strip()
         if sku and sku in self.price_overrides:
             display = (self.price_overrides[sku].get("display") or "").strip()
             if display:
@@ -1405,7 +1410,7 @@ class PatternEngineV3:
             return (None, None)
         circ = unc = None
         display = ""
-        sku = (getattr(info, "catalog", "") or "").strip()
+        sku = (self.resolve_pattern_catalog(name) or "").strip()
         rec = self.price_overrides.get(sku) if sku else None
         if rec:
             circ = rec.get("circ")
@@ -1547,6 +1552,52 @@ class PatternEngineV3:
                 return override
         info = self.lua_patterns.get(name)
         return info.catalog if info else ""
+
+    def is_pattern_editable(self, name: str) -> bool:
+        """True if the pattern's .lua file can be edited in place (a user / add-on
+        library), False for a read-only shipped/core pattern."""
+        info = self.lua_patterns.get(name)
+        return bool(info) and info.library not in self.SHIPPED_LIBRARIES
+
+    def set_pattern_catalog_header(self, name: str, new_sku: str):
+        """Rewrite an EDITABLE pattern's `Catalog:` header to new_sku (the
+        canonical SKU that travels in .ddpat bundles and to dd-web), clearing any
+        stale per-user override. Blank new_sku removes the Catalog line. For a
+        read-only shipped pattern this refuses -- callers use set_pattern_catalog
+        (settings override) there instead. Returns (ok, message)."""
+        info = self.lua_patterns.get(name)
+        if info is None:
+            return False, f"Pattern '{name}' was not found."
+        if info.library in self.SHIPPED_LIBRARIES:
+            return False, (f"'{name}' is a built-in pattern; its catalog number "
+                           "can only be set as a per-user override.")
+        new_sku = (new_sku or "").strip()
+        # Collision guard: don't let two patterns share a SKU.
+        if new_sku:
+            for other in self.lua_patterns:
+                if other != name and (self.resolve_pattern_catalog(other) or "").strip() == new_sku:
+                    return False, f"Catalog {new_sku} is already used by '{other}'."
+        try:
+            p = Path(info.file_path)
+            txt = p.read_text(encoding="utf-8")
+            if new_sku:
+                txt = self.restamp_catalog_text(txt, new_sku)
+            else:
+                txt = re.sub(r"(?im)^[ \t]*Catalog:[ \t]*.*\r?\n?", "", txt, count=1)
+            p.write_text(txt, encoding="utf-8")
+        except Exception as e:
+            return False, f"Could not update the pattern file: {e}"
+        # A header edit is authoritative -- drop any per-user override so the new
+        # header value is what resolves everywhere.
+        if self.settings and self.settings.get_pattern_catalog(name, ""):
+            try:
+                self.settings.set_pattern_catalog(name, "")
+                self.settings.save()
+            except Exception:
+                pass
+        self.reload()
+        return True, (f"Catalog for '{name}' set to {new_sku}." if new_sku
+                      else f"Catalog number cleared for '{name}'.")
 
     def get_all_patterns(self) -> dict:
         """Get all patterns."""
