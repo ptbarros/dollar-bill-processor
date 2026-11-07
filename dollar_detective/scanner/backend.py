@@ -69,6 +69,30 @@ class ScannerBackend(ABC):
         while a scan is in progress (it opens its own device session)."""
         return False
 
+    #: Seconds between blind retries when the backend can't sense paper.
+    RETRY_EMPTY_S = 2.0
+
+    def wait_for_paper(self, device_id=None, stop=None) -> bool:
+        """Block between feeder loads until it's worth trying another scan pass.
+        True = try now; False = stop was requested. With a paper sensor this
+        waits for paper; without one it just waits a moment (the next pass on
+        an empty feeder ends straight away with 'paper empty')."""
+        import time
+        interval = 1.0 if self.can_detect_paper else self.RETRY_EMPTY_S
+        while stop is None or not stop.is_set():
+            if not self.can_detect_paper:
+                if stop is not None:
+                    return not stop.wait(interval)
+                time.sleep(interval)
+                return True
+            if self.feeder_has_paper(device_id):
+                return True
+            if stop is not None:
+                stop.wait(interval)
+            else:
+                time.sleep(interval)
+        return False
+
 
 class ScanError(Exception):
     """A scan failed (device busy, jam, offline, ...). `cause` carries the raw

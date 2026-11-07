@@ -10,18 +10,26 @@ strictly front,back,front,back, ~1.1 s/bill). Any scanner with a WIA driver --
 including FIL's Canon R40 -- goes through the same API.
 
 ScanFilesToFolderAsync writes the pages itself, so we point it at a private temp
-folder, read each new file as the progress callback reports it, crop it, and
-hand it on as a ScanPage. The caller (ScanThread) then writes the app's usual
-FastFoto_NNNNN.jpg / _b.jpg names into the Monitor folder.
+folder and hand each finished file on as a ScanPage; ScanThread then writes the
+app's usual FastFoto_NNNNN.jpg / _b.jpg names into the Monitor folder.
+
+Robustness rules (each learned from a real failure on the test laptop):
+- Never attach Progress/Completed handlers. The scan op can come back before
+  it's "started", and attaching a handler then throws 0x80000019
+  (E_ASYNC_OPERATION_NOT_STARTED) -- which killed our reader while the scanner
+  kept feeding a whole stack into a folder nobody read. We poll op.status and
+  the folder instead.
+- A page is handed on only once it's complete: a newer file exists, or its size
+  has held steady, or the op has finished.
+- Front/back comes from the file's POSITION in scan order (odd = front, even =
+  back), so one unreadable file can't flip every later pairing.
+- Stop cancels the feed but still hands on every page already scanned.
 """
 
 from __future__ import annotations
 
-import asyncio
-import queue
 import shutil
 import tempfile
-import threading
 import time
 from pathlib import Path
 from typing import Iterator, List, Optional
@@ -31,78 +39,109 @@ import numpy as np
 
 from .backend import ScanError, ScannerBackend, ScanPage, ScannerDevice
 
-# WIA HRESULTs worth recognising (see wia_lh.h).
+try:
+    from dollar_detective.debug_logger import dlog
+except Exception:   # pragma: no cover -- logging must never break scanning
+    def dlog(*_a, **_k):
+        pass
+
+# HRESULTs worth recognising (wia_lh.h / winerror.h).
 _WIA_PAPER_EMPTY = 0x80210003
 _WIA_PAPER_JAM = 0x80210002
-_WIA_BUSY = 0x80210006
 _WIA_OFFLINE = 0x80210005
+_WIA_BUSY = 0x80210006
+_E_ASYNC_NOT_STARTED = 0x80000019
+
+_STARTED, _COMPLETED, _CANCELED, _ERROR = 0, 1, 2, 3
 
 _IMAGE_SUFFIXES = {".jpg", ".jpeg", ".bmp", ".png", ".tif", ".tiff"}
+
+POLL_S = 0.1            # folder/status poll interval while scanning
+STEADY_S = 0.6          # a last file whose size holds this long is complete
+READ_RETRY_S = 5.0      # how long to keep retrying an unreadable finished file
 
 
 def _hresult(exc) -> int:
     code = getattr(exc, "winerror", None)
-    if code is None and exc.args and isinstance(exc.args[0], int):
+    if code is None and getattr(exc, "args", None) and isinstance(exc.args[0], int):
         code = exc.args[0]
-    return (code or 0) & 0xFFFFFFFF
+    return int(code or 0) & 0xFFFFFFFF
 
 
-def _run_sync(coro_fn, *args):
-    """Run an async function to completion on a private thread + event loop, so
-    it's safe from the GUI thread (no loop running there) and from QThreads."""
-    box = {}
-
-    def runner():
-        try:
-            box["value"] = asyncio.run(coro_fn(*args))
-        except BaseException as e:   # noqa: BLE001 -- re-raised below
-            box["error"] = e
-
-    t = threading.Thread(target=runner, daemon=True)
-    t.start()
-    t.join()
-    if "error" in box:
-        raise box["error"]
-    return box.get("value")
+class _OpError(Exception):
+    def __init__(self, code: int):
+        super().__init__(f"0x{code:08X}")
+        self.code = code
 
 
-async def _await(op):
-    return await op
+def _status(op) -> int:
+    """op.status, treating 'not started yet' as still running."""
+    try:
+        return int(op.status)
+    except OSError as e:
+        if _hresult(e) == _E_ASYNC_NOT_STARTED:
+            return _STARTED
+        raise
 
 
-def new_page_files(folder: Path, seen: set) -> List[Path]:
-    """Image files in `folder` not yet in `seen`, oldest first.
+def _wait(op, timeout: float = 30.0):
+    """Block until a WinRT async op finishes (by polling -- no handlers)."""
+    deadline = time.monotonic() + timeout
+    while True:
+        st = _status(op)
+        if st == _COMPLETED:
+            return op.get_results()
+        if st == _ERROR:
+            raise _OpError(int(op.error_code) & 0xFFFFFFFF)
+        if st == _CANCELED:
+            return None
+        if time.monotonic() > deadline:
+            try:
+                op.cancel()
+            except Exception:
+                pass
+            raise ScanError("The scanner didn't respond.", cause="TIMEOUT")
+        time.sleep(0.02)
+
+
+def ordered_page_files(folder: Path) -> List[Path]:
+    """Every image file in `folder`, in scan order.
 
     The scanner names pages SCN_<date>.jpg, SCN_<date>_2.jpg, ... so creation
-    time is the reliable order; name length then name breaks ties (puts _2
+    time is the reliable order; name length then name break ties (puts _2
     before _10)."""
-    fresh = []
+    out = []
     try:
         for p in folder.iterdir():
-            if p.suffix.lower() in _IMAGE_SUFFIXES and p.name not in seen:
+            if p.suffix.lower() in _IMAGE_SUFFIXES and not p.name.startswith("."):
                 try:
                     ctime = p.stat().st_ctime
                 except OSError:
                     continue
-                fresh.append((ctime, len(p.stem), p.name, p))
+                out.append((ctime, len(p.stem), p.name, p))
     except OSError:
         return []
-    fresh.sort()
-    return [t[3] for t in fresh]
+    out.sort()
+    return [t[3] for t in out]
 
 
-def _read_image(path: Path, timeout: float = 3.0):
-    """Decode an image the scanner just wrote, retrying briefly in case it's
-    still being flushed."""
-    deadline = time.monotonic() + timeout
-    while True:
-        try:
-            img = cv2.imdecode(np.fromfile(str(path), dtype=np.uint8), cv2.IMREAD_COLOR)
-        except Exception:
-            img = None
-        if img is not None or time.monotonic() > deadline:
-            return img
-        time.sleep(0.05)
+def _decode(path: Path):
+    try:
+        return cv2.imdecode(np.fromfile(str(path), dtype=np.uint8), cv2.IMREAD_COLOR)
+    except Exception:
+        return None
+
+
+def _map_error(code: int) -> ScanError:
+    if code == _WIA_PAPER_EMPTY:
+        return ScanError("No paper in the feeder.", cause="PE")
+    if code == _WIA_PAPER_JAM:
+        return ScanError("Paper jam — clear the feeder and try again.", cause="JAM")
+    if code == _WIA_BUSY:
+        return ScanError("The scanner is busy (is another scanning app open?).", cause="BUSY")
+    if code == _WIA_OFFLINE:
+        return ScanError("The scanner is offline.", cause="OFFLINE")
+    return ScanError(f"Scanner error 0x{code:08X}", cause=f"0x{code:08X}")
 
 
 class WinRtScannerBackend(ScannerBackend):
@@ -124,21 +163,15 @@ class WinRtScannerBackend(ScannerBackend):
         from winrt.windows.devices import enumeration  # noqa: F401
 
     # -- discovery -----------------------------------------------------------
-    @staticmethod
-    async def _find_devices():
-        from winrt.windows.devices.enumeration import DeviceInformation
-        from winrt.windows.devices.scanners import ImageScanner
-
-        selector = ImageScanner.get_device_selector()
-        finder = (getattr(DeviceInformation, "find_all_async_aqs_filter", None)
-                  or DeviceInformation.find_all_async)
-        infos = await finder(selector)
-        return [(i.id, i.name) for i in infos]
-
     def list_devices(self) -> List[ScannerDevice]:
         try:
-            return [ScannerDevice(id=i, name=n) for i, n in _run_sync(self._find_devices)]
-        except Exception:
+            from winrt.windows.devices.enumeration import DeviceInformation
+            from winrt.windows.devices.scanners import ImageScanner
+            infos = _wait(DeviceInformation.find_all_async_aqs_filter(
+                ImageScanner.get_device_selector()), timeout=10)
+            return [ScannerDevice(id=i.id, name=i.name) for i in (infos or [])]
+        except Exception as e:
+            dlog("scan.winrt.list_failed", error=repr(e))
             return []
 
     def _resolve_device(self, device_id: Optional[str]) -> str:
@@ -150,27 +183,20 @@ class WinRtScannerBackend(ScannerBackend):
                 return d.id
         return devices[0].id
 
-    # -- scanning ------------------------------------------------------------
-    async def _scan(self, device_id, folder: Path, dpi, duplex, color, events, stop):
+    def _configure(self, scanner, dpi, duplex, color) -> bool:
         from winrt.windows.devices.scanners import (
-            ImageScanner, ImageScannerColorMode, ImageScannerFormat,
-            ImageScannerResolution, ImageScannerScanSource)
-        from winrt.windows.storage import StorageFolder
-
-        scanner = await ImageScanner.from_id_async(device_id)
+            ImageScannerColorMode, ImageScannerFormat, ImageScannerResolution,
+            ImageScannerScanSource)
         if not scanner.is_scan_source_supported(ImageScannerScanSource.FEEDER):
             raise ScanError("This scanner has no document feeder.", cause="NOFEEDER")
         cfg = scanner.feeder_configuration
-
         cfg.duplex = bool(duplex and cfg.can_scan_duplex)
-        events.put(("duplex", cfg.duplex))
         cfg.max_number_of_pages = 0          # everything in the feeder
         cfg.color_mode = (ImageScannerColorMode.COLOR if color
                           else ImageScannerColorMode.GRAYSCALE)
         if cfg.is_format_supported(ImageScannerFormat.JPEG):
             cfg.format = ImageScannerFormat.JPEG
         cfg.desired_resolution = ImageScannerResolution(dpi_x=float(dpi), dpi_y=float(dpi))
-
         # Shorten the scan window to bill length (faster, smaller files). Full
         # feed width keeps the scanner's grey backing on both sides of the bill,
         # which is what the cropper keys off. Best-effort: drivers may refuse.
@@ -186,93 +212,124 @@ class WinRtScannerBackend(ScannerBackend):
                 0, 0, area.width, min(area.height, self.SCAN_LENGTH_IN))
         except Exception:
             pass
+        return bool(cfg.duplex)
 
-        target = await StorageFolder.get_folder_from_path_async(str(folder))
-        op = scanner.scan_files_to_folder_async(ImageScannerScanSource.FEEDER, target)
-        op.progress = lambda _op, n: events.put(("page", int(n)))
-        task = asyncio.ensure_future(_await(op))
-        while not task.done():
-            if stop is not None and stop.is_set():
-                try:
-                    op.cancel()
-                except Exception:
-                    pass
-                break
-            await asyncio.sleep(0.1)
-        try:
-            await task
-        except Exception:
-            if stop is not None and stop.is_set():
-                return   # cancelled on purpose
-            raise
-
+    # -- scanning ------------------------------------------------------------
     def scan_pages(self, device_id: Optional[str] = None, *,
                    dpi: int = 300, duplex: bool = True, color: bool = True,
                    stop=None) -> Iterator[ScanPage]:
+        from winrt.windows.devices.scanners import ImageScanner, ImageScannerScanSource
+        from winrt.windows.storage import StorageFolder
+
+        try:
+            dev = self._resolve_device(device_id)
+            scanner = _wait(ImageScanner.from_id_async(dev), timeout=15)
+            is_duplex = self._configure(scanner, dpi, duplex, color)
+        except _OpError as e:
+            raise _map_error(e.code) from e
+
+        folder = Path(tempfile.mkdtemp(prefix="dd_scan_"))
+        try:
+            target = _wait(StorageFolder.get_folder_from_path_async(str(folder)), timeout=10)
+            op = scanner.scan_files_to_folder_async(ImageScannerScanSource.FEEDER, target)
+        except Exception:
+            shutil.rmtree(folder, ignore_errors=True)
+            raise
+        t0 = time.monotonic()
+        dlog("scan.winrt.start", folder=str(folder), dpi=dpi, duplex=is_duplex)
+        yield from self._pump(op, folder, is_duplex, stop, t0)
+
+    def _pump(self, op, folder: Path, is_duplex: bool, stop, t0: float) -> Iterator[ScanPage]:
+        """Hand on finished pages until the op ends; then clean up."""
         from . import billcrop
 
-        dev = self._resolve_device(device_id)
-        folder = Path(tempfile.mkdtemp(prefix="dd_scan_"))
-        events: "queue.Queue" = queue.Queue()
-        stop = stop or threading.Event()
+        handed = 0                    # files handed on (by position)
+        last_size = {}                # name -> (size, since) for the newest file
+        unreadable_since = {}         # name -> first failed read time
+        cancelled = False
+        final_status = _STARTED
+        error_code = 0
 
-        def worker():
+        def ready_count(files, finished) -> int:
+            """How many files (from the front of `files`) are complete."""
+            if finished:
+                return len(files)
+            if not files:
+                return 0
+            n = len(files) - 1        # all but the newest have a successor
+            newest = files[-1]
             try:
-                asyncio.run(self._scan(dev, folder, dpi, duplex, color, events, stop))
-            except BaseException as e:   # noqa: BLE001 -- forwarded to caller
-                events.put(("error", e))
-            finally:
-                events.put(("done", None))
-
-        thread = threading.Thread(target=worker, name="winrt-scan", daemon=True)
-        thread.start()
-
-        seen: set = set()
-        index = 0            # pages handed out so far
-        is_duplex = duplex
-
-        def drain():
-            nonlocal index
-            for path in new_page_files(folder, seen):
-                seen.add(path.name)
-                img = _read_image(path)
-                if img is None:
-                    continue
-                index += 1
-                side = "B" if (is_duplex and index % 2 == 0) else "A"
-                try:
-                    cropped, _found = billcrop.crop_item(img, margin_px=self.MARGIN_PX)
-                except Exception:
-                    cropped = img   # never drop a page over a crop hiccup
-                yield ScanPage(side=side, image=cropped)
+                size = newest.stat().st_size
+            except OSError:
+                return n
+            prev = last_size.get(newest.name)
+            now = time.monotonic()
+            if prev is None or prev[0] != size:
+                last_size[newest.name] = (size, now)
+            elif size > 0 and now - prev[1] >= STEADY_S:
+                n += 1
+            return n
 
         try:
             while True:
-                kind, value = events.get()
-                if kind == "duplex":
-                    is_duplex = bool(value)
-                elif kind == "page":
-                    yield from drain()
-                elif kind == "error":
-                    yield from drain()   # keep whatever made it before the error
-                    code = _hresult(value)
-                    if isinstance(value, ScanError):
-                        raise value
-                    if code == _WIA_PAPER_EMPTY:
-                        raise ScanError("No paper in the feeder.", cause="PE") from value
-                    if code == _WIA_PAPER_JAM:
-                        raise ScanError("Paper jam — clear the feeder and try again.",
-                                        cause="JAM") from value
-                    if code == _WIA_BUSY:
-                        raise ScanError("The scanner is busy (is another scanning app "
-                                        "open?).", cause="BUSY") from value
-                    if code == _WIA_OFFLINE:
-                        raise ScanError("The scanner is offline.", cause="OFFLINE") from value
-                    raise ScanError(f"Scanner error: {value}", cause=f"0x{code:08X}") from value
-                elif kind == "done":
-                    yield from drain()   # anything the progress callback missed
-                    return
+                if stop is not None and stop.is_set() and not cancelled:
+                    cancelled = True
+                    dlog("scan.winrt.cancel_requested", handed=handed)
+                    try:
+                        op.cancel()
+                    except Exception:
+                        pass
+                final_status = _status(op)
+                finished = final_status != _STARTED
+                files = ordered_page_files(folder)
+                ready = ready_count(files, finished)
+                while handed < ready:
+                    path = files[handed]
+                    img = _decode(path)
+                    if img is None:
+                        first = unreadable_since.setdefault(path.name, time.monotonic())
+                        if time.monotonic() - first < READ_RETRY_S:
+                            break          # try this file again next poll
+                        dlog("scan.winrt.unreadable", file=path.name, position=handed + 1)
+                        handed += 1        # give up on it; position still counts
+                        continue
+                    handed += 1
+                    side = "B" if (is_duplex and handed % 2 == 0) else "A"
+                    dlog("scan.winrt.page", n=handed, side=side, file=path.name,
+                         t=round(time.monotonic() - t0, 2))
+                    try:
+                        cropped, _found = billcrop.crop_item(img, margin_px=self.MARGIN_PX)
+                    except Exception:
+                        cropped = img   # never drop a page over a crop hiccup
+                    yield ScanPage(side=side, image=cropped)
+                if finished and handed >= len(files):
+                    break
+                time.sleep(POLL_S)
+
+            if final_status == _ERROR:
+                try:
+                    error_code = int(op.error_code) & 0xFFFFFFFF
+                except Exception:
+                    error_code = 0
+            dlog("scan.winrt.end", status=final_status, hresult=f"0x{error_code:08X}",
+                 pages=handed, cancelled=cancelled, t=round(time.monotonic() - t0, 2))
+            if final_status == _ERROR:
+                raise _map_error(error_code)
         finally:
-            stop.set()
-            thread.join(timeout=10)
-            shutil.rmtree(folder, ignore_errors=True)
+            # Make sure the scanner isn't left feeding into a folder nobody reads
+            # (e.g. the consumer stopped iterating early).
+            try:
+                if _status(op) == _STARTED:
+                    op.cancel()
+                    deadline = time.monotonic() + 5
+                    while _status(op) == _STARTED and time.monotonic() < deadline:
+                        time.sleep(0.05)
+            except Exception:
+                pass
+            for _ in range(20):
+                shutil.rmtree(folder, ignore_errors=True)
+                if not folder.exists():
+                    break
+                time.sleep(0.25)
+            if folder.exists():
+                dlog("scan.winrt.tempdir_left", folder=str(folder))

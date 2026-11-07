@@ -15,6 +15,8 @@ from pathlib import Path
 import cv2
 from PySide6.QtCore import QThread, Signal
 
+from dollar_detective.debug_logger import dlog
+
 _NUM_RE = re.compile(r"^FastFoto_(\d{5})(?:_b)?\.jpg$", re.IGNORECASE)
 
 
@@ -27,7 +29,8 @@ class ScanThread(QThread):
     failed = Signal(str)           # error message
 
     def __init__(self, backend, out_dir, *, dpi=300, duplex=True, color=True,
-                 device_id=None, start_number=None, parent=None):
+                 device_id=None, start_number=None, keep_armed=True,
+                 parent=None):
         super().__init__(parent)
         self.backend = backend
         self.out_dir = Path(out_dir)
@@ -41,7 +44,11 @@ class ScanThread(QThread):
         self.start_number = start_number
         # Highest number assigned this run (read by the caller to continue).
         self.final_number = (start_number - 1) if start_number else 0
+        # Stay armed between feeder loads (False = one pass, then finish).
+        self.keep_armed = keep_armed
         self._stop = threading.Event()
+        self._bills = 0
+        self._sides = 0
 
     def request_stop(self):
         self._stop.set()
@@ -70,20 +77,18 @@ class ScanThread(QThread):
         tmp.write_bytes(buf.tobytes())
         os.replace(str(tmp), str(final))
 
-    def run(self):
+    def _one_pass(self, number: int):
+        """Scan whatever is in the feeder now. Returns (next_number, sides
+        written). Raises the backend's ScanError."""
         written = 0
+        # Pair by POSITION, not arrival order: the scanner doesn't always send
+        # a bill's front before its back (duplex sides can arrive batched), so
+        # the nth front goes with the nth back. Assuming strict A,B order made
+        # backs overwrite the wrong front's file and silently drop bills.
+        fronts, backs = [], []
         try:
-            self.out_dir.mkdir(parents=True, exist_ok=True)
-            # Continue from the caller's counter when given (monotonic across
-            # scans in a session, even after the pipeline drained the folder);
-            # otherwise derive from whatever's in the folder.
-            number = self.start_number if self.start_number else self._next_number()
-            self.status.emit("Feed your strap into the scanner…")
-            # Pair by POSITION, not arrival order: the scanner doesn't always send
-            # a bill's front before its back (duplex sides can arrive batched), so
-            # the nth front goes with the nth back. Assuming strict A,B order made
-            # backs overwrite the wrong front's file and silently drop bills.
-            fronts, backs = [], []
+            # Don't break out on Stop: the backend cancels the feed itself and
+            # still hands over every page it already scanned.
             for page in self.backend.scan_pages(
                     self.device_id, dpi=self.dpi, duplex=self.duplex,
                     color=self.color, stop=self._stop):
@@ -93,25 +98,63 @@ class ScanThread(QThread):
                     self._write(f"FastFoto_{number:05d}_b.jpg", backs.pop(0))
                     number += 1
                     written += 2
-                    bills = number - (self.start_number or 1)
-                    self.page_written.emit(written)
-                    self.status.emit(f"Scanned {bills} bill{'s' if bills != 1 else ''}…")
-                if self._stop.is_set():
-                    break
-            # Leftover fronts with no back (simplex, or a strap that stopped
+                    self._bills += 1
+                    self._sides += 2
+                    self.page_written.emit(self._sides)
+                    self.status.emit(
+                        f"Scanned {self._bills} bill{'s' if self._bills != 1 else ''}…")
+        finally:
+            # Leftover fronts with no back (simplex, or a feed that stopped
             # mid-bill): save them front-only. Orphan backs are dropped.
             for front in fronts:
                 self._write(f"FastFoto_{number:05d}.jpg", front)
                 number += 1
                 written += 1
-            self.final_number = number - 1   # highest number actually assigned
-            self.finished_ok.emit(written)
+                self._bills += 1
+                self._sides += 1
+            # Record progress even if the pass failed, so the next Scan never
+            # reuses a number the pipeline may already have taken.
+            self.final_number = number - 1
+        return number, written
+
+    def run(self):
+        """Scan stack after stack until Stop. Between stacks the session stays
+        armed -- reload the feeder and it carries on, no click needed (clicking
+        between loads is how whole stacks got cancelled by mistake)."""
+        self._bills = 0
+        self._sides = 0
+        empty_reported = False
+        try:
+            self.out_dir.mkdir(parents=True, exist_ok=True)
+            # Continue from the caller's counter when given (monotonic across
+            # scans in a session, even after the pipeline drained the folder);
+            # otherwise derive from whatever's in the folder.
+            number = self.start_number if self.start_number else self._next_number()
+            self.final_number = number - 1
+            self.status.emit("Feed your strap into the scanner…")
+            while not self._stop.is_set():
+                try:
+                    number, got = self._one_pass(number)
+                except Exception as e:
+                    # An empty feeder isn't an error, just nothing to scan: the
+                    # FF-640's direct driver reports it as a "jam" (PJ), WIA as
+                    # paper-empty (PE).
+                    if getattr(e, "cause", "") not in ("PJ", "PE"):
+                        raise
+                    got = 0
+                dlog("scan.pass_end", sides=got, bills_total=self._bills,
+                     final_number=self.final_number)
+                if self._stop.is_set() or not self.keep_armed:
+                    break
+                if got or not empty_reported:
+                    empty_reported = True
+                    done = (f"{self._bills} bill{'s' if self._bills != 1 else ''} scanned. "
+                            if self._bills else "")
+                    self.status.emit(
+                        f"{done}Waiting for bills — load the next stack and it "
+                        "scans automatically. Click Stop Scan when the strap is done.")
+                if not self.backend.wait_for_paper(self.device_id, self._stop):
+                    break
+            self.finished_ok.emit(self._sides)
         except Exception as e:
-            # An empty feeder isn't an error, just nothing to scan: the FF-640's
-            # direct driver reports it as a "jam" (PJ), WIA as paper-empty (PE).
-            cause = getattr(e, "cause", "")
-            if cause in ("PJ", "PE") and written == 0:
-                self.status.emit("No bills in the feeder — load a strap and click Scan.")
-                self.finished_ok.emit(0)
-            else:
-                self.failed.emit(str(e))
+            self.failed.emit(str(e))

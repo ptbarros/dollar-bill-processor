@@ -3082,6 +3082,7 @@ class MainWindow(QMainWindow):
         it feeds. Click again to stop."""
         # Already scanning -> stop.
         if self._scan_thread is not None:
+            dlog("scan.stop_clicked")
             self.status_label.setText("Stopping scan…")
             try:
                 self._scan_thread.request_stop()
@@ -3105,6 +3106,9 @@ class MainWindow(QMainWindow):
         self._scan_thread.status.connect(self.status_label.setText)
         self._scan_thread.finished_ok.connect(self._on_scan_finished)
         self._scan_thread.failed.connect(self._on_scan_failed)
+        dlog("scan.start", backend=getattr(self._scanner_backend, "label", "?"),
+             out_dir=out_dir, start_number=self._scan_counter, dpi=sc.dpi,
+             duplex=sc.duplex, device=sc.device)
         self.processing_panel.set_scanning(True)
         self._feeder_timer.stop()   # don't poll the USB device while scanning
         self._scan_thread.start()
@@ -3121,6 +3125,9 @@ class MainWindow(QMainWindow):
                 self._scan_counter = t.final_number + 1
             self._park_thread(t)
         self._update_feeder_poller()   # resume auto-start if more paper is loaded
+        dlog("scan.finished", sides=total, final_number=getattr(t, "final_number", None))
+        if self._resume_watch_stop():
+            return
         if total <= 0:
             self.status_label.setText(
                 "No bills scanned — load a strap in the feeder and click Scan.")
@@ -3136,9 +3143,25 @@ class MainWindow(QMainWindow):
         self._scan_thread = None
         self.processing_panel.set_scanning(False)
         if t is not None:
+            # Keep numbering monotonic even after a failed pass.
+            if getattr(t, "final_number", 0):
+                self._scan_counter = t.final_number + 1
             self._park_thread(t)
         self._update_feeder_poller()
+        dlog("scan.failed", error=msg, final_number=getattr(t, "final_number", None))
+        self._resume_watch_stop()
         QMessageBox.warning(self, "Scanner", f"Scanning stopped:\n{msg}")
+
+    def _resume_watch_stop(self) -> bool:
+        """If Monitor's Stop was clicked mid-scan, file the strap now that the
+        scan has ended -- after a short pause so the watcher sees the last
+        files settle. Returns True when it took over."""
+        if not getattr(self, "_watch_stop_after_scan", False):
+            return False
+        self._watch_stop_after_scan = False
+        self.status_label.setText("Scan finished — filing the strap…")
+        QTimer.singleShot(2000, lambda: self._on_watch_toggled(False))
+        return True
 
     def _on_watch_toggled(self, on: bool):
         """Watch Folder toggle. ON = start collecting scans dropped into the Data
@@ -3157,6 +3180,17 @@ class MainWindow(QMainWindow):
                 # Live setup failed -> fall back to collect-then-Stop for this run.
                 self._live_mode = False
         else:
+            # A direct scan is still running: let it hand over its last pages
+            # first, or they'd land after the watcher stops (-> next strap). The
+            # scan's finished/failed handler re-enters here once it's done.
+            if self._scan_thread is not None:
+                self._watch_stop_after_scan = True
+                self.status_label.setText("Finishing the scan before filing the strap…")
+                try:
+                    self._scan_thread.request_stop()
+                except Exception:
+                    pass
+                return
             if getattr(self, "_live_mode", False):
                 self._live_request_stop()   # stop watcher, flush remainder, finalize
                 return
@@ -3354,20 +3388,17 @@ class MainWindow(QMainWindow):
         whatever remains (including a lone tail)."""
         if self._live_busy:
             return
+        from dollar_detective.live_chunk import select_live_chunk
         pending = self._live_pending
-        if self._live_stopping:
-            take = len(pending)                       # flush everything
-        else:
-            take = len(pending) - (len(pending) % 2)  # even cut; keep a lone tail
-        if take <= 0:
+        # Group by bill (front + _b back) so a missing side can't shift every
+        # later pairing; on Stop, flush whatever remains (including a lone tail).
+        chunk = select_live_chunk(pending, flush=self._live_stopping)
+        if not chunk:
             if self._live_stopping:
                 self._live_finalize()
             return
-        if not self._live_stopping and take < 2:
-            return
-
-        chunk = pending[:take]
-        del pending[:take]
+        chosen = set(chunk)
+        pending[:] = [p for p in pending if p not in chosen]
 
         # Stage this chunk into its own subfolder so find_pairs sees only it and
         # the moved originals keep valid absolute paths in the results.
