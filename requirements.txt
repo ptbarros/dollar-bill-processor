@@ -46,3 +46,6 @@ openai>=1.50
 
 # Code editor widget (optional, for syntax highlighting)
 QScintilla>=2.14
+
+# Direct USB scanner control (Linux feed-scanner integration, e.g. Epson FF-640)
+pyusb>=1.2.0

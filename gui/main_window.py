@@ -190,6 +190,20 @@ class MainWindow(QMainWindow):
         self.processing_panel.mode_about_to_change.connect(self._capture_pre_mode_geo)
         self.processing_panel.mode_changed.connect(self._on_panel_mode_changed)
         self.processing_panel.open_folders_settings.connect(self._on_folders_settings)
+        self.processing_panel.scan_requested.connect(self._on_scan_requested)
+
+        # Detect a directly-controllable feed scanner (Linux Epson FF-640 for now);
+        # if one is connected, reveal the in-Monitor "Scan" button. Cheap + guarded.
+        self._scanner_backend = None
+        self._scan_thread = None
+        try:
+            from dollar_detective.scanner import get_scanner_backend
+            backend, devices = get_scanner_backend()
+            if backend and devices:
+                self._scanner_backend = backend
+                self.processing_panel.set_scanner_available(True)
+        except Exception:
+            pass
         self._update_watch_info()  # seed the Scan-mode indicator (panel emits before we connect)
         self.main_layout.addWidget(self.processing_panel)
 
@@ -3007,6 +3021,56 @@ class MainWindow(QMainWindow):
             self._update_watch_info()
 
     # ---- Monitor mode (Option A: watch -> file batch -> normal processing) ----
+
+    def _on_scan_requested(self):
+        """Direct-scan toggle: drive the connected feed scanner, dropping each
+        bill into the watched folder so the Monitor/live pipeline processes it as
+        it feeds. Click again to stop."""
+        # Already scanning -> stop.
+        if self._scan_thread is not None:
+            self.status_label.setText("Stopping scan…")
+            try:
+                self._scan_thread.request_stop()
+            except Exception:
+                pass
+            return
+        if self._scanner_backend is None:
+            return
+        from dollar_detective.resource_path import content_dir
+        from .scan_thread import ScanThread
+        out_dir = str(content_dir())
+        # Make sure Monitor is watching the folder so scanned bills are picked up
+        # and (if live processing is on) classified as they land.
+        if not self._monitor_active:
+            self.processing_panel.watch_btn.setChecked(True)
+        self._scan_thread = ScanThread(self._scanner_backend, out_dir,
+                                       dpi=300, duplex=True, color=True, parent=self)
+        self._scan_thread.status.connect(self.status_label.setText)
+        self._scan_thread.finished_ok.connect(self._on_scan_finished)
+        self._scan_thread.failed.connect(self._on_scan_failed)
+        self.processing_panel.set_scanning(True)
+        self._scan_thread.start()
+
+    def _on_scan_finished(self, total: int):
+        """Scan worker done (feeder empty or stopped)."""
+        t = self._scan_thread
+        self._scan_thread = None
+        self.processing_panel.set_scanning(False)
+        if t is not None:
+            self._park_thread(t)
+        bills = (total + 1) // 2
+        self.status_label.setText(
+            f"Scan complete — {bills} bill{'s' if bills != 1 else ''} fed. "
+            "Click Stop to file the batch.")
+
+    def _on_scan_failed(self, msg: str):
+        """Scan worker error (device busy, jam, offline, ...)."""
+        t = self._scan_thread
+        self._scan_thread = None
+        self.processing_panel.set_scanning(False)
+        if t is not None:
+            self._park_thread(t)
+        QMessageBox.warning(self, "Scanner", f"Scanning stopped:\n{msg}")
 
     def _on_watch_toggled(self, on: bool):
         """Watch Folder toggle. ON = start collecting scans dropped into the Data
