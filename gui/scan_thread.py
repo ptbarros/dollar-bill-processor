@@ -153,6 +153,12 @@ class ScanThread(QThread):
                     self.status.emit(
                         f"{done}Waiting for bills — load the next stack and it "
                         "scans automatically. Click Stop Scan when the strap is done.")
+                # Right after a stack that fed, go again straight away: bills
+                # dropped in while it was still feeding aren't picked up by that
+                # pass (the scanner only takes what was loaded when it started),
+                # so they're already waiting. An empty pass costs ~0.1 s.
+                if got:
+                    continue
                 if not self.backend.wait_for_paper(self.device_id, self._stop):
                     break
             self.finished_ok.emit(self._sides)
