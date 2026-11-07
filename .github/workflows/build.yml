@@ -289,7 +289,20 @@ jobs:
   release:
     needs: [windows, windows-cuda, windows-directml, linux, macos]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Publish as long as the Windows + Linux builds succeeded. macOS is best-
+    # effort: `continue-on-error` already excuses a macOS *failure*, but a macOS
+    # job that gets CANCELLED (no runner available -- common, macOS runners are
+    # scarce) would otherwise SKIP this release job. `always()` makes it run
+    # regardless of the macOS outcome; the explicit result checks gate on the
+    # editions that must ship. The macos-app glob below simply matches nothing
+    # when there's no dmg (fail_on_unmatched_files defaults off).
+    if: >-
+      always() &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.windows.result == 'success' &&
+      needs.windows-cuda.result == 'success' &&
+      needs.windows-directml.result == 'success' &&
+      needs.linux.result == 'success'
     permissions:
       contents: write
     steps:
