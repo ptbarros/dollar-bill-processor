@@ -67,6 +67,8 @@ static class Native {
     [DllImport("kernel32.dll")] public static extern IntPtr GlobalLock(IntPtr h);
     [DllImport("kernel32.dll")] public static extern bool GlobalUnlock(IntPtr h);
     [DllImport("kernel32.dll")] public static extern IntPtr GlobalFree(IntPtr h);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    public static extern uint GetShortPathName(string longPath, StringBuilder shortPath, uint size);
     [DllImport("user32.dll")] public static extern bool PeekMessage(IntPtr msg, IntPtr hwnd, uint min, uint max, uint remove);
     [DllImport("user32.dll")] public static extern bool TranslateMessage(IntPtr msg);
     [DllImport("user32.dll")] public static extern IntPtr DispatchMessage(IntPtr msg);
@@ -431,6 +433,11 @@ static class Program {
         string name = Opt(a, "source", "");
         string outDir = Opt(a, "out", "");
         if (outDir == "" || !Directory.Exists(outDir)) throw new Exception("--out folder missing");
+        // The driver takes the file name as an ANSI char[256]; a user name with
+        // non-ANSI characters in the temp path would break it. The 8.3 short
+        // form of the folder is plain ASCII.
+        var shortBuf = new StringBuilder(1024);
+        if (Native.GetShortPathName(outDir, shortBuf, (uint)shortBuf.Capacity) > 0) outDir = shortBuf.ToString();
         int dpi = int.Parse(Opt(a, "dpi", "300"));
         bool duplex = Opt(a, "duplex", "1") == "1";
         bool color = Opt(a, "color", "1") == "1";
