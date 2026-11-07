@@ -56,7 +56,7 @@ h1{font-family:"IBM Plex Serif",Georgia,serif;font-weight:600;
   text-wrap:balance;margin:.5em 0 .35em;max-width:16ch;}
 h1 em{font-style:normal;color:var(--accent);}
 .lede{font-size:clamp(16px,2vw,18.5px);color:var(--ink-soft);max-width:62ch;margin:0;}
-.ledger{display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin:36px 0 8px;
+.ledger{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0;margin:18px 0 8px;
   border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);
   box-shadow:var(--shadow);}
 .ledger .cell{padding:18px 20px;border-right:1px solid var(--line-soft);}
@@ -127,6 +127,31 @@ h2{font-family:"IBM Plex Serif",serif;font-weight:600;font-size:clamp(21px,3vw,2
 .foot h4{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 12px;font-weight:600;}
 .foot ul{margin:0;padding-left:18px;display:grid;gap:7px;max-width:76ch;}
 .foot code{font-family:"IBM Plex Mono",monospace;font-size:12.5px;background:var(--surface-2);padding:1px 5px;border-radius:4px;border:1px solid var(--line-soft);}
+/* Time-range selector */
+.rangebar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:34px 0 0;}
+.rangebar label{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);}
+.rangebar select{font-family:"IBM Plex Sans",sans-serif;font-size:14px;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:9px;padding:7px 12px;box-shadow:var(--shadow);cursor:pointer;}
+.rangebar .rnote{font-size:12.5px;color:var(--ink-faint);}
+/* Review funnel */
+.funnel{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:14px;border:1px solid var(--line);
+  border-radius:12px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow);}
+.funnel .st{padding:16px 18px;border-right:1px solid var(--line-soft);}
+.funnel .st:last-child{border-right:0;}
+.funnel .st .k{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px;}
+.funnel .st .v{font-family:"IBM Plex Serif",serif;font-weight:600;font-size:clamp(22px,3vw,30px);line-height:1;}
+.funnel .st .cv{font-size:12px;color:var(--ink-soft);margin-top:6px;}
+.funnel .st.kept .v{color:var(--keep);}
+@media(max-width:720px){.funnel{grid-template-columns:repeat(2,1fr);}
+  .funnel .st:nth-child(2){border-right:0;}
+  .funnel .st:nth-child(-n+2){border-bottom:1px solid var(--line-soft);}}
+.backlog{margin-top:12px;font-size:13.5px;color:var(--ink-soft);}
+.backlog b{color:var(--noise);}
+/* Value */
+.money{color:var(--keep);}
+.vrow .rate{color:var(--keep);font-size:15px;}
+.vrow .hits{color:var(--ink-faint);}
+.val-sub{font-size:12.5px;color:var(--ink-faint);margin-top:4px;}
 </style>
 </head>
 <body>
@@ -137,10 +162,18 @@ h2{font-family:"IBM Plex Serif",serif;font-weight:600;font-size:clamp(21px,3vw,2
     <p class="lede" id="lede">Your full scan history — every bill the app has flagged, cross-referenced against the ones you cropped to keep. The gap between <em>how often a pattern fires</em> and <em>how often you keep it</em> is the whole story.</p>
   </header>
 
+  <div class="rangebar" id="rangebar" hidden>
+    <label for="rangesel">Time range</label>
+    <select id="rangesel"></select>
+    <span class="rnote" id="rangenote"></span>
+  </div>
+
   <div class="ledger" id="ledger"></div>
   <p style="font-size:12.5px;color:var(--ink-faint);margin:10px 2px 0" class="mono" id="genline"></p>
 
+  <div id="funnel"></div>
   <div id="keepcov"></div>
+  <div id="valuesec"></div>
   <div id="body"></div>
 
   <div class="foot">
@@ -156,39 +189,120 @@ h2{font-family:"IBM Plex Serif",serif;font-weight:600;font-size:clamp(21px,3vw,2
 
 <script>
 const PAYLOAD = __LEDGER_DATA__;
-const DATA = PAYLOAD.report || {total:0,fancy:0,unique_kept:0,patterns:[]};
-const STATS = PAYLOAD.stats || {};
 const $=(s)=>document.querySelector(s);
 const fmt=(n)=>Number(n||0).toLocaleString('en-US');
 const pct=(x,d=1)=>((x||0)*100).toFixed(d)+'%';
+const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money=(x)=>'$'+Number(x||0).toLocaleString('en-US',{maximumFractionDigits:0});
+const nm=(p)=>esc(p.display||p.name);           // friendly label
+const tip=(p)=>esc(p.aliases&&p.aliases.length>1?p.aliases.join(' · '):p.name); // internal id(s)
 
+// Back-compat: an older payload had {report,stats,keep_coverage} at the top level.
+const WINDOWS = PAYLOAD.windows || {all:{label:'All time',report:PAYLOAD.report,stats:PAYLOAD.stats,
+  keep_coverage:PAYLOAD.keep_coverage,value:null,funnel:null}};
+const ORDER = PAYLOAD.order || ['all'];
+const PRICES = !!PAYLOAD.prices_available;
+const ALLW = WINDOWS.all || WINDOWS[ORDER[0]];
+
+// Current-window globals; setWindow() repoints them and re-renders.
+let DATA, STATS, KC, VALUE, FUNNEL;
+
+// Generated line uses the full history span (the 'all' window), independent of
+// the selected range.
+const AST = (ALLW&&ALLW.stats)||{};
 $('#genline').textContent = 'Generated ' + (PAYLOAD.generated||'') +
-  (STATS.first_seen ? '  ·  history ' + (STATS.first_seen||'').slice(0,10) + ' → ' + (STATS.last_seen||'').slice(0,10) : '');
+  (AST.first_seen ? '  ·  history ' + (AST.first_seen||'').slice(0,10) + ' → ' + (AST.last_seen||'').slice(0,10) : '');
 
-/* ---- Ledger row ---- */
-const nameCount = DATA.patterns.reduce((a,p)=>a+(p.aliases?p.aliases.length:1),0);
-const cells=[
-  ['Bills scanned', fmt(STATS.observations!=null?STATS.observations:DATA.total),
-     fmt(STATS.unique_bills!=null?STATS.unique_bills:DATA.total)+' unique · '+fmt(STATS.sessions||0)+' sessions'],
-  ['Fancy hits', DATA.total?pct(DATA.fancy/DATA.total,1):'0%', fmt(DATA.fancy)+' bills flagged'],
-  ['Bills kept', fmt(DATA.unique_kept), DATA.fancy?pct(DATA.unique_kept/DATA.fancy,0)+' of fancy':'—'],
-  ['Patterns fired', String(DATA.patterns.length), 'from '+nameCount+' raw definitions'],
-  ['Keep signal', DATA.total?pct(DATA.unique_kept/DATA.total,1):'0%', 'of all bills worth saving'],
-];
-$('#ledger').innerHTML=cells.map(c=>
-  `<div class="cell"><div class="k">${c[0]}</div><div class="v num">${c[1]}</div><div class="sub">${c[2]}</div></div>`).join('');
+/* ---- Range selector ---- */
+(function buildRange(){
+  if(ORDER.length<=1 || !(ALLW&&ALLW.report&&ALLW.report.total)) return;
+  const sel=$('#rangesel');
+  sel.innerHTML=ORDER.map(k=>`<option value="${k}">${esc((WINDOWS[k]||{}).label||k)}</option>`).join('');
+  sel.value = PAYLOAD.active||'all';
+  sel.addEventListener('change',()=>setWindow(sel.value));
+  $('#rangebar').hidden=false;
+})();
 
-renderKeepCoverage();
-if(!DATA.total){
-  $('#body').innerHTML='<div class="empty">No bills in the ledger yet. Process a folder, and this report fills in automatically.</div>';
-} else {
-  buildBody();
+function setWindow(key){
+  const w = WINDOWS[key] || ALLW;
+  DATA = w.report || {total:0,fancy:0,unique_kept:0,patterns:[]};
+  STATS = w.stats || {};
+  KC = w.keep_coverage;
+  VALUE = w.value;
+  FUNNEL = w.funnel;
+  const scanned = (STATS.unique_bills!=null?STATS.unique_bills:DATA.total);
+  $('#rangenote').textContent = (key==='all'?'':'· '+fmt(scanned)+' bills scanned in this range');
+  renderLedger(); renderFunnel(); renderKeepCoverage(); renderValue();
+  if(!DATA.total){
+    $('#body').innerHTML='<div class="empty">No bills scanned in this range.</div>';
+  } else { buildBody(); }
 }
 
+function renderLedger(){
+  const cells=[
+    ['Bills scanned', fmt(STATS.observations!=null?STATS.observations:DATA.total),
+       fmt(STATS.unique_bills!=null?STATS.unique_bills:DATA.total)+' unique · '+fmt(STATS.sessions||0)+' sessions'],
+    ['Fancy hits', DATA.total?pct(DATA.fancy/DATA.total,1):'0%', fmt(DATA.fancy)+' bills flagged'],
+    ['Bills kept', fmt(DATA.unique_kept), DATA.fancy?pct(DATA.unique_kept/DATA.fancy,0)+' of fancy':'—'],
+  ];
+  if(PRICES && VALUE){
+    cells.push(['Kept value', `<span class="money">${money(VALUE.kept_value)}</span>`,
+       fmt(VALUE.kept_priced)+' priced'+(VALUE.kept_no_price?' · '+fmt(VALUE.kept_no_price)+' unpriced':'')]);
+  }
+  cells.push(['Keep signal', DATA.total?pct(DATA.unique_kept/DATA.total,1):'0%', 'of all bills worth saving']);
+  cells.push(['Patterns fired', String(DATA.patterns.length), 'distinct patterns hit']);
+  $('#ledger').innerHTML=cells.map(c=>
+    `<div class="cell"><div class="k">${c[0]}</div><div class="v num">${c[1]}</div><div class="sub">${c[2]}</div></div>`).join('');
+}
+
+/* ---- Review funnel ---- */
+function renderFunnel(){
+  const el=$('#funnel');
+  if(!FUNNEL){ el.innerHTML=''; return; }
+  const f=FUNNEL;
+  const conv=(a,b)=> b>0 ? pct(a/b,0) : '—';
+  const stage=(k,v,cv,cls='')=>`<div class="st ${cls}"><div class="k">${k}</div><div class="v num">${fmt(v)}</div><div class="cv">${cv}</div></div>`;
+  el.innerHTML = `
+    <div class="funnel">
+      ${stage('Scanned', f.scanned, 'bills seen')}
+      ${stage('Fancy', f.fancy, conv(f.fancy,f.scanned)+' of scanned')}
+      ${stage('Reviewed', f.checked, conv(f.checked,f.fancy)+' of fancy')}
+      ${stage('Kept', f.kept, conv(f.kept,f.fancy)+' of fancy','kept')}
+    </div>` +
+    (f.backlog>0 ? `<p class="backlog"><b>${fmt(f.backlog)}</b> fancy ${f.backlog===1?'note is':'notes are'} flagged but not yet reviewed — your current backlog.</p>` : '');
+}
+
+/* ---- Where the value is ---- */
+function renderValue(){
+  const el=$('#valuesec');
+  const top = (PRICES && VALUE && VALUE.top_by_value) || [];
+  if(!top.length){ el.innerHTML=''; return; }
+  el.innerHTML = `
+    <section>
+      <div class="sec-head"><span class="sec-no">$</span><h2>Where the value is</h2></div>
+      <p class="sec-note">Your kept notes, valued at catalog price (the higher price when a note hits more than one pattern, so nothing is double-counted). This is what each pattern has actually earned you in keepers — a different ranking from raw hit count.</p>
+      <div class="panel keep">
+        <h3>Top patterns by kept value</h3>
+        <span class="tag">Estimated catalog value · kept notes</span>
+        <div id="valrows"></div>
+      </div>
+    </section>`;
+  const max = top.reduce((a,t)=>Math.max(a,t.value),0)||1;
+  $('#valrows').innerHTML = top.map(t=>`
+    <div class="row vrow"><div class="nm" title="${esc(t.name)}">${esc(t.display||t.name)}</div>
+    <div class="rate">${money(t.value)}</div>
+    <div class="meta"><span class="track"><i style="width:${(t.value/max*100).toFixed(0)}%;background:var(--keep)"></i></span>
+    <span class="hits">${fmt(t.count)} kept</span></div></div>`).join('');
+}
+
+// kick off
+setWindow(PAYLOAD.active||'all');
+
 function renderKeepCoverage(){
-  const kc = PAYLOAD.keep_coverage;
+  const kc = KC;
   const el = $('#keepcov');
-  if(!kc || !kc.kept_total){ el.hidden = true; return; }
+  if(!kc || !kc.kept_total){ el.hidden = true; el.innerHTML=''; return; }
+  el.hidden = false;
   const covPct = kc.kept_with_pattern ? (kc.covered/kc.kept_with_pattern*100) : 100;
   const col = covPct>=90 ? 'var(--keep)' : (covPct>=70 ? 'var(--gold)' : 'var(--noise)');
   const miss = kc.missing_patterns || [];
@@ -210,7 +324,8 @@ function renderKeepCoverage(){
       </div>
     </section>`;
   $('#kcmiss').innerHTML = miss.length
-    ? miss.map(([p,n])=>`<div class="row"><div class="nm" title="${p}">${p}</div><div class="rate" style="color:var(--noise)">${n}</div></div>`).join('')
+    ? miss.map(m=>{const p=m[0],n=m[1],d=m[2]||m[0];
+        return `<div class="row"><div class="nm" title="${esc(p)}">${esc(d)}</div><div class="rate" style="color:var(--noise)">${n}</div></div>`;}).join('')
     : '<div class="row"><div class="nm" style="color:var(--keep)">Nothing — your active set covers every pattern-flagged keep.</div></div>';
 }
 
@@ -290,16 +405,16 @@ function drawScatter(){
   s+=`<text class="quad-label" x="${mL+pw-8}" y="${mT+ph-10}" text-anchor="end" fill="var(--noise)">noise · common &amp; skipped ◢</text>`;
   const pts=[...DATA.patterns].sort((a,b)=>b.hits-a.hits);
   pts.forEach(p=>{const x=X(p.hit_rate),y=Y(p.keep_rate),r=R(p.hits),c=keepColor(p.keep_rate);
-    s+=`<circle class="dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${c}" fill-opacity="0.82" stroke="${c}"><title>${p.name} — ${p.hits} hits, ${p.kept} kept (${pct(p.keep_rate,0)})</title></circle>`;});
+    s+=`<circle class="dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${c}" fill-opacity="0.82" stroke="${c}"><title>${nm(p)} — ${p.hits} hits, ${p.kept} kept (${pct(p.keep_rate,0)})</title></circle>`;});
   pts.forEach(p=>{if(!labelSet.has(p.name)) return;
     const x=X(p.hit_rate),y=Y(p.keep_rate),r=R(p.hits);
     const left=x>mL+pw*0.72; const tx=left?(x-r-6):(x+r+6);
-    s+=`<text class="pt-label" x="${tx.toFixed(1)}" y="${(y+3.5).toFixed(1)}" text-anchor="${left?'end':'start'}">${p.name}</text>`;});
+    s+=`<text class="pt-label" x="${tx.toFixed(1)}" y="${(y+3.5).toFixed(1)}" text-anchor="${left?'end':'start'}">${nm(p)}</text>`;});
   $('#scatter').innerHTML=s;
 }
 
 function rankRow(p,color){
-  return `<div class="row"><div class="nm" title="${p.name}">${p.name}</div>
+  return `<div class="row"><div class="nm" title="${tip(p)}">${nm(p)}</div>
     <div class="rate" style="color:${color}">${pct(p.keep_rate,0)}</div>
     <div class="meta"><span class="track"><i style="width:${(p.keep_rate*100).toFixed(0)}%;background:${color}"></i></span>
     <span class="hits">${p.kept}/${p.hits} kept</span></div></div>`;
@@ -314,8 +429,8 @@ function drawDups(){
   const dups=DATA.patterns.filter(p=>p.aliases&&p.aliases.length>1&&p.hits>=8).sort((a,b)=>b.hits-a.hits);
   if(!dups.length){ $('#dupsec').style.display='none'; return; }
   $('#dups').innerHTML=dups.map(p=>`
-    <div class="dup"><div class="top"><span class="cnt">${p.hits} shared hits</span><span class="cnt" style="color:var(--ink-faint)">${pct(p.keep_rate,0)} kept</span></div>
-    <div class="names">${p.aliases.map((a,i)=>`<span class="chip2${i===0?' head':''}">${a}</span>`).join('')}</div></div>`).join('');
+    <div class="dup"><div class="top"><span class="cnt">${nm(p)}</span><span class="cnt" style="color:var(--ink-faint)">${p.hits} shared · ${pct(p.keep_rate,0)} kept</span></div>
+    <div class="names">${p.aliases.map(a=>`<span class="chip2">${esc(a)}</span>`).join('')}</div></div>`).join('');
   const from=dups.reduce((a,p)=>a+p.aliases.length,0);
   $('#dupcall').innerHTML=`Merging these <b>${dups.length}</b> groups collapses <b>${from}</b> pattern names into <b>${dups.length}</b> — the clearest, lowest-risk first cut toward a leaner core set, straight from your own data.`;
 }

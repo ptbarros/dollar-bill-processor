@@ -479,19 +479,44 @@ class Ledger:
         return {"added_bills": added, "updated_bills": updated, "added_observations": obs}
 
     # -- aggregates --------------------------------------------------------
-    def stats(self) -> dict:
-        """Lifetime headline numbers."""
+    @staticmethod
+    def _window(start, end, col):
+        """Build an SQL predicate restricting `col` (a date column, ISO strings)
+        to [start, end). Either bound may be None (open). Returns (conds, params)
+        where conds is a list of 'col >= ?' / 'col < ?' fragments. ISO-8601
+        timestamps sort lexicographically, so string comparison is correct."""
+        conds, params = [], []
+        if start:
+            conds.append(f"{col} >= ?"); params.append(start)
+        if end:
+            conds.append(f"{col} < ?"); params.append(end)
+        return conds, params
+
+    def stats(self, start=None, end=None) -> dict:
+        """Headline numbers, optionally restricted to bills first seen in
+        [start, end) (scan-date window). Observations/sessions are windowed by
+        their own timestamps so 'bills scanned' reflects activity in the period."""
         c = self._conn
-        obs = c.execute("SELECT COUNT(*) n FROM observations").fetchone()["n"]
+        bconds, bparams = self._window(start, end, "first_seen")
+        bwhere = ("WHERE " + " AND ".join(bconds)) if bconds else ""
+        oconds, oparams = self._window(start, end, "seen_at")
+        owhere = ("WHERE " + " AND ".join(oconds)) if oconds else ""
+        sconds, sparams = self._window(start, end, "started_at")
+        swhere = ("WHERE " + " AND ".join(sconds)) if sconds else ""
+
+        obs = c.execute(
+            f"SELECT COUNT(*) n FROM observations {owhere}", oparams).fetchone()["n"]
         row = c.execute(
             "SELECT COUNT(*) uniq, COALESCE(SUM(is_fancy),0) fancy, "
             "COALESCE(SUM(kept),0) kept, COALESCE(SUM(checked),0) checked, "
-            "MIN(first_seen) first, MAX(last_seen) last FROM bills"
-        ).fetchone()
-        sess = c.execute("SELECT COUNT(*) n FROM sessions").fetchone()["n"]
+            f"MIN(first_seen) first, MAX(last_seen) last FROM bills {bwhere}",
+            bparams).fetchone()
+        sess = c.execute(
+            f"SELECT COUNT(*) n FROM sessions {swhere}", sparams).fetchone()["n"]
+        dup_where = ("WHERE " + " AND ".join(bconds + ["times_seen>1"])) \
+            if bconds else "WHERE times_seen>1"
         dups = c.execute(
-            "SELECT COUNT(*) n FROM bills WHERE times_seen>1"
-        ).fetchone()["n"]
+            f"SELECT COUNT(*) n FROM bills {dup_where}", bparams).fetchone()["n"]
         return {
             "observations": obs,
             "unique_bills": row["uniq"],
@@ -504,7 +529,22 @@ class Ledger:
             "last_seen": row["last"],
         }
 
-    def keep_coverage(self, enabled_names) -> dict:
+    def kept_bill_patterns(self, start=None, end=None) -> list:
+        """For each kept bill (first seen in the optional [start, end) window), the
+        list of pattern names that fired on it. Feeds value attribution: the GUI
+        values each kept bill at the highest-priced pattern among its matches."""
+        c = self._conn
+        conds, params = self._window(start, end, "b.first_seen")
+        where = (" AND " + " AND ".join(conds)) if conds else ""
+        rows = c.execute(
+            "SELECT bp.bill_id, bp.pattern FROM bill_patterns bp "
+            f"JOIN bills b ON b.id=bp.bill_id WHERE b.kept=1{where}", params)
+        by_bill: dict = {}
+        for r in rows:
+            by_bill.setdefault(r["bill_id"], []).append(r["pattern"])
+        return list(by_bill.values())
+
+    def keep_coverage(self, enabled_names, start=None, end=None) -> dict:
         """Do the currently-enabled patterns catch the bills you actually kept?
 
         The real validation of a lean set: of the bills you cropped, how many
@@ -515,7 +555,10 @@ class Ledger:
         """
         enabled = set(enabled_names or [])
         c = self._conn
-        kept_ids = [r["id"] for r in c.execute("SELECT id FROM bills WHERE kept=1")]
+        conds, params = self._window(start, end, "first_seen")
+        kwhere = ("WHERE " + " AND ".join(conds + ["kept=1"])) if conds else "WHERE kept=1"
+        kept_ids = [r["id"] for r in c.execute(
+            f"SELECT id FROM bills {kwhere}", params)]
         with_pattern = covered = 0
         missing = Counter()
         for bid in kept_ids:
@@ -538,9 +581,10 @@ class Ledger:
             "missing_patterns": missing.most_common(30),
         }
 
-    def report_data(self) -> dict:
-        """Aggregate for the analysis page. Same shape as the report artifact's
-        DATA object, so it can feed the bundled HTML template directly:
+    def report_data(self, start=None, end=None) -> dict:
+        """Aggregate for the analysis page, optionally restricted to bills first
+        seen in [start, end) (scan-date window). Same shape as the report
+        artifact's DATA object, so it can feed the bundled HTML template directly:
 
             {total, fancy, unique_kept, patterns:[{name, aliases, hits, kept,
              hit_rate, keep_rate}, ...]}
@@ -549,17 +593,27 @@ class Ledger:
         row (aliases[]) — the live duplicate-pattern / "pattern health" signal.
         """
         c = self._conn
-        total = c.execute("SELECT COUNT(*) n FROM bills").fetchone()["n"]
+        bconds, bparams = self._window(start, end, "first_seen")
+        bwhere = ("WHERE " + " AND ".join(bconds)) if bconds else ""
+        total = c.execute(
+            f"SELECT COUNT(*) n FROM bills {bwhere}", bparams).fetchone()["n"]
         fancy = c.execute(
-            "SELECT COALESCE(SUM(is_fancy),0) n FROM bills").fetchone()["n"]
+            f"SELECT COALESCE(SUM(is_fancy),0) n FROM bills {bwhere}",
+            bparams).fetchone()["n"]
         unique_kept = c.execute(
-            "SELECT COALESCE(SUM(kept),0) n FROM bills").fetchone()["n"]
+            f"SELECT COALESCE(SUM(kept),0) n FROM bills {bwhere}",
+            bparams).fetchone()["n"]
 
+        jconds, jparams = self._window(start, end, "b.first_seen")
+        jtail = (" AND " + " AND ".join(jconds)) if jconds else ""
+        jwhere = ("WHERE " + " AND ".join(jconds)) if jconds else ""
         kept_ids = {r["bill_id"] for r in c.execute(
             "SELECT DISTINCT bp.bill_id FROM bill_patterns bp "
-            "JOIN bills b ON b.id=bp.bill_id WHERE b.kept=1")}
+            f"JOIN bills b ON b.id=bp.bill_id WHERE b.kept=1{jtail}", jparams)}
         pat_bills: dict[str, set] = {}
-        for r in c.execute("SELECT pattern, bill_id FROM bill_patterns"):
+        for r in c.execute(
+                "SELECT bp.pattern, bp.bill_id FROM bill_patterns bp "
+                f"JOIN bills b ON b.id=bp.bill_id {jwhere}", jparams):
             pat_bills.setdefault(r["pattern"], set()).add(r["bill_id"])
 
         # collapse patterns with identical bill-sets into alias groups
