@@ -27,7 +27,7 @@ class ScanThread(QThread):
     failed = Signal(str)           # error message
 
     def __init__(self, backend, out_dir, *, dpi=300, duplex=True, color=True,
-                 device_id=None, parent=None):
+                 device_id=None, start_number=None, parent=None):
         super().__init__(parent)
         self.backend = backend
         self.out_dir = Path(out_dir)
@@ -35,6 +35,12 @@ class ScanThread(QThread):
         self.duplex = duplex
         self.color = color
         self.device_id = device_id
+        # Caller-supplied starting number keeps numbering monotonic across
+        # successive scans in one session, even after the live pipeline has
+        # drained earlier files out of the folder. None -> derive from the folder.
+        self.start_number = start_number
+        # Highest number assigned this run (read by the caller to continue).
+        self.final_number = (start_number - 1) if start_number else 0
         self._stop = threading.Event()
 
     def request_stop(self):
@@ -68,7 +74,10 @@ class ScanThread(QThread):
         written = 0
         try:
             self.out_dir.mkdir(parents=True, exist_ok=True)
-            number = self._next_number()
+            # Continue from the caller's counter when given (monotonic across
+            # scans in a session, even after the pipeline drained the folder);
+            # otherwise derive from whatever's in the folder.
+            number = self.start_number if self.start_number else self._next_number()
             cur_front = None   # number assigned to the most recent front (side A)
             self.status.emit("Feed your strap into the scanner…")
             for page in self.backend.scan_pages(
@@ -89,6 +98,7 @@ class ScanThread(QThread):
                 self.status.emit(f"Scanned {bills} bill{'s' if bills != 1 else ''}…")
                 if self._stop.is_set():
                     break
+            self.final_number = number - 1   # highest number actually assigned
             self.finished_ok.emit(written)
         except Exception as e:
             # The FF-640 reports a "jam" (PJ) with no pages when the feeder is

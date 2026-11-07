@@ -196,6 +196,7 @@ class MainWindow(QMainWindow):
         # if one is connected, reveal the in-Monitor "Scan" button. Cheap + guarded.
         self._scanner_backend = None
         self._scan_thread = None
+        self._scan_counter = None   # monotonic FastFoto number across scans this session
         try:
             from dollar_detective.scanner import get_scanner_backend
             backend, devices = get_scanner_backend()
@@ -3044,7 +3045,8 @@ class MainWindow(QMainWindow):
         if not self._monitor_active:
             self.processing_panel.watch_btn.setChecked(True)
         self._scan_thread = ScanThread(self._scanner_backend, out_dir,
-                                       dpi=300, duplex=True, color=True, parent=self)
+                                       dpi=300, duplex=True, color=True,
+                                       start_number=self._scan_counter, parent=self)
         self._scan_thread.status.connect(self.status_label.setText)
         self._scan_thread.finished_ok.connect(self._on_scan_finished)
         self._scan_thread.failed.connect(self._on_scan_failed)
@@ -3057,6 +3059,10 @@ class MainWindow(QMainWindow):
         self._scan_thread = None
         self.processing_panel.set_scanning(False)
         if t is not None:
+            # Continue numbering from where this scan left off, so the next Scan
+            # in this session never reuses filenames the pipeline already drained.
+            if getattr(t, "final_number", 0):
+                self._scan_counter = t.final_number + 1
             self._park_thread(t)
         if total <= 0:
             self.status_label.setText(
@@ -3119,6 +3125,7 @@ class MainWindow(QMainWindow):
         self._stop_monitor()  # clean any prior watcher
         self._monitor_watch_dir = wd
         self._monitor_new_files = set()
+        self._scan_counter = None   # fresh strap -> restart scan numbering
         self._monitor_watcher = FileWatcher(wd)
         self._monitor_watcher.new_file_detected.connect(self._on_monitor_file)
         self._monitor_watcher.start()
