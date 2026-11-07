@@ -1287,6 +1287,16 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
             self._on_stop_requested()
+        # Let a running scan end its scanner session cleanly before we exit:
+        # killing the thread mid-command can leave the FF-640 locked until it's
+        # power-cycled. The driver checks the stop flag between pages and always
+        # sends FIN on the way out.
+        self._feeder_timer.stop()
+        t = self._scan_thread
+        if t is not None and t.isRunning():
+            t.request_stop()
+            if not t.wait(20000):
+                dlog("scan.exit_wait_timeout")
         # Final autosave before exit (if we have unarchived results)
         if self.current_results and self._session_dirty:
             self._trigger_autosave()
