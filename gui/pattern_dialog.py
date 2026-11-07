@@ -942,6 +942,7 @@ class PatternDialog(QDialog):
                 # overridden by a per-user setting when one exists.
                 catalog = self.engine.resolve_pattern_catalog(name)
                 pattern_item.setText(4, catalog if catalog else "-")
+                pattern_item.setToolTip(4, "Double-click to edit the catalog number")
 
                 # Price column: circulated value ($N); full range + uncirculated
                 # in the tooltip. Override-aware (same source as the results table).
@@ -1105,19 +1106,32 @@ class PatternDialog(QDialog):
                 self._clear_pattern_color(item, name)
 
         elif column == 4:
-            # Catalog SKU column - show input dialog. Start from the resolved
-            # value (shipped header SKU, or an existing override).
+            # Catalog SKU column (double-click to edit). For an editable pattern
+            # (user / add-on library) this rewrites the real Catalog: header in the
+            # .lua file -- the canonical SKU that travels in bundles / to dd-web.
+            # For a read-only built-in pattern it stores a per-user override only.
             current_catalog = self.engine.resolve_pattern_catalog(name)
+            editable = self.engine.is_pattern_editable(name)
+            prompt = ("Catalog number (e.g., U-003). Changes the number stored in\n"
+                      "this pattern's file. Leave blank to remove it."
+                      if editable else
+                      "Catalog number (e.g., C-004). Blank clears your override and\n"
+                      "restores the pattern's shipped number:")
             catalog, ok = QInputDialog.getText(
-                self, f"Catalog for {name}",
-                "Catalog number (e.g., C-004). Blank clears your override and\n"
-                "restores the pattern's shipped number:",
-                text=current_catalog
-            )
-            if ok:
-                # Store as a per-user override; blank removes it so the shipped
-                # SKU shows again.
-                self.settings.set_pattern_catalog(name, catalog.strip())
+                self, f"Catalog for {name}", prompt, text=current_catalog)
+            if not ok:
+                return
+            new_sku = catalog.strip()
+            if editable:
+                okr, msg = self.engine.set_pattern_catalog_header(name, new_sku)
+                if okr:
+                    self._patterns_modified = True
+                    self._load_patterns()   # engine reloaded; refresh the whole tree
+                else:
+                    QMessageBox.warning(self, "Catalog", msg)
+            else:
+                # Per-user override; blank removes it so the shipped SKU shows again.
+                self.settings.set_pattern_catalog(name, new_sku)
                 item.setText(4, self.engine.resolve_pattern_catalog(name) or "-")
 
     def _on_context_menu(self, pos):
@@ -2265,6 +2279,9 @@ class PatternDialog(QDialog):
 
         # Store file path for saving
         dialog._edit_file_path = lua_info.file_path
+        # Prefill the catalog field with the current number so an edit can change it.
+        _orig_catalog = self.engine.resolve_pattern_catalog(lua_info.name)
+        dialog.set_catalog(_orig_catalog)
 
         if dialog.exec() == QDialog.Accepted:
             name, defn = dialog.get_pattern()
@@ -2302,6 +2319,19 @@ class PatternDialog(QDialog):
                         if pinfo.file_path == lua_info.file_path:
                             new_pattern_name = pname
                             break
+
+                    # If the user changed the Catalog FIELD, apply it to the file's
+                    # header now (only when actually changed, so a catalog edited
+                    # directly in the Lua text isn't clobbered by the stale field).
+                    entered_catalog = dialog.get_catalog()
+                    if (new_pattern_name and entered_catalog != _orig_catalog
+                            and self.engine.is_pattern_editable(new_pattern_name)):
+                        okc, msgc = self.engine.set_pattern_catalog_header(
+                            new_pattern_name, entered_catalog)
+                        if okc:
+                            self._load_patterns()
+                        else:
+                            QMessageBox.warning(self, "Catalog", msgc)
 
                     # Re-select the pattern in the tree
                     if new_pattern_name:
@@ -3127,6 +3157,7 @@ Logs appear in batch test results and "Copy for AI Debug" output.
                 library=library,
                 display_name=defn.get('display_name', ''),
                 aka=defn.get('aka'),
+                catalog=dialog.get_catalog(),   # '' = auto-assign next free SKU
             )
         else:
             # Legacy YAML rule pattern.
@@ -3716,6 +3747,16 @@ class CustomPatternDialog(QDialog):
             self.library_combo.setCurrentIndex(_li)
         header_layout.addRow("Library:", self.library_combo)
 
+        # Catalog number (SKU). Blank = auto-assign the next free number for the
+        # chosen library; set/change it to control the pattern's catalog id (used
+        # for prices, labels and bundle sharing). Prefilled when editing.
+        self.catalog_edit = QLineEdit()
+        self.catalog_edit.setPlaceholderText("auto (leave blank to assign automatically)")
+        self.catalog_edit.setToolTip(
+            "Catalog number for this pattern, e.g. U-003. Leave blank to have one "
+            "assigned automatically; set it to choose or change the number.")
+        header_layout.addRow("Catalog:", self.catalog_edit)
+
         # Tab widget holds every editor. We keep its original tab indices
         # (0=Simple, 1=Wizard, 2=AI, 3=Lua, 4=Test, 5=API Docs, 6=List) because
         # the save/test logic keys off them -- but we HIDE the tab bar and drive
@@ -4202,6 +4243,13 @@ class CustomPatternDialog(QDialog):
 
     def get_library(self) -> str:
         return self.library_combo.currentText()
+
+    def get_catalog(self) -> str:
+        """User-entered catalog number ('' = auto-assign)."""
+        return self.catalog_edit.text().strip()
+
+    def set_catalog(self, value: str):
+        self.catalog_edit.setText(value or "")
 
     def _create_simple_tab(self) -> QWidget:
         """Create the simple rules tab."""
