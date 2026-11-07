@@ -56,20 +56,30 @@ STEPS: List[Step] = [
          "Load 3 bills exactly the way you normally feed them, then click Run.\n\n"
          "Scans one side only, using the scanner's full scan length, to see "
          "where the bills land and which way they feed.",
-         scan={"duplex": False, "scan_length_in": None}, default_bills=3),
+         scan={"duplex": False, "scan_length_in": None, "transfer_format": "jpeg"},
+         default_bills=3),
     Step("duplex", "Both sides",
          "Load 3 bills the same way, then click Run.\n\nScans front and back in "
          "one pass (duplex), the way the app scans a strap.",
-         scan={"duplex": True, "scan_length_in": None}, default_bills=3),
+         scan={"duplex": True, "scan_length_in": None, "transfer_format": "jpeg"},
+         default_bills=3),
     Step("short", "Shorter scan window",
          "Load 3 bills the same way, then click Run.\n\nScans only as far as the "
          "bills actually reach (measured in the earlier steps) -- usually faster. "
          "Checks the bills still come out whole.",
-         scan={"duplex": True, "scan_length_in": "measured"}, default_bills=3),
+         scan={"duplex": True, "scan_length_in": "measured", "transfer_format": "jpeg"},
+         default_bills=3),
+    Step("dib", "Uncompressed transfer",
+         "Load 5 bills, then click Run.\n\nSends the pages uncompressed. Some "
+         "scanners compress more slowly than they feed, so this can be much "
+         "faster (the FastFoto FF-640 went from 1.12 to 0.78 s per bill).",
+         scan={"duplex": True, "scan_length_in": "measured", "transfer_format": "dib"},
+         default_bills=5),
     Step("speed", "Speed run",
          "Load 10 bills, then click Run.\n\nScans with the best settings found "
          "so far, to measure real bills-per-minute.",
-         scan={"duplex": True, "scan_length_in": "recommended"}, default_bills=10),
+         scan={"duplex": True, "scan_length_in": "recommended",
+               "transfer_format": "recommended"}, default_bills=10),
 ]
 STEP_BY_KEY = {s.key: s for s in STEPS}
 
@@ -179,6 +189,8 @@ def run_step(step: Step, backend, device_id, results: Dict[str, StepResult], *,
 
     opts = dict(step.scan)
     opts["scan_length_in"] = resolve_scan_length(opts.get("scan_length_in"), results)
+    if opts.get("transfer_format") == "recommended":
+        opts["transfer_format"] = recommend(results).get("transfer_format", "jpeg")
     res.options = dict(opts, dpi=dpi)
     progress("Scanning…")
     fronts = backs = 0
@@ -301,6 +313,18 @@ def checks(results: Dict[str, StepResult]) -> List[dict]:
         add("Shorter window keeps bills whole", "pass" if whole else "fail",
             f"window {sh.options.get('scan_length_in')} in. {gain}")
 
+    dib = results.get("dib")
+    base = results.get("short") or results.get("duplex")
+    if dib and not dib.skipped:
+        if dib.ok:
+            r_dib, r_base = _rate(dib), (_rate(base) if base and base.ok else None)
+            faster = bool(r_dib and r_base and r_dib < 0.9 * r_base)
+            add("Uncompressed transfer", "pass" if faster else "warn",
+                (f"{r_base:.2f} → {r_dib:.2f} s/bill" if (r_dib and r_base) else "measured")
+                + (" -- faster, will use it" if faster else " -- no real gain, keeping JPEG"))
+        else:
+            add("Uncompressed transfer", "warn", f"not supported ({dib.error})")
+
     sp = results.get("speed")
     if sp and not sp.skipped:
         if sp.ok:
@@ -334,6 +358,12 @@ def recommend(results: Dict[str, StepResult]) -> dict:
             for p in sh.pages):
         rec["scan_length_in"] = sh.options.get("scan_length_in")
     rec["feed"] = orientation(results)
+    rec["transfer_format"] = "jpeg"
+    dib, base = results.get("dib"), results.get("short") or results.get("duplex")
+    if dib and dib.ok and base and base.ok:
+        r_dib, r_base = _rate(dib), _rate(base)
+        if r_dib and r_base and r_dib < 0.9 * r_base and len(dib.pages) == 2 * dib.bills_loaded:
+            rec["transfer_format"] = "dib"
     return rec
 
 

@@ -166,6 +166,18 @@ class WinRtScannerBackend(ScannerBackend):
         up = (device_id or "").upper()
         return cls.SCAN_LENGTH_IN if any(k in up for k in cls.KNOWN_SHORT_FEED) else None
 
+    # Transfer format. The FF-640 feeds ~0.55 s/bill but compresses JPEG at only
+    # ~1.12 s/bill, so it buffers and the feeder empties ~0.57 s x N before the
+    # scan ends. Uncompressed (DIB) delivers at ~0.78 s/bill over USB 2 (A/B on
+    # Paul's laptop, 2026-11-07); we JPEG-encode on our side anyway. Other
+    # scanners keep JPEG until measured.
+    UNCOMPRESSED_FASTER = ("VID_04B8&PID_015F",)
+
+    @classmethod
+    def default_format(cls, device_id: str) -> str:
+        up = (device_id or "").upper()
+        return "dib" if any(k in up for k in cls.UNCOMPRESSED_FASTER) else "jpeg"
+
     def __init__(self):
         # Fail fast (-> backend not offered) when the WinRT projection isn't
         # installed, e.g. a dev venv without the winrt-* packages.
@@ -237,7 +249,8 @@ class WinRtScannerBackend(ScannerBackend):
             }
         return info
 
-    def _configure(self, scanner, dpi, duplex, color, scan_length_in=None) -> bool:
+    def _configure(self, scanner, dpi, duplex, color, scan_length_in=None,
+                   transfer_format="jpeg") -> bool:
         from winrt.windows.devices.scanners import (
             ImageScannerColorMode, ImageScannerFormat, ImageScannerResolution,
             ImageScannerScanSource)
@@ -248,7 +261,11 @@ class WinRtScannerBackend(ScannerBackend):
         cfg.max_number_of_pages = 0          # everything in the feeder
         cfg.color_mode = (ImageScannerColorMode.COLOR if color
                           else ImageScannerColorMode.GRAYSCALE)
-        if cfg.is_format_supported(ImageScannerFormat.JPEG):
+        fmt = (ImageScannerFormat.DEVICE_INDEPENDENT_BITMAP if transfer_format == "dib"
+               else ImageScannerFormat.JPEG)
+        if cfg.is_format_supported(fmt):
+            cfg.format = fmt
+        elif cfg.is_format_supported(ImageScannerFormat.JPEG):
             cfg.format = ImageScannerFormat.JPEG
         cfg.desired_resolution = ImageScannerResolution(dpi_x=float(dpi), dpi_y=float(dpi))
         # Shorten the scan window to bill length (faster, smaller files). Full
@@ -271,9 +288,11 @@ class WinRtScannerBackend(ScannerBackend):
     # -- scanning ------------------------------------------------------------
     def scan_pages(self, device_id: Optional[str] = None, *,
                    dpi: int = 300, duplex: bool = True, color: bool = True,
-                   stop=None, scan_length_in="auto", **options) -> Iterator[ScanPage]:
+                   stop=None, scan_length_in="auto", transfer_format="auto",
+                   **options) -> Iterator[ScanPage]:
         """`scan_length_in`: "auto" (FF-640 short window, else full length),
-        None (full length), or a length in inches (Scanner Test)."""
+        None (full length), or a length in inches (Scanner Test).
+        `transfer_format`: "auto" (per-scanner default), "jpeg" or "dib"."""
         from winrt.windows.devices.scanners import ImageScanner, ImageScannerScanSource
         from winrt.windows.storage import StorageFolder
 
@@ -282,7 +301,10 @@ class WinRtScannerBackend(ScannerBackend):
             scanner = _wait(ImageScanner.from_id_async(dev), timeout=15)
             if scan_length_in == "auto":
                 scan_length_in = self.default_scan_length(dev)
-            is_duplex = self._configure(scanner, dpi, duplex, color, scan_length_in)
+            if transfer_format == "auto":
+                transfer_format = self.default_format(dev)
+            is_duplex = self._configure(scanner, dpi, duplex, color, scan_length_in,
+                                        transfer_format)
         except _OpError as e:
             raise _map_error(e.code) from e
 
@@ -295,7 +317,7 @@ class WinRtScannerBackend(ScannerBackend):
             raise
         t0 = time.monotonic()
         dlog("scan.winrt.start", folder=str(folder), dpi=dpi, duplex=is_duplex,
-             scan_length_in=scan_length_in)
+             scan_length_in=scan_length_in, transfer_format=transfer_format)
         yield from self._pump(op, folder, is_duplex, stop, t0)
 
     def _pump(self, op, folder: Path, is_duplex: bool, stop, t0: float) -> Iterator[ScanPage]:

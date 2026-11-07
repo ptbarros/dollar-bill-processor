@@ -48,14 +48,17 @@ class Fake:
     def describe(self, device_id=None):
         return {"backend": "Fake", "name": "Fake R40", "feeder": {"can_scan_duplex": True}}
 
-    def scan_pages(self, device_id=None, *, dpi, duplex, color, stop, scan_length_in=None):
+    def scan_pages(self, device_id=None, *, dpi, duplex, color, stop, scan_length_in=None,
+                   transfer_format="jpeg"):
         self.calls.append(scan_length_in)
+        self.formats = getattr(self, "formats", []) + [transfer_format]
+        gap = 0.78 if transfer_format == "dib" else 1.1
         if self.empty:
             raise ScanError("No paper", cause="PE")
         for i in range(self.bills):
-            yield ScanPage("A", page(), raw=page(), t=1.0 + i * 1.1)
+            yield ScanPage("A", page(), raw=page(), t=1.0 + i * gap)
             if duplex:
-                yield ScanPage("B", page(), raw=page(), t=1.03 + i * 1.1)
+                yield ScanPage("B", page(), raw=page(), t=1.03 + i * gap)
 
 
 def test_full_walkthrough_and_report(tmp_path):
@@ -70,11 +73,13 @@ def test_full_walkthrough_and_report(tmp_path):
         results[step.key] = r
         assert r.ok, (step.key, r.error)
     # 'short' used the measured window (bill end + margin), 'speed' the recommendation.
-    assert f.calls[-2] == lab.measured_window(results) and f.calls[-2] < 8.5
-    assert f.calls[-1] == f.calls[-2]
+    w = lab.measured_window(results)
+    assert w < 8.5 and f.calls[-3:] == [w, w, w]      # short, dib, speed
+    assert f.formats[-3:] == ["jpeg", "dib", "dib"]   # speed uses the faster one
     s = lab.summarize(results)
     assert s["recommended"]["duplex"] is True
     assert s["recommended"]["feed"] == "long_edge_first"
+    assert s["recommended"]["transfer_format"] == "dib"
     assert all(c["status"] == "pass" for c in s["checks"]), s["checks"]
     out = lab.save_report(tmp_path / "r.zip", results, s)
     names = zipfile.ZipFile(out).namelist()
