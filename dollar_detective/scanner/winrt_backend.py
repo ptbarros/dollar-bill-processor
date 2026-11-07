@@ -173,6 +173,18 @@ class WinRtScannerBackend(ScannerBackend):
     # scanners keep JPEG until measured.
     UNCOMPRESSED_FASTER = ("VID_04B8&PID_015F",)
 
+    # Scan-window WIDTH for the FF-640. Uncompressed transfer is USB-bound
+    # (~21 MB/s), so time scales with width: 8.5" = 1.02 s/bill, 6.5" = 0.78.
+    # 7.0" leaves ~0.4" of grey backing each side of a 6.14" bill (the driver
+    # centres the window) so a crooked bill doesn't touch the edges the
+    # cropper samples, for ~0.06 s/bill more than 6.5".
+    SCAN_WIDTH_IN = 7.0
+
+    @classmethod
+    def default_scan_width(cls, device_id: str) -> Optional[float]:
+        up = (device_id or "").upper()
+        return cls.SCAN_WIDTH_IN if any(k in up for k in cls.KNOWN_SHORT_FEED) else None
+
     @classmethod
     def default_format(cls, device_id: str) -> str:
         up = (device_id or "").upper()
@@ -250,7 +262,7 @@ class WinRtScannerBackend(ScannerBackend):
         return info
 
     def _configure(self, scanner, dpi, duplex, color, scan_length_in=None,
-                   transfer_format="jpeg") -> bool:
+                   transfer_format="jpeg", scan_width_in=None) -> bool:
         from winrt.windows.devices.scanners import (
             ImageScannerColorMode, ImageScannerFormat, ImageScannerResolution,
             ImageScannerScanSource)
@@ -280,7 +292,9 @@ class WinRtScannerBackend(ScannerBackend):
             from winrt.windows.foundation import Rect
             area = cfg.max_scan_area
             length = area.height if not scan_length_in else min(area.height, scan_length_in)
-            cfg.selected_scan_region = Rect(0, 0, area.width, length)
+            width = area.width if not scan_width_in else min(area.width, scan_width_in)
+            # X=0: drivers centre a narrower window in the feed path themselves.
+            cfg.selected_scan_region = Rect(0, 0, width, length)
         except Exception:
             pass
         return bool(cfg.duplex)
@@ -289,7 +303,7 @@ class WinRtScannerBackend(ScannerBackend):
     def scan_pages(self, device_id: Optional[str] = None, *,
                    dpi: int = 300, duplex: bool = True, color: bool = True,
                    stop=None, scan_length_in="auto", transfer_format="auto",
-                   **options) -> Iterator[ScanPage]:
+                   scan_width_in="auto", **options) -> Iterator[ScanPage]:
         """`scan_length_in`: "auto" (FF-640 short window, else full length),
         None (full length), or a length in inches (Scanner Test).
         `transfer_format`: "auto" (per-scanner default), "jpeg" or "dib"."""
@@ -303,8 +317,10 @@ class WinRtScannerBackend(ScannerBackend):
                 scan_length_in = self.default_scan_length(dev)
             if transfer_format == "auto":
                 transfer_format = self.default_format(dev)
+            if scan_width_in == "auto":
+                scan_width_in = self.default_scan_width(dev)
             is_duplex = self._configure(scanner, dpi, duplex, color, scan_length_in,
-                                        transfer_format)
+                                        transfer_format, scan_width_in)
         except _OpError as e:
             raise _map_error(e.code) from e
 
@@ -317,7 +333,8 @@ class WinRtScannerBackend(ScannerBackend):
             raise
         t0 = time.monotonic()
         dlog("scan.winrt.start", folder=str(folder), dpi=dpi, duplex=is_duplex,
-             scan_length_in=scan_length_in, transfer_format=transfer_format)
+             scan_length_in=scan_length_in, transfer_format=transfer_format,
+             scan_width_in=scan_width_in)
         yield from self._pump(op, folder, is_duplex, stop, t0)
 
     def _pump(self, op, folder: Path, is_duplex: bool, stop, t0: float) -> Iterator[ScanPage]:
