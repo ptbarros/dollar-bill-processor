@@ -65,10 +65,10 @@ class ScanThread(QThread):
         os.replace(str(tmp), str(final))
 
     def run(self):
+        written = 0
         try:
             self.out_dir.mkdir(parents=True, exist_ok=True)
             number = self._next_number()
-            written = 0
             cur_front = None   # number assigned to the most recent front (side A)
             self.status.emit("Feed your strap into the scanner…")
             for page in self.backend.scan_pages(
@@ -90,5 +90,12 @@ class ScanThread(QThread):
                 if self._stop.is_set():
                     break
             self.finished_ok.emit(written)
-        except Exception as e:  # ScanError or anything unexpected
-            self.failed.emit(str(e))
+        except Exception as e:
+            # The FF-640 reports a "jam" (PJ) with no pages when the feeder is
+            # simply empty -- that's not an error, just nothing to scan.
+            cause = getattr(e, "cause", "")
+            if cause == "PJ" and written == 0:
+                self.status.emit("No bills in the feeder — load a strap and click Scan.")
+                self.finished_ok.emit(0)
+            else:
+                self.failed.emit(str(e))

@@ -63,7 +63,12 @@ class ScannerBackend(ABC):
 
 
 class ScanError(Exception):
-    """A scan failed (device busy, jam, offline, ...)."""
+    """A scan failed (device busy, jam, offline, ...). `cause` carries the raw
+    scanner code where known, e.g. 'PJ' (jam / empty feeder), 'PE' (paper empty)."""
+
+    def __init__(self, msg, cause=""):
+        super().__init__(msg)
+        self.cause = cause
 
 
 # --------------------------------------------------------------------------- #
@@ -93,22 +98,31 @@ class EpsonEsciBackend(ScannerBackend):
             return []
         return [ScannerDevice(id="ff640", name="Epson FastFoto FF-640")]
 
+    # Bills feed long-edge-first, so only ~66mm travels; 120mm is a generous
+    # window (matches the standalone FastFoto app) and far faster than the 14"
+    # default. "Normal" crop margin keeps a little background.
+    SCAN_LENGTH_MM = 120
+    MARGIN_PX = 6
+
     def scan_pages(self, device_id: Optional[str] = None, *,
                    dpi: int = 300, duplex: bool = True, color: bool = True,
                    stop=None) -> Iterator[ScanPage]:
         from . import billcrop
-        margin_px = max(8, int(round(0.06 * dpi)))   # ~"Normal" margin
+        max_len_px = int(self.SCAN_LENGTH_MM / 25.4 * dpi)
         try:
             with self._esci2.FF640() as scanner:
-                for side, img in scanner.scan(dpi=dpi, duplex=duplex,
-                                              color=color, stop=stop):
+                for side, img in scanner.scan(dpi=dpi, duplex=duplex, color=color,
+                                              overscan=True, max_len_px=max_len_px,
+                                              stop=stop):
                     try:
-                        cropped, _found = billcrop.crop_item(img, margin_px=margin_px)
+                        cropped, _found = billcrop.crop_item(img, margin_px=self.MARGIN_PX)
                     except Exception:
                         cropped = img   # never drop a page over a crop hiccup
                     yield ScanPage(side=side, image=cropped)
         except self._esci2.ScanError as e:
-            raise ScanError(str(e)) from e
+            # Preserve the raw cause so the caller can tell an empty feeder (PJ
+            # before any page) from a real jam.
+            raise ScanError(str(e), cause=getattr(e, "cause", "")) from e
 
 
 # --------------------------------------------------------------------------- #

@@ -3058,6 +3058,10 @@ class MainWindow(QMainWindow):
         self.processing_panel.set_scanning(False)
         if t is not None:
             self._park_thread(t)
+        if total <= 0:
+            self.status_label.setText(
+                "No bills scanned — load a strap in the feeder and click Scan.")
+            return
         bills = (total + 1) // 2
         self.status_label.setText(
             f"Scan complete — {bills} bill{'s' if bills != 1 else ''} fed. "
