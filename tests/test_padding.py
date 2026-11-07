@@ -1,5 +1,5 @@
-"""WinRT pages: white padding after paper end, with dark sensor-edge columns
-running through it on the front side (Paul's strap 017 front crops)."""
+"""WinRT pages: white padding after paper end that billcrop's all-white trim
+couldn't remove (Paul's strap 017 front crops)."""
 import numpy as np
 
 from dollar_detective.scanner import billcrop
@@ -39,4 +39,13 @@ def test_front_crop_is_bill_sized_after_trim():
 
 def test_no_padding_is_untouched():
     img = raw_page(dark_edges=False)[:830]
+    assert trim_padding(img).shape[0] == 830
+
+
+def test_grey_dash_on_last_row_is_still_padding():
+    """The real FF-640 front-page artifact: a short grey dash on the last row,
+    inside the middle of the page (x ~0.5 in), 3% of the width here."""
+    img = raw_page(dark_edges=False)
+    img[-1, 140:203] = 109
+    assert billcrop._trim_white_padding(img).shape[0] == 1415   # the bug
     assert trim_padding(img).shape[0] == 830

@@ -2,18 +2,19 @@
 
 WIA/WinRT drivers stop scanning at the paper's end but still return a page as
 tall as the requested window, filled with white. billcrop (vendored verbatim
-from fastfoto640) only trims rows that are white in EVERY pixel -- but on the
-FF-640's front (A) side a few dark sensor-edge columns run down the far left
-and right through the padding, so nothing got trimmed, the white block was
-taken for part of the bill, and fronts came out with a white slab under them
-(Paul's strap 017, 2026-11-07). Here a row counts as padding when nearly all
-of its MIDDLE is near-white, ignoring the edge columns and JPEG speckle.
+from fastfoto640) only trims rows that are white in EVERY pixel -- but the
+FF-640's front (A) pages can end with a short grey dash on the very last row
+(~18 px of RGB 109 seen on a real page), so nothing got trimmed, the white
+block was taken for part of the bill, and fronts came out with a white slab
+under them (Paul's strap 017, 2026-11-07). Here a row counts as padding when
+nearly all of its middle is near-white, so stray marks and JPEG ringing don't
+stop the trim.
 """
 
 import numpy as np
 
 NEAR_WHITE = 235      # min channel value counted as white (bill paper is ~205)
-ROW_WHITE_FRAC = 0.98
+ROW_WHITE_FRAC = 0.95   # a stray dash of up to 5% of the row is still padding
 
 
 def trim_padding(img: np.ndarray) -> np.ndarray:
