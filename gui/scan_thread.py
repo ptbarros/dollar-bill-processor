@@ -78,26 +78,32 @@ class ScanThread(QThread):
             # scans in a session, even after the pipeline drained the folder);
             # otherwise derive from whatever's in the folder.
             number = self.start_number if self.start_number else self._next_number()
-            cur_front = None   # number assigned to the most recent front (side A)
             self.status.emit("Feed your strap into the scanner…")
+            # Pair by POSITION, not arrival order: the scanner doesn't always send
+            # a bill's front before its back (duplex sides can arrive batched), so
+            # the nth front goes with the nth back. Assuming strict A,B order made
+            # backs overwrite the wrong front's file and silently drop bills.
+            fronts, backs = [], []
             for page in self.backend.scan_pages(
                     self.device_id, dpi=self.dpi, duplex=self.duplex,
                     color=self.color, stop=self._stop):
-                if page.side == "A":
-                    cur_front = number
-                    self._write(f"FastFoto_{number:05d}.jpg", page.image)
+                (backs if page.side == "B" else fronts).append(page.image)
+                while fronts and backs:
+                    self._write(f"FastFoto_{number:05d}.jpg", fronts.pop(0))
+                    self._write(f"FastFoto_{number:05d}_b.jpg", backs.pop(0))
                     number += 1
-                else:  # 'B' -> back of the most recent front (or its own number)
-                    n = cur_front if cur_front is not None else number
-                    if cur_front is None:
-                        number += 1
-                    self._write(f"FastFoto_{n:05d}_b.jpg", page.image)
-                written += 1
-                self.page_written.emit(written)
-                bills = (written + 1) // 2 if self.duplex else written
-                self.status.emit(f"Scanned {bills} bill{'s' if bills != 1 else ''}…")
+                    written += 2
+                    bills = number - (self.start_number or 1)
+                    self.page_written.emit(written)
+                    self.status.emit(f"Scanned {bills} bill{'s' if bills != 1 else ''}…")
                 if self._stop.is_set():
                     break
+            # Leftover fronts with no back (simplex, or a strap that stopped
+            # mid-bill): save them front-only. Orphan backs are dropped.
+            for front in fronts:
+                self._write(f"FastFoto_{number:05d}.jpg", front)
+                number += 1
+                written += 1
             self.final_number = number - 1   # highest number actually assigned
             self.finished_ok.emit(written)
         except Exception as e:
