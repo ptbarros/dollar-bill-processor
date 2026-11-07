@@ -151,10 +151,20 @@ class WinRtScannerBackend(ScannerBackend):
     # WinRT has no "paper in feeder" query, so auto-start isn't offered.
     can_detect_paper = False
 
-    # Bills feed long-edge-first, so only ~2.6" of paper travels; 4.72" (120mm)
-    # is generous headroom for skew and matches the Linux backend's window.
+    # Scan-window length. On the Epson FF-640 bills feed long-edge-first, so
+    # only ~2.6" of paper travels and 4.72" (120mm) is generous headroom
+    # (matches the Linux backend). Other scanners get their FULL length until
+    # the Scanner Test has measured them -- a bill fed short-edge-first is
+    # 6.14" long and a short window would cut every one off.
     SCAN_LENGTH_IN = 4.72
+    KNOWN_SHORT_FEED = ("VID_04B8&PID_015F",)    # Epson FastFoto FF-640
     MARGIN_PX = 6
+
+    @classmethod
+    def default_scan_length(cls, device_id: str) -> Optional[float]:
+        """Scan length (inches) to use for a device, or None = full length."""
+        up = (device_id or "").upper()
+        return cls.SCAN_LENGTH_IN if any(k in up for k in cls.KNOWN_SHORT_FEED) else None
 
     def __init__(self):
         # Fail fast (-> backend not offered) when the WinRT projection isn't
@@ -183,7 +193,51 @@ class WinRtScannerBackend(ScannerBackend):
                 return d.id
         return devices[0].id
 
-    def _configure(self, scanner, dpi, duplex, color) -> bool:
+    def describe(self, device_id: Optional[str] = None) -> dict:
+        """Capabilities as WinRT reports them (no scanning)."""
+        from winrt.windows.devices.scanners import (
+            ImageScanner, ImageScannerAutoCroppingMode, ImageScannerColorMode,
+            ImageScannerFormat, ImageScannerScanSource)
+        info = super().describe(device_id)
+        dev = self._resolve_device(device_id)
+        info["id"] = dev
+        info["name"] = next((d.name for d in self.list_devices() if d.id == dev), "")
+        info["default_scan_length_in"] = self.default_scan_length(dev)
+        sc = _wait(ImageScanner.from_id_async(dev), timeout=15)
+
+        def safe(fn, default=None):
+            try:
+                return fn()
+            except Exception as e:
+                return f"error: {e}"
+
+        info["default_source"] = safe(lambda: ImageScannerScanSource(sc.default_scan_source).name)
+        info["sources"] = {s.name: safe(lambda s=s: bool(sc.is_scan_source_supported(s)))
+                           for s in ImageScannerScanSource}
+        if info["sources"].get("FEEDER") is True:
+            cfg = sc.feeder_configuration
+            res = lambda r: [round(r.dpi_x), round(r.dpi_y)]
+            size = lambda z: [round(z.width, 2), round(z.height, 2)]
+            info["feeder"] = {
+                "can_scan_duplex": safe(lambda: bool(cfg.can_scan_duplex)),
+                "can_scan_ahead": safe(lambda: bool(cfg.can_scan_ahead)),
+                "can_auto_detect_page_size": safe(lambda: bool(cfg.can_auto_detect_page_size)),
+                "max_number_of_pages": safe(lambda: int(cfg.max_number_of_pages)),
+                "resolution_min": safe(lambda: res(cfg.min_resolution)),
+                "resolution_max": safe(lambda: res(cfg.max_resolution)),
+                "resolution_optical": safe(lambda: res(cfg.optical_resolution)),
+                "scan_area_min_in": safe(lambda: size(cfg.min_scan_area)),
+                "scan_area_max_in": safe(lambda: size(cfg.max_scan_area)),
+                "formats": safe(lambda: [f.name for f in ImageScannerFormat
+                                         if cfg.is_format_supported(f)]),
+                "color_modes": safe(lambda: [m.name for m in ImageScannerColorMode
+                                             if cfg.is_color_mode_supported(m)]),
+                "auto_crop_modes": safe(lambda: [m.name for m in ImageScannerAutoCroppingMode
+                                                 if cfg.is_auto_cropping_mode_supported(m)]),
+            }
+        return info
+
+    def _configure(self, scanner, dpi, duplex, color, scan_length_in=None) -> bool:
         from winrt.windows.devices.scanners import (
             ImageScannerColorMode, ImageScannerFormat, ImageScannerResolution,
             ImageScannerScanSource)
@@ -208,8 +262,8 @@ class WinRtScannerBackend(ScannerBackend):
         try:
             from winrt.windows.foundation import Rect
             area = cfg.max_scan_area
-            cfg.selected_scan_region = Rect(
-                0, 0, area.width, min(area.height, self.SCAN_LENGTH_IN))
+            length = area.height if not scan_length_in else min(area.height, scan_length_in)
+            cfg.selected_scan_region = Rect(0, 0, area.width, length)
         except Exception:
             pass
         return bool(cfg.duplex)
@@ -217,14 +271,18 @@ class WinRtScannerBackend(ScannerBackend):
     # -- scanning ------------------------------------------------------------
     def scan_pages(self, device_id: Optional[str] = None, *,
                    dpi: int = 300, duplex: bool = True, color: bool = True,
-                   stop=None) -> Iterator[ScanPage]:
+                   stop=None, scan_length_in="auto", **options) -> Iterator[ScanPage]:
+        """`scan_length_in`: "auto" (FF-640 short window, else full length),
+        None (full length), or a length in inches (Scanner Test)."""
         from winrt.windows.devices.scanners import ImageScanner, ImageScannerScanSource
         from winrt.windows.storage import StorageFolder
 
         try:
             dev = self._resolve_device(device_id)
             scanner = _wait(ImageScanner.from_id_async(dev), timeout=15)
-            is_duplex = self._configure(scanner, dpi, duplex, color)
+            if scan_length_in == "auto":
+                scan_length_in = self.default_scan_length(dev)
+            is_duplex = self._configure(scanner, dpi, duplex, color, scan_length_in)
         except _OpError as e:
             raise _map_error(e.code) from e
 
@@ -236,7 +294,8 @@ class WinRtScannerBackend(ScannerBackend):
             shutil.rmtree(folder, ignore_errors=True)
             raise
         t0 = time.monotonic()
-        dlog("scan.winrt.start", folder=str(folder), dpi=dpi, duplex=is_duplex)
+        dlog("scan.winrt.start", folder=str(folder), dpi=dpi, duplex=is_duplex,
+             scan_length_in=scan_length_in)
         yield from self._pump(op, folder, is_duplex, stop, t0)
 
     def _pump(self, op, folder: Path, is_duplex: bool, stop, t0: float) -> Iterator[ScanPage]:
@@ -301,7 +360,8 @@ class WinRtScannerBackend(ScannerBackend):
                         cropped, _found = billcrop.crop_item(img, margin_px=self.MARGIN_PX)
                     except Exception:
                         cropped = img   # never drop a page over a crop hiccup
-                    yield ScanPage(side=side, image=cropped)
+                    yield ScanPage(side=side, image=cropped, raw=img,
+                                   t=time.monotonic() - t0)
                 if finished and handed >= len(files):
                     break
                 time.sleep(POLL_S)

@@ -442,6 +442,11 @@ class MainWindow(QMainWindow):
         strap_action.triggered.connect(self._on_strap_check)
         tools_menu.addAction(strap_action)
 
+        scanner_test_action = QAction("Scanner &Test...", self)
+        scanner_test_action.setToolTip("Step-by-step check of what your feed scanner can do (detection, empty feeder, both sides, speed) with a report you can send")
+        scanner_test_action.triggered.connect(self.open_scanner_test)
+        tools_menu.addAction(scanner_test_action)
+
         # Pattern Prices: a group-editable CSV (keyed by catalog SKU) that
         # overrides the shipped Lua Price: headers.
         prices_menu = tools_menu.addMenu("Pattern &Prices")
@@ -3052,11 +3057,28 @@ class MainWindow(QMainWindow):
             pass
         self._update_feeder_poller()
 
+    def open_scanner_test(self):
+        """Tools -> Scanner Test. Not while a scan is running: both would talk
+        to the scanner at once."""
+        if self._scan_thread is not None:
+            QMessageBox.information(self, "Scanner Test",
+                                    "Stop the current scan first.")
+            return
+        from .scanner_lab_dialog import ScannerLabDialog
+        self._feeder_timer.stop()          # keep auto-start off the device meanwhile
+        self._scanner_lab_open = True
+        try:
+            ScannerLabDialog(self.settings, self).exec()
+        finally:
+            self._scanner_lab_open = False
+            self._refresh_scanner_availability()   # settings may have changed
+
     def _update_feeder_poller(self):
         """Run the feeder poll only when it could usefully auto-start a scan:
         scanner enabled + auto-start on + a device + Monitor active + idle."""
         sc = getattr(self.settings, "scanner", None)
         want = bool(sc and sc.enabled and sc.auto_start
+                    and not getattr(self, "_scanner_lab_open", False)
                     and self._scanner_backend is not None
                     and getattr(self._scanner_backend, "can_detect_paper", False)
                     and getattr(self, "_monitor_active", False)

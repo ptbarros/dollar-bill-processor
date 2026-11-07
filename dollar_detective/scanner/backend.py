@@ -40,6 +40,10 @@ class ScanPage:
     does that itself)."""
     side: str
     image: np.ndarray
+    #: The page as the scanner sent it, before cropping (diagnostics only).
+    raw: Optional[np.ndarray] = None
+    #: Seconds since the scan started when this page arrived (diagnostics).
+    t: float = 0.0
 
 
 class ScannerBackend(ABC):
@@ -58,10 +62,18 @@ class ScannerBackend(ABC):
     @abstractmethod
     def scan_pages(self, device_id: Optional[str] = None, *,
                    dpi: int = 300, duplex: bool = True, color: bool = True,
-                   stop=None) -> Iterator[ScanPage]:
+                   stop=None, **options) -> Iterator[ScanPage]:
         """Feed and scan every sheet in the feeder, yielding one ScanPage per
         finished side as it arrives (so the caller can process live). `stop` is
-        an optional threading.Event to cancel mid-feed. Raises ScanError."""
+        an optional threading.Event to cancel mid-feed. `options` are
+        backend-specific tuning knobs used by the Scanner Test (e.g.
+        scan_length_in); backends ignore ones they don't know. Raises ScanError."""
+
+    def describe(self, device_id: Optional[str] = None) -> dict:
+        """What the backend can report about a scanner without scanning
+        (capabilities, limits). Best-effort; used by the Scanner Test report."""
+        return {"backend": self.label,
+                "devices": [d.__dict__ for d in self.list_devices()]}
 
     def feeder_has_paper(self, device_id: Optional[str] = None) -> bool:
         """Quick read of whether paper is loaded in the feeder (for auto-start).
@@ -131,6 +143,13 @@ class EpsonEsciBackend(ScannerBackend):
             return []
         return [ScannerDevice(id="ff640", name="Epson FastFoto FF-640")]
 
+    def describe(self, device_id: Optional[str] = None) -> dict:
+        info = super().describe(device_id)
+        info.update({"driver": "direct ESC/I-2 over USB (vendored esci2.py)",
+                     "duplex": True, "overscan": True, "paper_sensor": True,
+                     "scan_length_mm": self.SCAN_LENGTH_MM})
+        return info
+
     def feeder_has_paper(self, device_id: Optional[str] = None) -> bool:
         try:
             with self._esci2.FF640() as scanner:
@@ -146,8 +165,10 @@ class EpsonEsciBackend(ScannerBackend):
 
     def scan_pages(self, device_id: Optional[str] = None, *,
                    dpi: int = 300, duplex: bool = True, color: bool = True,
-                   stop=None) -> Iterator[ScanPage]:
+                   stop=None, **options) -> Iterator[ScanPage]:
+        import time
         from . import billcrop
+        t0 = time.monotonic()
         max_len_px = int(self.SCAN_LENGTH_MM / 25.4 * dpi)
         try:
             with self._esci2.FF640() as scanner:
@@ -158,7 +179,8 @@ class EpsonEsciBackend(ScannerBackend):
                         cropped, _found = billcrop.crop_item(img, margin_px=self.MARGIN_PX)
                     except Exception:
                         cropped = img   # never drop a page over a crop hiccup
-                    yield ScanPage(side=side, image=cropped)
+                    yield ScanPage(side=side, image=cropped, raw=img,
+                                   t=time.monotonic() - t0)
         except self._esci2.ScanError as e:
             # Preserve the raw cause so the caller can tell an empty feeder (PJ
             # before any page) from a real jam.

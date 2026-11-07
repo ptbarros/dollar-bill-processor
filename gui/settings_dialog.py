@@ -544,6 +544,11 @@ class SettingsDialog(QDialog):
         self.scanner_detect_btn = QPushButton("Detect")
         self.scanner_detect_btn.clicked.connect(self._detect_scanners)
         dev_row.addWidget(self.scanner_detect_btn)
+        self.scanner_test_btn = QPushButton("Test My Scanner…")
+        self.scanner_test_btn.setToolTip(
+            "Step-by-step check of what your scanner can do, with a report you can send")
+        self.scanner_test_btn.clicked.connect(self._open_scanner_test)
+        dev_row.addWidget(self.scanner_test_btn)
         eg.addLayout(dev_row)
 
         self.scanner_status_label = QLabel("")
@@ -583,6 +588,21 @@ class SettingsDialog(QDialog):
         layout.addStretch()
 
         self._detect_scanners()   # populate the device list on open
+
+    def _open_scanner_test(self):
+        """Run the Scanner Test (via the main window when we have one, so it
+        can pause auto-start and refuse while a scan is running)."""
+        main = self.parent()
+        if main is not None and hasattr(main, "open_scanner_test"):
+            main.open_scanner_test()
+        else:
+            from .scanner_lab_dialog import ScannerLabDialog
+            ScannerLabDialog(self.settings, self).exec()
+        # The test may have saved scanner settings -- reflect them here.
+        sc = self.settings.scanner
+        self.scanner_enabled_check.setChecked(sc.enabled)
+        self.scanner_duplex_check.setChecked(sc.duplex)
+        self._detect_scanners()
 
     def _detect_scanners(self):
         """Fill the device dropdown from a live scan for connected scanners."""
