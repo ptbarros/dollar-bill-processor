@@ -204,7 +204,8 @@ def run_step(step: Step, backend, device_id, results: Dict[str, StepResult], *,
     t0 = time.monotonic()
     if step.scan is None:
         try:
-            res.info = backend.describe(device_id)
+            res.info = (backend.describe(device_id, driver=driver or "auto")
+                        if hasattr(backend, "choose") else backend.describe(device_id))
             res.ok = bool(backend.list_devices())
             if not res.ok:
                 res.error = "No scanner found."

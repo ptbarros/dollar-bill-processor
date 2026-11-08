@@ -156,3 +156,16 @@ def test_jam_does_not_fall_back_to_wia(helper, monkeypatch):
     with pytest.raises(ScanError) as ei:
         list(w.scan_pages("wia-id", stop=threading.Event(), driver="auto"))
     assert ei.value.cause == "TWAIN" and w.last_driver == "twain"
+
+
+def test_describe_does_not_open_wia_when_twain_is_used(helper):
+    """v1.15.1: reading WIA capabilities alone crashed the Windows scanner
+    service on Paul's Epson; with TWAIN in use, never open WIA."""
+    w = _windows(helper)
+    opened = []
+    w.wia.describe = lambda *a, **k: opened.append(1) or {"name": "x"}
+    info = w.describe("wia-id")
+    assert info["driver"] == "twain" and not opened
+    assert info["wia"]["skipped"] and info["twain"]["caps"]
+    w.describe("wia-id", driver="wia")
+    assert opened                                  # explicitly asked for WIA

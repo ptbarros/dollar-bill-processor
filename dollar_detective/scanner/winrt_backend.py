@@ -231,7 +231,7 @@ class WinRtScannerBackend(ScannerBackend):
                 return d.id
         return devices[0].id
 
-    def describe(self, device_id: Optional[str] = None) -> dict:
+    def describe(self, device_id: Optional[str] = None, **options) -> dict:
         """Capabilities as WinRT reports them (no scanning)."""
         from winrt.windows.devices.scanners import (
             ImageScanner, ImageScannerAutoCroppingMode, ImageScannerColorMode,
@@ -241,7 +241,12 @@ class WinRtScannerBackend(ScannerBackend):
         info["id"] = dev
         info["name"] = next((d.name for d in self.list_devices() if d.id == dev), "")
         info["default_scan_length_in"] = self.default_scan_length(dev)
-        sc = _wait(ImageScanner.from_id_async(dev), timeout=15)
+        try:
+            sc = _wait(ImageScanner.from_id_async(dev), timeout=15)
+        except _OpError as e:
+            raise _map_error(e.code) from e
+        except OSError as e:
+            raise _map_error(_hresult(e)) from e
 
         def safe(fn, default=None):
             try:
