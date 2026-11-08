@@ -18,6 +18,7 @@ on:
           - windows-openvino   # standard Windows (OpenVINO) only
           - windows-cuda       # Windows CUDA only
           - windows-directml   # Windows DirectML only
+          - macos              # macOS only
 
 jobs:
   windows:
@@ -258,8 +259,12 @@ jobs:
 
   macos:
     # Built for a full "all" run or any tag push; skipped for Windows-only choices.
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.editions == 'all' }}
-    runs-on: macos-14           # Apple Silicon (arm64) runner
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.editions == 'all' || github.event.inputs.editions == 'macos' }}
+    # Apple Silicon (arm64). macos-14 images were retired by GitHub (early Nov
+    # 2026): jobs were cancelled at once with "The configuration
+    # 'macos-14-arm64-us-default' is not supported" (v1.14.0-v1.15.1 shipped
+    # without a .dmg). When this image is retired too, bump the number.
+    runs-on: macos-15
     continue-on-error: true     # best-effort: a macOS quirk must not block the Windows/Linux release
     steps:
       - uses: actions/checkout@v4
