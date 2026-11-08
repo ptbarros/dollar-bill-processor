@@ -134,7 +134,19 @@ def _decode(path: Path):
         return None
 
 
+# The Windows scanner service (stisvc) died under us -- seen when Epson's WIA
+# driver 1.1.0.1 crashed it with paper in the feeder. The scanner usually
+# stays wedged (for TWAIN too) until it's power-cycled.
+_RPC_CALL_FAILED = 0x800706BE
+_RPC_SERVER_UNAVAILABLE = 0x800706BA
+
+
 def _map_error(code: int) -> ScanError:
+    if code in (_RPC_CALL_FAILED, _RPC_SERVER_UNAVAILABLE):
+        return ScanError("Windows' scanner service crashed (a scanner-driver problem). "
+                         "Turn the scanner off and on (or unplug and replug it), then "
+                         "try again. If it keeps happening, use the TWAIN driver in "
+                         "Settings -> Scanner.", cause="WIA_CRASH")
     if code == _WIA_PAPER_EMPTY:
         return ScanError("No paper in the feeder.", cause="PE")
     if code == _WIA_PAPER_JAM:
@@ -325,6 +337,8 @@ class WinRtScannerBackend(ScannerBackend):
                                         transfer_format, scan_width_in)
         except _OpError as e:
             raise _map_error(e.code) from e
+        except OSError as e:
+            raise _map_error(_hresult(e)) from e
 
         folder = Path(tempfile.mkdtemp(prefix="dd_scan_"))
         try:
@@ -390,7 +404,10 @@ class WinRtScannerBackend(ScannerBackend):
                         op.cancel()
                     except Exception:
                         pass
-                final_status = _status(op)
+                try:
+                    final_status = _status(op)
+                except OSError as e:          # e.g. the scanner service crashed
+                    raise _map_error(_hresult(e)) from e
                 finished = final_status != _STARTED
                 files = ordered_page_files(folder)
                 if len(files) != seen_count:

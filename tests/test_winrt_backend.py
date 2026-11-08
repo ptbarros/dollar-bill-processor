@@ -199,3 +199,11 @@ def test_unknown_device_falls_back_to_first():
     b.list_devices = lambda: []
     with pytest.raises(ScanError):
         b._resolve_device(None)
+
+
+def test_scanner_service_crash_is_reported_clearly():
+    op, folder = FakeOp(), _folder()
+    op.error_code, op._status = 0x800706BE, 3
+    with pytest.raises(ScanError) as ei:
+        list(_pump(op, folder))
+    assert ei.value.cause == "WIA_CRASH" and "Turn the scanner off" in str(ei.value)

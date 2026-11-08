@@ -320,17 +320,26 @@ class TwainBackend(ScannerBackend):
         if empty and pages == 0 and error is None:
             raise ScanError("No paper in the feeder.", cause="PE")
         if error is not None and not (stop is not None and stop.is_set()):
-            raise ScanError(f"TWAIN: {error.get('msg', 'error')} "
-                            f"(rc={error.get('rc')} cc={error.get('cc')})",
-                            cause="TWAIN")
+            msg = str(error.get("msg", "error"))
+            # Couldn't get the scanner going at all (no TWAIN manager, source
+            # missing, open/enable refused) vs. a problem during a scan (jam).
+            # Only the former may fall back to WIA.
+            startup = pages == 0 and any(k in msg for k in (
+                "OPENDS", "ENABLEDS", "source not found", "data source manager",
+                "DSM_Entry", "MSG_OPENDSM"))
+            raise ScanError(f"TWAIN: {msg} (rc={error.get('rc')} cc={error.get('cc')})",
+                            cause="TWAIN_START" if startup else "TWAIN")
 
 
 class WindowsScannerBackend(ScannerBackend):
     """Windows: one backend that picks TWAIN or WIA (WinRT) per the setting.
 
-    "auto": TWAIN when the connected scanner has a matching TWAIN source and
-    the helper starts; if TWAIN fails before the first page, fall back to WIA
-    for the rest of the session. "twain"/"wia": force one."""
+    "auto": TWAIN when the connected scanner has a matching TWAIN source; WIA
+    only if TWAIN can't START (no helper/source, or the driver won't open).
+    Normal TWAIN outcomes -- empty feeder, jam, stop -- never fall back: on
+    Paul's laptop a "no paper" fallback sent the Scanner Test to WIA, whose
+    Epson driver (1.1.0.1) then crashed the Windows scanner service.
+    Not sticky: every scan tries TWAIN first. "twain"/"wia": force one."""
 
     label = "Windows scanner"
 
@@ -374,7 +383,7 @@ class WindowsScannerBackend(ScannerBackend):
 
     def choose(self, device_id: Optional[str], driver: str = "auto") -> tuple:
         """(backend, device_id) to scan with."""
-        if driver != "wia" and not (driver == "auto" and self._twain_failed):
+        if driver != "wia":
             src = self._twain_source_for(device_id)
             if src:
                 return self.twain, src
@@ -416,8 +425,9 @@ class WindowsScannerBackend(ScannerBackend):
                 got += 1
                 yield page
         except ScanError as e:
-            if backend is self.twain and driver == "auto" and got == 0 and self.wia:
-                self._twain_failed = True
+            if (backend is self.twain and driver == "auto" and got == 0 and self.wia
+                    and e.cause in ("TWAIN_START", "NOHELPER")):
+                self._twain_failed = True       # for the log/report only
                 dlog("scan.windows.twain_fallback", error=str(e))
                 self.last_driver = "wia"
                 yield from self.wia.scan_pages(device_id, dpi=dpi, duplex=duplex,

@@ -27,6 +27,13 @@ FAKE = textwrap.dedent(r'''
     out = args[args.index("--out") + 1]
     if mode == "fail":
         emit(event="error", rc=1, cc=4, msg="MSG_OPENDS failed"); emit(event="end"); sys.exit(6)
+    if mode == "empty":
+        emit(event="config", source="EPSON FF-640", border_detect=True, feeder_sensor=True)
+        emit(event="empty", t=0.5); emit(event="end"); sys.exit(0)
+    if mode == "jam":
+        emit(event="config", source="EPSON FF-640", border_detect=True, feeder_sensor=True)
+        emit(event="error", rc=0, cc=0, recoverable=True, msg="the scanner stopped the batch (jam, double feed or cover open?)")
+        emit(event="end"); sys.exit(0)
     emit(event="config", source="EPSON FF-640", border_detect=True, feeder_sensor=True)
     n = 0
     for batch in range(2):
@@ -78,7 +85,7 @@ def test_helper_error_raises(helper, monkeypatch):
     monkeypatch.setenv("FAKE_MODE", "fail")
     with pytest.raises(ScanError) as ei:
         list(tb.TwainBackend().scan_pages("twain:EPSON FF-640", stop=threading.Event()))
-    assert ei.value.cause == "TWAIN"
+    assert ei.value.cause == "TWAIN_START"      # couldn't open: may fall back
 
 
 def test_epson_settings_restored(helper, tmp_path):
@@ -119,12 +126,33 @@ def test_auto_prefers_twain_and_wia_forces_wia(helper):
     assert b is w.wia and dev == "wia-id"
 
 
-def test_auto_falls_back_to_wia_when_twain_fails(helper, monkeypatch):
-    monkeypatch.setenv("FAKE_MODE", "fail")
+def test_auto_falls_back_to_wia_only_when_twain_cant_start(helper, monkeypatch):
+    monkeypatch.setenv("FAKE_MODE", "fail")          # "MSG_OPENDS failed"
     w = _windows(helper)
     pages = list(w.scan_pages("wia-id", stop=threading.Event(), driver="auto"))
-    assert len(pages) == 1 and w.last_driver == "wia" and w._twain_failed
-    # forced TWAIN does not fall back
-    w._twain_failed = False
+    assert len(pages) == 1 and w.last_driver == "wia"
+    # not sticky: the next scan tries TWAIN again
+    monkeypatch.setenv("FAKE_MODE", "ok")
+    b, _ = w.choose("wia-id", "auto")
+    assert b is w.twain
+    # forced TWAIN never falls back
+    monkeypatch.setenv("FAKE_MODE", "fail")
     with pytest.raises(ScanError):
         list(w.scan_pages("wia-id", stop=threading.Event(), driver="twain"))
+
+
+def test_empty_feeder_does_not_fall_back_to_wia(helper, monkeypatch):
+    """The v1.15.0 bug: TWAIN's 'no paper' sent the Scanner Test to WIA."""
+    monkeypatch.setenv("FAKE_MODE", "empty")
+    w = _windows(helper)
+    with pytest.raises(ScanError) as ei:
+        list(w.scan_pages("wia-id", stop=threading.Event(), driver="auto", once=True))
+    assert ei.value.cause == "PE" and w.last_driver == "twain"
+
+
+def test_jam_does_not_fall_back_to_wia(helper, monkeypatch):
+    monkeypatch.setenv("FAKE_MODE", "jam")
+    w = _windows(helper)
+    with pytest.raises(ScanError) as ei:
+        list(w.scan_pages("wia-id", stop=threading.Event(), driver="auto"))
+    assert ei.value.cause == "TWAIN" and w.last_driver == "twain"
