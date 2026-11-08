@@ -59,7 +59,7 @@ class Fake:
         return {"backend": "Fake", "name": "Fake R40", "feeder": {"can_scan_duplex": True}}
 
     def scan_pages(self, device_id=None, *, dpi, duplex, color, stop, scan_length_in=None,
-                   transfer_format="jpeg"):
+                   transfer_format="jpeg", **options):
         self.calls.append(scan_length_in)
         self.formats = getattr(self, "formats", []) + [transfer_format]
         gap = 0.78 if transfer_format == "dib" else 1.1
@@ -106,3 +106,30 @@ def test_duplex_page_count_mismatch_fails():
     st = {c["check"]: c["status"] for c in lab.checks(results)}
     assert st["Two-sided scan"] == "fail"
     assert lab.recommend(results)["duplex"] is False
+
+
+class FakeWindows(Fake):
+    """Windows composite whose choose() picks TWAIN."""
+    def __init__(self):
+        super().__init__()
+        self.twain = object()
+
+    def choose(self, device_id, driver):
+        return self.twain, "twain:Fake"
+
+
+def test_twain_skips_wia_only_steps_and_recommends_twain():
+    f = FakeWindows()
+    results = {}
+    for step in lab.STEPS:
+        f.empty = step.key == "empty"
+        f.bills = step.default_bills
+        results[step.key] = lab.run_step(step, f, "d", results, bills=step.default_bills, dpi=DPI)
+    assert results["short"].skipped and results["dib"].skipped
+    assert all(r.driver == "twain" for r in results.values() if r.key != "discover")
+    rec = lab.recommend(results)
+    assert rec["driver"] == "twain" and "scan_length_in" not in rec
+    names = [c["check"] for c in lab.checks(results)]
+    assert "Shorter window keeps bills whole" not in names
+    assert "Uncompressed transfer" not in names
+    assert "Driver used: TWAIN" in lab.report_text(results, lab.summarize(results))

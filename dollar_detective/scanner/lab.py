@@ -40,6 +40,7 @@ class Step:
     scan: Optional[dict] = None        # scan options; None = no scanning
     default_bills: int = 0             # 0 = no paper for this step
     ask_noise: bool = False
+    wia_only: bool = False             # tunes a WIA setting; n/a when TWAIN crops
 
 
 STEPS: List[Step] = [
@@ -69,13 +70,13 @@ STEPS: List[Step] = [
          "bills actually reach (measured in the earlier steps) -- usually faster. "
          "Checks the bills still come out whole.",
          scan={"duplex": True, "scan_length_in": "measured", "transfer_format": "jpeg"},
-         default_bills=3),
+         default_bills=3, wia_only=True),
     Step("dib", "Uncompressed transfer",
          "Load 5 bills, then click Run.\n\nSends the pages uncompressed. Some "
          "scanners compress more slowly than they feed, so this can be much "
          "faster (the FastFoto FF-640 went from 1.12 to 0.78 s per bill).",
          scan={"duplex": True, "scan_length_in": "measured", "transfer_format": "dib"},
-         default_bills=5),
+         default_bills=5, wia_only=True),
     Step("speed", "Speed run",
          "Load 10 bills, then click Run.\n\nScans with the best settings found "
          "so far, to measure real bills-per-minute.",
@@ -143,6 +144,7 @@ class StepResult:
     pages: List[dict] = field(default_factory=list)   # side, t, analysis
     info: dict = field(default_factory=dict)          # discover output
     noise: Optional[str] = None                       # user's answer (empty step)
+    driver: Optional[str] = None                      # "twain" / "wia" (Windows)
     samples: Dict[str, bytes] = field(default_factory=dict)   # name -> JPEG
 
 
@@ -183,6 +185,18 @@ def measured_window(results: Dict[str, StepResult]) -> Optional[float]:
     return round(max(ends) + WINDOW_MARGIN_IN, 2)
 
 
+def driver_in_use(backend, device_id, driver: Optional[str]) -> Optional[str]:
+    """Which Windows driver a scan would use ("twain"/"wia"); None elsewhere."""
+    choose = getattr(backend, "choose", None)
+    if choose is None:
+        return None
+    try:
+        b, _ = choose(device_id, driver or "auto")
+        return "twain" if b is getattr(backend, "twain", None) else "wia"
+    except Exception:
+        return None
+
+
 def run_step(step: Step, backend, device_id, results: Dict[str, StepResult], *,
              bills: int = 0, dpi: int = 300, stop=None, driver: Optional[str] = None,
              progress: Callable[[str], None] = lambda s: None) -> StepResult:
@@ -199,7 +213,14 @@ def run_step(step: Step, backend, device_id, results: Dict[str, StepResult], *,
         res.seconds = round(time.monotonic() - t0, 2)
         return res
 
+    res.driver = driver_in_use(backend, device_id, driver)
+    if step.wia_only and res.driver == "twain":
+        res.skipped = True
+        res.ok = True
+        res.error = "not used with TWAIN (the scanner's driver crops and sizes the page)"
+        return res
     opts = dict(step.scan)
+    opts["once"] = True          # one stack, and an empty feeder ends straight away
     opts["scan_length_in"] = resolve_scan_length(opts.get("scan_length_in"), results)
     if opts.get("transfer_format") == "recommended":
         opts["transfer_format"] = recommend(results).get("transfer_format", "jpeg")
@@ -314,7 +335,8 @@ def checks(results: Dict[str, StepResult]) -> List[dict]:
                 add(f"{label}: whole bill scanned", "pass",
                     "full length" + ("; the scanner stops right at the paper's end, so a "
                                      "crooked bill can lose a corner sliver (normal for "
-                                     "this driver)" if touch >= 0.6 else ""))
+                                     "this driver)" if touch >= 0.6 and r.driver != "twain"
+                                     else ""))
         s = _streams(r)
         if s is not None:
             add(f"{label}: pages arrive as they feed", "pass" if s else "warn",
@@ -375,6 +397,12 @@ def recommend(results: Dict[str, StepResult]) -> dict:
     if sh and sh.ok and sh.pages and all(bill_whole(p["analysis"]) for p in sh.pages):
         rec["scan_length_in"] = sh.options.get("scan_length_in")
     rec["feed"] = orientation(results)
+    drivers = {r.driver for r in results.values() if r.driver and not r.skipped}
+    if drivers:
+        rec["driver"] = "twain" if drivers == {"twain"} else ("wia" if drivers == {"wia"} else "mixed")
+    if rec.get("driver") == "twain":
+        rec.pop("scan_length_in", None)     # the TWAIN driver sizes/crops the page
+        return rec
     rec["transfer_format"] = "jpeg"
     dib, base = results.get("dib"), results.get("short") or results.get("duplex")
     if dib and dib.ok and base and base.ok:
@@ -397,6 +425,9 @@ def report_text(results: Dict[str, StepResult], summary: dict) -> str:
     d = results.get("discover")
     if d and d.info:
         lines.append(f"Scanner: {d.info.get('name') or '?'}  ({d.info.get('backend', '')})")
+    drv = summary.get("recommended", {}).get("driver")
+    if drv:
+        lines.append(f"Driver used: {drv.upper()}")
     lines.append(f"Computer: {platform.platform()}")
     lines.append("")
     for c in summary["checks"]:

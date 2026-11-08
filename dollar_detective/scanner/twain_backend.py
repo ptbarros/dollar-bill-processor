@@ -203,7 +203,8 @@ class TwainBackend(ScannerBackend):
         folder = Path(tempfile.mkdtemp(prefix="dd_twain_"))
         args = [str(exe), "scan", "--source", name, "--out", str(folder),
                 "--dpi", str(int(dpi)), "--duplex", "1" if duplex else "0",
-                "--color", "1" if color else "0", "--crop", "1", "--deskew", "1"]
+                "--color", "1" if color else "0", "--crop", "1", "--deskew", "1",
+                "--once", "1" if options.get("once") else "0"]
         dlog("scan.twain.start", source=name, folder=str(folder), dpi=dpi, duplex=duplex)
         with _EpsonSettingsGuard():
             proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -230,6 +231,7 @@ class TwainBackend(ScannerBackend):
         driver_crops = True
         pages = 0
         error = None
+        empty = False
         stop_sent = now_sent = None       # times STOP / STOPNOW were written
         last_event = time.monotonic()
         t0 = time.monotonic()
@@ -291,6 +293,9 @@ class TwainBackend(ScannerBackend):
                     dlog("scan.twain.page", n=pages, side=side, t=ev.get("t"))
                     yield ScanPage(side=side, image=img, raw=raw,
                                    t=float(ev.get("t", time.monotonic() - t0)))
+                elif kind == "empty":
+                    empty = True
+                    dlog("scan.twain.empty", t=ev.get("t"))
                 elif kind == "warning":
                     dlog("scan.twain.warning", **{k: v for k, v in ev.items() if k != "event"})
                     if ev.get("in_flight_lost"):
@@ -312,6 +317,8 @@ class TwainBackend(ScannerBackend):
             shutil.rmtree(folder, ignore_errors=True)
             dlog("scan.twain.end", pages=pages, rc=proc.returncode,
                  t=round(time.monotonic() - t0, 2))
+        if empty and pages == 0 and error is None:
+            raise ScanError("No paper in the feeder.", cause="PE")
         if error is not None and not (stop is not None and stop.is_set()):
             raise ScanError(f"TWAIN: {error.get('msg', 'error')} "
                             f"(rc={error.get('rc')} cc={error.get('cc')})",

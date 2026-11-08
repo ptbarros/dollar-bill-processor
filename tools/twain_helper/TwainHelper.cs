@@ -460,6 +460,9 @@ static class Program {
         bool crop = Opt(a, "crop", "1") == "1";
         bool deskew = Opt(a, "deskew", "1") == "1";
         int quality = int.Parse(Opt(a, "quality", "92"));
+        // --once 1: one stack then exit; an empty feeder ends at once with an
+        // "empty" event (the Scanner Test). Default: stay armed across stacks.
+        bool once = Opt(a, "once", "0") == "1";
 
         var src = FindSource(name);
         if (src == null) { Json.Emit("\"event\":\"error\",\"rc\":-1,\"cc\":0,\"msg\":" + Json.Str("source not found: " + name)); return 5; }
@@ -500,14 +503,21 @@ static class Program {
                     if (feederSensor) {
                         double? loaded = Tw.GetCurrent(CAP_FEEDERLOADED);
                         if (!(loaded.HasValue && loaded.Value != 0)) {
+                            if (once) { Json.Emit("\"event\":\"empty\",\"t\":" + T()); break; }
                             if (!waitingSaid) { Json.Emit("\"event\":\"waiting\",\"t\":" + T()); waitingSaid = true; }
                             Pump(msg, 250);
                             continue;
                         }
                     }
                     waitingSaid = false;
-                    int got = Batch(outDir, ref total, duplex, feederSensor, msg, ev);
+                    // No sensor + once: don't wait for paper forever in state 5.
+                    int got = Batch(outDir, ref total, duplex, feederSensor, msg, ev,
+                                    (once && !feederSensor) ? 10000 : 0);
                     if (got < 0) return 7;                        // couldn't enable -- fatal
+                    if (once) {
+                        if (got == 0) Json.Emit("\"event\":\"empty\",\"t\":" + T());
+                        break;
+                    }
                     if (got == 0 && !feederSensor) {
                         if (!waitingSaid) { Json.Emit("\"event\":\"waiting\",\"t\":" + T()); waitingSaid = true; }
                         Pump(msg, 1000);                          // empty feeder: retry shortly
@@ -531,7 +541,9 @@ static class Program {
 
     // One stack: ENABLEDS, transfer every page, DISABLEDS (back to state 4).
     // Returns pages transferred, or -1 if the source wouldn't enable.
-    static int Batch(string outDir, ref int total, bool duplex, bool paperLoaded, IntPtr msg, IntPtr ev) {
+    static int Batch(string outDir, ref int total, bool duplex, bool paperLoaded, IntPtr msg, IntPtr ev,
+                     int firstPageTimeoutMs) {
+        var waited = Stopwatch.StartNew();
         IntPtr ui;
         ushort rc = Tw.Enable(out ui);
         if (rc != Tw.RC_SUCCESS && rc != Tw.RC_CHECKSTATUS) {
@@ -547,6 +559,7 @@ static class Program {
                 // Waiting for the first page. If the sensor said paper is loaded,
                 // a stack is (about to be) feeding: a graceful STOP lets it run.
                 if (StopNow(outDir) || (StopRequested(outDir) && !paperLoaded)) break;
+                if (firstPageTimeoutMs > 0 && pages == 0 && waited.ElapsedMilliseconds > firstPageTimeoutMs) break;
                 if (!Native.PeekMessage(msg, IntPtr.Zero, 0, 0, 1)) { Thread.Sleep(5); continue; }
                 ushort twMsg;
                 ushort erc = Tw.ProcessEvent(msg, ev, out twMsg);
