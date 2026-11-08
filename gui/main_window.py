@@ -1299,7 +1299,7 @@ class MainWindow(QMainWindow):
         self._feeder_timer.stop()
         t = self._scan_thread
         if t is not None and t.isRunning():
-            t.request_stop()
+            t.request_stop(now=True)
             if not t.wait(20000):
                 dlog("scan.exit_wait_timeout")
         # Final autosave before exit (if we have unarchived results)
@@ -3105,7 +3105,8 @@ class MainWindow(QMainWindow):
         # Already scanning -> stop.
         if self._scan_thread is not None:
             dlog("scan.stop_clicked")
-            self.status_label.setText("Stopping scan…")
+            self.status_label.setText(
+                "Stopping — any bills in the feeder finish scanning first…")
             try:
                 self._scan_thread.request_stop()
             except Exception:

@@ -19,6 +19,7 @@ driver, vendored). Windows: any WIA scanner through the WinRT ImageScanner API
 from __future__ import annotations
 
 import sys
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Iterator, List, Optional, Tuple
@@ -104,6 +105,25 @@ class ScannerBackend(ABC):
             else:
                 time.sleep(interval)
         return False
+
+
+class StopEvent(threading.Event):
+    """Stop request for a scan. Plain set() = graceful: finish the stack that's
+    feeding, then stop (scanners pull bills in ahead of transferring them, so
+    an immediate stop loses ~1-2 bills). set_now() = stop at once (app
+    closing); bills already inside may not be saved."""
+
+    def __init__(self):
+        super().__init__()
+        self.now = False
+
+    def set_now(self):
+        self.now = True
+        self.set()
+
+
+def stop_now(stop) -> bool:
+    return bool(stop is not None and stop.is_set() and getattr(stop, "now", False))
 
 
 class ScanError(Exception):

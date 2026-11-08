@@ -131,15 +131,32 @@ def test_partially_written_file_waits_not_dropped():
     assert [p.side for p in pages] == ["A", "B"] * 3
 
 
-def test_stop_keeps_pages_already_scanned():
+def test_graceful_stop_lets_the_feeding_stack_finish():
+    """Stop mid-stack: don't cancel (the scanner has bills inside); the op
+    ends when the feeder empties and every page is kept."""
+    from dollar_detective.scanner.backend import StopEvent
     op, folder = FakeOp(), _folder()
-    _writer(folder, op, 200, gap=0.02)
-    stop = threading.Event()
+    _writer(folder, op, 40, gap=0.01)
+    stop = StopEvent()
     n = 0
     for _ in _pump(op, folder, stop=stop):
         n += 1
         if n == 6:
             stop.set()
+    assert not op.cancelled and n == 40
+    assert not folder.exists()
+
+
+def test_stop_now_cancels_but_keeps_pages_on_disk():
+    from dollar_detective.scanner.backend import StopEvent
+    op, folder = FakeOp(), _folder()
+    _writer(folder, op, 200, gap=0.02)
+    stop = StopEvent()
+    n = 0
+    for _ in _pump(op, folder, stop=stop):
+        n += 1
+        if n == 6:
+            stop.set_now()
     assert op.cancelled
     assert n >= 6                          # nothing already on disk is lost
     assert not folder.exists()

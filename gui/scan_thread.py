@@ -16,6 +16,7 @@ import cv2
 from PySide6.QtCore import QThread, Signal
 
 from dollar_detective.debug_logger import dlog
+from dollar_detective.scanner.backend import StopEvent
 
 _NUM_RE = re.compile(r"^FastFoto_(\d{5})(?:_b)?\.jpg$", re.IGNORECASE)
 
@@ -48,12 +49,17 @@ class ScanThread(QThread):
         self.keep_armed = keep_armed
         # Backend-specific choices, e.g. {"driver": "auto"|"twain"|"wia"}.
         self.options = dict(options or {})
-        self._stop = threading.Event()
+        self._stop = StopEvent()
         self._bills = 0
         self._sides = 0
 
-    def request_stop(self):
-        self._stop.set()
+    def request_stop(self, now: bool = False):
+        """Graceful by default: the stack that's feeding finishes first. now=True
+        (app closing) stops at once."""
+        if now:
+            self._stop.set_now()
+        else:
+            self._stop.set()
 
     def _next_number(self) -> int:
         """Continue FastFoto numbering after any files already in the folder."""

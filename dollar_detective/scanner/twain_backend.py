@@ -17,7 +17,8 @@ Helper protocol (stdout, one JSON object per line):
   scan  -> {"event":"config",..} {"event":"waiting"} {"event":"page","n":..,"side":"A|B",
            "file":..,"t":..} {"event":"batch_end","pages":..}
            {"event":"error","rc":..,"cc":..,"msg":..} {"event":"end"}
-  Stop a scan by creating a file named STOP in its --out folder.
+  Stop a scan by creating STOP (finish the stack that's feeding, then stop) or
+  STOPNOW (at once) in its --out folder.
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ from typing import Dict, Iterator, List, Optional
 import cv2
 import numpy as np
 
-from .backend import ScanError, ScannerBackend, ScanPage, ScannerDevice
+from .backend import ScanError, ScannerBackend, ScanPage, ScannerDevice, stop_now
 
 try:
     from dollar_detective.debug_logger import dlog
@@ -46,8 +47,10 @@ except Exception:   # pragma: no cover
         pass
 
 HELPER_NAME = "dd_twain_helper.exe"
-STOP_FILE = "STOP"
+STOP_FILE = "STOP"          # finish the feeding stack, then stop
+STOP_NOW_FILE = "STOPNOW"   # stop at once
 LIST_TIMEOUT_S = 20
+STOP_QUIET_S = 15           # graceful stop escalates if the scanner goes quiet this long
 STOP_GRACE_S = 20
 
 
@@ -227,18 +230,29 @@ class TwainBackend(ScannerBackend):
         driver_crops = True
         pages = 0
         error = None
-        stop_sent_at = None
+        stop_sent = now_sent = None       # times STOP / STOPNOW were written
+        last_event = time.monotonic()
         t0 = time.monotonic()
+
+        def drop(name):
+            try:
+                (folder / name).write_text("stop")
+            except OSError:
+                pass
+
         try:
             while True:
-                if stop is not None and stop.is_set() and stop_sent_at is None:
-                    stop_sent_at = time.monotonic()
-                    try:
-                        (folder / STOP_FILE).write_text("stop")
-                    except OSError:
-                        pass
+                now_t = time.monotonic()
+                if stop is not None and stop.is_set() and stop_sent is None:
+                    stop_sent = last_event = now_t
+                    drop(STOP_FILE)        # finish the stack that's feeding
                     dlog("scan.twain.stop_requested", pages=pages)
-                if stop_sent_at and time.monotonic() - stop_sent_at > STOP_GRACE_S:
+                if now_sent is None and (stop_now(stop) or (
+                        stop_sent and now_t - last_event > STOP_QUIET_S)):
+                    now_sent = now_t       # app closing, or the scanner went quiet
+                    drop(STOP_NOW_FILE)
+                    dlog("scan.twain.stop_now", pages=pages)
+                if now_sent and now_t - now_sent > STOP_GRACE_S:
                     dlog("scan.twain.stop_timeout")
                     proc.kill()
                     break
@@ -246,6 +260,7 @@ class TwainBackend(ScannerBackend):
                     ev = events.get(timeout=0.2)
                 except queue.Empty:
                     continue
+                last_event = time.monotonic()
                 kind = ev.get("event")
                 if kind == "config":
                     driver_crops = bool(ev.get("border_detect", True))
@@ -289,10 +304,7 @@ class TwainBackend(ScannerBackend):
                     break
         finally:
             if proc.poll() is None:
-                try:
-                    (folder / STOP_FILE).write_text("stop")
-                except OSError:
-                    pass
+                drop(STOP_NOW_FILE)        # consumer gave up: stop at once
                 try:
                     proc.wait(timeout=STOP_GRACE_S)
                 except subprocess.TimeoutExpired:

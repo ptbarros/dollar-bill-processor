@@ -10,7 +10,8 @@
 //   dd_twain_helper caps --source "EPSON FF-640"
 //   dd_twain_helper scan --source NAME --out DIR [--dpi 300] [--duplex 1]
 //                        [--color 1] [--crop 1] [--deskew 1] [--quality 92]
-//   Stop a scan by creating DIR\STOP.
+//   Stop a scan by creating DIR\STOP (finish the stack that's feeding, then
+//   stop) or DIR\STOPNOW (stop at once; bills already inside may be lost).
 //
 // Built from the probe rig used on Paul's laptop (2026-11-07, Epson Scan 2
 // 6.4.8 + 6.7.81). Lessons baked in:
@@ -435,7 +436,14 @@ static class Program {
         return 0;
     }
 
-    static bool StopRequested(string outDir) { return File.Exists(Path.Combine(outDir, "STOP")); }
+    // STOP    = stop at the next stack boundary: a stack that's feeding finishes
+    //           (the FF-640 pulls bills in ahead of transferring them and refuses
+    //           MSG_STOPFEEDER, so stopping mid-stack loses ~1.5 bills).
+    // STOPNOW = stop immediately (app closing / unresponsive); may lose bills.
+    static bool StopRequested(string outDir) {
+        return File.Exists(Path.Combine(outDir, "STOP")) || StopNow(outDir);
+    }
+    static bool StopNow(string outDir) { return File.Exists(Path.Combine(outDir, "STOPNOW")); }
 
     static int Scan(Dictionary<string, string> a) {
         string name = Opt(a, "source", "");
@@ -498,7 +506,7 @@ static class Program {
                         }
                     }
                     waitingSaid = false;
-                    int got = Batch(outDir, ref total, duplex, msg, ev);
+                    int got = Batch(outDir, ref total, duplex, feederSensor, msg, ev);
                     if (got < 0) return 7;                        // couldn't enable -- fatal
                     if (got == 0 && !feederSensor) {
                         if (!waitingSaid) { Json.Emit("\"event\":\"waiting\",\"t\":" + T()); waitingSaid = true; }
@@ -523,7 +531,7 @@ static class Program {
 
     // One stack: ENABLEDS, transfer every page, DISABLEDS (back to state 4).
     // Returns pages transferred, or -1 if the source wouldn't enable.
-    static int Batch(string outDir, ref int total, bool duplex, IntPtr msg, IntPtr ev) {
+    static int Batch(string outDir, ref int total, bool duplex, bool paperLoaded, IntPtr msg, IntPtr ev) {
         IntPtr ui;
         ushort rc = Tw.Enable(out ui);
         if (rc != Tw.RC_SUCCESS && rc != Tw.RC_CHECKSTATUS) {
@@ -536,7 +544,9 @@ static class Program {
         bool done = false;
         try {
             while (!done) {
-                if (StopRequested(outDir)) break;
+                // Waiting for the first page. If the sensor said paper is loaded,
+                // a stack is (about to be) feeding: a graceful STOP lets it run.
+                if (StopNow(outDir) || (StopRequested(outDir) && !paperLoaded)) break;
                 if (!Native.PeekMessage(msg, IntPtr.Zero, 0, 0, 1)) { Thread.Sleep(5); continue; }
                 ushort twMsg;
                 ushort erc = Tw.ProcessEvent(msg, ev, out twMsg);
@@ -549,6 +559,7 @@ static class Program {
                 } else if (twMsg == Tw.MSG_XFERREADY) {
                     int failures = 0;
                     bool feederStopped = false;
+                    bool stopNoted = false;
                     int afterStop = 0;
                     while (true) {
                         int n = total + 1;
@@ -573,7 +584,11 @@ static class Program {
                         // A driver that accepts STOPFEEDER but keeps pulling sheets:
                         // don't scan the whole stack -- a couple of bills is "in flight".
                         if (feederStopped && ++afterStop > 6) { Tw.ResetXfers(); done = true; break; }
-                        if (!feederStopped && StopRequested(outDir)) {
+                        if (!stopNoted && !StopNow(outDir) && StopRequested(outDir)) {
+                            stopNoted = true;       // graceful: let this stack finish
+                            Json.Emit("\"event\":\"stopping\",\"after_stack\":true,\"t\":" + T());
+                        }
+                        if (!feederStopped && StopNow(outDir)) {
                             // Stop mid-stack: the scanner has already pulled the next
                             // bill or two in, so cancelling now would lose them (seen on
                             // the FF-640: 1.5 bills). Stop the feeder instead and keep
@@ -581,7 +596,7 @@ static class Program {
                             ushort src = Tw.StopFeeder();
                             if (src == Tw.RC_SUCCESS) {
                                 feederStopped = true;
-                                Json.Emit("\"event\":\"stopping\",\"t\":" + T());
+                                Json.Emit("\"event\":\"stopping\",\"after_stack\":false,\"t\":" + T());
                             } else {
                                 ushort cc = Tw.CondCode();
                                 Tw.ResetXfers();

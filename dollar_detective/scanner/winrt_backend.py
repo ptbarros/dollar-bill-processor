@@ -37,7 +37,7 @@ from typing import Iterator, List, Optional
 import cv2
 import numpy as np
 
-from .backend import ScanError, ScannerBackend, ScanPage, ScannerDevice
+from .backend import ScanError, ScannerBackend, ScanPage, ScannerDevice, stop_now
 from .padding import trim_padding
 
 try:
@@ -60,6 +60,7 @@ _IMAGE_SUFFIXES = {".jpg", ".jpeg", ".bmp", ".png", ".tif", ".tiff"}
 POLL_S = 0.1            # folder/status poll interval while scanning
 STEADY_S = 0.6          # a last file whose size holds this long is complete
 READ_RETRY_S = 5.0      # how long to keep retrying an unreadable finished file
+STOP_QUIET_S = 8.0      # graceful stop cancels if no new page arrives this long
 
 
 def _hresult(exc) -> int:
@@ -346,6 +347,9 @@ class WinRtScannerBackend(ScannerBackend):
         last_size = {}                # name -> (size, since) for the newest file
         unreadable_since = {}         # name -> first failed read time
         cancelled = False
+        stop_at = None
+        last_new = time.monotonic()
+        seen_count = 0
         final_status = _STARTED
         error_code = 0
 
@@ -371,9 +375,17 @@ class WinRtScannerBackend(ScannerBackend):
 
         try:
             while True:
-                if stop is not None and stop.is_set() and not cancelled:
+                # Graceful stop: let the stack that's feeding finish (the op
+                # ends when the feeder empties; cancelling mid-feed loses the
+                # bills already pulled in). Cancel on stop-now, or if nothing
+                # new has arrived for a while after the stop.
+                if stop is not None and stop.is_set() and stop_at is None:
+                    stop_at = time.monotonic()
+                    dlog("scan.winrt.stop_requested", handed=handed)
+                quiet = stop_at is not None and time.monotonic() - max(stop_at, last_new) > STOP_QUIET_S
+                if not cancelled and (stop_now(stop) or quiet):
                     cancelled = True
-                    dlog("scan.winrt.cancel_requested", handed=handed)
+                    dlog("scan.winrt.cancel_requested", handed=handed, now=stop_now(stop))
                     try:
                         op.cancel()
                     except Exception:
@@ -381,6 +393,8 @@ class WinRtScannerBackend(ScannerBackend):
                 final_status = _status(op)
                 finished = final_status != _STARTED
                 files = ordered_page_files(folder)
+                if len(files) != seen_count:
+                    seen_count, last_new = len(files), time.monotonic()
                 ready = ready_count(files, finished)
                 while handed < ready:
                     path = files[handed]
