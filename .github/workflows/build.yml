@@ -50,6 +50,15 @@ jobs:
           pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
           pip install pyinstaller
 
+      - name: Build TWAIN helper (32-bit, built-in .NET Framework compiler)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force scanner_helpers | Out-Null
+          & "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe" /nologo /platform:x86 /target:exe /optimize+ `
+            /r:System.Windows.Forms.dll /out:scanner_helpers\dd_twain_helper.exe tools\twain_helper\TwainHelper.cs
+          if ($LASTEXITCODE -ne 0) { throw "TWAIN helper build failed" }
+          Get-Item scanner_helpers\dd_twain_helper.exe
+
       - name: Build onedir (PyInstaller)
         run: pyinstaller --noconfirm --clean DollarDetective.spec
 
@@ -110,6 +119,15 @@ jobs:
           python -c "import easyocr; easyocr.Reader(['en'], gpu=False, model_storage_directory='easyocr_models', download_enabled=True, verbose=False)"
           ls -l easyocr_models
 
+      - name: Build TWAIN helper (32-bit, built-in .NET Framework compiler)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force scanner_helpers | Out-Null
+          & "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe" /nologo /platform:x86 /target:exe /optimize+ `
+            /r:System.Windows.Forms.dll /out:scanner_helpers\dd_twain_helper.exe tools\twain_helper\TwainHelper.cs
+          if ($LASTEXITCODE -ne 0) { throw "TWAIN helper build failed" }
+          Get-Item scanner_helpers\dd_twain_helper.exe
+
       - name: Build onedir (PyInstaller, CUDA spec)
         run: pyinstaller --noconfirm --clean DollarDetective-cuda.spec
 
@@ -154,6 +172,15 @@ jobs:
           python -c "import onnxruntime as o; p=o.get_available_providers(); print('providers:',p); assert 'DmlExecutionProvider' in p, 'DirectML EP missing'"
           pip uninstall -y QScintilla PyQt5 PyQt5-Qt5 PyQt5-sip || true
           pip install pyinstaller
+
+      - name: Build TWAIN helper (32-bit, built-in .NET Framework compiler)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force scanner_helpers | Out-Null
+          & "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe" /nologo /platform:x86 /target:exe /optimize+ `
+            /r:System.Windows.Forms.dll /out:scanner_helpers\dd_twain_helper.exe tools\twain_helper\TwainHelper.cs
+          if ($LASTEXITCODE -ne 0) { throw "TWAIN helper build failed" }
+          Get-Item scanner_helpers\dd_twain_helper.exe
 
       - name: Build onedir (PyInstaller)
         run: pyinstaller --noconfirm --clean DollarDetective.spec

@@ -126,6 +126,17 @@ class AISettings:
     openai_model: str = "gpt-5"
 
 
+@dataclass
+class ScannerSettings:
+    """Direct feed-scanner control (the in-app Scan button)."""
+    enabled: bool = False       # user opted into driving the scanner directly
+    device: str = "auto"        # backend/device id, or "auto" = first detected
+    dpi: int = 300              # 300 or 600
+    duplex: bool = True         # scan both sides in one pass
+    auto_start: bool = True     # start scanning when paper is placed in the feeder
+    driver: str = "auto"        # Windows: "auto" (TWAIN if available, else WIA), "twain", "wia"
+
+
 class SettingsManager:
     """
     Manages persistent user settings.
@@ -148,6 +159,7 @@ class SettingsManager:
         self.crop = CropSettings()
         self.autosave = AutosaveSettings()
         self.ai = AISettings()
+        self.scanner = ScannerSettings()
         self.pattern_states: Dict[str, bool] = {}  # Pattern name -> enabled
         # Named enable/disable presets (e.g. "Core", "Full"): name -> {pattern_states, library_states}
         self.selection_presets: Dict[str, Dict] = {}
@@ -278,6 +290,15 @@ class SettingsManager:
                     elif self.ai.provider == 'openai':
                         self.ai.openai_api_key = old_key
             self.ai.anthropic_model = ai.get('anthropic_model', 'claude-opus-5')
+
+        if 'scanner' in data:
+            sc = data['scanner']
+            self.scanner.enabled = bool(sc.get('enabled', False))
+            self.scanner.device = sc.get('device', 'auto')
+            self.scanner.dpi = int(sc.get('dpi', 300))
+            self.scanner.duplex = bool(sc.get('duplex', True))
+            self.scanner.auto_start = bool(sc.get('auto_start', True))
+            self.scanner.driver = sc.get('driver', 'auto') if sc.get('driver') in ('auto', 'twain', 'wia') else 'auto'
             self.ai.openai_model = ai.get('openai_model', 'gpt-5')
             # Migrate retired model IDs saved by older versions to a current default
             # (the combos are editable, so anything current is left untouched).
@@ -474,6 +495,14 @@ class SettingsManager:
                 'openai_api_key': self.ai.openai_api_key,
                 'anthropic_model': self.ai.anthropic_model,
                 'openai_model': self.ai.openai_model,
+            },
+            'scanner': {
+                'enabled': self.scanner.enabled,
+                'device': self.scanner.device,
+                'dpi': self.scanner.dpi,
+                'duplex': self.scanner.duplex,
+                'auto_start': self.scanner.auto_start,
+                'driver': self.scanner.driver,
             },
             'pattern_states': self.pattern_states,
             'selection_presets': self.selection_presets,

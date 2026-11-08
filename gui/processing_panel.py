@@ -31,6 +31,7 @@ class ProcessingPanel(QWidget):
     mode_about_to_change = Signal()  # fired BEFORE visibility changes (capture geo)
     mode_changed = Signal(str)    # "manual" or "scan" — toolbar reconfigured
     open_folders_settings = Signal()  # gear next to the Watching indicator
+    scan_requested = Signal()  # Scan directly from a connected feed scanner (toggle)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -238,6 +239,19 @@ class ProcessingPanel(QWidget):
         self.watch_btn.toggled.connect(self._on_watch_toggled)
         layout.addWidget(self.watch_btn)
 
+        # Scan directly from a connected feed scanner (hidden unless one is
+        # detected). Drives the scanner itself and drops bills into the watched
+        # folder, so you don't open the scanner's own software.
+        self._scanner_available = False
+        self.scan_device_btn = QPushButton("Scan")
+        self.scan_device_btn.setToolTip(
+            "<qt>Scan straight from your connected feed scanner. Load a strap in "
+            "the feeder and click &mdash; each bill is scanned and processed as it "
+            "feeds. Click again to stop.</qt>")
+        self.scan_device_btn.setVisible(False)
+        self.scan_device_btn.clicked.connect(self.scan_requested.emit)
+        layout.addWidget(self.scan_device_btn)
+
         # Active crop-profile picker (replaces the old Organize button; Organize
         # moved to Edit -> Organize Folder). Switching here changes the profile
         # and denomination used for the next Process run.
@@ -340,6 +354,7 @@ class ProcessingPanel(QWidget):
         self.watch_btn.setVisible(not manual)
         self.live_check.setVisible(not manual)
         self.watch_info_group.setVisible(not manual)
+        self.scan_device_btn.setVisible(not manual and self._scanner_available)
         # Toggling QFrame visibility leaves the layout's cached size hints stale,
         # so the window's minimumSizeHint can balloon (Manual then forced the
         # window past the screen). Invalidate + updateGeometry recomputes it.
@@ -361,6 +376,17 @@ class ProcessingPanel(QWidget):
             self.set_mode(getattr(self, "_mode", "manual"), persist=False)
             return
         self.set_mode(mode)
+
+    def set_scanner_available(self, available: bool):
+        """Show/hide the direct-Scan button (a supported feed scanner was found).
+        Only visible in Monitor mode."""
+        self._scanner_available = bool(available)
+        manual = self.process_btn.isVisible()
+        self.scan_device_btn.setVisible(not manual and self._scanner_available)
+
+    def set_scanning(self, scanning: bool):
+        """Reflect scan-in-progress state on the Scan button."""
+        self.scan_device_btn.setText("Stop Scan" if scanning else "Scan")
 
     def set_watching_info(self, text: str):
         """Set the Scan-mode 'Watching: …' indicator (MainWindow builds it). Full

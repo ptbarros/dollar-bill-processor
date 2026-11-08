@@ -121,6 +121,11 @@ class SettingsDialog(QDialog):
         self._setup_folders_tab(folders_tab)
         tabs.addTab(folders_tab, "Folders")
 
+        # Scanner tab
+        scanner_tab = QWidget()
+        self._setup_scanner_tab(scanner_tab)
+        tabs.addTab(scanner_tab, "Scanner")
+
         # AI tab
         ai_tab = QWidget()
         self._setup_ai_tab(ai_tab)
@@ -518,6 +523,133 @@ class SettingsDialog(QDialog):
         layout.addStretch()
 
 
+    def _setup_scanner_tab(self, tab: QWidget):
+        """Setup the direct feed-scanner control tab."""
+        layout = QVBoxLayout(tab)
+
+        enable_group = QGroupBox("Direct Scanner Control")
+        eg = QVBoxLayout(enable_group)
+        self.scanner_enabled_check = QCheckBox(
+            "Let Dollar Detective scan directly from a feed scanner")
+        self.scanner_enabled_check.setChecked(self.settings.scanner.enabled)
+        self.scanner_enabled_check.setToolTip(
+            "When on, a Scan button appears in Monitor mode. It drives a supported "
+            "feed scanner directly -- you don't open the scanner's own software.")
+        eg.addWidget(self.scanner_enabled_check)
+
+        # Detected-device row + Detect button.
+        dev_row = QHBoxLayout()
+        self.scanner_device_combo = QComboBox()
+        dev_row.addWidget(self.scanner_device_combo, 1)
+        self.scanner_detect_btn = QPushButton("Detect")
+        self.scanner_detect_btn.clicked.connect(self._detect_scanners)
+        dev_row.addWidget(self.scanner_detect_btn)
+        self.scanner_test_btn = QPushButton("Test My Scanner…")
+        self.scanner_test_btn.setToolTip(
+            "Step-by-step check of what your scanner can do, with a report you can send")
+        self.scanner_test_btn.clicked.connect(self._open_scanner_test)
+        dev_row.addWidget(self.scanner_test_btn)
+        eg.addLayout(dev_row)
+
+        self.scanner_status_label = QLabel("")
+        self.scanner_status_label.setStyleSheet("color:#888;")
+        self.scanner_status_label.setWordWrap(True)
+        eg.addWidget(self.scanner_status_label)
+        layout.addWidget(enable_group)
+
+        opt_group = QGroupBox("Scan Options")
+        og = QFormLayout(opt_group)
+        self.scanner_dpi_combo = QComboBox()
+        self.scanner_dpi_combo.addItem("300 dpi (faster)", 300)
+        self.scanner_dpi_combo.addItem("600 dpi (finer)", 600)
+        ix = self.scanner_dpi_combo.findData(int(self.settings.scanner.dpi))
+        self.scanner_dpi_combo.setCurrentIndex(ix if ix >= 0 else 0)
+        og.addRow("Resolution:", self.scanner_dpi_combo)
+
+        self.scanner_driver_combo = QComboBox()
+        self.scanner_driver_combo.addItem("Automatic (TWAIN if available, else WIA)", "auto")
+        self.scanner_driver_combo.addItem("TWAIN (scanner maker's driver: own crop + straighten)", "twain")
+        self.scanner_driver_combo.addItem("WIA (Windows' built-in scanning)", "wia")
+        ix = self.scanner_driver_combo.findData(getattr(self.settings.scanner, "driver", "auto"))
+        self.scanner_driver_combo.setCurrentIndex(ix if ix >= 0 else 0)
+        if sys.platform == "win32":
+            og.addRow("Windows driver:", self.scanner_driver_combo)
+        else:
+            self.scanner_driver_combo.setVisible(False)
+
+        self.scanner_duplex_check = QCheckBox("Scan both sides in one pass")
+        self.scanner_duplex_check.setChecked(self.settings.scanner.duplex)
+        og.addRow("Duplex:", self.scanner_duplex_check)
+
+        self.scanner_autostart_check = QCheckBox(
+            "Start scanning automatically when bills are placed in the feeder")
+        self.scanner_autostart_check.setChecked(self.settings.scanner.auto_start)
+        og.addRow("Auto-start:", self.scanner_autostart_check)
+        layout.addWidget(opt_group)
+
+        info = QLabel(
+            "Supported: on Windows, feed scanners with a WIA driver (e.g. Epson "
+            "FastFoto FF-640, Canon imageFORMULA R40) -- close the scanner's own "
+            "software first. On Linux, the Epson FastFoto FF-640 (direct USB). If "
+            "your scanner isn't supported, keep using its own software with "
+            "Monitor mode.")
+        info.setWordWrap(True)
+        info.setStyleSheet("color:#888; font-size:11px;")
+        layout.addWidget(info)
+        layout.addStretch()
+
+        self._detect_scanners()   # populate the device list on open
+
+    def _open_scanner_test(self):
+        """Run the Scanner Test (via the main window when we have one, so it
+        can pause auto-start and refuse while a scan is running)."""
+        main = self.parent()
+        if main is not None and hasattr(main, "open_scanner_test"):
+            main.open_scanner_test()
+        else:
+            from .scanner_lab_dialog import ScannerLabDialog
+            ScannerLabDialog(self.settings, self).exec()
+        # The test may have saved scanner settings -- reflect them here.
+        sc = self.settings.scanner
+        self.scanner_enabled_check.setChecked(sc.enabled)
+        self.scanner_duplex_check.setChecked(sc.duplex)
+        self._detect_scanners()
+
+    def _detect_scanners(self):
+        """Fill the device dropdown from a live scan for connected scanners."""
+        self.scanner_device_combo.clear()
+        self.scanner_device_combo.addItem("Auto-detect", "auto")
+        found = []
+        can_detect_paper = False
+        try:
+            from dollar_detective.scanner import available_backends
+            for backend in available_backends():
+                can_detect_paper |= bool(getattr(backend, "can_detect_paper", False))
+                try:
+                    for d in backend.list_devices():
+                        self.scanner_device_combo.addItem(f"{d.name}", d.id)
+                        found.append(d.name)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        # Auto-start needs a "paper in feeder" sensor read the backend may lack
+        # (WinRT/WIA on Windows has none) -- say so rather than silently ignore it.
+        self.scanner_autostart_check.setEnabled(can_detect_paper)
+        self.scanner_autostart_check.setToolTip(
+            "" if can_detect_paper else
+            "Not available for this scanner on this system -- click Scan to start.")
+        # Restore the saved selection.
+        ix = self.scanner_device_combo.findData(self.settings.scanner.device)
+        if ix >= 0:
+            self.scanner_device_combo.setCurrentIndex(ix)
+        if found:
+            self.scanner_status_label.setText("Detected: " + ", ".join(found))
+        else:
+            self.scanner_status_label.setText(
+                "No scanner detected. Connect and power on a supported scanner, "
+                "then click Detect.")
+
     def _setup_ai_tab(self, tab: QWidget):
         """Setup the AI-assisted pattern generation settings tab."""
         layout = QVBoxLayout(tab)
@@ -848,6 +980,14 @@ class SettingsDialog(QDialog):
         self.settings.processing.output_subfolder = self.output_subfolder_edit.text().strip() or "fancy_bills"
 
         # AI
+        # Scanner settings
+        self.settings.scanner.enabled = self.scanner_enabled_check.isChecked()
+        self.settings.scanner.device = self.scanner_device_combo.currentData() or "auto"
+        self.settings.scanner.driver = self.scanner_driver_combo.currentData() or "auto"
+        self.settings.scanner.dpi = int(self.scanner_dpi_combo.currentData() or 300)
+        self.settings.scanner.duplex = self.scanner_duplex_check.isChecked()
+        self.settings.scanner.auto_start = self.scanner_autostart_check.isChecked()
+
         self.settings.ai.provider = self.ai_provider_combo.currentData() or ""
         self.settings.ai.anthropic_api_key = self.anthropic_api_key_edit.text()
         self.settings.ai.openai_api_key = self.openai_api_key_edit.text()

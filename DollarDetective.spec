@@ -38,6 +38,11 @@ for p in Path('assets/samples').rglob('*'):
     if p.is_file():
         datas.append((str(p), str(p.parent)))
 
+# TWAIN helper (Windows): built by CI from tools/twain_helper/TwainHelper.cs
+# into scanner_helpers/ just before PyInstaller runs.
+if Path('scanner_helpers/dd_twain_helper.exe').is_file():
+    datas.append(('scanner_helpers/dd_twain_helper.exe', 'scanner_helpers'))
+
 binaries = []
 hiddenimports = ['yaml', 'pandas', 'openpyxl', 'docx', 'PIL', 'dollar_detective.updater', 'gui.updater_ui']
 
@@ -60,6 +65,11 @@ _collect_pkgs = ['rapidocr_onnxruntime', 'onnxruntime', 'lupa', 'anthropic', 'op
 # on Windows/Linux where it's proven and harmless.
 if sys.platform != 'darwin':
     _collect_pkgs.append('cv2')
+
+# Windows feed-scanner control (WinRT ImageScanner): the winrt projection is a
+# namespace package of per-API native modules, imported lazily -> force it in.
+if sys.platform == 'win32':
+    _collect_pkgs.append('winrt')
 
 for pkg in _collect_pkgs:
     d, b, h = collect_all(pkg)
