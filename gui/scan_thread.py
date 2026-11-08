@@ -109,8 +109,12 @@ class ScanThread(QThread):
                     self._bills += 1
                     self._sides += 2
                     self.page_written.emit(self._sides)
-                    self.status.emit(
-                        f"Scanned {self._bills} bill{'s' if self._bills != 1 else ''}…")
+                    done = f"{self._bills} bill{'s' if self._bills != 1 else ''}"
+                    if self._stop.is_set():
+                        self.status.emit(f"Stopping — finishing the stack in the feeder "
+                                         f"({done} scanned)…")
+                    else:
+                        self.status.emit(f"Scanned {done}…")
         finally:
             # Leftover fronts with no back (simplex, or a feed that stopped
             # mid-bill): save them front-only. Orphan backs are dropped.
