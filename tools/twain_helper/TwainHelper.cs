@@ -315,6 +315,13 @@ static class Tw {
         Marshal.FreeHGlobal(pend);
         return count;
     }
+    // TWAIN 2.x: stop pulling new sheets but finish the ones already inside.
+    public static ushort StopFeeder() {
+        IntPtr pend = Marshal.AllocHGlobal(8);
+        ushort rc = dPtr(App, Src, 1, 0x0005, 0x0702 /*MSG_STOPFEEDER*/, pend);
+        Marshal.FreeHGlobal(pend);
+        return rc;
+    }
     public static void ResetXfers() {
         IntPtr pend = Marshal.AllocHGlobal(8);
         dPtr(App, Src, 1, 0x0005, MSG_RESET, pend);
@@ -363,6 +370,7 @@ static class Program {
 
     [STAThread]
     static int Main(string[] argv) {
+        Clock.Restart();                       // "t" is seconds since launch
         Console.OutputEncoding = Encoding.UTF8;
         if (argv.Length == 0) { Console.Error.WriteLine("usage: dd_twain_helper list|caps|scan ..."); return 2; }
         var form = new Form();                 // hidden window: TWAIN parent + message queue
@@ -540,6 +548,8 @@ static class Program {
                     done = true;
                 } else if (twMsg == Tw.MSG_XFERREADY) {
                     int failures = 0;
+                    bool feederStopped = false;
+                    int afterStop = 0;
                     while (true) {
                         int n = total + 1;
                         string final = Path.Combine(outDir, string.Format("page_{0:D5}.jpg", n));
@@ -560,7 +570,25 @@ static class Program {
                         int pending = Tw.EndXfer();
                         if (pending == 0) { done = true; break; }
                         if (failures > 3) { Tw.ResetXfers(); done = true; break; }
-                        if (StopRequested(outDir)) { Tw.ResetXfers(); done = true; break; }
+                        // A driver that accepts STOPFEEDER but keeps pulling sheets:
+                        // don't scan the whole stack -- a couple of bills is "in flight".
+                        if (feederStopped && ++afterStop > 6) { Tw.ResetXfers(); done = true; break; }
+                        if (!feederStopped && StopRequested(outDir)) {
+                            // Stop mid-stack: the scanner has already pulled the next
+                            // bill or two in, so cancelling now would lose them (seen on
+                            // the FF-640: 1.5 bills). Stop the feeder instead and keep
+                            // transferring until the bills inside are out.
+                            ushort src = Tw.StopFeeder();
+                            if (src == Tw.RC_SUCCESS) {
+                                feederStopped = true;
+                                Json.Emit("\"event\":\"stopping\",\"t\":" + T());
+                            } else {
+                                ushort cc = Tw.CondCode();
+                                Tw.ResetXfers();
+                                Json.Emit("\"event\":\"warning\",\"msg\":\"scanner can't stop its feeder; bills already inside may not have been saved\",\"in_flight_lost\":true,\"cc\":" + cc);
+                                done = true; break;
+                            }
+                        }
                     }
                 }
             }

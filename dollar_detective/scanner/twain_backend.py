@@ -159,6 +159,7 @@ class TwainBackend(ScannerBackend):
     label = "Windows scanner (TWAIN)"
     can_detect_paper = False   # the helper waits for paper itself, across stacks
     MARGIN_PX = 6
+    in_flight_lost = False     # set if a Stop couldn't let in-flight bills finish
 
     def __init__(self):
         if helper_path() is None:
@@ -275,7 +276,11 @@ class TwainBackend(ScannerBackend):
                     dlog("scan.twain.page", n=pages, side=side, t=ev.get("t"))
                     yield ScanPage(side=side, image=img, raw=raw,
                                    t=float(ev.get("t", time.monotonic() - t0)))
-                elif kind in ("waiting", "batch_end"):
+                elif kind == "warning":
+                    dlog("scan.twain.warning", **{k: v for k, v in ev.items() if k != "event"})
+                    if ev.get("in_flight_lost"):
+                        self.in_flight_lost = True
+                elif kind in ("waiting", "batch_end", "stopping"):
                     dlog(f"scan.twain.{kind}", **{k: v for k, v in ev.items() if k != "event"})
                 elif kind == "error":
                     error = ev
