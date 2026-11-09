@@ -70,7 +70,7 @@ class ScannerBackend(ABC):
         backend-specific tuning knobs used by the Scanner Test (e.g.
         scan_length_in); backends ignore ones they don't know. Raises ScanError."""
 
-    def describe(self, device_id: Optional[str] = None) -> dict:
+    def describe(self, device_id: Optional[str] = None, **options) -> dict:
         """What the backend can report about a scanner without scanning
         (capabilities, limits). Best-effort; used by the Scanner Test report."""
         return {"backend": self.label,
@@ -163,7 +163,7 @@ class EpsonEsciBackend(ScannerBackend):
             return []
         return [ScannerDevice(id="ff640", name="Epson FastFoto FF-640")]
 
-    def describe(self, device_id: Optional[str] = None) -> dict:
+    def describe(self, device_id: Optional[str] = None, **options) -> dict:
         info = super().describe(device_id)
         info.update({"driver": "direct ESC/I-2 over USB (vendored esci2.py)",
                      "duplex": True, "overscan": True, "paper_sensor": True,

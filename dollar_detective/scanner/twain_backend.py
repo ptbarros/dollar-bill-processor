@@ -179,7 +179,7 @@ class TwainBackend(ScannerBackend):
     def list_devices(self) -> List[ScannerDevice]:
         return [ScannerDevice(id="twain:" + s["name"], name=s["name"]) for s in self.sources()]
 
-    def describe(self, device_id: Optional[str] = None) -> dict:
+    def describe(self, device_id: Optional[str] = None, **options) -> dict:
         info = {"backend": self.label, "sources": self.sources()}
         name = (device_id or "").split("twain:", 1)[-1]
         if name:
@@ -393,16 +393,33 @@ class WindowsScannerBackend(ScannerBackend):
             raise ScanError("WIA scanning isn't available.", cause="NOWIA")
         return self.wia, device_id
 
-    def describe(self, device_id: Optional[str] = None) -> dict:
+    def describe(self, device_id: Optional[str] = None, **options) -> dict:
         info = {"backend": self.label}
-        if self.wia is not None:
+        driver = options.get("driver") or "auto"
+        twain_src = None
+        if self.twain is not None and driver != "wia":
+            try:
+                twain_src = self._twain_source_for(device_id)
+            except Exception:
+                twain_src = None
+        info["driver"] = "twain" if twain_src else "wia"
+        # Don't open the scanner through WIA when TWAIN is what will scan: on
+        # Paul's laptop just reading the FF-640's WIA capabilities (Epson WIA
+        # driver 1.1.0.1) crashed the Windows scanner service and wedged the
+        # scanner. Listing devices (below, via list_devices) is safe.
+        if self.wia is not None and not twain_src:
             try:
                 info["wia"] = self.wia.describe(device_id)
             except Exception as e:
                 info["wia"] = {"error": repr(e)}
+        elif self.wia is not None:
+            devs = self.wia.list_devices()
+            dev = next((d for d in devs if d.id == device_id), devs[0] if devs else None)
+            info["wia"] = {"skipped": "TWAIN in use -- WIA driver not opened",
+                           "name": dev.name if dev else None}
         if self.twain is not None:
             try:
-                src = self._twain_source_for(device_id)
+                src = twain_src or self._twain_source_for(device_id)
                 info["twain"] = self.twain.describe(src) if src else {
                     "sources": self.twain.sources(), "matched": None}
             except Exception as e:
