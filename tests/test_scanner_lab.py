@@ -46,6 +46,33 @@ def test_bill_ending_at_paper_end_is_whole():
     assert a["trailing_touch"] > 0.9 and lab.bill_whole(a)
 
 
+def test_driver_cropped_page_is_whole():
+    """Canon R40 / TWAIN: the driver crops to the paper, so the page IS the bill.
+    On a $1 back the cream border blends into the (absent) background and only
+    the printed design (~5.66 x 2.16 in) is detected -- still a whole bill.
+    Numbers from FIL's 2026-11 R40 report."""
+    a = {"found": True, "page_in": [6.14, 2.6], "bill_in": [5.66, 2.16],
+         "orientation": "long_edge_first"}
+    assert lab.bill_whole(a)
+    a["page_in"] = [6.07, 2.56]                  # slightly smaller crop, same
+    assert lab.bill_whole(a)
+    # Same measurement on an uncropped, feeder-width page = really cut off.
+    a["page_in"] = [8.5, 2.3]
+    assert not lab.bill_whole(a)
+
+
+def test_cropped_page_analysis_whole():
+    """End to end: a page that is exactly a bill whose border matches the
+    'background' -- analyze_page records the page size and it counts as whole."""
+    bw, bh = 614 * DPI // 100, 261 * DPI // 100
+    img = np.full((bh, bw, 3), (205, 245, 250), np.uint8)    # cream paper border
+    img[22:bh - 22, 24:bw - 24] = (90, 120, 80)             # printed design
+    a = lab.analyze_page(img, DPI)
+    assert lab.page_is_bill(a) and lab.bill_whole(a)
+    # The WIA-style full-width page is not mistaken for a cropped one.
+    assert not lab.page_is_bill(lab.analyze_page(page(True), DPI))
+
+
 class Fake:
     label = "Fake"
 
@@ -129,7 +156,9 @@ def test_twain_skips_wia_only_steps_and_recommends_twain():
     assert all(r.driver == "twain" for r in results.values() if r.key != "discover")
     rec = lab.recommend(results)
     assert rec["driver"] == "twain" and "scan_length_in" not in rec
-    names = [c["check"] for c in lab.checks(results)]
-    assert "Shorter window keeps bills whole" not in names
-    assert "Uncompressed transfer" not in names
+    st = {c["check"]: c["status"] for c in lab.checks(results)}
+    assert "Shorter window keeps bills whole" not in st
+    # The skipped WIA-only steps are listed as skipped, not silently missing.
+    assert st["Shorter scan window"] == "skip" and st["Uncompressed transfer"] == "skip"
+    assert "not used with TWAIN" in lab.report_text(results, lab.summarize(results))
     assert "Driver used: TWAIN" in lab.report_text(results, lab.summarize(results))

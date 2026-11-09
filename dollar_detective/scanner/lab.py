@@ -97,6 +97,7 @@ def analyze_page(raw: np.ndarray, dpi: int) -> dict:
     try:
         trimmed = billcrop._trim_white_padding(trim_padding(raw))
         out["white_pad_rows"] = int(h0 - trimmed.shape[0])
+        out["page_in"] = [round(trimmed.shape[1] / dpi, 2), round(trimmed.shape[0] / dpi, 2)]
         bg = billcrop._background_colour(trimmed)
         out["background_rgb"] = [int(bg[2]), int(bg[1]), int(bg[0])]
         mask, _c = billcrop._item_mask(trimmed)
@@ -156,11 +157,33 @@ def _jpeg(img, max_w=SAMPLE_MAX_W) -> bytes:
     return buf.tobytes() if ok else b""
 
 
+def page_is_bill(a: dict) -> bool:
+    """Is the page itself one bill (driver cropped to the paper's edge)? A
+    feeder scan that wasn't cropped is the full feeder width (~8.5 in), so the
+    across-feed size tells them apart."""
+    p = a.get("page_in")
+    if not p:
+        return False
+    pw, ph = p
+    for across, along in ((BILL_LONG_IN, BILL_SHORT_IN), (BILL_SHORT_IN, BILL_LONG_IN)):
+        if abs(pw - across) <= 0.3 and along - 0.1 <= ph <= along + 0.35:
+            return True
+    return False
+
+
 def bill_whole(a: dict, tol_in: float = 0.1) -> bool:
     """Did the whole bill make it into the scan? Judged by its length along the
     feed (2.61" long-edge-first, 6.14" short-edge-first), NOT by whether it
     touches the end of the page: many drivers stop exactly at the paper's end,
-    so a complete bill always touches the last row."""
+    so a complete bill always touches the last row.
+
+    A page that is itself bill-sized was cropped to the paper by the driver
+    (TWAIN, e.g. Canon R40), so the whole bill is there by definition. Measuring
+    the bill inside it would be wrong: with no background left, the paper's
+    cream border reads as background and only the printed design gets measured
+    (~2.16 in on a $1 back), which falsely reported bills as cut off."""
+    if page_is_bill(a):
+        return True
     if not a.get("found"):
         return False
     expected = BILL_SHORT_IN if a.get("orientation") == "long_edge_first" else BILL_LONG_IN
@@ -377,6 +400,13 @@ def checks(results: Dict[str, StepResult]) -> List[dict]:
                 f"{got}/{want} pages" + (f", {rate:.2f} s/bill ({60 / rate:.0f} bills/min)" if rate else ""))
         else:
             add("Speed run", "fail", sp.error)
+
+    # Say which steps didn't run, so a short report isn't mistaken for missing
+    # results (e.g. the WIA-only steps under TWAIN).
+    for step in STEPS:
+        r = results.get(step.key)
+        if r and r.skipped:
+            add(step.title, "skip", r.error or "skipped")
     return out
 
 
