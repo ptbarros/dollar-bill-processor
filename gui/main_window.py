@@ -2618,7 +2618,9 @@ class MainWindow(QMainWindow):
     def _archive_ledger(self):
         """Tools → Archive Ledger & Start Fresh: move ledger.db into an archive
         file and let the next access create an empty one."""
-        busy = ((self.processing_thread is not None and self.processing_thread.isRunning())
+        # processing_thread only exists once something has been processed.
+        pt = getattr(self, "processing_thread", None)
+        busy = ((pt is not None and pt.isRunning())
                 or getattr(self, "_monitor_watcher", None) is not None
                 or getattr(self, "_live_mode", False))
         if busy:
