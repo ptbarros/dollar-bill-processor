@@ -3438,6 +3438,10 @@ class MainWindow(QMainWindow):
 
         # Fresh results view; point auto-export at the batch so the results CSV
         # lands inside it (the batch dropdown reopens the batch from that CSV).
+        # Remember where things pointed, so an empty session can put them back.
+        self._live_prev_dirs = (getattr(self, "_current_input_dir", None),
+                                self.settings.ui.last_input_dir,
+                                self.settings.ui.last_output_dir)
         self.current_results = []
         self.results_list.clear()
         self._current_input_dir = str(batch)
@@ -3661,6 +3665,35 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _live_end_empty(self):
+        """Undo a live session that scanned nothing: leave live mode, take down
+        the "Collecting scans" overlay (back to the previous view), and point the
+        folder settings back where they were instead of at the deleted batch.
+        The normal finish does this via _on_processing_complete, which an empty
+        session skips."""
+        self._live_mode = False
+        self._monitor_run_active = False
+        self._live_thread_refs = []
+        try:
+            self.preview_panel.hide_watch_overlay()
+        except Exception:
+            pass
+        try:
+            self.preview_panel.set_batch_processing_active(False)
+        except Exception:
+            pass
+        prev = getattr(self, "_live_prev_dirs", None)
+        if prev:
+            cur_in, last_in, last_out = prev
+            self._current_input_dir = cur_in
+            self.settings.ui.last_input_dir = last_in
+            self.settings.ui.last_output_dir = last_out
+            try:
+                self.settings.save()
+            except Exception:
+                pass
+        self._live_batch_dir = None
+
     def _live_finalize(self):
         """All live chunks done: hand off to the shared completion path (writes the
         results CSV into the batch, refreshes the batch picker, selects it)."""
@@ -3686,6 +3719,7 @@ class MainWindow(QMainWindow):
                             self.settings.save()
                     except Exception:
                         pass
+                    self._live_end_empty()
                     try:
                         self._update_watch_info()   # show the reclaimed number
                     except Exception:
