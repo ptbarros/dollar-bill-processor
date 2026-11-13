@@ -639,6 +639,61 @@ class Ledger:
 
 
 # ---------------------------------------------------------------------------
+# Archive & start fresh
+# ---------------------------------------------------------------------------
+ARCHIVE_DIR_NAME = "ledger_archives"
+
+
+def archive_ledger(db_path: Union[str, Path],
+                   archive_dir: Union[str, Path, None] = None) -> Optional[Path]:
+    """Move the ledger aside so the next open starts empty ("start fresh").
+
+    Copies a consistent snapshot to `archive_dir/ledger-archive-<timestamp>.db`
+    (default: a `ledger_archives` folder next to the ledger), checks the copy
+    opens and holds the same bill count, and only then deletes ledger.db and its
+    -wal/-shm sidecars. The archive is an ordinary ledger file, so it can be
+    merged back later with Ledger.merge_from().
+
+    The caller must close every open Ledger on `db_path` first. Returns the
+    archive path, or None if there was no ledger to archive.
+    """
+    db = Path(db_path)
+    if not db.exists():
+        return None
+    archive_dir = Path(archive_dir) if archive_dir else db.parent / ARCHIVE_DIR_NAME
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dest = archive_dir / f"ledger-archive-{stamp}.db"
+    i = 2
+    while dest.exists():
+        dest = archive_dir / f"ledger-archive-{stamp}-{i}.db"
+        i += 1
+
+    led = Ledger(db)
+    try:
+        expected = led._conn.execute("SELECT COUNT(*) FROM bills").fetchone()[0]
+        led.backup(dest)
+    finally:
+        led.close()
+
+    # Never delete the live ledger unless the archive is readable and complete.
+    check = sqlite3.connect(str(dest))
+    try:
+        got = check.execute("SELECT COUNT(*) FROM bills").fetchone()[0]
+    finally:
+        check.close()
+    if got != expected:
+        raise RuntimeError(f"Ledger archive check failed ({got} of {expected} bills copied); "
+                           "the ledger was left as it was.")
+
+    for p in (db, db.with_name(db.name + "-wal"), db.with_name(db.name + "-shm")):
+        try:
+            p.unlink()
+        except FileNotFoundError:
+            pass
+    return dest
+
+
+# ---------------------------------------------------------------------------
 # Self-test / CLI
 # ---------------------------------------------------------------------------
 def _selftest() -> None:

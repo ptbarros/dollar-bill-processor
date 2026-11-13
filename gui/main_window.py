@@ -432,6 +432,14 @@ class MainWindow(QMainWindow):
         insights_custom_action.triggered.connect(lambda: self._open_insights_custom())
         tools_menu.addAction(insights_custom_action)
 
+        archive_ledger_action = QAction("Archive Ledger && Start Fresh...", self)
+        archive_ledger_action.setToolTip(
+            "Set the bill history aside and start a new, empty one — resets Insights, "
+            "'seen before' and Find Crop history (e.g. after testing). The old history "
+            "is kept as an archive file.")
+        archive_ledger_action.triggered.connect(self._archive_ledger)
+        tools_menu.addAction(archive_ledger_action)
+
         coverage_action = QAction("&Coverage Check...", self)
         coverage_action.setToolTip("Compare your enabled patterns against the full library on the current batch — see which bills the full library catches that your enabled set misses")
         coverage_action.triggered.connect(self._on_coverage_check)
@@ -2606,6 +2614,56 @@ class MainWindow(QMainWindow):
             return
         engine.sync_enabled_from_settings()
         StrapCheckDialog(engine, self).exec()
+
+    def _archive_ledger(self):
+        """Tools → Archive Ledger & Start Fresh: move ledger.db into an archive
+        file and let the next access create an empty one."""
+        busy = ((self.processing_thread is not None and self.processing_thread.isRunning())
+                or getattr(self, "_monitor_watcher", None) is not None
+                or getattr(self, "_live_mode", False))
+        if busy:
+            QMessageBox.information(
+                self, "Archive Ledger",
+                "Please wait until processing or Monitor has stopped, then try again.")
+            return
+        from dollar_detective.ledger import archive_ledger
+        from dollar_detective.resource_path import user_data_dir
+        db = user_data_dir() / "ledger.db"
+        led = self._get_ledger()
+        try:
+            s = led.stats() if led else {}
+        except Exception:
+            s = {}
+        if not db.exists() or not s.get("observations"):
+            QMessageBox.information(self, "Archive Ledger",
+                                    "The ledger is already empty — nothing to archive.")
+            return
+        since = (s.get("first_seen") or "")[:10]
+        msg = (f"Your bill history holds {s.get('unique_bills', 0):,} bills from "
+               f"{s.get('observations', 0):,} scans"
+               + (f" since {since}" if since else "") + ".\n\n"
+               "Archiving sets it aside and starts a new, empty history. Insights, "
+               "'seen before' and Find Crop by Serial will only know about bills "
+               "scanned from now on.\n\n"
+               "Nothing is deleted: the old history is saved as an archive file in "
+               f"{db.parent / 'ledger_archives'}.\n\nArchive and start fresh?")
+        if QMessageBox.question(self, "Archive Ledger & Start Fresh", msg,
+                                QMessageBox.Yes | QMessageBox.No,
+                                QMessageBox.No) != QMessageBox.Yes:
+            return
+        self._reset_ledger()            # close our handle so the file can move
+        self._ledger_session = None     # its session lives in the old ledger
+        try:
+            dest = archive_ledger(db)
+        except Exception as e:
+            QMessageBox.warning(self, "Archive Ledger",
+                                f"Couldn't archive the ledger; it was left unchanged.\n\n{e}")
+            return
+        self.status_label.setText("Ledger archived — starting a fresh history.")
+        QMessageBox.information(
+            self, "Archive Ledger",
+            f"Done. The old history was saved to:\n{dest}\n\n"
+            "A new, empty history starts with your next scan.")
 
     def _reset_ledger(self):
         """Close and forget the ledger handle so the next access reopens it
