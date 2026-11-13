@@ -3350,6 +3350,7 @@ class MainWindow(QMainWindow):
         try:
             from dollar_detective.resource_path import straps_dir
             from dollar_detective.batch_naming import make_batch_dir
+            before = int(getattr(self.settings.processing, "batch_counter", 0) or 0)
             batch = Path(make_batch_dir(
                 straps_dir(), self.settings.processing.batch_name_format, self.settings))
         except Exception as e:
@@ -3357,6 +3358,10 @@ class MainWindow(QMainWindow):
                                 f"Couldn't start the live batch:\n{e}")
             return False
         self._live_batch_dir = batch
+        # The strap number this session took, so an empty session can give it
+        # back. None if the counter didn't advance (time-based fallback name).
+        after = int(getattr(self.settings.processing, "batch_counter", 0) or 0)
+        self._live_batch_number = after if after == before + 1 else None
         self._monitor_last_batch = str(batch)
         self._live_pending = []
         self._live_busy = False
@@ -3612,8 +3617,17 @@ class MainWindow(QMainWindow):
                 if not any(Path(batch).rglob("*.jpg")):
                     shutil.rmtree(batch, ignore_errors=True)
                     self.status_label.setText("Stopped — nothing scanned (no strap filed).")
+                    # Give the strap number back, unless another strap has
+                    # taken a later one since (then a gap is unavoidable).
                     try:
-                        self._update_watch_info()   # reclaim the strap number
+                        taken = getattr(self, "_live_batch_number", None)
+                        if taken and self.settings.processing.batch_counter == taken:
+                            self.settings.processing.batch_counter = taken - 1
+                            self.settings.save()
+                    except Exception:
+                        pass
+                    try:
+                        self._update_watch_info()   # show the reclaimed number
                     except Exception:
                         pass
                     return
