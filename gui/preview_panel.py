@@ -1443,7 +1443,17 @@ class PreviewPanel(QWidget):
         control_bar.addSpacing(20)
 
         # Threshold slider with label and value display
-        threshold_label = QLabel("Threshold:")
+        gp_tooltip = (
+            "Gas Pump threshold — how far a digit must sit above or below the\n"
+            "others (in pixels) before the bill is flagged as a Gas Pump.\n\n"
+            "• Lower = more sensitive: catches slight shifts, but more false hits\n"
+            "   (e.g. from a slightly crooked scan).\n"
+            "• Higher = stricter: only clearly shifted digits are flagged.\n\n"
+            "Dragging it switches the overlay to Gas Pump so you can see the effect.\n"
+            "Click Re-classify to apply the new threshold to this bill's results."
+        )
+        threshold_label = QLabel("Gas Pump Threshold:")
+        threshold_label.setToolTip(gp_tooltip)
         control_bar.addWidget(threshold_label)
 
         # Read initial value from pattern config
@@ -1460,12 +1470,13 @@ class PreviewPanel(QWidget):
         # hijack Left/Right (which cycle overlays) to nudge the threshold instead.
         self.gp_threshold_slider.setFocusPolicy(Qt.NoFocus)
         self.gp_threshold_slider.setMinimumWidth(150)
-        self.gp_threshold_slider.setToolTip("Adjust threshold for gas pump detection")
+        self.gp_threshold_slider.setToolTip(gp_tooltip)
         self.gp_threshold_slider.valueChanged.connect(self._on_gp_threshold_changed)
         control_bar.addWidget(self.gp_threshold_slider)
 
         self.gp_threshold_value_label = QLabel(f"{initial_threshold:.1f} px")
         self.gp_threshold_value_label.setMinimumWidth(45)
+        self.gp_threshold_value_label.setToolTip(gp_tooltip)
         control_bar.addWidget(self.gp_threshold_value_label)
 
         control_bar.addStretch()

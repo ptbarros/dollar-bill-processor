@@ -22,6 +22,23 @@ from PySide6.QtCore import Qt, Signal, Slot, QSettings, QEvent, QByteArray
 # Bump when the set/order of columns changes, to invalidate an incompatible
 # saved header layout instead of restoring it onto the wrong columns.
 _HEADER_STATE_VERSION = 1
+
+# Column added after the 15-column layout users already have saved (appended
+# last so no existing column index shifts).
+SUFFIX_COLUMN = 15
+
+
+def serial_suffix(serial) -> str:
+    """Last letter of a serial ('K34915558E' -> 'E'); star notes -> '★'."""
+    s = str(serial or "").strip()
+    if not s:
+        return ""
+    last = s[-1]
+    if last in "*★":
+        return "★"
+    if s.lower().endswith("star"):
+        return "★"
+    return last.upper() if last.isalpha() else ""
 from PySide6.QtGui import QColor, QBrush, QAction, QIcon
 
 # Add parent for imports
@@ -284,7 +301,7 @@ class ResultsList(QWidget):
 
         # Results tree
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "GPT", "Shift X%", "Shift Y%", "Seal %", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule? (exp)", "Mismatch?", "Status"])
+        self.tree.setHeaderLabels(["#", "Serial", "Patterns", "Conf", "GPT", "Shift X%", "Shift Y%", "Seal %", "Est. Price", "Series", "Front Plate", "Back Plate", "Mule? (exp)", "Mismatch?", "Status", "Suffix"])
         self.tree.headerItem().setToolTip(
             2, "Click to sort by how many patterns each bill matched "
                "(descending = the most-fancy bills on top).")
@@ -317,6 +334,7 @@ class ResultsList(QWidget):
             12: "EXPERIMENTAL hint, not a verdict: an old-era note (pre-1960s series) whose back-plate font reads small. True mules are a micro/macro plate-number font mismatch and vary by denomination -- verify with the plate magnifier (press M). Modern notes never flag.",
             13: "Mismatched serial numbers (two different serials detected on front)",
             14: "Status flags: ✓=queued, V=viewed, C=cropped, R=sent for review, ⟳=seen in a previous scan",
+            15: "Serial-number suffix letter (★ = star note). Click to sort by suffix.",
         }
         self._setup_header_tooltips()
 
@@ -373,6 +391,25 @@ class ResultsList(QWidget):
         saved_ver = settings.value("header_state_version", 0, type=int)
         header = self.tree.header()
 
+        # A layout saved before the Suffix column existed: restore it as-is
+        # (so the user keeps their order/widths), then add Suffix after Serial.
+        if (blob is not None and saved_ver == _HEADER_STATE_VERSION
+                and saved_cols == SUFFIX_COLUMN
+                and self.tree.columnCount() == SUFFIX_COLUMN + 1):
+            try:
+                labels = [self.tree.headerItem().text(i) for i in range(SUFFIX_COLUMN + 1)]
+                self.tree.setColumnCount(SUFFIX_COLUMN)
+                state = blob if isinstance(blob, QByteArray) else QByteArray(blob)
+                ok = header.restoreState(state)
+                self.tree.setColumnCount(SUFFIX_COLUMN + 1)
+                self.tree.headerItem().setText(SUFFIX_COLUMN, labels[SUFFIX_COLUMN])
+                if ok:
+                    self.tree.setColumnWidth(SUFFIX_COLUMN, 50)
+                    header.moveSection(header.visualIndex(SUFFIX_COLUMN),
+                                       header.visualIndex(1) + 1)
+                    return
+            except Exception:
+                pass
         if (blob is not None
                 and saved_cols == self.tree.columnCount()
                 and saved_ver == _HEADER_STATE_VERSION):
@@ -392,11 +429,12 @@ class ResultsList(QWidget):
         # Default widths per logical column: #, Serial, Patterns, Conf, GPT,
         # Shift X%, Shift Y%, Seal %, Est. Price, Series, Front Plate, Back Plate,
         # Mule?, Mismatch?, Status
-        defaults = [35, 130, 150, 50, 55, 50, 50, 45, 100, 60, 70, 60, 45, 55, 50]
+        defaults = [35, 130, 150, 50, 55, 50, 50, 45, 100, 60, 70, 60, 45, 55, 50, 50]
         for i in range(self.tree.columnCount()):
             self.tree.setColumnWidth(i, defaults[i] if i < len(defaults) else 60)
-        # Default order: Status (logical 14) sits just after the "#" column.
+        # Default order: Status (logical 14) just after "#", Suffix right after Serial.
         header.moveSection(header.visualIndex(14), 1)
+        header.moveSection(header.visualIndex(SUFFIX_COLUMN), header.visualIndex(1) + 1)
 
     def _save_header_state(self, *args):
         """Persist the full column layout (order + widths + visibility)."""
@@ -778,6 +816,7 @@ class ResultsList(QWidget):
 
             # Status column (review tracking)
             item.setText(14, self._build_status_text(result))
+            item.setText(15, serial_suffix(result.get('serial', '')))
 
             # Build comprehensive row tooltip with all bill details
             tooltip_lines = [f"Serial: {serial}"]

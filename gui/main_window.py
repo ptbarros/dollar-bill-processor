@@ -432,6 +432,14 @@ class MainWindow(QMainWindow):
         insights_custom_action.triggered.connect(lambda: self._open_insights_custom())
         tools_menu.addAction(insights_custom_action)
 
+        archive_ledger_action = QAction("Archive Ledger && Start Fresh...", self)
+        archive_ledger_action.setToolTip(
+            "Set the bill history aside and start a new, empty one — resets Insights, "
+            "'seen before' and Find Crop history (e.g. after testing). The old history "
+            "is kept as an archive file.")
+        archive_ledger_action.triggered.connect(self._archive_ledger)
+        tools_menu.addAction(archive_ledger_action)
+
         coverage_action = QAction("&Coverage Check...", self)
         coverage_action.setToolTip("Compare your enabled patterns against the full library on the current batch — see which bills the full library catches that your enabled set misses")
         coverage_action.triggered.connect(self._on_coverage_check)
@@ -2607,6 +2615,58 @@ class MainWindow(QMainWindow):
         engine.sync_enabled_from_settings()
         StrapCheckDialog(engine, self).exec()
 
+    def _archive_ledger(self):
+        """Tools → Archive Ledger & Start Fresh: move ledger.db into an archive
+        file and let the next access create an empty one."""
+        # processing_thread only exists once something has been processed.
+        pt = getattr(self, "processing_thread", None)
+        busy = ((pt is not None and pt.isRunning())
+                or getattr(self, "_monitor_watcher", None) is not None
+                or getattr(self, "_live_mode", False))
+        if busy:
+            QMessageBox.information(
+                self, "Archive Ledger",
+                "Please wait until processing or Monitor has stopped, then try again.")
+            return
+        from dollar_detective.ledger import archive_ledger
+        from dollar_detective.resource_path import user_data_dir
+        db = user_data_dir() / "ledger.db"
+        led = self._get_ledger()
+        try:
+            s = led.stats() if led else {}
+        except Exception:
+            s = {}
+        if not db.exists() or not s.get("observations"):
+            QMessageBox.information(self, "Archive Ledger",
+                                    "The ledger is already empty — nothing to archive.")
+            return
+        since = (s.get("first_seen") or "")[:10]
+        msg = (f"Your bill history holds {s.get('unique_bills', 0):,} bills from "
+               f"{s.get('observations', 0):,} scans"
+               + (f" since {since}" if since else "") + ".\n\n"
+               "Archiving sets it aside and starts a new, empty history. Insights, "
+               "'seen before' and Find Crop by Serial will only know about bills "
+               "scanned from now on.\n\n"
+               "Nothing is deleted: the old history is saved as an archive file in "
+               f"{db.parent / 'ledger_archives'}.\n\nArchive and start fresh?")
+        if QMessageBox.question(self, "Archive Ledger & Start Fresh", msg,
+                                QMessageBox.Yes | QMessageBox.No,
+                                QMessageBox.No) != QMessageBox.Yes:
+            return
+        self._reset_ledger()            # close our handle so the file can move
+        self._ledger_session = None     # its session lives in the old ledger
+        try:
+            dest = archive_ledger(db)
+        except Exception as e:
+            QMessageBox.warning(self, "Archive Ledger",
+                                f"Couldn't archive the ledger; it was left unchanged.\n\n{e}")
+            return
+        self.status_label.setText("Ledger archived — starting a fresh history.")
+        QMessageBox.information(
+            self, "Archive Ledger",
+            f"Done. The old history was saved to:\n{dest}\n\n"
+            "A new, empty history starts with your next scan.")
+
     def _reset_ledger(self):
         """Close and forget the ledger handle so the next access reopens it
         (used after a restore rewrites ledger.db)."""
@@ -3350,6 +3410,7 @@ class MainWindow(QMainWindow):
         try:
             from dollar_detective.resource_path import straps_dir
             from dollar_detective.batch_naming import make_batch_dir
+            before = int(getattr(self.settings.processing, "batch_counter", 0) or 0)
             batch = Path(make_batch_dir(
                 straps_dir(), self.settings.processing.batch_name_format, self.settings))
         except Exception as e:
@@ -3357,6 +3418,10 @@ class MainWindow(QMainWindow):
                                 f"Couldn't start the live batch:\n{e}")
             return False
         self._live_batch_dir = batch
+        # The strap number this session took, so an empty session can give it
+        # back. None if the counter didn't advance (time-based fallback name).
+        after = int(getattr(self.settings.processing, "batch_counter", 0) or 0)
+        self._live_batch_number = after if after == before + 1 else None
         self._monitor_last_batch = str(batch)
         self._live_pending = []
         self._live_busy = False
@@ -3373,6 +3438,10 @@ class MainWindow(QMainWindow):
 
         # Fresh results view; point auto-export at the batch so the results CSV
         # lands inside it (the batch dropdown reopens the batch from that CSV).
+        # Remember where things pointed, so an empty session can put them back.
+        self._live_prev_dirs = (getattr(self, "_current_input_dir", None),
+                                self.settings.ui.last_input_dir,
+                                self.settings.ui.last_output_dir)
         self.current_results = []
         self.results_list.clear()
         self._current_input_dir = str(batch)
@@ -3596,6 +3665,35 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _live_end_empty(self):
+        """Undo a live session that scanned nothing: leave live mode, take down
+        the "Collecting scans" overlay (back to the previous view), and point the
+        folder settings back where they were instead of at the deleted batch.
+        The normal finish does this via _on_processing_complete, which an empty
+        session skips."""
+        self._live_mode = False
+        self._monitor_run_active = False
+        self._live_thread_refs = []
+        try:
+            self.preview_panel.hide_watch_overlay()
+        except Exception:
+            pass
+        try:
+            self.preview_panel.set_batch_processing_active(False)
+        except Exception:
+            pass
+        prev = getattr(self, "_live_prev_dirs", None)
+        if prev:
+            cur_in, last_in, last_out = prev
+            self._current_input_dir = cur_in
+            self.settings.ui.last_input_dir = last_in
+            self.settings.ui.last_output_dir = last_out
+            try:
+                self.settings.save()
+            except Exception:
+                pass
+        self._live_batch_dir = None
+
     def _live_finalize(self):
         """All live chunks done: hand off to the shared completion path (writes the
         results CSV into the batch, refreshes the batch picker, selects it)."""
@@ -3612,8 +3710,18 @@ class MainWindow(QMainWindow):
                 if not any(Path(batch).rglob("*.jpg")):
                     shutil.rmtree(batch, ignore_errors=True)
                     self.status_label.setText("Stopped — nothing scanned (no strap filed).")
+                    # Give the strap number back, unless another strap has
+                    # taken a later one since (then a gap is unavoidable).
                     try:
-                        self._update_watch_info()   # reclaim the strap number
+                        taken = getattr(self, "_live_batch_number", None)
+                        if taken and self.settings.processing.batch_counter == taken:
+                            self.settings.processing.batch_counter = taken - 1
+                            self.settings.save()
+                    except Exception:
+                        pass
+                    self._live_end_empty()
+                    try:
+                        self._update_watch_info()   # show the reclaimed number
                     except Exception:
                         pass
                     return
