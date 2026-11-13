@@ -11,6 +11,7 @@ is instant and works with no run loaded. Patterns that need image-derived
 metadata (GAS_PUMP, SEAL_SHIFT, plate/mule) simply won't match a typed serial --
 those are image findings, not serial findings.
 """
+import html
 import random
 import re
 
@@ -237,8 +238,17 @@ class SerialLookupDialog(QDialog):
         self._current_flippable = bool(info.get('flippable'))
         self._update_flipped_view()
         lines = [f"<b>{info.get('display_name') or m.name}</b>"]
+        # Catalog #: the user's edited number wins over the shipped one.
+        try:
+            catalog = (self.engine.resolve_pattern_catalog(m.name) or "").strip()
+        except Exception:
+            catalog = (info.get('catalog') or "").strip()
+        if catalog:
+            lines.append(f"Catalog #: {html.escape(catalog)}")
         if info.get('library'):
             lines.append(f"Library: {info['library']}")
+        if info.get('description'):
+            lines.append(f"Description: {html.escape(info['description'])}")
         if info.get('odds'):
             lines.append(f"Rarity: {info['odds']}")
         price = info.get('price') or info.get('price_range')
