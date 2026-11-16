@@ -3859,27 +3859,18 @@ class MainWindow(QMainWindow):
         This allows cropping from restored sessions without reprocessing.
 
         Args:
-            silent: If True, don't ask user for confirmation (used for auto-load on restore)
+            silent: If True, don't show error dialogs (used for auto-load on restore)
         """
         if self.processor:
             return self.processor
 
-        # Ask user if they want to load the processor (unless silent mode)
-        if not silent:
-            reply = QMessageBox.question(
-                self, "Load Processor",
-                "Cropping requires loading the YOLO model.\n\n"
-                "This may take a few seconds. Continue?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes
-            )
-            if reply != QMessageBox.Yes:
-                return None
-
+        # No confirmation prompt: it asked a jargon question ("load the YOLO
+        # model?") whose only alternative was cancelling the crop, and it
+        # confused users (Kelly, Nov 2026). Just load, with a busy cursor + note.
         # Show progress. The model construction below blocks the UI thread for a
         # few seconds; without a busy cursor the window looks hung (the OS keeps the
         # wait cursor animating even while we're blocked, so it reads as "working").
-        self.status_label.setText("Loading detection model… (first use)")
+        self.status_label.setText("Loading the bill detector… (a few seconds, first time only)")
         QApplication.setOverrideCursor(Qt.WaitCursor)
         QApplication.processEvents()
 
@@ -3927,14 +3918,14 @@ class MainWindow(QMainWindow):
             # Share with preview panel
             self.preview_panel.set_processor(self.processor)
 
-            self.status_label.setText("Ready - processor loaded")
+            self.status_label.setText("Ready — bill detector loaded")
             return self.processor
 
         except Exception as e:
             if not silent:
                 QMessageBox.warning(
                     self, "Load Error",
-                    f"Failed to load processor:\n\n{str(e)}"
+                    f"Couldn't load the bill detector:\n\n{str(e)}"
                 )
             else:
                 print(f"[MainWindow] Failed to load processor: {e}")
