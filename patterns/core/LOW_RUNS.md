@@ -81,5 +81,5 @@ each update. See that script's header for usage.
   with fewer than 12 cells, so those districts can be under-counted on such
   charts. Eyeball B/G (or whichever columns are split) by hand.
 - The tool also reports end-of-series short blocks (e.g. 1988A `E/R/DC` 6.4M:
-  only 6.4M of block R was printed before the series ended). Whether those count
-  as low runs is a collector judgement, not a chart fact.
+  only 6.4M of block R was printed before the series ended). Collectors DO count
+  these (Ed, Nov 2026), so they belong in the list.
