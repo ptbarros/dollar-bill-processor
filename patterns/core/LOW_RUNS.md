@@ -50,6 +50,8 @@ The chart is a **monthly grid**:
    can grow past 6.4M/12.8M and stop being one. (2021 example: `K/D/FW` was a 6.4M
    low run, later grew to 83.2M, and was removed.) Conversely new small slices
    appear. Re-derive from the current chart when the site updates.
+   (2021 example the other way: `J/E/FW` was listed as 6.4M but the chart now
+   shows 12.8M, so it was corrected in Nov 2026.)
 
 ## CSV format
 
@@ -68,3 +70,16 @@ uspapermoney chart and prints candidate `low_runs.csv` rows (flagging still-open
 blocks so they aren't added prematurely). It is a standalone helper today; a
 future feature could fetch the site directly and diff against `low_runs.csv` on
 each update. See that script's header for usage.
+
+## Gotchas found checking older series (Nov 2026)
+
+- **Check hand-made sheets against the chart.** Ed's Nov 2026 sheet listed
+  `1988A,K,C,FW,6.4`; the 1988A chart shows K/C was DC 19.2M + FW 76.8M (not a
+  low run), while **L**/C was DC 89.6M + FW 6.4M. The row was added as L.
+- **Older charts can split one month across two table rows** (1988A: Jun 92,
+  Jul/Aug/Nov 93 for districts B and G). `tools/parse_low_runs.py` skips rows
+  with fewer than 12 cells, so those districts can be under-counted on such
+  charts. Eyeball B/G (or whichever columns are split) by hand.
+- The tool also reports end-of-series short blocks (e.g. 1988A `E/R/DC` 6.4M:
+  only 6.4M of block R was printed before the series ended). Whether those count
+  as low runs is a collector judgement, not a chart fact.
