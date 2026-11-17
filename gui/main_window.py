@@ -975,11 +975,21 @@ class MainWindow(QMainWindow):
                     return odds, price
         return "", ""
 
-    def _label_data_for_result(self, result: dict):
+    def _label_data_for_result(self, result: dict, denom=None):
         """Build one LabelData from a bill result. The same data feeds both the
         Customer and Internal label copies; the profiles decide which fields show.
+
+        Shared by the crop-labels .docx and Label Preview so both get the same
+        fields (denomination and plates used to be missing here, so Word labels
+        dropped "$1" while the preview showed it). `denom` is the batch's
+        denomination; pass it when building many labels to read config once.
         """
         from gui.label_render import LabelData
+        if denom is None:
+            try:
+                denom = self._active_denomination()
+            except Exception:
+                denom = None
         selected = self._selected_patterns(result) or ['No Pattern']
         pattern_display = ', '.join(self._pattern_display_name(p) for p in selected)
         catalog = ', '.join(
@@ -994,8 +1004,12 @@ class MainWindow(QMainWindow):
             note=result.get('note', ''),
             catalog=catalog,
             position=str(result.get('position', '') or ''),
+            denomination=f"${denom}" if denom else '',
+            front_plate=result.get('front_plate', '') or '',
+            back_plate=result.get('back_plate', '') or '',
             odds=odds,
             price=price,
+            front_file=result.get('front_file', '') or '',
         )
 
     def _generate_labels_docx(self, results: list, output_dir: Path):
@@ -1015,7 +1029,11 @@ class MainWindow(QMainWindow):
         # One profile drives both copies; use the active label profile so what he
         # edits in Label Preview is exactly what prints here.
         template = LabelTemplate.from_dict(self.settings.get_label_template())
-        items = [self._label_data_for_result(r) for r in results]
+        try:
+            denom = self._active_denomination()
+        except Exception:
+            denom = None
+        items = [self._label_data_for_result(r, denom=denom) for r in results]
 
         labels_file = output_dir / "zbill_labels.docx"
         try:
