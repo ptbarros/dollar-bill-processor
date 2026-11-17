@@ -76,6 +76,12 @@ each update. See that script's header for usage.
 - **Check hand-made sheets against the chart.** Ed's Nov 2026 sheet listed
   `1988A,K,C,FW,6.4`; the 1988A chart shows K/C was DC 19.2M + FW 76.8M (not a
   low run), while **L**/C was DC 89.6M + FW 6.4M. The row was added as L.
+- **A month where BOTH facilities printed for one district is a small table
+  nested inside that cell**, one colored row per facility (outer cell has class
+  `i`, inner cells `fw`/`dc`). Read the inner cells' colors, not the outer
+  cell's. `tools/parse_low_runs.py` doesn't handle this yet, which is how 1995
+  D/E looked like a 6.4M FW low run when FW actually printed 70.4M of it in
+  Jun+Jul 97 (Ed caught it, Nov 2026).
 - **Older charts can split one month across two table rows** (1988A: Jun 92,
   Jul/Aug/Nov 93 for districts B and G). `tools/parse_low_runs.py` skips rows
   with fewer than 12 cells, so those districts can be under-counted on such
