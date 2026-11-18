@@ -5,6 +5,8 @@ __pycache__/
 *.so
 .Python
 venv/
+# Per-edition build venvs from tools/build_windows.ps1
+.venv-build-*/
 env/
 ENV/
 *.egg-info/

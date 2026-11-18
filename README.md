@@ -251,6 +251,41 @@ For the CUDA/torch build (NVIDIA), use `requirements-cuda.txt` instead. The Wind
 macOS, and Linux installers are built by GitHub Actions from the `*.spec` files when
 a version tag is pushed — see `.github/workflows/`.
 
+### Building on Windows locally
+
+`tools\build_windows.ps1` builds one Windows edition's installer on your own PC,
+using the same steps as the CI build (`.github/workflows/build.yml`), so you don't
+have to wait ~30 minutes for GitHub Actions to test a change.
+
+One-time setup:
+
+```powershell
+winget install -e --id Python.Python.3.12
+winget install -e --id Git.Git
+winget install -e --id JRSoftware.InnoSetup
+```
+
+Build (from the repo root):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\build_windows.ps1 -Edition directml   # or openvino, cuda
+```
+
+- Each edition gets its own venv (`.venv-build-<edition>`), created on the first run
+  and reused after that. The three onnxruntime variants conflict, so they can't share one.
+- The installer lands in `dist\` (e.g. `DollarDetective-1.16.0-directml-setup.exe`).
+- `-SkipInstaller` stops after PyInstaller and the self-test. `-SkipDeps` reuses the
+  venv without re-running pip (for quick rebuilds).
+- Every edition runs the frozen self-test (CI runs it for DirectML only).
+- The CUDA edition needs several GB of disk for its venv and build.
+- **Local builds are for testing only.** Don't upload them to GitHub Releases or tag
+  anything from them. Official releases come from the CI tag build, which is what
+  the in-app updater downloads.
+
+For most testing you don't need an installer at all: `git pull`, then run
+`python run_gui.py` with the matching venv's Python (e.g.
+`.venv-build-directml\Scripts\python.exe run_gui.py`).
+
 ---
 
 ## How it works
