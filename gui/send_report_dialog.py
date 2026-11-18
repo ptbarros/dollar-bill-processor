@@ -243,6 +243,13 @@ class SendReportDialog(QDialog):
                                     "Please enter the group code Paul gave you.")
             self.code_edit.setFocus()
             return
+        problem = sr.group_code_problem(code)
+        if problem:
+            QMessageBox.information(self, "Send to Paul",
+                                    problem + "\n\nCheck it against the code Paul gave you.")
+            self.code_edit.setFocus()
+            return
+        self.code_edit.setText(code)      # show it trimmed, as Paul gave it
         if not note:
             QMessageBox.information(self, "Send to Paul",
                                     "Please add a line about what's going on.")

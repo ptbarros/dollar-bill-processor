@@ -146,3 +146,11 @@ def test_screenshots_included_with_limits(tmp_path, monkeypatch):
     m2 = sr.build_report(tmp_path / "t.zip", sender="s", note="n", system={}, scrub=SCRUB,
                          screenshots=[shots[2], shots[0], shots[3], shots[4]])
     assert m2["contents"]["screenshots"] == ["01.png", "02.png", "03.png"]   # gif skipped, cap 3
+
+
+@pytest.mark.parametrize("code,ok", [
+    ("radar-love-1221", True), ("  radar-love-1221  ", True), ("copper ladder 47", True),
+    ("short", False), ("x" * 41, False), ("café-ladder-47", False), ("star\tnote-12", False),
+])
+def test_group_code_shape(code, ok):
+    assert (sr.group_code_problem(code) is None) == ok

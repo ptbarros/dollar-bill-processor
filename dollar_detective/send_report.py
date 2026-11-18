@@ -237,6 +237,24 @@ def _open(req, timeout):
 
 
 GROUP_CODE_HEADER = "X-DD-Group-Code"
+GROUP_CODE_MIN, GROUP_CODE_MAX = 8, 40     # must match the server's rule
+
+
+def group_code_problem(code: str) -> Optional[str]:
+    """Why `code` can't be a valid group code, or None if it could be.
+
+    The server only accepts 8-40 printable ASCII characters (the code travels in
+    an HTTP header, so accented letters/emoji would never match). Catching that
+    here tells the tester what's wrong with what they typed, instead of a 403."""
+    code = (code or "").strip()
+    if not (GROUP_CODE_MIN <= len(code) <= GROUP_CODE_MAX):
+        return (f"That doesn't look like a group code: it should be "
+                f"{GROUP_CODE_MIN} to {GROUP_CODE_MAX} characters.")
+    if any(not (32 <= ord(ch) <= 126) for ch in code):
+        return ("That doesn't look like a group code: use plain letters, numbers "
+                "and symbols only (no accents or emoji).")
+    return None
+
 
 
 def upload_report(zip_path: Path, url: str = REPORT_URL, timeout: int = 120,
