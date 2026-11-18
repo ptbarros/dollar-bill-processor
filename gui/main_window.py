@@ -2163,7 +2163,8 @@ class MainWindow(QMainWindow):
             self, settings=self.settings, current_bill=current, queued_bills=queued,
             log_paths=log_paths, crash_path=crash,
             settings_path=getattr(self.settings, "path", None),
-            reports_dir=user_data_dir() / "reports", app_version=__version__)
+            reports_dir=user_data_dir() / "reports", app_version=__version__,
+            review_folder=self._review_folder())
         dlg.exec()
 
     def _on_open_debug_log(self):

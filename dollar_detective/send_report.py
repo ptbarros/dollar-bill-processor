@@ -11,6 +11,8 @@ small manifest. Layout:
     settings/user_settings.yaml   their settings with API keys removed
     bills/NN_<serial>/front.jpg, back.jpg, result.json   bills they picked
     screenshots/NN.png|jpg     screenshots they attached (or of the app window)
+    review/review_log.csv      their "Save for Review" bills: one row per bill with
+    review/<name>.jpg|png|...  their note, plus the copied scans + serial close-ups
 
 Everything text-like is scrubbed: the home folder becomes "~", the account name
 becomes "<user>", and anything that looks like an API key is masked.
@@ -49,6 +51,9 @@ MAX_BILLS = 10
 MAX_SCREENSHOTS = 3
 MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024
 SCREENSHOT_EXTS = (".png", ".jpg", ".jpeg")
+REVIEW_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".tif", ".tiff")
+REVIEW_LOG = "review_log.csv"
+_REVIEW_NAME_RE = re.compile(r"[^A-Za-z0-9._-]")
 MAX_REPORT_BYTES = 40 * 1024 * 1024        # must match the server's limit
 _LOG_TAIL_BYTES = 4 * 1024 * 1024          # per log file
 
@@ -123,7 +128,8 @@ def build_report(dest: Path, *, sender: str, note: str,
                  log_paths: Iterable[Path] = (), crash_path: Optional[Path] = None,
                  settings_path: Optional[Path] = None, bills: Iterable[dict] = (),
                  system: Optional[dict] = None, app_version: str = "",
-                 screenshots: Iterable[Path] = (), scrub=None) -> dict:
+                 screenshots: Iterable[Path] = (), review_folder: Optional[Path] = None,
+                 scrub=None) -> dict:
     """Write the report zip to `dest` and return its manifest.
 
     `bills` are result dicts (front_file/back_file + fields); at most MAX_BILLS
@@ -151,7 +157,8 @@ def build_report(dest: Path, *, sender: str, note: str,
         "edition": system.get("edition", ""),
         "os": system.get("os", ""),
         "contents": {"logs": [], "crash_log": False, "settings": False,
-                     "system": bool(system), "bills": [], "screenshots": []},
+                     "system": bool(system), "bills": [], "screenshots": [],
+                     "review": {"rows": 0, "images": []}},
     }
 
     with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
@@ -196,15 +203,55 @@ def build_report(dest: Path, *, sender: str, note: str,
             name = f"{n:02d}{'.jpg' if ext == '.jpeg' else ext}"
             z.write(shot, f"screenshots/{name}", compress_type=zipfile.ZIP_STORED)
             manifest["contents"]["screenshots"].append(name)
+        if review_folder:
+            _add_review_folder(z, Path(review_folder), manifest, scrub)
         z.writestr("manifest.json", json.dumps(manifest, indent=2))
 
     size = dest.stat().st_size
     manifest["size_bytes"] = size
     if size > MAX_REPORT_BYTES:
+        tip = ("Include fewer bills, or send the saved-for-review bills with "
+               "File → Export Review Bundle instead."
+               if manifest["contents"]["review"]["images"] else "Include fewer bills.")
         raise ReportError(
             f"The report is {size / 1e6:.0f} MB, over the {MAX_REPORT_BYTES / 1e6:.0f} MB limit. "
-            "Include fewer bills and try again.")
+            f"{tip}")
     return manifest
+
+
+def review_count(review_folder: Optional[Path]) -> int:
+    """How many bills are waiting in the Save-for-Review folder (log rows)."""
+    log = Path(review_folder) / REVIEW_LOG if review_folder else None
+    if not log or not log.is_file():
+        return 0
+    try:
+        import csv
+        with open(log, newline="", encoding="utf-8", errors="replace") as f:
+            return max(0, sum(1 for _ in csv.reader(f)) - 1)
+    except Exception:
+        return 0
+
+
+def _add_review_folder(z: zipfile.ZipFile, folder: Path, manifest: dict, scrub) -> None:
+    """Pack the Save-for-Review folder's top-level files (not its sent/ archive)
+    under review/. File names are made safe (letters, digits . _ -), and the
+    log's file references are rewritten to match."""
+    log = folder / REVIEW_LOG
+    if not log.is_file():
+        return
+    renames = {}
+    for p in sorted(folder.iterdir()):
+        if p.is_file() and p.suffix.lower() in REVIEW_IMAGE_EXTS:
+            safe = _REVIEW_NAME_RE.sub("_", p.name)[-120:]
+            z.write(p, f"review/{safe}", compress_type=zipfile.ZIP_STORED)
+            renames[p.name] = safe
+            manifest["contents"]["review"]["images"].append(safe)
+    text = log.read_text(encoding="utf-8", errors="replace")
+    for old, new in renames.items():
+        if old != new:
+            text = text.replace(old, new)
+    z.writestr(f"review/{REVIEW_LOG}", scrub(text))
+    manifest["contents"]["review"]["rows"] = review_count(folder)
 
 
 # --------------------------------------------------------------------------- #

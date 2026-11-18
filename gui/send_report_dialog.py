@@ -50,6 +50,7 @@ class SendReportDialog(QDialog):
     def __init__(self, parent=None, *, settings=None, current_bill: Optional[dict] = None,
                  queued_bills: Optional[List[dict]] = None, log_paths=(), crash_path=None,
                  settings_path=None, reports_dir: Path = None, app_version: str = "",
+                 review_folder: Optional[Path] = None,
                  url: str = sr.REPORT_URL):
         super().__init__(parent)
         self.setWindowTitle("Send to Paul")
@@ -58,6 +59,8 @@ class SendReportDialog(QDialog):
         self.queued = list(queued_bills or [])
         self.log_paths, self.crash_path = list(log_paths), crash_path
         self.settings_path = settings_path
+        self.review_folder = Path(review_folder) if review_folder else None
+        self._sent_review = False
         self.reports_dir = Path(reports_dir) if reports_dir else Path.home()
         self.app_version, self.url = app_version, url
         self._worker = None
@@ -107,6 +110,17 @@ class SendReportDialog(QDialog):
         hint.setStyleSheet("color: gray;")
         hint.setWordWrap(True)
         lay.addWidget(hint)
+
+        n_review = sr.review_count(self.review_folder)
+        self.review_cb = QCheckBox(
+            f"My saved-for-review bills ({n_review}), with my notes" if n_review
+            else "My saved-for-review bills (none saved)")
+        self.review_cb.setToolTip(
+            "Bills you right-clicked and chose \"Save for Review…\": their scans, "
+            "serial close-ups and your note for each.")
+        self.review_cb.setEnabled(bool(n_review))
+        self.review_cb.setChecked(bool(n_review))
+        lay.addWidget(self.review_cb)
 
         # Screenshots: a one-click picture of the app window, or image files.
         lay.addWidget(QLabel("<b>Screenshots</b> (optional, up to %d)" % sr.MAX_SCREENSHOTS))
@@ -271,6 +285,7 @@ class SendReportDialog(QDialog):
             settings_path=self.settings_path if self.settings_cb.isChecked() else None,
             bills=self._chosen_bills(),
             screenshots=list(self._shots),
+            review_folder=self.review_folder if self.review_cb.isChecked() else None,
             system=None if self.logs_cb.isChecked() else {},
         )
         self._set_busy(True)
@@ -286,6 +301,7 @@ class SendReportDialog(QDialog):
             b.setEnabled(not busy)
         if not busy:
             self._update_shot_buttons()
+        self.review_cb.setEnabled(not busy and sr.review_count(self.review_folder) > 0)
         for w in (self.send_btn, self.name_edit, self.code_edit, self.note_edit, self.logs_cb,
                   self.settings_cb, self.no_bills_rb, self.current_rb, self.queued_rb):
             w.setEnabled(not busy)
@@ -304,6 +320,31 @@ class SendReportDialog(QDialog):
         self._ref = ref
         self.send_btn.setEnabled(False)
         self.close_btn.setText("Close")
+        if self.review_cb.isChecked() and self.review_folder:
+            self._offer_review_tidy()
+
+    def _offer_review_tidy(self):
+        """After a successful send, offer to move the saved-for-review bills into
+        the review folder's sent/ archive so they aren't sent twice."""
+        n = sr.review_count(self.review_folder)
+        if not n:
+            return
+        if QMessageBox.question(
+                self, "Send to Paul",
+                f"Your {n} saved-for-review bill(s) went to Paul.\n\n"
+                "Move them out of the review list so they aren't sent again? "
+                "(They're kept in the review folder's 'sent' archive.)",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes) != QMessageBox.Yes:
+            return
+        try:
+            from dollar_detective import review_bundle
+            review_bundle.archive_review_folder(self.review_folder, mode="sent")
+            self.review_cb.setText("My saved-for-review bills (none saved)")
+            self.review_cb.setChecked(False)
+            self.review_cb.setEnabled(False)
+        except Exception as e:
+            QMessageBox.warning(self, "Send to Paul",
+                                f"Sent, but couldn't tidy the review folder:\n{e}")
 
     def _on_failed(self, msg: str):
         self._set_busy(False)
