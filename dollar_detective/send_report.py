@@ -254,8 +254,12 @@ def upload_report(zip_path: Path, url: str = REPORT_URL, timeout: int = 120,
         with _open(req, timeout) as resp:
             data = json.loads(resp.read().decode("utf-8") or "{}")
     except urllib.error.HTTPError as e:
-        if e.code in (401, 403):
+        if e.code == 403:
             raise ReportError("The group code isn't right. Ask Paul for the current one.")
+        if e.code in (401, 404):
+            # This endpoint never takes a login: the site answers 401 (its session
+            # gate) or 404 when the receiver isn't deployed there yet.
+            raise ReportError("The report service isn't available yet. Please let Paul know.")
         if e.code == 413:
             raise ReportError("The report is too large for the server. Include fewer bills.")
         if e.code == 507:
@@ -263,8 +267,6 @@ def upload_report(zip_path: Path, url: str = REPORT_URL, timeout: int = 120,
                               "right now. Please let Paul know.")
         if e.code == 429:
             raise ReportError("Too many reports sent recently. Please wait a while and try again.")
-        if e.code == 404:
-            raise ReportError("The report service isn't available yet (404).")
         raise ReportError(f"The server refused the report (HTTP {e.code}).")
     except urllib.error.URLError as e:
         raise ReportError(f"Couldn't reach fancydetective.com. Check the internet connection.\n({e.reason})")
