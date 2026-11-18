@@ -154,3 +154,44 @@ def test_screenshots_included_with_limits(tmp_path, monkeypatch):
 ])
 def test_group_code_shape(code, ok):
     assert (sr.group_code_problem(code) is None) == ok
+
+
+def _review_folder(tmp_path):
+    rf = tmp_path / "review"
+    (rf / "sent" / "old").mkdir(parents=True)
+    (rf / "sent" / "old" / "20260101_000000_Dollar_009.jpg").write_bytes(b"old")   # already sent
+    for n in ("20261118_130000_Dollar_001.jpg", "20261118_130000_Dollar_002.jpg",
+              "20261118_130000_serial_crop (1).png"):
+        (rf / n).write_bytes(b"img")
+    (rf / "review_log.csv").write_text(
+        "timestamp,serial,note,confidence,patterns,front_file,files_copied\n"
+        "2026-11-18T13:00:00,B39299183A,G/C wrong at /home/kelly/x,0.91,Gas Pump,Dollar_001.jpg,"
+        "20261118_130000_Dollar_001.jpg; 20261118_130000_Dollar_002.jpg; 20261118_130000_serial_crop (1).png\n")
+    return rf
+
+
+def test_review_folder_packed_with_safe_names(tmp_path):
+    rf = _review_folder(tmp_path)
+    assert sr.review_count(rf) == 1 and sr.review_count(tmp_path / "nope") == 0
+    out = tmp_path / "r.zip"
+    m = sr.build_report(out, sender="s", note="n", system={}, scrub=SCRUB, review_folder=rf)
+    z = zipfile.ZipFile(out)
+    names = set(z.namelist())
+    assert {"review/review_log.csv", "review/20261118_130000_Dollar_001.jpg",
+            "review/20261118_130000_Dollar_002.jpg",
+            "review/20261118_130000_serial_crop__1_.png"} <= names
+    assert not any("Dollar_009" in n for n in names)            # sent/ archive left out
+    log = z.read("review/review_log.csv").decode()
+    assert "serial_crop__1_.png" in log and "crop (1)" not in log  # refs rewritten
+    assert "/home/kelly" not in log                              # scrubbed
+    assert m["contents"]["review"]["rows"] == 1
+    assert len(m["contents"]["review"]["images"]) == 3
+    man = json.loads(z.read("manifest.json"))
+    assert man["contents"]["review"]["rows"] == 1
+
+
+def test_no_review_folder_means_no_review_entries(tmp_path):
+    out = tmp_path / "r.zip"
+    m = sr.build_report(out, sender="s", note="n", system={}, scrub=SCRUB)
+    assert not any(n.startswith("review/") for n in zipfile.ZipFile(out).namelist())
+    assert m["contents"]["review"] == {"rows": 0, "images": []}
