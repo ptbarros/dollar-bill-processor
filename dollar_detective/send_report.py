@@ -246,11 +246,23 @@ def _add_review_folder(z: zipfile.ZipFile, folder: Path, manifest: dict, scrub) 
             z.write(p, f"review/{safe}", compress_type=zipfile.ZIP_STORED)
             renames[p.name] = safe
             manifest["contents"]["review"]["images"].append(safe)
-    text = log.read_text(encoding="utf-8", errors="replace")
-    for old, new in renames.items():
-        if old != new:
-            text = text.replace(old, new)
-    z.writestr(f"review/{REVIEW_LOG}", scrub(text))
+    import csv
+    from dollar_detective.review_bundle import csv_safe
+    with open(log, newline="", encoding="utf-8", errors="replace") as f:
+        rows = list(csv.reader(f))
+    out = io.StringIO()
+    w = csv.writer(out)
+    for i, row in enumerate(rows):
+        cells = []
+        for cell in row:
+            for old, new in renames.items():
+                if old != new:
+                    cell = cell.replace(old, new)
+            # Scrub each cell, then defuse formulas (header row left as is).
+            cell = scrub(cell)
+            cells.append(cell if i == 0 else csv_safe(cell))
+        w.writerow(cells)
+    z.writestr(f"review/{REVIEW_LOG}", out.getvalue())
     manifest["contents"]["review"]["rows"] = review_count(folder)
 
 

@@ -1490,7 +1490,8 @@ class ResultsList(QWidget):
             if not file_exists:
                 writer.writerow(['timestamp', 'serial', 'note', 'confidence',
                                 'patterns', 'front_file', 'files_copied'])
-            writer.writerow([
+            from dollar_detective.review_bundle import csv_safe
+            writer.writerow([csv_safe(v) for v in (
                 datetime.now().isoformat(),
                 serial,
                 note,
@@ -1498,7 +1499,7 @@ class ResultsList(QWidget):
                 result.get('fancy_types', ''),
                 filename,
                 '; '.join(files_copied)
-            ])
+            )])
 
         # Mark as sent for review and update status cell
         result['sent_for_review'] = True
