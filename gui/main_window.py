@@ -504,6 +504,12 @@ class MainWindow(QMainWindow):
         open_log_action.triggered.connect(self._on_open_debug_log)
         help_menu.addAction(open_log_action)
 
+        send_report_action = QAction("&Send to Paul...", self)
+        send_report_action.setToolTip(
+            "Send Paul your debug log, settings and example bills in one click")
+        send_report_action.triggered.connect(self._open_send_report)
+        help_menu.addAction(send_report_action)
+
         # Offer a one-click revert only when the last in-app update recorded the
         # version we came from (and it isn't the one we're already running).
         try:
@@ -2137,6 +2143,28 @@ class MainWindow(QMainWindow):
                 self.settings.save()
             except Exception:
                 pass
+
+    def _open_send_report(self):
+        """Help → Send to Paul…: bundle logs/settings/bills and upload them."""
+        from .send_report_dialog import SendReportDialog
+        from dollar_detective.resource_path import user_data_dir
+        from dollar_detective.version import __version__
+        log_paths, crash = [], None
+        try:
+            from dollar_detective.debug_logger import get_log_path
+            lp = Path(get_log_path())
+            log_paths = [lp, lp.with_name(lp.name + ".1")]
+            crash = lp.with_name("crash.log")
+        except Exception:
+            pass
+        current = getattr(self.preview_panel, "current_result", None)
+        queued = [r for r in getattr(self.results_list, "results", []) if r.get("checked")]
+        dlg = SendReportDialog(
+            self, settings=self.settings, current_bill=current, queued_bills=queued,
+            log_paths=log_paths, crash_path=crash,
+            settings_path=getattr(self.settings, "path", None),
+            reports_dir=user_data_dir() / "reports", app_version=__version__)
+        dlg.exec()
 
     def _on_open_debug_log(self):
         """Open the debug log so a user can send it to support. The log lives in
