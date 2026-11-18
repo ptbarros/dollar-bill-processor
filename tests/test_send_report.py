@@ -195,3 +195,25 @@ def test_no_review_folder_means_no_review_entries(tmp_path):
     m = sr.build_report(out, sender="s", note="n", system={}, scrub=SCRUB)
     assert not any(n.startswith("review/") for n in zipfile.ZipFile(out).namelist())
     assert m["contents"]["review"] == {"rows": 0, "images": []}
+
+
+def test_review_log_formulas_defused_and_csv_intact(tmp_path):
+    import csv, io
+    from dollar_detective.review_bundle import csv_safe
+    assert csv_safe('=HYPERLINK("x")') == '\'=HYPERLINK("x")'
+    assert csv_safe("-2 px gas pump") == "'-2 px gas pump"
+    assert csv_safe("Looks like a radar") == "Looks like a radar"
+    assert csv_safe("'=already") == "'=already"                 # no double prefix
+    rf = tmp_path / "review"
+    rf.mkdir()
+    with open(rf / "review_log.csv", "w", newline="") as f:      # an OLD log, written unguarded
+        w = csv.writer(f)
+        w.writerow(["timestamp", "serial", "note", "confidence", "patterns", "front_file", "files_copied"])
+        w.writerow(["2026-11-18", "A1B", '=HYPERLINK("http://evil","click")', "0.9", "", "a.jpg", ""])
+        w.writerow(["2026-11-18", "A2B", 'Radar, but the "4s" are odd\nsecond line', "0.9", "", "b.jpg", ""])
+    out = tmp_path / "r.zip"
+    sr.build_report(out, sender="s", note="n", system={}, scrub=SCRUB, review_folder=rf)
+    rows = list(csv.reader(io.StringIO(zipfile.ZipFile(out).read("review/review_log.csv").decode())))
+    assert rows[0][2] == "note"
+    assert rows[1][2].startswith("'=")                           # formula defused
+    assert rows[2][2] == 'Radar, but the "4s" are odd\nsecond line'   # commas/quotes/newline intact
