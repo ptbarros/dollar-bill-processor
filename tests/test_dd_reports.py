@@ -16,7 +16,7 @@ _spec = importlib.util.spec_from_file_location(
 ddr = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ddr)
 
-KEY = "k" * 40
+KEY = "ddr_" + "k" * 43
 
 
 def _zip_bytes(tmp_path) -> bytes:
@@ -74,8 +74,15 @@ def test_no_key_is_a_clear_error(server):
         ddr.feed()
 
 
+def test_malformed_key_rejected_locally(server, monkeypatch):
+    monkeypatch.setenv("DD_REPORTS_KEY", "not-a-key")
+    with pytest.raises(ddr.ReportsError, match="ddr_"):
+        ddr.feed()
+    assert _Feed.seen == []                                     # never sent anywhere
+
+
 def test_bad_key_401(server, monkeypatch):
-    monkeypatch.setenv("DD_REPORTS_KEY", "wrong")
+    monkeypatch.setenv("DD_REPORTS_KEY", "ddr_" + "x" * 43)
     with pytest.raises(ddr.ReportsError, match="401"):
         ddr.feed()
 

@@ -47,6 +47,7 @@ KEY_FILE = Path(os.environ.get("DD_REPORTS_KEY_FILE",
 CACHE = Path(os.environ.get("DD_REPORTS_CACHE", Path.home() / ".cache" / "dd-reports"))
 STATE = CACHE / "state.json"
 ID_RE = re.compile(r"^R-[A-Z2-9]{4,12}$")
+KEY_RE = re.compile(r"^ddr_[A-Za-z0-9_-]{20,}$")    # server format: ddr_ + token_urlsafe(32)
 
 # Lines in a debug log worth surfacing in a summary.
 _ALERT_RE = re.compile(r"Traceback|\bERROR\b|\bException\b|\[QT FATAL\]|\[QT CRITICAL\]|"
@@ -70,6 +71,15 @@ def _key() -> str:
         raise ReportsError(
             f"No report access key. Create one in the fancydetective.com admin Reports page "
             f"and save it to {KEY_FILE} (chmod 600) — or summarise a downloaded zip by path.")
+    if not KEY_RE.match(key):
+        raise ReportsError(f"{KEY_FILE} doesn't look like a report key (they start with 'ddr_'). "
+                           "Copy it again from the admin Reports page.")
+    try:
+        if KEY_FILE.is_file() and os.name == "posix" and KEY_FILE.stat().st_mode & 0o077:
+            print(f"warning: {KEY_FILE} is readable by other users; run: chmod 600 {KEY_FILE}",
+                  file=sys.stderr)
+    except OSError:
+        pass
     return key
 
 
