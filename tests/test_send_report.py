@@ -1,0 +1,121 @@
+"""Send to Paul: report zip contents, scrubbing, size limit, and upload replies."""
+import json
+import threading
+import zipfile
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+import pytest
+
+from dollar_detective import send_report as sr
+
+HOME = "/home/kelly"
+SCRUB = sr.make_scrubber(home=HOME, user="kelly")
+
+
+def _files(tmp_path):
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "debug_log.txt").write_text(
+        f"start\nopened {HOME}/Desktop/strap1/Dollar_001.jpg\nuser kelly ok\n"
+        "key sk-ant-abcdefghijklmnop1234 used\n")
+    (logs / "crash.log").write_text("")                       # empty -> not included
+    st = tmp_path / "user_settings.yaml"
+    st.write_text("ai:\n  anthropic_api_key: sk-ant-SECRETSECRETSECRET\n"
+                  "  openai_api_key: abc\nui:\n  last_input_dir: /home/kelly/scans\n")
+    img = tmp_path / "Dollar_001.jpg"
+    img.write_bytes(b"\xff\xd8fakejpeg")
+    bill = {"serial": "B92414494G", "front_file": str(img), "back_file": str(tmp_path / "missing.jpg"),
+            "series_year": "2021", "fancy_types": "4 of a Kind", "position": 8}
+    return logs, st, bill
+
+
+def test_report_contents_are_scrubbed(tmp_path):
+    logs, st, bill = _files(tmp_path)
+    out = tmp_path / "r.zip"
+    m = sr.build_report(out, sender="Kelly", note="YOLO prompt?", log_paths=[logs / "debug_log.txt"],
+                        crash_path=logs / "crash.log", settings_path=st, bills=[bill],
+                        system={"app_version": "1.16.0", "os": "macOS"}, scrub=SCRUB)
+    z = zipfile.ZipFile(out)
+    names = set(z.namelist())
+    assert {"manifest.json", "note.txt", "system.json", "logs/debug_log.txt",
+            "settings/user_settings.yaml", "bills/01_B92414494G/front.jpg",
+            "bills/01_B92414494G/result.json"} <= names
+    assert "logs/crash.log" not in names                        # empty crash log skipped
+    assert "bills/01_B92414494G/back.jpg" not in names          # missing file skipped
+    log = z.read("logs/debug_log.txt").decode()
+    assert HOME not in log and "~/Desktop" in log and "<user>" in log
+    assert "sk-ant-" not in log and "<api-key removed>" in log
+    sett = z.read("settings/user_settings.yaml").decode()
+    assert "SECRET" not in sett and "abc" not in sett and "~/scans" in sett
+    man = json.loads(z.read("manifest.json"))
+    assert man["format"] == "dd-report" and man["sender"] == "Kelly"
+    assert man["app_version"] == "1.16.0"
+    assert man["contents"]["bills"] == [{"serial": "B92414494G", "images": ["front.jpg"]}]
+    assert m["size_bytes"] == out.stat().st_size
+    row = json.loads(z.read("bills/01_B92414494G/result.json"))
+    assert row["fancy_types"] == "4 of a Kind" and "front_file" not in row
+
+
+def test_bills_capped_and_size_limit(tmp_path, monkeypatch):
+    big = tmp_path / "big.jpg"
+    big.write_bytes(b"x" * 2000)
+    bills = [{"serial": f"A{i:08d}B", "front_file": str(big)} for i in range(15)]
+    m = sr.build_report(tmp_path / "a.zip", sender="x", note="y", bills=bills, system={}, scrub=SCRUB)
+    assert len(m["contents"]["bills"]) == sr.MAX_BILLS
+    monkeypatch.setattr(sr, "MAX_REPORT_BYTES", 1000)
+    with pytest.raises(sr.ReportError, match="limit"):
+        sr.build_report(tmp_path / "b.zip", sender="x", note="y", bills=bills, system={}, scrub=SCRUB)
+
+
+class _Handler(BaseHTTPRequestHandler):
+    status, reply, seen = 201, {"id": "R-TEST01"}, {}
+
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers["Content-Length"]))
+        _Handler.seen = {"ctype": self.headers["Content-Type"], "body": body,
+                         "ua": self.headers["User-Agent"]}
+        self.send_response(_Handler.status)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(_Handler.reply).encode())
+
+    def log_message(self, *a):
+        pass
+
+
+@pytest.fixture
+def server():
+    httpd = HTTPServer(("127.0.0.1", 0), _Handler)
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    yield f"http://127.0.0.1:{httpd.server_port}/api/reports"
+    httpd.shutdown()
+
+
+def test_upload_returns_reference_and_sends_multipart(tmp_path, server):
+    z = tmp_path / "r.zip"
+    sr.build_report(z, sender="s", note="n", system={}, scrub=SCRUB)
+    _Handler.status, _Handler.reply = 201, {"id": "R-TEST01"}
+    assert sr.upload_report(z, url=server, app_version="1.16.1") == "R-TEST01"
+    seen = _Handler.seen
+    assert seen["ctype"].startswith("multipart/form-data; boundary=")
+    assert b'name="report"; filename="r.zip"' in seen["body"]
+    assert z.read_bytes() in seen["body"]
+    assert "DollarDetective/1.16.1" in seen["ua"]
+
+
+@pytest.mark.parametrize("code,text", [(413, "too large"), (429, "wait"),
+                                       (404, "isn't available"), (500, "HTTP 500")])
+def test_upload_errors_are_plain_language(tmp_path, server, code, text):
+    z = tmp_path / "r.zip"
+    sr.build_report(z, sender="s", note="n", system={}, scrub=SCRUB)
+    _Handler.status, _Handler.reply = code, {"detail": "x"}
+    with pytest.raises(sr.ReportError, match=text):
+        sr.upload_report(z, url=server)
+
+
+def test_unreachable_server(tmp_path):
+    z = tmp_path / "r.zip"
+    sr.build_report(z, sender="s", note="n", system={}, scrub=SCRUB)
+    with pytest.raises(sr.ReportError, match="Couldn't reach"):
+        sr.upload_report(z, url="http://127.0.0.1:9/api/reports", timeout=3)
