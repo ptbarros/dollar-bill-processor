@@ -10,6 +10,7 @@ small manifest. Layout:
     logs/crash.log             native crash dump, if any
     settings/user_settings.yaml   their settings with API keys removed
     bills/NN_<serial>/front.jpg, back.jpg, result.json   bills they picked
+    screenshots/NN.png|jpg     screenshots they attached (or of the app window)
 
 Everything text-like is scrubbed: the home folder becomes "~", the account name
 becomes "<user>", and anything that looks like an API key is masked.
@@ -44,6 +45,9 @@ REPORT_URL = "https://fancydetective.com/api/reports"
 FORMAT = "dd-report"
 FORMAT_VERSION = 1
 MAX_BILLS = 10
+MAX_SCREENSHOTS = 3
+MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024
+SCREENSHOT_EXTS = (".png", ".jpg", ".jpeg")
 MAX_REPORT_BYTES = 40 * 1024 * 1024        # must match the server's limit
 _LOG_TAIL_BYTES = 4 * 1024 * 1024          # per log file
 
@@ -118,7 +122,7 @@ def build_report(dest: Path, *, sender: str, note: str,
                  log_paths: Iterable[Path] = (), crash_path: Optional[Path] = None,
                  settings_path: Optional[Path] = None, bills: Iterable[dict] = (),
                  system: Optional[dict] = None, app_version: str = "",
-                 scrub=None) -> dict:
+                 screenshots: Iterable[Path] = (), scrub=None) -> dict:
     """Write the report zip to `dest` and return its manifest.
 
     `bills` are result dicts (front_file/back_file + fields); at most MAX_BILLS
@@ -146,7 +150,7 @@ def build_report(dest: Path, *, sender: str, note: str,
         "edition": system.get("edition", ""),
         "os": system.get("os", ""),
         "contents": {"logs": [], "crash_log": False, "settings": False,
-                     "system": bool(system), "bills": []},
+                     "system": bool(system), "bills": [], "screenshots": []},
     }
 
     with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
@@ -179,6 +183,18 @@ def build_report(dest: Path, *, sender: str, note: str,
             row["included_images"] = files
             z.writestr(f"{folder}/result.json", scrub(json.dumps(row, indent=2, default=str)))
             manifest["contents"]["bills"].append({"serial": serial, "images": files})
+        for shot in screenshots:
+            if len(manifest["contents"]["screenshots"]) >= MAX_SCREENSHOTS:
+                break
+            shot = Path(shot)
+            ext = shot.suffix.lower()
+            if (ext not in SCREENSHOT_EXTS or not shot.is_file()
+                    or shot.stat().st_size > MAX_SCREENSHOT_BYTES):
+                continue
+            n = len(manifest["contents"]["screenshots"]) + 1
+            name = f"{n:02d}{'.jpg' if ext == '.jpeg' else ext}"
+            z.write(shot, f"screenshots/{name}", compress_type=zipfile.ZIP_STORED)
+            manifest["contents"]["screenshots"].append(name)
         z.writestr("manifest.json", json.dumps(manifest, indent=2))
 
     size = dest.stat().st_size

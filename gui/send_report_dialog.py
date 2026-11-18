@@ -18,7 +18,7 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QButtonGroup, QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton,
-    QRadioButton, QVBoxLayout, QWidget,
+    QListWidget, QRadioButton, QVBoxLayout, QWidget,
 )
 
 from dollar_detective import send_report as sr
@@ -108,6 +108,31 @@ class SendReportDialog(QDialog):
         hint.setWordWrap(True)
         lay.addWidget(hint)
 
+        # Screenshots: a one-click picture of the app window, or image files.
+        lay.addWidget(QLabel("<b>Screenshots</b> (optional, up to %d)" % sr.MAX_SCREENSHOTS))
+        self._shots: List[Path] = []
+        self.shot_list = QListWidget()
+        self.shot_list.setMaximumHeight(64)
+        lay.addWidget(self.shot_list)
+        srow = QHBoxLayout()
+        self.window_shot_btn = QPushButton("Add a picture of this window")
+        self.window_shot_btn.setToolTip("Captures the Dollar Detective main window as it is right now")
+        self.window_shot_btn.clicked.connect(self._add_window_shot)
+        self.window_shot_btn.setEnabled(parent is not None)
+        self.file_shot_btn = QPushButton("Attach screenshot file…")
+        self.file_shot_btn.clicked.connect(self._add_file_shot)
+        self.remove_shot_btn = QPushButton("Remove")
+        self.remove_shot_btn.clicked.connect(self._remove_shot)
+        for b in (self.window_shot_btn, self.file_shot_btn, self.remove_shot_btn):
+            srow.addWidget(b)
+        srow.addStretch()
+        lay.addLayout(srow)
+        shot_hint = QLabel("Screenshots are sent as they are, so check they don't show anything private.")
+        shot_hint.setStyleSheet("color: gray;")
+        shot_hint.setWordWrap(True)
+        lay.addWidget(shot_hint)
+        self._update_shot_buttons()
+
         self.status = QLabel("")
         self.status.setWordWrap(True)
         self.status.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -116,6 +141,8 @@ class SendReportDialog(QDialog):
         row = QHBoxLayout()
         self.copy_btn = QPushButton("Copy reference")
         self.copy_btn.hide()
+        self._ref = ""
+        self.copy_btn.clicked.connect(lambda: QGuiApplication.clipboard().setText(self._ref))
         self.save_btn = QPushButton("Save report file…")
         self.save_btn.setToolTip("Save the report as a .zip you can email to Paul instead")
         self.save_btn.hide()
@@ -130,7 +157,7 @@ class SendReportDialog(QDialog):
         self.close_btn.clicked.connect(self.reject)
         row.addWidget(self.buttons)
         lay.addLayout(row)
-        self.resize(520, 480)
+        self.resize(540, 620)
 
     # -- labels ------------------------------------------------------------
     def _current_label(self) -> str:
@@ -144,6 +171,56 @@ class SendReportDialog(QDialog):
             return "My queued (checked) bills (none queued)"
         extra = f", first {sr.MAX_BILLS} only" if n > sr.MAX_BILLS else ""
         return f"My queued (checked) bills ({n}{extra})"
+
+    # -- screenshots ---------------------------------------------------------
+    def _update_shot_buttons(self):
+        full = len(self._shots) >= sr.MAX_SCREENSHOTS
+        self.window_shot_btn.setEnabled(not full and self.parent() is not None)
+        self.file_shot_btn.setEnabled(not full)
+        self.remove_shot_btn.setEnabled(bool(self._shots))
+
+    def _add_shot(self, path: Path, label: str):
+        self._shots.append(path)
+        self.shot_list.addItem(label)
+        self._update_shot_buttons()
+
+    def _add_window_shot(self):
+        win = self.parent()
+        if win is None:
+            return
+        try:
+            self.reports_dir.mkdir(parents=True, exist_ok=True)
+            path = self.reports_dir / f"window-{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.png"
+            if not win.grab().save(str(path), "PNG"):
+                raise OSError("couldn't save the picture")
+        except Exception as e:
+            QMessageBox.warning(self, "Send to Paul", f"Couldn't capture the window:\n{e}")
+            return
+        self._add_shot(path, f"Picture of the Dollar Detective window ({datetime.now():%H:%M:%S})")
+
+    def _add_file_shot(self):
+        start = Path.home() / "Desktop"
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Attach screenshot", str(start if start.is_dir() else Path.home()),
+            "Images (*.png *.jpg *.jpeg)")
+        if not path:
+            return
+        p = Path(path)
+        if p.stat().st_size > sr.MAX_SCREENSHOT_BYTES:
+            QMessageBox.information(
+                self, "Send to Paul",
+                f"That picture is over {sr.MAX_SCREENSHOT_BYTES // (1024 * 1024)} MB. Please pick a smaller one.")
+            return
+        self._add_shot(p, p.name)
+
+    def _remove_shot(self):
+        row = self.shot_list.currentRow()
+        if row < 0:
+            row = len(self._shots) - 1
+        if 0 <= row < len(self._shots):
+            self._shots.pop(row)
+            self.shot_list.takeItem(row)
+        self._update_shot_buttons()
 
     def _chosen_bills(self) -> List[dict]:
         if self.current_rb.isChecked() and self.current_bill:
@@ -186,6 +263,7 @@ class SendReportDialog(QDialog):
             crash_path=self.crash_path if self.logs_cb.isChecked() else None,
             settings_path=self.settings_path if self.settings_cb.isChecked() else None,
             bills=self._chosen_bills(),
+            screenshots=list(self._shots),
             system=None if self.logs_cb.isChecked() else {},
         )
         self._set_busy(True)
@@ -197,6 +275,10 @@ class SendReportDialog(QDialog):
         self._worker.start()
 
     def _set_busy(self, busy: bool):
+        for b in (self.window_shot_btn, self.file_shot_btn, self.remove_shot_btn):
+            b.setEnabled(not busy)
+        if not busy:
+            self._update_shot_buttons()
         for w in (self.send_btn, self.name_edit, self.code_edit, self.note_edit, self.logs_cb,
                   self.settings_cb, self.no_bills_rb, self.current_rb, self.queued_rb):
             w.setEnabled(not busy)
@@ -212,11 +294,7 @@ class SendReportDialog(QDialog):
             "Mention this reference if you write to Paul about it.")
         self.copy_btn.show()
         self.save_btn.hide()
-        try:
-            self.copy_btn.clicked.disconnect()
-        except Exception:
-            pass
-        self.copy_btn.clicked.connect(lambda: QGuiApplication.clipboard().setText(ref))
+        self._ref = ref
         self.send_btn.setEnabled(False)
         self.close_btn.setText("Close")
 

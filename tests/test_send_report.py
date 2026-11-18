@@ -124,3 +124,24 @@ def test_unreachable_server(tmp_path):
     sr.build_report(z, sender="s", note="n", system={}, scrub=SCRUB)
     with pytest.raises(sr.ReportError, match="Couldn't reach"):
         sr.upload_report(z, url="http://127.0.0.1:9/api/reports", timeout=3)
+
+
+def test_screenshots_included_with_limits(tmp_path, monkeypatch):
+    shots = []
+    for name in ("a.png", "b.jpeg", "c.gif", "d.png", "e.png"):
+        p = tmp_path / name
+        p.write_bytes(b"img" * 10)
+        shots.append(p)
+    big = tmp_path / "big.png"
+    big.write_bytes(b"x" * 50)
+    monkeypatch.setattr(sr, "MAX_SCREENSHOT_BYTES", 40)
+    out = tmp_path / "s.zip"
+    # big is skipped (too large) and missing.png doesn't exist; numbering stays 01, 02
+    m = sr.build_report(out, sender="s", note="n", system={}, scrub=SCRUB,
+                        screenshots=[big, shots[0], shots[1]] + [tmp_path / "missing.png"])
+    names = zipfile.ZipFile(out).namelist()
+    assert m["contents"]["screenshots"] == ["01.png", "02.jpg"]
+    assert "screenshots/01.png" in names and "screenshots/02.jpg" in names
+    m2 = sr.build_report(tmp_path / "t.zip", sender="s", note="n", system={}, scrub=SCRUB,
+                         screenshots=[shots[2], shots[0], shots[3], shots[4]])
+    assert m2["contents"]["screenshots"] == ["01.png", "02.png", "03.png"]   # gif skipped, cap 3
