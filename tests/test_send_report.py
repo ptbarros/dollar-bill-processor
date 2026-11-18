@@ -109,7 +109,7 @@ def test_upload_returns_reference_and_sends_multipart(tmp_path, server):
     assert seen["code"] == "GREENBACK42"
 
 
-@pytest.mark.parametrize("code,text", [(403, "group code"), (413, "too large"), (429, "wait"),
+@pytest.mark.parametrize("code,text", [(403, "group code"), (413, "too large"), (429, "wait"), (507, "storage is full"),
                                        (404, "isn't available"), (500, "HTTP 500")])
 def test_upload_errors_are_plain_language(tmp_path, server, code, text):
     z = tmp_path / "r.zip"

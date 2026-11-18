@@ -17,7 +17,8 @@ becomes "<user>", and anything that looks like an API key is masked.
 
 Upload contract (implemented on the web side in dollardetective-web):
     POST {REPORT_URL}  multipart/form-data, one file field "report" (the zip)
-    201 -> {"id": "R-XXXXXX", ...}     413 too large     429 rate limited     400 bad zip
+    201 -> {"id": "R-XXXXXX", ...}   403 bad/missing group code   413 too large
+    429 rate limited   507 report store full   400 bad zip
 Header X-DD-Group-Code carries the group code Paul hands out to testers (typed
 once in the app; never in the source). 403 -> wrong/missing code. The server
 also enforces size/rate/storage limits and a strict zip whitelist.
@@ -257,6 +258,9 @@ def upload_report(zip_path: Path, url: str = REPORT_URL, timeout: int = 120,
             raise ReportError("The group code isn't right. Ask Paul for the current one.")
         if e.code == 413:
             raise ReportError("The report is too large for the server. Include fewer bills.")
+        if e.code == 507:
+            raise ReportError("Paul's report storage is full, so new reports can't be accepted "
+                              "right now. Please let Paul know.")
         if e.code == 429:
             raise ReportError("Too many reports sent recently. Please wait a while and try again.")
         if e.code == 404:
