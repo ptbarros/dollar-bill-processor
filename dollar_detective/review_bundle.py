@@ -26,6 +26,15 @@ SCHEMA = "dollar-detective-review-bundle/1"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 
 
+def csv_safe(value) -> str:
+    """Defuse spreadsheet formulas: a cell starting with = + - @ (or a tab/CR)
+    is run as a formula by Excel/LibreOffice when the CSV is opened. Prefix it
+    with an apostrophe so it shows as plain text. Tester notes are free text, so
+    every review_log.csv cell goes through this."""
+    text = "" if value is None else str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+
+
 def review_bundle_stats(review_folder) -> dict:
     """Count reviewable content in `review_folder` (drives the export prompt)."""
     folder = Path(review_folder)

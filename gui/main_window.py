@@ -504,6 +504,12 @@ class MainWindow(QMainWindow):
         open_log_action.triggered.connect(self._on_open_debug_log)
         help_menu.addAction(open_log_action)
 
+        send_report_action = QAction("&Send to Paul...", self)
+        send_report_action.setToolTip(
+            "Send Paul your debug log, settings and example bills in one click")
+        send_report_action.triggered.connect(self._open_send_report)
+        help_menu.addAction(send_report_action)
+
         # Offer a one-click revert only when the last in-app update recorded the
         # version we came from (and it isn't the one we're already running).
         try:
@@ -975,11 +981,21 @@ class MainWindow(QMainWindow):
                     return odds, price
         return "", ""
 
-    def _label_data_for_result(self, result: dict):
+    def _label_data_for_result(self, result: dict, denom=None):
         """Build one LabelData from a bill result. The same data feeds both the
         Customer and Internal label copies; the profiles decide which fields show.
+
+        Shared by the crop-labels .docx and Label Preview so both get the same
+        fields (denomination and plates used to be missing here, so Word labels
+        dropped "$1" while the preview showed it). `denom` is the batch's
+        denomination; pass it when building many labels to read config once.
         """
         from gui.label_render import LabelData
+        if denom is None:
+            try:
+                denom = self._active_denomination()
+            except Exception:
+                denom = None
         selected = self._selected_patterns(result) or ['No Pattern']
         pattern_display = ', '.join(self._pattern_display_name(p) for p in selected)
         catalog = ', '.join(
@@ -994,8 +1010,12 @@ class MainWindow(QMainWindow):
             note=result.get('note', ''),
             catalog=catalog,
             position=str(result.get('position', '') or ''),
+            denomination=f"${denom}" if denom else '',
+            front_plate=result.get('front_plate', '') or '',
+            back_plate=result.get('back_plate', '') or '',
             odds=odds,
             price=price,
+            front_file=result.get('front_file', '') or '',
         )
 
     def _generate_labels_docx(self, results: list, output_dir: Path):
@@ -1015,7 +1035,11 @@ class MainWindow(QMainWindow):
         # One profile drives both copies; use the active label profile so what he
         # edits in Label Preview is exactly what prints here.
         template = LabelTemplate.from_dict(self.settings.get_label_template())
-        items = [self._label_data_for_result(r) for r in results]
+        try:
+            denom = self._active_denomination()
+        except Exception:
+            denom = None
+        items = [self._label_data_for_result(r, denom=denom) for r in results]
 
         labels_file = output_dir / "zbill_labels.docx"
         try:
@@ -2119,6 +2143,29 @@ class MainWindow(QMainWindow):
                 self.settings.save()
             except Exception:
                 pass
+
+    def _open_send_report(self):
+        """Help → Send to Paul…: bundle logs/settings/bills and upload them."""
+        from .send_report_dialog import SendReportDialog
+        from dollar_detective.resource_path import user_data_dir
+        from dollar_detective.version import __version__
+        log_paths, crash = [], None
+        try:
+            from dollar_detective.debug_logger import get_log_path
+            lp = Path(get_log_path())
+            log_paths = [lp, lp.with_name(lp.name + ".1")]
+            crash = lp.with_name("crash.log")
+        except Exception:
+            pass
+        current = getattr(self.preview_panel, "current_result", None)
+        queued = [r for r in getattr(self.results_list, "results", []) if r.get("checked")]
+        dlg = SendReportDialog(
+            self, settings=self.settings, current_bill=current, queued_bills=queued,
+            log_paths=log_paths, crash_path=crash,
+            settings_path=getattr(self.settings, "path", None),
+            reports_dir=user_data_dir() / "reports", app_version=__version__,
+            review_folder=self._review_folder())
+        dlg.exec()
 
     def _on_open_debug_log(self):
         """Open the debug log so a user can send it to support. The log lives in
@@ -3859,27 +3906,18 @@ class MainWindow(QMainWindow):
         This allows cropping from restored sessions without reprocessing.
 
         Args:
-            silent: If True, don't ask user for confirmation (used for auto-load on restore)
+            silent: If True, don't show error dialogs (used for auto-load on restore)
         """
         if self.processor:
             return self.processor
 
-        # Ask user if they want to load the processor (unless silent mode)
-        if not silent:
-            reply = QMessageBox.question(
-                self, "Load Processor",
-                "Cropping requires loading the YOLO model.\n\n"
-                "This may take a few seconds. Continue?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes
-            )
-            if reply != QMessageBox.Yes:
-                return None
-
+        # No confirmation prompt: it asked a jargon question ("load the YOLO
+        # model?") whose only alternative was cancelling the crop, and it
+        # confused users (Kelly, Nov 2026). Just load, with a busy cursor + note.
         # Show progress. The model construction below blocks the UI thread for a
         # few seconds; without a busy cursor the window looks hung (the OS keeps the
         # wait cursor animating even while we're blocked, so it reads as "working").
-        self.status_label.setText("Loading detection model… (first use)")
+        self.status_label.setText("Loading the bill detector… (a few seconds, first time only)")
         QApplication.setOverrideCursor(Qt.WaitCursor)
         QApplication.processEvents()
 
@@ -3927,14 +3965,14 @@ class MainWindow(QMainWindow):
             # Share with preview panel
             self.preview_panel.set_processor(self.processor)
 
-            self.status_label.setText("Ready - processor loaded")
+            self.status_label.setText("Ready — bill detector loaded")
             return self.processor
 
         except Exception as e:
             if not silent:
                 QMessageBox.warning(
                     self, "Load Error",
-                    f"Failed to load processor:\n\n{str(e)}"
+                    f"Couldn't load the bill detector:\n\n{str(e)}"
                 )
             else:
                 print(f"[MainWindow] Failed to load processor: {e}")
