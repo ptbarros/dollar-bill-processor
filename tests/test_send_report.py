@@ -21,7 +21,8 @@ def _files(tmp_path):
     (logs / "crash.log").write_text("")                       # empty -> not included
     st = tmp_path / "user_settings.yaml"
     st.write_text("ai:\n  anthropic_api_key: sk-ant-SECRETSECRETSECRET\n"
-                  "  openai_api_key: abc\nui:\n  last_input_dir: /home/kelly/scans\n")
+                  "  openai_api_key: abc\nui:\n  last_input_dir: /home/kelly/scans\n"
+                  "  report_group_code: GREENBACK42\n")
     img = tmp_path / "Dollar_001.jpg"
     img.write_bytes(b"\xff\xd8fakejpeg")
     bill = {"serial": "B92414494G", "front_file": str(img), "back_file": str(tmp_path / "missing.jpg"),
@@ -47,6 +48,7 @@ def test_report_contents_are_scrubbed(tmp_path):
     assert "sk-ant-" not in log and "<api-key removed>" in log
     sett = z.read("settings/user_settings.yaml").decode()
     assert "SECRET" not in sett and "abc" not in sett and "~/scans" in sett
+    assert "GREENBACK42" not in sett                            # group code never sent
     man = json.loads(z.read("manifest.json"))
     assert man["format"] == "dd-report" and man["sender"] == "Kelly"
     assert man["app_version"] == "1.16.0"
@@ -73,7 +75,8 @@ class _Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         body = self.rfile.read(int(self.headers["Content-Length"]))
         _Handler.seen = {"ctype": self.headers["Content-Type"], "body": body,
-                         "ua": self.headers["User-Agent"]}
+                         "ua": self.headers["User-Agent"],
+                         "code": self.headers.get("X-DD-Group-Code")}
         self.send_response(_Handler.status)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
@@ -96,15 +99,17 @@ def test_upload_returns_reference_and_sends_multipart(tmp_path, server):
     z = tmp_path / "r.zip"
     sr.build_report(z, sender="s", note="n", system={}, scrub=SCRUB)
     _Handler.status, _Handler.reply = 201, {"id": "R-TEST01"}
-    assert sr.upload_report(z, url=server, app_version="1.16.1") == "R-TEST01"
+    assert sr.upload_report(z, url=server, app_version="1.16.1",
+                            group_code=" GREENBACK42 ") == "R-TEST01"
     seen = _Handler.seen
     assert seen["ctype"].startswith("multipart/form-data; boundary=")
     assert b'name="report"; filename="r.zip"' in seen["body"]
     assert z.read_bytes() in seen["body"]
     assert "DollarDetective/1.16.1" in seen["ua"]
+    assert seen["code"] == "GREENBACK42"
 
 
-@pytest.mark.parametrize("code,text", [(413, "too large"), (429, "wait"),
+@pytest.mark.parametrize("code,text", [(403, "group code"), (413, "too large"), (429, "wait"),
                                        (404, "isn't available"), (500, "HTTP 500")])
 def test_upload_errors_are_plain_language(tmp_path, server, code, text):
     z = tmp_path / "r.zip"

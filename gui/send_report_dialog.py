@@ -28,15 +28,17 @@ class _SendWorker(QThread):
     done = Signal(str)        # reference code
     failed = Signal(str)      # plain-language error
 
-    def __init__(self, build_kwargs: dict, zip_path: Path, url: str, app_version: str):
+    def __init__(self, build_kwargs: dict, zip_path: Path, url: str, app_version: str,
+                 group_code: str = ""):
         super().__init__()
         self.build_kwargs, self.zip_path = build_kwargs, zip_path
-        self.url, self.app_version = url, app_version
+        self.url, self.app_version, self.group_code = url, app_version, group_code
 
     def run(self):
         try:
             sr.build_report(self.zip_path, **self.build_kwargs)
-            ref = sr.upload_report(self.zip_path, url=self.url, app_version=self.app_version)
+            ref = sr.upload_report(self.zip_path, url=self.url, app_version=self.app_version,
+                                   group_code=self.group_code)
             self.done.emit(ref)
         except sr.ReportError as e:
             self.failed.emit(str(e))
@@ -72,6 +74,10 @@ class SendReportDialog(QDialog):
         self.name_edit = QLineEdit(getattr(getattr(settings, "ui", None), "report_sender_name", "") or "")
         self.name_edit.setPlaceholderText("So Paul knows who sent it")
         form.addRow("Your name:", self.name_edit)
+        self.code_edit = QLineEdit(getattr(getattr(settings, "ui", None), "report_group_code", "") or "")
+        self.code_edit.setPlaceholderText("From Paul — you only need to enter it once")
+        self.code_edit.setToolTip("The group code Paul gave you. It keeps strangers from sending reports.")
+        form.addRow("Group code:", self.code_edit)
         self.note_edit = QPlainTextEdit()
         self.note_edit.setPlaceholderText(
             "What happened, or what's odd about the bill(s)? What were you doing at the time?")
@@ -154,6 +160,12 @@ class SendReportDialog(QDialog):
             QMessageBox.information(self, "Send to Paul", "Please enter your name.")
             self.name_edit.setFocus()
             return
+        code = self.code_edit.text().strip()
+        if not code:
+            QMessageBox.information(self, "Send to Paul",
+                                    "Please enter the group code Paul gave you.")
+            self.code_edit.setFocus()
+            return
         if not note:
             QMessageBox.information(self, "Send to Paul",
                                     "Please add a line about what's going on.")
@@ -162,6 +174,7 @@ class SendReportDialog(QDialog):
         if self.settings is not None:
             try:
                 self.settings.ui.report_sender_name = name
+                self.settings.ui.report_group_code = code
                 self.settings.save()
             except Exception:
                 pass
@@ -177,13 +190,14 @@ class SendReportDialog(QDialog):
         )
         self._set_busy(True)
         self.status.setText("Packing and sending… (bills with images can take a minute)")
-        self._worker = _SendWorker(kwargs, self._zip_path, self.url, self.app_version)
+        self._worker = _SendWorker(kwargs, self._zip_path, self.url, self.app_version,
+                                   group_code=code)
         self._worker.done.connect(self._on_sent)
         self._worker.failed.connect(self._on_failed)
         self._worker.start()
 
     def _set_busy(self, busy: bool):
-        for w in (self.send_btn, self.name_edit, self.note_edit, self.logs_cb,
+        for w in (self.send_btn, self.name_edit, self.code_edit, self.note_edit, self.logs_cb,
                   self.settings_cb, self.no_bills_rb, self.current_rb, self.queued_rb):
             w.setEnabled(not busy)
         if not busy:
@@ -197,6 +211,7 @@ class SendReportDialog(QDialog):
             f"<b>Sent — thank you!</b><br>Reference: <b>{ref}</b><br>"
             "Mention this reference if you write to Paul about it.")
         self.copy_btn.show()
+        self.save_btn.hide()
         try:
             self.copy_btn.clicked.disconnect()
         except Exception:

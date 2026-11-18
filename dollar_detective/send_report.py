@@ -17,7 +17,9 @@ becomes "<user>", and anything that looks like an API key is masked.
 Upload contract (implemented on the web side in dollardetective-web):
     POST {REPORT_URL}  multipart/form-data, one file field "report" (the zip)
     201 -> {"id": "R-XXXXXX", ...}     413 too large     429 rate limited     400 bad zip
-No login: the upload is anonymous, protected server-side by size/rate limits.
+Header X-DD-Group-Code carries the group code Paul hands out to testers (typed
+once in the app; never in the source). 403 -> wrong/missing code. The server
+also enforces size/rate/storage limits and a strict zip whitelist.
 
 Standalone (stdlib only; system_info is optional) so it can be tested headless.
 """
@@ -86,8 +88,10 @@ def make_scrubber(home: Optional[str] = None, user: Optional[str] = None):
 
 
 def _scrub_settings(yaml_text: str, scrub) -> str:
-    """Blank every *api_key* value, then scrub paths/user."""
-    out = re.sub(r"(?im)^(\s*[\w.-]*api_key[\w.-]*\s*:\s*).*$", r"\1''", yaml_text)
+    """Blank every secret-looking value (API keys, the group code, passwords,
+    tokens), then scrub paths/user."""
+    out = re.sub(r"(?im)^(\s*[\w.-]*(?:api_key|group_code|password|secret|token)[\w.-]*\s*:\s*).*$",
+                 r"\1''", yaml_text)
     return scrub(out)
 
 
@@ -215,8 +219,11 @@ def _open(req, timeout):
         raise
 
 
+GROUP_CODE_HEADER = "X-DD-Group-Code"
+
+
 def upload_report(zip_path: Path, url: str = REPORT_URL, timeout: int = 120,
-                  app_version: str = "") -> str:
+                  app_version: str = "", group_code: str = "") -> str:
     """Upload the zip; return the server's reference code (e.g. "R-7K3QX2").
     Raises ReportError with a plain-language message on any failure."""
     zip_path = Path(zip_path)
@@ -224,11 +231,14 @@ def upload_report(zip_path: Path, url: str = REPORT_URL, timeout: int = 120,
     req = urllib.request.Request(url, data=body, method="POST", headers={
         "Content-Type": ctype,
         "User-Agent": f"DollarDetective/{app_version or 'unknown'} (send-report)",
-        "Accept": "application/json"})
+        "Accept": "application/json",
+        GROUP_CODE_HEADER: (group_code or "").strip()})
     try:
         with _open(req, timeout) as resp:
             data = json.loads(resp.read().decode("utf-8") or "{}")
     except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            raise ReportError("The group code isn't right. Ask Paul for the current one.")
         if e.code == 413:
             raise ReportError("The report is too large for the server. Include fewer bills.")
         if e.code == 429:
