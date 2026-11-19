@@ -21,6 +21,9 @@ on:
           - macos              # macOS only
 
 jobs:
+  # The three Windows jobs below are mirrored by tools/build_windows.ps1 (local
+  # test builds). Keep these in sync: change a Windows build step here, change it
+  # there too.
   windows:
     # OpenVINO (standard) edition. On a tag push everything builds; a manual run
     # builds this only for the matching edition choices.
